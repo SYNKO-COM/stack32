@@ -106,7 +106,7 @@ Copy `.env.example` to `apps/web/.env.local` (and `services/agent-service/.env`)
 
 - **i18n** — English-first with full French support. All UI strings live in `apps/web/locales/{en,fr}/*.json` (10 namespaces). Adding a language = new folder + registration in `lib/i18n/locales.ts` + `lib/i18n/resources.ts`.
 - **Repositories** — UI components never touch storage directly. They use TanStack Query hooks over repository interfaces (`lib/repositories/interfaces.ts`). Phase 1 binds mock (localStorage) implementations via `lib/repositories/factory.ts`; Supabase/API implementations swap in later without touching components.
-- **Company/legal data** — centralized in `packages/config/src/company.ts` (Zeldia, SIREN 951 022 094). Fields still holding `TO_BE_COMPLETED_BEFORE_PRODUCTION` trigger a development banner on legal pages.
+- **Company/legal data** — centralized in `packages/config/src/company.ts` (Zeldia, SIREN 951 022 094, hébergeur IONOS, contact `hello@stack32.com`).
 - **Supabase** — 15 versioned migrations create all tables with UUID PKs, deny-by-default RLS, SECURITY DEFINER RPCs, Storage buckets and pgTAP tests. See `docs/DATA_MODEL.md` and `docs/RLS_SECURITY_MODEL.md`.
 - **Auth** — SSR cookies via `@supabase/ssr`, session refresh + route protection in `apps/web/middleware.ts`, translated error mapping. See `docs/AUTH_FLOWS.md`.
 - **State** — TanStack Query for server-state (cache cleared on logout), Zustand strictly for local UI state (sidebar, dialogs).

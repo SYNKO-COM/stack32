@@ -7,7 +7,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { company, getIncompleteCompanyFields } from "@/lib/company";
 
 /** Single source for legal drafts' last revision date. */
-export const LEGAL_LAST_UPDATED = "2026-08-03";
+export const LEGAL_LAST_UPDATED = "2026-08-04";
 
 interface LegalSection {
   title: string;
@@ -23,8 +23,8 @@ function companyValues() {
     shareCapital: company.shareCapital,
     website: company.website,
     contactEmail: company.contactEmail,
-    registeredAddress: company.registeredAddress,
     siren: company.siren,
+    siret: company.siret,
     rcs: company.rcs,
     vatNumber: company.vatNumber,
     publicationDirector: company.publicationDirector,

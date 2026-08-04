@@ -32,6 +32,8 @@ export interface AuthRepository {
   signUpWithPassword(email: string, password: string): Promise<SignUpResult>;
   /** Returns null when an OAuth redirect is in progress. */
   signInWithGoogle(): Promise<User | null>;
+  /** Returns null when an OAuth redirect is in progress. */
+  signInWithGithub(): Promise<User | null>;
   sendPasswordReset(email: string): Promise<void>;
   updatePassword(newPassword: string): Promise<void>;
   signOut(): Promise<void>;

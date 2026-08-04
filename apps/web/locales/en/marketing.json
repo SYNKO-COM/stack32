@@ -254,7 +254,11 @@
       "items": [
         {
           "question": "Can I cancel anytime?",
-          "answer": "Yes. Subscriptions are monthly and can be cancelled when you no longer need Pro. You keep Free access within Free limits."
+          "answer": "Yes. Subscriptions are monthly and can be cancelled when you no longer need Pro. You keep access until the end of the period already paid, then Free. Cancellation does not refund the started period."
+        },
+        {
+          "question": "Can I get a refund?",
+          "answer": "Not for a period that has already started: the service (Pro access, credits, agent creation) activates immediately on payment. By ordering, you accept immediate performance and waive the withdrawal right under the French Consumer Code. See the Refund Policy for very limited exceptions."
         },
         {
           "question": "Who handles payment?",

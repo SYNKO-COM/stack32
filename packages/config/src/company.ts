@@ -15,6 +15,7 @@ export interface CompanyInfo {
   shareCapital: string;
   website: string;
   contactEmail: string;
+  /** Kept for internal / registry use; not displayed on marketing legal pages. */
   registeredAddress: string;
   siren: string;
   siret: string;
@@ -32,15 +33,16 @@ export const company: CompanyInfo = {
   legalForm: "EURL (SARL unipersonnelle)",
   shareCapital: "1 000 EUR",
   website: "https://stack32.com",
-  contactEmail: PLACEHOLDER,
+  contactEmail: "hello@stack32.com",
   registeredAddress: "23 Rue Pierre Durand, 27140 Gisors, France",
   siren: "951 022 094",
   siret: "951 022 094 00019",
   rcs: "951 022 094 R.C.S. Evreux",
   vatNumber: "FR56951022094",
   publicationDirector: "Evan Ebwea Songue Ngongui",
-  hostingProvider: PLACEHOLDER,
-  hostingAddress: PLACEHOLDER,
+  hostingProvider: "IONOS SARL",
+  hostingAddress:
+    "7 place de la Gare, BP 70109, 57200 Sarreguemines Cedex, France (RCS Sarreguemines B 431 303 775, SIRET 431 303 775 00016, TVA FR13 431303775). Serveurs opérés par IONOS CLOUD, Elgendorfer Str. 57, 56410 Montabaur, Allemagne",
 };
 
 /** Fields that legally must be filled before going to production. */

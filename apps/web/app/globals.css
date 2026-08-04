@@ -16,7 +16,8 @@
   --brand-to: #fa720b;
   --brand: #fa8a0b;
 
-  --background: #ffffff;
+  /* Soft grey canvas so white cards / glass panels read as distinct layers. */
+  --background: #f3f3f5;
   --foreground: #0a0a0a;
   --card: #ffffff;
   --card-foreground: #0a0a0a;
@@ -24,30 +25,31 @@
   --popover-foreground: #0a0a0a;
   --primary: #fa8a0b;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
+  --secondary: #e8e8ec;
   --secondary-foreground: #0a0a0a;
-  --muted: #f4f4f5;
+  --muted: #e8e8ec;
   --muted-foreground: #52525b;
   --accent: #fff7ed;
   --accent-foreground: #0a0a0a;
   --destructive: #dc2626;
-  --border: #e4e4e7;
-  --input: #e4e4e7;
+  --border: #d4d4d8;
+  --input: #d4d4d8;
   --ring: #fa8a0b;
-  --sidebar: #fafafa;
+  --sidebar: #ebebed;
   --sidebar-foreground: #0a0a0a;
   --sidebar-primary: #fa8a0b;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #fff7ed;
   --sidebar-accent-foreground: #0a0a0a;
-  --sidebar-border: #e4e4e7;
+  --sidebar-border: #d4d4d8;
   --sidebar-ring: #fa8a0b;
 
-  --grid-dot: rgb(0 0 0 / 0.1);
-  --glass-bg: rgb(255 255 255 / 0.72);
-  --glass-border: rgb(0 0 0 / 0.08);
-  --glass-strong-bg: rgb(255 255 255 / 0.86);
-  --glass-strong-border: rgb(0 0 0 / 0.1);
+  /* Dots must stay visible on the light grey canvas. */
+  --grid-dot: rgb(0 0 0 / 0.16);
+  --glass-bg: rgb(255 255 255 / 0.82);
+  --glass-border: rgb(0 0 0 / 0.12);
+  --glass-strong-bg: rgb(255 255 255 / 0.94);
+  --glass-strong-border: rgb(0 0 0 / 0.14);
   --surface: #ffffff;
 }
 

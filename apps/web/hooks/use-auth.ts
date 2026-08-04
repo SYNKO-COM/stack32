@@ -14,6 +14,9 @@ export function useCurrentUser() {
   return useQuery({
     queryKey: authKeys.user,
     queryFn: () => getAuthRepository().getCurrentUser(),
+    staleTime: 10_000,
+    retry: 2,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -21,6 +24,9 @@ export function useProfile() {
   return useQuery({
     queryKey: authKeys.profile,
     queryFn: () => getAuthRepository().getProfile(),
+    staleTime: 10_000,
+    retry: 2,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -46,6 +52,14 @@ export function useSignInWithGoogle() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => getAuthRepository().signInWithGoogle(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
+  });
+}
+
+export function useSignInWithGithub() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => getAuthRepository().signInWithGithub(),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
   });
 }

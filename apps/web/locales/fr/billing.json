@@ -15,7 +15,7 @@
   },
   "upgrade": {
     "title": "Passer à Pro",
-    "subtitle": "Débloquez les agents illimités et tout ce que Stack32 a à offrir.",
+    "subtitle": "Débloquez les agents illimités et tout ce que Stack32 a à offrir. L'accès et les crédits s'activent immédiatement après paiement.",
     "features": [
       "Agents illimités",
       "Tests et réparation automatiques",
@@ -23,6 +23,10 @@
       "Historique des versions",
       "Support prioritaire"
     ],
+    "consents": {
+      "terms": "J'ai lu et j'accepte les <terms>Conditions Générales d'Utilisation</terms>, les <sales>Conditions d'abonnement</sales> et la <refunds>Politique de remboursement</refunds>.",
+      "immediate": "J'accepte l'exécution immédiate de la prestation (accès Pro, crédits, création d'agents) et renonce expressément à mon droit de rétractation, conformément au Code de la consommation. Je comprends que la période entamée n'est pas remboursable."
+    },
     "cta": "Passer à Pro",
     "processing": "Redirection vers le paiement…"
   },

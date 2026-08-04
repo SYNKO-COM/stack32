@@ -42,22 +42,22 @@ function useTypewriter(examples: string[] | undefined, enabled: boolean): string
       const current = examples[indexRef.current % examples.length];
       if (!deletingRef.current) {
         charRef.current += 1;
+        setText(current.slice(0, charRef.current));
         if (charRef.current >= current.length) {
           deletingRef.current = true;
-          setText(current);
           return 2200;
         }
-      } else {
-        charRef.current -= 2;
-        if (charRef.current <= 0) {
-          charRef.current = 0;
-          deletingRef.current = false;
-          indexRef.current += 1;
-          return 400;
-        }
+        return 45;
       }
-      setText(current.slice(0, Math.max(0, charRef.current)));
-      return deletingRef.current ? 18 : 45;
+
+      charRef.current = Math.max(0, charRef.current - 2);
+      setText(current.slice(0, charRef.current));
+      if (charRef.current === 0) {
+        deletingRef.current = false;
+        indexRef.current += 1;
+        return 400;
+      }
+      return 18;
     };
 
     let timeout: ReturnType<typeof setTimeout>;
@@ -97,7 +97,7 @@ export function PromptComposer({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, size === "hero" ? 200 : 160)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, size === "hero" ? 240 : 160)}px`;
   }, [value, size]);
 
   const canSend = value.trim().length > 0 && !disabled && !busy;
@@ -111,8 +111,8 @@ export function PromptComposer({
   return (
     <div
       className={cn(
-        "glass-strong shadow-glow-sm rounded-[28px] p-3 transition-shadow focus-within:shadow-glow",
-        size === "hero" ? "p-4" : "p-3",
+        "glass-strong shadow-glow-sm rounded-[28px] transition-shadow focus-within:shadow-glow",
+        size === "hero" ? "rounded-[32px] p-5 sm:p-6" : "p-3",
         className,
       )}
     >
@@ -132,18 +132,25 @@ export function PromptComposer({
         }}
         placeholder={animatedPlaceholders ? animated : placeholder}
         disabled={disabled}
-        rows={size === "hero" ? 2 : 1}
+        rows={size === "hero" ? 3 : 1}
         className={cn(
-          "w-full resize-none bg-transparent px-2 pt-1 text-foreground placeholder:text-muted-foreground/70 focus:outline-none",
-          size === "hero" ? "min-h-16 text-base" : "min-h-10 text-sm",
+          "w-full resize-none bg-transparent text-foreground placeholder:text-muted-foreground/70 focus:outline-none",
+          size === "hero"
+            ? "min-h-20 px-2.5 pt-1.5 text-lg leading-relaxed"
+            : "min-h-10 px-2 pt-1 text-sm",
         )}
       />
-      <div className="mt-1 flex items-center justify-between gap-2">
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2",
+          size === "hero" ? "mt-3" : "mt-1",
+        )}
+      >
         <div className="flex items-center gap-1">
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size={size === "hero" ? "icon" : "icon-sm"}
             className="rounded-full text-muted-foreground"
             aria-label={t("composer.attach")}
             title={t("composer.attach")}
@@ -153,7 +160,7 @@ export function PromptComposer({
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size={size === "hero" ? "icon" : "icon-sm"}
             className="rounded-full text-muted-foreground"
             aria-label={t("composer.voice")}
             title={t("composer.voice")}
@@ -179,11 +186,14 @@ export function PromptComposer({
             size={size === "hero" ? "default" : "sm"}
             onClick={submit}
             disabled={!canSend}
-            className="gap-1.5 rounded-full"
+            className={cn(
+              "gap-1.5 rounded-full",
+              size === "hero" && "h-11 px-5 text-base",
+            )}
             aria-label={t("composer.send")}
           >
             {busy ? t("composer.sending") : t("composer.build")}
-            <ArrowUp className="size-4" aria-hidden="true" />
+            <ArrowUp className={size === "hero" ? "size-5" : "size-4"} aria-hidden="true" />
           </Button>
         </div>
       </div>

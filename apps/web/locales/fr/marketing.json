@@ -254,7 +254,11 @@
       "items": [
         {
           "question": "Puis-je annuler à tout moment ?",
-          "answer": "Oui. L'abonnement est mensuel et annulable quand vous n'avez plus besoin de Pro. Vous conservez l'accès Free dans les limites du plan gratuit."
+          "answer": "Oui. L'abonnement est mensuel et annulable quand vous n'avez plus besoin de Pro. Vous conservez l'accès jusqu'à la fin de la période déjà payée, puis le plan Free. L'annulation ne donne pas lieu à un remboursement de la période entamée."
+        },
+        {
+          "question": "Puis-je être remboursé ?",
+          "answer": "Non pour une période déjà commencée : le service (accès Pro, crédits, création d'agents) s'active immédiatement dès le paiement. En commandant, vous acceptez l'exécution immédiate et renoncez au droit de rétractation (Code de la consommation). Voir la Politique de remboursement pour les exceptions très limitées."
         },
         {
           "question": "Qui gère le paiement ?",

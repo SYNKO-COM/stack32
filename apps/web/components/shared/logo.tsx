@@ -27,6 +27,8 @@ interface LogoProps {
   href?: string;
   /** Full wordmark (icon + Stack32 text) or compact mark only. */
   withWordmark?: boolean;
+  /** Larger mark + wordmark for auth/onboarding headers. */
+  size?: "default" | "lg";
   className?: string;
 }
 
@@ -37,12 +39,29 @@ interface LogoProps {
  * always follows the current theme (black on light, white on dark) without
  * depending on wordmark plate exports that composite poorly on the web.
  */
-export function Logo({ href = "/", withWordmark = true, className }: LogoProps) {
+export function Logo({
+  href = "/",
+  withWordmark = true,
+  size = "default",
+  className,
+}: LogoProps) {
+  const large = size === "lg";
   const content = (
-    <span className={cn("inline-flex items-center gap-2.5 bg-transparent", className)}>
-      <LogoMark />
+    <span
+      className={cn(
+        "inline-flex items-center bg-transparent",
+        large ? "gap-3" : "gap-2.5",
+        className,
+      )}
+    >
+      <LogoMark className={large ? "size-10" : undefined} />
       {withWordmark ? (
-        <span className="font-brand text-[1.35rem] leading-none tracking-tight text-foreground">
+        <span
+          className={cn(
+            "font-brand leading-none tracking-tight text-foreground",
+            large ? "text-[1.65rem]" : "text-[1.35rem]",
+          )}
+        >
           Stack32
         </span>
       ) : null}

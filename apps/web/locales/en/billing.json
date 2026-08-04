@@ -15,7 +15,7 @@
   },
   "upgrade": {
     "title": "Upgrade to Pro",
-    "subtitle": "Unlock unlimited agents and everything Stack32 has to offer.",
+    "subtitle": "Unlock unlimited agents and everything Stack32 has to offer. Access and credits activate immediately after payment.",
     "features": [
       "Unlimited agents",
       "Automatic testing and repair",
@@ -23,6 +23,10 @@
       "Version history",
       "Priority support"
     ],
+    "consents": {
+      "terms": "I have read and accept the <terms>Terms of Use</terms>, the <sales>Subscription Terms</sales> and the <refunds>Refund Policy</refunds>.",
+      "immediate": "I accept the immediate performance of the service (Pro access, credits, agent creation) and expressly waive my right of withdrawal under the French Consumer Code. I understand that the started period is non-refundable."
+    },
     "cta": "Upgrade now",
     "processing": "Redirecting to checkout…"
   },

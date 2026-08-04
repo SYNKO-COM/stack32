@@ -61,8 +61,16 @@ export class MockAuthRepository implements AuthRepository {
   }
 
   async signInWithGoogle(): Promise<User | null> {
+    return this.signInWithOAuthMock("google");
+  }
+
+  async signInWithGithub(): Promise<User | null> {
+    return this.signInWithOAuthMock("github");
+  }
+
+  private async signInWithOAuthMock(provider: "google" | "github"): Promise<User | null> {
     await delay(600);
-    const user = makeUser("demo@stack32.com");
+    const user = makeUser(`${provider}@stack32.com`);
     const previous = readState();
     writeState({ user, profile: previous.profile ?? makeProfile(user.id) });
     return user;

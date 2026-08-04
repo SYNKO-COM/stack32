@@ -6,7 +6,8 @@ Phase 1 delivered the full product foundation in mock mode. Everything below is 
 
 - [ ] Wire Supabase Auth (email/password + Google OAuth) into `AuthRepository` (`apps/web/lib/repositories`), replacing `MockAuthRepository` in `factory.ts` when `NEXT_PUBLIC_USE_MOCK_DATA=false`.
 - [ ] Register `updateSupabaseSession` (`lib/supabase/middleware.ts`) in a root `middleware.ts` and protect `/agents`, `/onboarding` server-side (replaces the client-side `RequireAuth`).
-- [ ] Apple sign-in and magic links (UI placeholders already exist in `AuthForm`).
+- [ ] Magic links (optional).
+- [x] GitHub sign-in (replaces Apple placeholder).
 - [ ] Persist profiles/onboarding to Supabase (`profiles`, `onboarding_responses`).
 - [ ] Supabase implementations of `AgentRepository`, `BuilderRepository`, `LiveRepository`, `KnowledgeRepository`.
 - [ ] Email confirmation flow (screen exists; wire `auth/callback` states).
@@ -40,7 +41,7 @@ Phase 1 delivered the full product foundation in mock mode. Everything below is 
 - [ ] Real Whop checkout session creation (server-side, `WHOP_API_KEY`) in `BillingRepository`.
 - [ ] Whop webhook verification + `webhook_events` persistence (`app/api/webhooks/whop/route.ts`).
 - [ ] Plan gating (agent limits per plan) via the protected-route helper.
-- [ ] Complete `packages/config/src/company.ts` placeholders (contact email, hosting provider) — the dev banner on legal pages disappears automatically.
+- [x] Complete `packages/config/src/company.ts` placeholders (contact email, hosting provider) — the dev banner on legal pages disappears automatically.
 - [ ] Legal review of all `/legal/*` drafts by a lawyer.
 - [ ] Observability: Sentry, Langfuse, structured log shipping.
 - [ ] Deployment: Vercel (web), Cloud Run (agent-service), hosted Supabase; secrets management.

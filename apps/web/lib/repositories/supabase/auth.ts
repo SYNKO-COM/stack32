@@ -45,9 +45,19 @@ export class SupabaseAuthRepository implements AuthRepository {
   }
 
   async signInWithGoogle(): Promise<User | null> {
+    return this.signInWithOAuthProvider("google");
+  }
+
+  async signInWithGithub(): Promise<User | null> {
+    return this.signInWithOAuthProvider("github");
+  }
+
+  private async signInWithOAuthProvider(
+    provider: "google" | "github",
+  ): Promise<User | null> {
     const supabase = requireSupabaseBrowserClient();
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider,
       options: {
         redirectTo: `${appOrigin()}/auth/callback?next=/agents`,
       },

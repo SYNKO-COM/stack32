@@ -2,53 +2,68 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  Bot,
   Briefcase,
   Code2,
   Ellipsis,
   GraduationCap,
   Handshake,
+  IdCard,
   Megaphone,
-  MessageCircle,
   Rocket,
-  Search,
-  Users,
-  Video,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 
+import {
+  ChatgptLogo,
+  GoogleLogo,
+  InstagramLogo,
+  LinkedinLogo,
+  RedditLogo,
+  TiktokLogo,
+  XLogo,
+  YoutubeLogo,
+} from "@/components/onboarding/discovery-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCompleteOnboarding } from "@/hooks/use-auth";
 import { useCreateAgent } from "@/hooks/use-agents";
+import { useCompleteOnboarding, useCurrentUser } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
+import {
+  clearOnboardingDraft,
+  readOnboardingDraft,
+  writeOnboardingDraft,
+} from "@/lib/onboarding-draft";
 import { cn } from "@/lib/utils";
 
 const TOTAL_STEPS = 3;
 
-const DISCOVERY_OPTIONS = [
-  { id: "googleSearch", icon: Search },
-  { id: "youtube", icon: Video },
-  { id: "twitter", icon: MessageCircle },
-  { id: "linkedin", icon: Users },
-  { id: "tiktok", icon: Video },
-  { id: "reddit", icon: MessageCircle },
-  { id: "chatgpt", icon: Bot },
+type OptionIcon = ComponentType<{ className?: string }>;
+
+const DISCOVERY_OPTIONS: readonly { id: string; icon: OptionIcon; brand?: boolean }[] = [
+  { id: "googleSearch", icon: GoogleLogo, brand: true },
+  { id: "youtube", icon: YoutubeLogo, brand: true },
+  { id: "twitter", icon: XLogo, brand: true },
+  { id: "linkedin", icon: LinkedinLogo, brand: true },
+  { id: "tiktok", icon: TiktokLogo, brand: true },
+  { id: "instagram", icon: InstagramLogo, brand: true },
+  { id: "reddit", icon: RedditLogo, brand: true },
+  { id: "chatgpt", icon: ChatgptLogo, brand: true },
   { id: "friends", icon: Handshake },
   { id: "other", icon: Ellipsis },
-] as const;
+];
 
-const ROLE_OPTIONS = [
+const ROLE_OPTIONS: readonly { id: string; icon: OptionIcon }[] = [
   { id: "founder", icon: Rocket },
   { id: "freelancer", icon: Briefcase },
   { id: "marketer", icon: Megaphone },
   { id: "developer", icon: Code2 },
   { id: "sales", icon: Handshake },
   { id: "student", icon: GraduationCap },
+  { id: "employee", icon: IdCard },
   { id: "other", icon: Ellipsis },
-] as const;
+];
 
 const COUNTRY_CODES = ["+33", "+1", "+44", "+49", "+34", "+32", "+41", "+352"] as const;
 
@@ -58,14 +73,14 @@ function OptionGrid({
   onSelect,
   translate,
 }: {
-  options: readonly { id: string; icon: React.ComponentType<{ className?: string }> }[];
+  options: readonly { id: string; icon: OptionIcon; brand?: boolean }[];
   selected: string | null;
   onSelect: (id: string) => void;
   translate: (id: string) => string;
 }) {
   return (
     <div role="radiogroup" className="grid gap-2.5 sm:grid-cols-2">
-      {options.map(({ id, icon: Icon }) => {
+      {options.map(({ id, icon: Icon, brand }) => {
         const isSelected = selected === id;
         return (
           <button
@@ -83,11 +98,15 @@ function OptionGrid({
           >
             <span
               className={cn(
-                "flex size-8 shrink-0 items-center justify-center rounded-xl",
-                isSelected ? "bg-brand/20 text-brand" : "bg-foreground/5 text-foreground/70",
+                "flex size-8 shrink-0 items-center justify-center",
+                brand
+                  ? "text-foreground"
+                  : isSelected
+                    ? "text-brand"
+                    : "text-foreground/70",
               )}
             >
-              <Icon className="size-4" aria-hidden="true" />
+              <Icon className="size-5" aria-hidden="true" />
             </span>
             {translate(id)}
           </button>
@@ -101,9 +120,12 @@ export function OnboardingFlow() {
   const { t } = useTranslation(["onboarding", "common"]);
   const router = useRouter();
   const reducedMotion = useReducedMotion();
+  const { data: user } = useCurrentUser();
+  const userId = user?.id ?? "";
   const completeOnboarding = useCompleteOnboarding();
   const createAgent = useCreateAgent();
 
+  const [ready, setReady] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
   const [step, setStep] = useState(1);
   const [finishing, setFinishing] = useState(false);
@@ -115,10 +137,56 @@ export function OnboardingFlow() {
   const [phone, setPhone] = useState("");
   const [useCase, setUseCase] = useState("");
 
+  // Restore draft once we know who the user is.
   useEffect(() => {
+    if (!userId) return;
+    const draft = readOnboardingDraft(userId);
+    setStep(draft.step);
+    setShowIntro(draft.showIntro);
+    setDiscoverySource(draft.discoverySource);
+    setRole(draft.role);
+    setFirstName(draft.firstName);
+    setCountryCode(
+      COUNTRY_CODES.includes(draft.countryCode as (typeof COUNTRY_CODES)[number])
+        ? draft.countryCode
+        : COUNTRY_CODES[0],
+    );
+    setPhone(draft.phone);
+    setUseCase(draft.useCase);
+    setReady(true);
+  }, [userId]);
+
+  // Persist on every meaningful change (after restore).
+  useEffect(() => {
+    if (!ready || !userId) return;
+    writeOnboardingDraft(userId, {
+      step: step as 1 | 2 | 3,
+      showIntro,
+      discoverySource,
+      role,
+      firstName,
+      countryCode,
+      phone,
+      useCase,
+    });
+  }, [
+    ready,
+    userId,
+    step,
+    showIntro,
+    discoverySource,
+    role,
+    firstName,
+    countryCode,
+    phone,
+    useCase,
+  ]);
+
+  useEffect(() => {
+    if (!ready || !showIntro) return;
     const timeout = setTimeout(() => setShowIntro(false), reducedMotion ? 300 : 2600);
     return () => clearTimeout(timeout);
-  }, [reducedMotion]);
+  }, [ready, showIntro, reducedMotion]);
 
   const canContinue =
     (step === 1 && discoverySource !== null) ||
@@ -127,17 +195,30 @@ export function OnboardingFlow() {
 
   const handleFinish = async () => {
     setFinishing(true);
-    await completeOnboarding.mutateAsync({
-      discoverySource: discoverySource ?? undefined,
-      role: role ?? undefined,
-      firstName: firstName.trim(),
-      phone: phone.trim() ? `${countryCode} ${phone.trim()}` : undefined,
-      primaryUseCase: useCase.trim() || undefined,
-    });
-    // A fresh agent hosts the pending prompt (consumed by the Build view).
-    const agent = await createAgent.mutateAsync(undefined);
-    router.push(`/agents/${agent.id}/build`);
+    try {
+      await completeOnboarding.mutateAsync({
+        discoverySource: discoverySource ?? undefined,
+        role: role ?? undefined,
+        firstName: firstName.trim(),
+        phone: phone.trim() ? `${countryCode} ${phone.trim()}` : undefined,
+        primaryUseCase: useCase.trim() || undefined,
+      });
+      if (userId) clearOnboardingDraft(userId);
+      // A fresh agent hosts the pending prompt (consumed by the Build view).
+      const agent = await createAgent.mutateAsync(undefined);
+      router.push(`/agents/${agent.id}/build`);
+    } catch {
+      setFinishing(false);
+    }
   };
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+        {t("common:loading")}
+      </div>
+    );
+  }
 
   if (showIntro) {
     return (
@@ -165,10 +246,6 @@ export function OnboardingFlow() {
 
   return (
     <div className="mx-auto w-full max-w-xl" aria-label={t("a11y.stepper")}>
-      <p className="mb-2 font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
-        {t("progress", { current: step, total: TOTAL_STEPS })}
-      </p>
-
       <AnimatePresence mode="wait">
         <motion.div
           key={step}

@@ -20,7 +20,8 @@ Supabase Auth with SSR cookies (`@supabase/ssr`). Sessions are refreshed by `app
 | --- | --- |
 | Email/password signup | `signUp` with `emailRedirectTo=/auth/confirm?next=/onboarding`. If confirmation is enabled (hosted default), the form shows the "check your inbox" state; the email link hits `/auth/confirm` (verifyOtp) → session → `/onboarding`. |
 | Login | `signInWithPassword` → profile check → `/agents` or `/onboarding`. |
-| Google OAuth | `signInWithOAuth` (PKCE) → provider → `/auth/callback` (code exchange) → onboarding check → `/agents` or `/onboarding`. Apple: UI scaffold present, provider not configured. |
+| Google OAuth | `signInWithOAuth` (PKCE) → provider → `/auth/callback` (code exchange) → onboarding check → `/agents` or `/onboarding`. |
+| GitHub OAuth | Same flow as Google with `provider: "github"`. Requires the GitHub provider enabled in the Supabase dashboard. |
 | Forgot password | `resetPasswordForEmail` with `redirectTo=/auth/confirm?next=/reset-password`; the confirm route verifies the recovery token and lands on `/reset-password` where `updateUser({password})` applies. |
 | Logout | `signOut` + **full React Query cache clear** (no private data survives), redirect to `/`. |
 | Session expiry | Middleware `getUser()` refreshes tokens; an expired/invalid session on a protected route redirects to `/login`. |

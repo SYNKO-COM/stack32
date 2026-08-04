@@ -15,8 +15,9 @@ export default function ContactPage() {
   const { t } = useTranslation("marketing");
   const [sent, setSent] = useState(false);
 
-  const contactEmail = company.contactEmail === PLACEHOLDER ? null : company.contactEmail;
   const topics = t("contact.topics.items", { returnObjects: true }) as Topic[];
+  const contactEmail =
+    company.contactEmail === PLACEHOLDER ? null : company.contactEmail;
 
   return (
     <div className="mx-auto max-w-5xl px-6 pt-36 pb-24">
@@ -109,15 +110,20 @@ export default function ContactPage() {
           <div>
             <h2 className="font-medium">{t("contact.aside.companyTitle")}</h2>
             <p className="mt-1.5 text-muted-foreground">
-              {company.legalCompanyName} — {company.registeredAddress}
+              {company.legalCompanyName}
+              {contactEmail ? (
+                <>
+                  {" — "}
+                  <a
+                    href={`mailto:${contactEmail}`}
+                    className="underline-offset-2 hover:underline"
+                  >
+                    {contactEmail}
+                  </a>
+                </>
+              ) : null}
             </p>
           </div>
-          {contactEmail ? (
-            <div>
-              <h2 className="font-medium">{t("contact.aside.emailTitle")}</h2>
-              <p className="mt-1.5 text-muted-foreground">{contactEmail}</p>
-            </div>
-          ) : null}
         </aside>
       </div>
     </div>

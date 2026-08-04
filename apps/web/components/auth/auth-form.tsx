@@ -6,7 +6,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useSignIn, useSignInWithGoogle, useSignUp } from "@/hooks/use-auth";
+import {
+  useSignIn,
+  useSignInWithGithub,
+  useSignInWithGoogle,
+  useSignUp,
+} from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import { authErrorKey } from "@/lib/auth/errors";
 import { getAuthRepository } from "@/lib/repositories/factory";
@@ -20,6 +25,14 @@ function GoogleIcon() {
         fill="currentColor"
         d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81Z"
       />
+    </svg>
+  );
+}
+
+function GithubIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="currentColor">
+      <path d="M12 2C6.477 2 2 6.586 2 12.253c0 4.53 2.865 8.367 6.839 9.722.5.094.683-.222.683-.492 0-.243-.01-1.052-.014-1.91-2.782.618-3.369-1.168-3.369-1.168-.454-1.18-1.11-1.494-1.11-1.494-.908-.636.069-.623.069-.623 1.003.072 1.531 1.057 1.531 1.057.892 1.564 2.341 1.112 2.91.85.091-.662.35-1.112.636-1.367-2.22-.259-4.555-1.14-4.555-5.077 0-1.122.39-2.04 1.029-2.76-.103-.259-.446-1.302.098-2.714 0 0 .84-.275 2.75 1.052A9.36 9.36 0 0 1 12 6.844a9.36 9.36 0 0 1 2.504.346c1.909-1.327 2.748-1.052 2.748-1.052.546 1.412.203 2.455.1 2.714.64.72 1.028 1.638 1.028 2.76 0 3.947-2.339 4.815-4.566 5.069.359.317.679.943.679 1.902 0 1.373-.012 2.48-.012 2.817 0 .272.18.59.688.49A10.27 10.27 0 0 0 22 12.253C22 6.586 17.523 2 12 2Z" />
     </svg>
   );
 }
@@ -53,8 +66,10 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
   const signIn = useSignIn();
   const signUp = useSignUp();
   const google = useSignInWithGoogle();
+  const github = useSignInWithGithub();
 
-  const busy = signIn.isPending || signUp.isPending || google.isPending;
+  const busy =
+    signIn.isPending || signUp.isPending || google.isPending || github.isPending;
   const ns = mode === "login" ? "login" : "signup";
 
   const finish = async () => {
@@ -92,10 +107,11 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
     }
   };
 
-  const handleGoogle = async () => {
+  const handleOAuth = async (provider: "google" | "github") => {
     setError(null);
     try {
-      const user = await google.mutateAsync();
+      const mutation = provider === "google" ? google : github;
+      const user = await mutation.mutateAsync();
       // null = OAuth redirect in progress; the provider page takes over.
       if (user) await finish();
     } catch (err) {
@@ -120,7 +136,7 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
         type="button"
         variant="outline"
         className="w-full gap-2 rounded-xl"
-        onClick={handleGoogle}
+        onClick={() => handleOAuth("google")}
         disabled={busy}
       >
         <GoogleIcon />
@@ -129,11 +145,12 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
       <Button
         type="button"
         variant="outline"
-        className="w-full gap-2 rounded-xl opacity-60"
-        disabled
-        title={t("auth:oauth.appleSoon")}
+        className="w-full gap-2 rounded-xl"
+        onClick={() => handleOAuth("github")}
+        disabled={busy}
       >
-        {t("auth:oauth.apple")}
+        <GithubIcon />
+        {t("auth:oauth.github")}
       </Button>
 
       <div className="flex items-center gap-3">

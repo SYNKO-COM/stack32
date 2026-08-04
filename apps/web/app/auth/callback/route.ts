@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
           .select("onboarding_completed")
           .eq("id", user.id)
           .maybeSingle();
-        if (profile && !profile.onboarding_completed) {
+        // Missing profile (trigger lag) or incomplete onboarding → onboarding.
+        if (!profile || !profile.onboarding_completed) {
           return NextResponse.redirect(`${origin}/onboarding`);
         }
       }

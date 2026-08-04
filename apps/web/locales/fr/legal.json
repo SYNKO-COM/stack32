@@ -6,7 +6,7 @@
     "lastUpdated": "Dernière mise à jour : {{date}}",
     "tableOfContents": "Sommaire",
     "backToLegal": "Toutes les pages légales",
-    "draftNotice": "Ce document est un premier projet structuré. Il n'a pas été relu par un avocat et ne constitue pas un conseil juridique."
+    "draftNotice": "Ce document est un projet juridique structuré destiné à informer les utilisateurs. Il n'a pas été relu par un avocat et ne constitue pas un conseil juridique. En cas de doute, consultez un professionnel du droit."
   },
   "index": {
     "title": "Mentions légales et documents",
@@ -23,7 +23,7 @@
       "sales": "Conditions d'abonnement et de vente",
       "salesDescription": "Conditions applicables aux abonnements payants.",
       "refunds": "Politique de remboursement",
-      "refundsDescription": "Quand et comment être remboursé."
+      "refundsDescription": "Pourquoi les abonnements ne sont pas remboursables et exceptions limitées."
     }
   },
   "notice": {
@@ -31,7 +31,7 @@
     "sections": [
       {
         "title": "Éditeur",
-        "body": "Le site et le service Stack32 ({{website}}) sont édités par {{companyName}}, {{legalForm}} au capital de {{shareCapital}}, immatriculée sous le SIREN {{siren}} ({{rcs}}), dont le siège social est situé {{registeredAddress}}. Numéro de TVA intracommunautaire : {{vatNumber}}. Stack32 est un produit {{parentBrand}}."
+        "body": "Le site et le service Stack32 ({{website}}) sont édités par {{companyName}}, {{legalForm}} au capital de {{shareCapital}}, immatriculée sous le SIREN {{siren}} ({{rcs}}), SIRET {{siret}}. Numéro de TVA intracommunautaire : {{vatNumber}}. Stack32 est un produit {{parentBrand}}."
       },
       {
         "title": "Directeur de la publication",
@@ -39,25 +39,33 @@
       },
       {
         "title": "Contact",
-        "body": "Vous pouvez nous contacter par email à {{contactEmail}} ou par courrier à {{registeredAddress}}."
+        "body": "Pour toute question relative au service, à votre compte ou aux présentes mentions, contactez-nous exclusivement par email à {{contactEmail}}. Nous ne traitons pas de demandes commerciales ou support par courrier postal."
       },
       {
         "title": "Hébergement",
-        "body": "Le service est hébergé par {{hostingProvider}}, {{hostingAddress}}."
+        "body": "Le service est hébergé par {{hostingProvider}}, {{hostingAddress}}. Contact hébergeur : info@ionos.fr / 0970 808 911."
+      },
+      {
+        "title": "Nature du service",
+        "body": "Stack32 est un service numérique en ligne (SaaS) permettant de créer, configurer et utiliser des agents d'intelligence artificielle. L'accès au service, l'attribution des crédits d'usage et la mise à disposition des fonctionnalités payantes interviennent immédiatement après validation du paiement."
       },
       {
         "title": "Propriété intellectuelle",
-        "body": "L'ensemble des éléments du service Stack32 (structure, textes, visuels, logos, code) est protégé par le droit de la propriété intellectuelle et demeure la propriété exclusive de {{companyName}} ou de ses concédants. Toute reproduction sans autorisation écrite préalable est interdite."
+        "body": "L'ensemble des éléments du service Stack32 (structure, textes, visuels, logos, code, marques) est protégé par le droit de la propriété intellectuelle et demeure la propriété exclusive de {{companyName}} ou de ses concédants. Toute reproduction, représentation, adaptation ou exploitation, totale ou partielle, sans autorisation écrite préalable est interdite."
+      },
+      {
+        "title": "Droit applicable",
+        "body": "Les présentes mentions et le service Stack32 sont régis par le droit français."
       }
     ]
   },
   "terms": {
     "title": "Conditions générales d'utilisation",
-    "intro": "Les présentes conditions générales d'utilisation encadrent l'accès et l'utilisation du service Stack32, édité par {{companyName}}. En créant un compte ou en utilisant Stack32, vous les acceptez.",
+    "intro": "Les présentes conditions générales d'utilisation (ci-après « CGU ») encadrent l'accès et l'utilisation du service Stack32, édité par {{companyName}}. En créant un compte, en utilisant Stack32 ou en souscrivant un abonnement, vous acceptez sans réserve les présentes CGU, les Conditions d'abonnement et de vente, et la Politique de remboursement.",
     "sections": [
       {
         "title": "1. Le service",
-        "body": "Stack32 permet de créer, tester et utiliser des agents IA en les décrivant en langage naturel. Le service comprend une interface de création (Builder), un chat en direct avec vos agents (Live), et une vue de leur configuration (Structure). Stack32 est fourni comme application web accessible depuis un navigateur compatible."
+        "body": "Stack32 permet de créer, tester et utiliser des agents IA en les décrivant en langage naturel. Le service comprend une interface de création (Builder), un chat en direct avec vos agents (Live), et une vue de leur configuration (Structure). Stack32 est fourni comme application web accessible depuis un navigateur compatible. Dès l'activation d'un abonnement payant, des crédits d'usage peuvent être crédités et les fonctionnalités Pro deviennent immédiatement disponibles."
       },
       {
         "title": "2. Compte",
@@ -76,8 +84,8 @@
         "body": "Vous restez propriétaire des contenus que vous soumettez (prompts, documents, sources de connaissances). Vous accordez à {{companyName}} les licences strictement nécessaires au fonctionnement du service, y compris le traitement de vos contenus par des fournisseurs tiers de modèles d'IA."
       },
       {
-        "title": "6. Abonnements",
-        "body": "Certaines fonctionnalités nécessitent un abonnement payant. Les prix, la facturation et la résiliation sont décrits dans les Conditions d'abonnement et de vente. La facturation est assurée par notre prestataire de paiement, Whop."
+        "title": "6. Abonnements, exécution immédiate et non-remboursement",
+        "body": "Certaines fonctionnalités nécessitent un abonnement payant. Les prix, la facturation, le droit de rétractation et la résiliation sont décrits dans les Conditions d'abonnement et de vente et la Politique de remboursement. En souscrivant, vous demandez l'exécution immédiate du service numérique (accès Pro, crédits, capacité de création d'agents). Conformément aux articles L221-18 et L221-28 du Code de la consommation, vous renoncez expressément à votre droit de rétractation dès lors que l'exécution a commencé avec votre accord préalable. Les périodes entamées ne sont pas remboursables, sauf disposition légale impérative contraire."
       },
       {
         "title": "7. Disponibilité",
@@ -89,11 +97,11 @@
       },
       {
         "title": "9. Résiliation",
-        "body": "Vous pouvez cesser d'utiliser le service et supprimer votre compte à tout moment. Nous pouvons suspendre ou résilier un compte en cas de manquement aux présentes conditions, avec préavis lorsque cela est raisonnablement possible."
+        "body": "Vous pouvez cesser d'utiliser le service et supprimer votre compte à tout moment. La résiliation d'un abonnement payant suit les règles des Conditions d'abonnement et de vente (fin de période en cours, sans remboursement des sommes déjà versées). Nous pouvons suspendre ou résilier un compte en cas de manquement aux présentes conditions, avec préavis lorsque cela est raisonnablement possible."
       },
       {
-        "title": "10. Droit applicable",
-        "body": "Les présentes conditions sont soumises au droit français. Tout litige qui ne pourrait être résolu à l'amiable sera soumis aux tribunaux français compétents."
+        "title": "10. Droit applicable et litiges",
+        "body": "Les présentes conditions sont soumises au droit français. En cas de litige, vous pouvez d'abord nous contacter à {{contactEmail}}. À défaut d'accord amiable, les tribunaux français compétents seront saisis. Si vous êtes consommateur, vous pouvez également recourir à une médiation de la consommation dans les conditions prévues par le Code de la consommation."
       }
     ]
   },
@@ -103,7 +111,7 @@
     "sections": [
       {
         "title": "1. Responsable de traitement",
-        "body": "Le responsable de traitement est {{companyName}}, {{registeredAddress}}. Contact : {{contactEmail}}."
+        "body": "Le responsable de traitement est {{companyName}} (SIREN {{siren}}, {{rcs}}). Contact : {{contactEmail}}."
       },
       {
         "title": "2. Données collectées",
@@ -119,7 +127,7 @@
       },
       {
         "title": "5. Partage",
-        "body": "Les données ne sont partagées qu'avec les sous-traitants nécessaires au fonctionnement du service (hébergement, base de données, fournisseurs de modèles d'IA, prestataire de paiement, mesure d'audience), dans le cadre d'accords de sous-traitance. Nous ne vendons pas de données personnelles."
+        "body": "Les données ne sont partagées qu'avec les sous-traitants nécessaires au fonctionnement du service (hébergement IONOS, base de données, fournisseurs de modèles d'IA, prestataire de paiement, mesure d'audience), dans le cadre d'accords de sous-traitance. Nous ne vendons pas de données personnelles."
       },
       {
         "title": "6. Durées de conservation",
@@ -163,57 +171,77 @@
   },
   "sales": {
     "title": "Conditions d'abonnement et de vente",
-    "intro": "Les présentes conditions s'appliquent aux abonnements payants à Stack32, vendus par {{companyName}}.",
+    "intro": "Les présentes conditions s'appliquent aux abonnements payants à Stack32, vendus par {{companyName}}. Elles complètent les Conditions générales d'utilisation et la Politique de remboursement.",
     "sections": [
       {
-        "title": "1. Offre",
-        "body": "Stack32 est proposé sous forme d'abonnement mensuel donnant accès aux fonctionnalités décrites sur la page tarifs. Les fonctionnalités et limites de chaque plan sont décrites au moment de l'achat."
+        "title": "1. Offre et nature du service",
+        "body": "Stack32 est proposé sous forme d'abonnement donnant accès immédiat à un service numérique (contenu numérique / prestation de service fournie par voie électronique) : accès aux fonctionnalités Pro, attribution éventuelle de crédits d'usage, et capacité de créer et d'exécuter des agents dès validation du paiement. Les fonctionnalités et limites de chaque plan sont décrites au moment de l'achat et sur la page tarifs."
       },
       {
         "title": "2. Prix et paiement",
-        "body": "Les prix sont indiqués lors du parcours de paiement, taxes précisées le cas échéant. Le paiement est traité par notre prestataire, Whop. L'abonnement se renouvelle automatiquement à chaque période jusqu'à résiliation."
+        "body": "Les prix sont indiqués lors du parcours de paiement, taxes précisées le cas échéant. Le paiement est traité par notre prestataire de paiement. L'abonnement se renouvelle automatiquement à chaque période jusqu'à résiliation. Le paiement d'une période vaut commande ferme de cette période."
       },
       {
-        "title": "3. Droit de rétractation",
-        "body": "Pour les consommateurs de l'UE, l'abonnement donne un accès immédiat à un contenu numérique. En souscrivant, vous demandez expressément l'exécution immédiate et reconnaissez renoncer au droit de rétractation de 14 jours une fois le service pleinement accessible, conformément au Code de la consommation."
+        "title": "3. Exécution immédiate",
+        "body": "Dès confirmation du paiement, {{companyName}} exécute immédiatement la prestation : activation de l'abonnement, déblocage des fonctionnalités payantes, et le cas échéant crédit immédiat de votre solde d'usage. Vous pouvez utiliser le service sans attendre l'expiration du délai légal de rétractation."
       },
       {
-        "title": "4. Résiliation",
-        "body": "Vous pouvez résilier à tout moment depuis vos paramètres de facturation. La résiliation prend effet à la fin de la période de facturation en cours. L'accès reste actif jusqu'à cette date."
+        "title": "4. Droit de rétractation — renonciation expresse (Code de la consommation)",
+        "body": "Conformément aux articles L221-18 et suivants du Code de la consommation, le consommateur dispose en principe d'un délai de quatorze (14) jours pour se rétracter d'un contrat conclu à distance. Toutefois, l'article L221-28 prévoit notamment que le droit de rétractation ne peut être exercé pour : (i) la fourniture d'un contenu numérique non fourni sur un support matériel dont l'exécution a commencé après accord préalable exprès du consommateur et renonciation expresse à son droit de rétractation ; (ii) les contrats de prestation de services pleinement exécutés avant la fin du délai de rétractation et dont l'exécution a commencé après accord préalable exprès du consommateur et renonciation expresse. En cochant la case prévue lors du paiement et en validant votre commande, vous (a) demandez expressément que l'exécution commence immédiatement, (b) reconnaissez que le service (accès, crédits, capacité de création d'agents) vous est fourni sans délai, et (c) renoncez expressément à votre droit de rétractation. En conséquence, aucun remboursement n'est dû au titre de la rétractation pour la période entamée."
       },
       {
-        "title": "5. Évolution des prix",
+        "title": "5. Absence de remboursement des périodes entamées",
+        "body": "Sauf disposition légale impérative contraire, {{companyName}} ne procède à aucun remboursement des sommes déjà versées pour une période d'abonnement commencée, y compris en cas de résiliation anticipée, de non-utilisation, de changement d'avis, ou d'usage partiel des crédits. La Politique de remboursement détaille ce principe et les exceptions très limitées (erreur de facturation, défaillance majeure imputable à Stack32)."
+      },
+      {
+        "title": "6. Résiliation",
+        "body": "Vous pouvez résilier à tout moment depuis vos paramètres de facturation ou en contactant {{contactEmail}}. La résiliation prend effet à la fin de la période de facturation en cours : le service et les prélèvements se poursuivent jusqu'au dernier jour de cette période, puis cessent. La résiliation ne donne lieu à aucun remboursement des sommes déjà encaissées pour la période en cours, sauf disposition légale impérative contraire."
+      },
+      {
+        "title": "7. Évolution des prix",
         "body": "Nous pouvons modifier les prix avec un préavis d'au moins 30 jours. Les changements s'appliquent au renouvellement suivant. En cas de désaccord, vous pouvez résilier avant l'entrée en vigueur du nouveau prix."
       },
       {
-        "title": "6. Usage raisonnable",
-        "body": "Les limites d'usage (nombre d'agents, exécutions, volume de connaissances) sont décrites par plan. Nous pouvons limiter un usage abusif menaçant la stabilité de la plateforme, avec préavis lorsque possible."
+        "title": "8. Usage raisonnable",
+        "body": "Les limites d'usage (nombre d'agents, exécutions, volume de connaissances, crédits) sont décrites par plan. Nous pouvons limiter un usage abusif menaçant la stabilité de la plateforme, avec préavis lorsque possible."
+      },
+      {
+        "title": "9. Consentements recueillis au paiement",
+        "body": "Avant tout paiement, vous devez cocher clairement : (1) l'acceptation des CGU (et documents associés, dont la politique de remboursement) ; (2) votre demande d'exécution immédiate et votre renonciation expresse au droit de rétractation. Sans ces consentements, la commande ne peut pas être validée."
       }
     ]
   },
   "refunds": {
     "title": "Politique de remboursement",
-    "intro": "Cette politique précise les cas de remboursement des abonnements Stack32 vendus par {{companyName}}.",
+    "intro": "Cette politique précise les règles de remboursement des abonnements Stack32 vendus par {{companyName}}. Elle s'applique à toute commande d'abonnement payant et complète les Conditions d'abonnement et de vente.",
     "sections": [
       {
-        "title": "1. Principe général",
-        "body": "Les périodes d'abonnement déjà entamées ne sont en principe pas remboursables, le service étant un contenu numérique mis à disposition immédiatement."
+        "title": "1. Principe : pas de remboursement",
+        "body": "Les abonnements Stack32 sont des services numériques à exécution immédiate. Dès le paiement, l'accès Pro est activé, des crédits d'usage peuvent être attribués, et vous pouvez créer et utiliser des agents sans délai. En conséquence, et sauf disposition légale impérative contraire, aucune somme déjà versée pour une période entamée n'est remboursable — y compris si vous n'avez pas utilisé le service, si vous changez d'avis, si vous résiliez en cours de période, ou si vous avez consommé seulement une partie de vos crédits."
       },
       {
-        "title": "2. Défaillance du service",
-        "body": "Si un dysfonctionnement majeur imputable à Stack32 vous a empêché d'utiliser le service pendant une partie significative d'une période de facturation, contactez-nous : nous étudierons de bonne foi un remboursement au prorata ou un avoir."
+        "title": "2. Fondement légal (droit français)",
+        "body": "En application des articles L221-18 et L221-28 du Code de la consommation, le droit de rétractation de 14 jours ne s'applique pas lorsque vous avez expressément demandé l'exécution immédiate d'un contenu numérique / d'une prestation de service fournie par voie électronique et que vous avez renoncé expressément à ce droit avant le début de l'exécution. Ces consentements sont recueillis via les cases à cocher obligatoires du parcours de paiement. Stack32 étant un service numérique non fourni sur support matériel, la renonciation est opposable dans les conditions prévues par la loi."
       },
       {
-        "title": "3. Erreurs de facturation",
-        "body": "Tout prélèvement en double ou erroné sera intégralement remboursé après vérification."
+        "title": "3. Ce que couvre le paiement",
+        "body": "Votre paiement couvre l'accès immédiat au service pour la période souscrite : fonctionnalités Pro, capacité de construction et d'exécution d'agents, et le cas échéant le crédit immédiat de votre solde d'usage. Ces éléments constituent l'exécution de la prestation dès la confirmation du paiement."
       },
       {
-        "title": "4. Comment demander",
-        "body": "Envoyez votre demande à {{contactEmail}} en précisant l'email de votre compte et la facture concernée. Nous répondons sous 7 jours ouvrés. Les remboursements sont effectués sur le moyen de paiement d'origine via notre prestataire de paiement."
+        "title": "4. Résiliation ≠ remboursement",
+        "body": "Vous pouvez résilier votre abonnement à tout moment. La résiliation met fin au renouvellement automatique à l'échéance de la période en cours. Elle ne constitue pas une demande de remboursement : vous conservez l'accès jusqu'à la fin de la période déjà payée, et aucun prorata n'est versé pour les jours non utilisés, sauf disposition légale impérative contraire."
       },
       {
-        "title": "5. Droits légaux",
-        "body": "Rien dans cette politique ne limite vos droits légaux, notamment les garanties légales applicables aux services numériques."
+        "title": "5. Exceptions limitées",
+        "body": "Nous examinerons de bonne foi : (a) les prélèvements en double ou manifestement erronés, remboursés en intégralité après vérification ; (b) une indisponibilité majeure du service imputable à Stack32 vous ayant empêché d'utiliser le service pendant une partie significative de la période, pouvant donner lieu à un avoir ou un remboursement au prorata à notre discrétion raisonnable. Un simple dysfonctionnement temporaire, une erreur d'utilisation, un résultat d'agent insatisfaisant, ou un changement d'avis ne constituent pas des motifs de remboursement."
+      },
+      {
+        "title": "6. Comment nous contacter",
+        "body": "Pour toute demande relative à la facturation, écrivez à {{contactEmail}} en indiquant l'email du compte et la référence de facture. Nous répondons sous 7 jours ouvrés. Tout remboursement éventuel est effectué sur le moyen de paiement d'origine via notre prestataire de paiement."
+      },
+      {
+        "title": "7. Droits légaux impératifs",
+        "body": "Rien dans cette politique ne limite les droits légaux impératifs dont vous disposez en tant que consommateur, notamment les garanties légales applicables aux services numériques lorsque la loi l'impose."
       }
     ]
   }

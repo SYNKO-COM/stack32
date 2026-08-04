@@ -13,6 +13,7 @@
       "twitter": "X (Twitter)",
       "linkedin": "LinkedIn",
       "tiktok": "TikTok",
+      "instagram": "Instagram",
       "reddit": "Reddit",
       "chatgpt": "ChatGPT, Perplexity ou autre IA",
       "friends": "Amis ou famille",
@@ -29,6 +30,7 @@
       "developer": "Développeur",
       "sales": "Commercial",
       "student": "Étudiant",
+      "employee": "Salarié",
       "other": "Autre"
     }
   },

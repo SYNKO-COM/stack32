@@ -11,7 +11,8 @@ _Last updated: 2026-08-04_
 | Hosted deployment | ✅ Done | Migrations pushed to project `mhwzxpscyvuavpfqxfgm` (Postgres 17) |
 | Generated types | ✅ Done | `apps/web/lib/supabase/database.types.ts`, drift-checked in CI |
 | Auth SSR (email/password, Google, reset) | ✅ Done | Middleware session refresh + route protection, `/auth/callback` + `/auth/confirm` |
-| Apple OAuth | 🟡 Scaffold | Button present but disabled; provider not configured yet |
+| Apple OAuth | — Removed | Replaced by GitHub |
+| GitHub OAuth | ✅ Done | Button + `signInWithGithub`; enable provider in Supabase dashboard |
 | Onboarding persistence | ✅ Done | Atomic `complete_onboarding` RPC, upsert-safe |
 | Agent workspace | ✅ Done | `create_agent_workspace` RPC (agent + version 1 + threads), `soft_delete_agent` |
 | Supabase repositories | ✅ Done | Auth, Agents, Builder, Live, Knowledge, Billing behind `NEXT_PUBLIC_DATA_MODE` |
@@ -63,5 +64,5 @@ See `docs/TESTING.md` and `docs/supabase-setup.md` for details.
 
 - Replace polling with Realtime subscriptions in `use-builder` / `use-live`.
 - Next.js 16 deprecates the `middleware.ts` convention in favour of `proxy.ts`; migrate when `@supabase/ssr` documents the new pattern.
-- Configure Google (and later Apple) OAuth providers in the hosted dashboard; local scaffolding is ready.
+- Configure Google and GitHub OAuth providers in the hosted dashboard; app wiring is ready.
 - Wire attachments UI to the `attachments` bucket/table (schema and policies are ready).
