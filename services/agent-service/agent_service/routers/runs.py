@@ -1,47 +1,56 @@
-"""Run streaming endpoints (Phase 1: simulated SSE)."""
+"""Run endpoints — Phase 2: persistence-safe reads + cancel."""
 
-import asyncio
-import json
-from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from typing import Annotated, Any
 
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException
 
 from agent_service.auth import CurrentUser
+from agent_service.supabase_client import SupabaseRepository, get_repository
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
-# TODO(phase-2): replace with real run events pulled from the run event store /
-# LangGraph execution stream.
-_MOCK_STEPS = [
-    "Understanding your goal",
-    "Selecting capabilities",
-    "Building the agent",
-    "Running a test",
-]
+Repo = Annotated[SupabaseRepository, Depends(get_repository)]
 
 
-def _sse(event_type: str, data: dict) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+def _not_found() -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={"code": "not_found", "message": "Run not found."},
+    )
 
 
-async def _mock_event_stream(run_id: str) -> AsyncIterator[str]:
-    def now() -> str:
-        return datetime.now(UTC).isoformat()
+@router.get("/{run_id}")
+async def get_run(run_id: str, user: CurrentUser, repo: Repo) -> dict[str, Any]:
+    run = await repo.get_owned_run(run_id, user.user_id)
+    if run is None:
+        raise _not_found()
+    return run
 
-    yield _sse("run_started", {"run_id": run_id, "timestamp": now()})
-    for index, label in enumerate(_MOCK_STEPS, start=1):
-        await asyncio.sleep(0.3)
-        yield _sse(
-            "step",
-            {"run_id": run_id, "step": index, "label": label, "timestamp": now()},
+
+@router.post("/{run_id}/cancel")
+async def cancel_run(run_id: str, user: CurrentUser, repo: Repo) -> dict[str, Any]:
+    run = await repo.get_owned_run(run_id, user.user_id)
+    if run is None:
+        raise _not_found()
+    if run["status"] not in ("queued", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "conflict",
+                "message": f"Run is already {run['status']} and cannot be canceled.",
+            },
         )
-    await asyncio.sleep(0.3)
-    yield _sse("run_completed", {"run_id": run_id, "status": "succeeded", "timestamp": now()})
+    canceled = await repo.cancel_run(run_id, user.user_id)
+    return canceled or run
 
 
 @router.get("/{run_id}/stream")
-async def stream_run(run_id: str, user: CurrentUser) -> StreamingResponse:
-    """Stream run progress as Server-Sent Events (simulated in Phase 1)."""
-    return StreamingResponse(_mock_event_stream(run_id), media_type="text/event-stream")
+async def stream_run(run_id: str, user: CurrentUser) -> None:
+    """Real SSE run streaming arrives with the agent runtime (Phase 3+)."""
+    raise HTTPException(
+        status_code=501,
+        detail={
+            "code": "not_implemented",
+            "message": "Run streaming is not implemented yet.",
+        },
+    )

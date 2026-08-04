@@ -54,7 +54,8 @@ export function useSignOut() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => getAuthRepository().signOut(),
-    onSuccess: () => queryClient.invalidateQueries(),
+    // Clear (not just invalidate) so no private data survives logout in cache.
+    onSuccess: () => queryClient.clear(),
   });
 }
 

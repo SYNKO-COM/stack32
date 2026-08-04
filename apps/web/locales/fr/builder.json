@@ -59,7 +59,8 @@
     "warningResponse": "Votre agent est construit, mais le test a révélé un point mineur : une réponse était moins précise qu'attendu. Vous pouvez le tester tel quel, ou me laisser corriger automatiquement.",
     "errorResponse": "Je n'ai pas pu terminer la construction cette fois : le test a échoué lors de la vérification des réponses de l'agent. Je peux corriger cela automatiquement — ou vous pouvez reformuler votre demande avec plus de détails.",
     "repairInProgress": "Réparation de l'agent…",
-    "repairResponse": "C'est corrigé. J'ai ajusté les instructions de l'agent et relancé le test — il passe maintenant. Votre agent est prêt à l'emploi."
+    "repairResponse": "C'est corrigé. J'ai ajusté les instructions de l'agent et relancé le test — il passe maintenant. Votre agent est prêt à l'emploi.",
+    "executionDisabled": "La construction d'agents est momentanément indisponible. Votre message a été enregistré — la construction reprendra dès le retour du service."
   },
   "composer": {
     "placeholder": "Décrivez quoi construire ou modifier…"

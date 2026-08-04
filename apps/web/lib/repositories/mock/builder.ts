@@ -185,4 +185,8 @@ export class MockBuilderRepository implements BuilderRepository {
     });
     runSimulatedBuild(agentId, content);
   }
+
+  async repairAgent(agentId: string): Promise<void> {
+    runSimulatedRepair(agentId);
+  }
 }

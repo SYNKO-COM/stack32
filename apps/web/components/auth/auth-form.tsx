@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSignIn, useSignInWithGoogle, useSignUp } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
+import { authErrorKey } from "@/lib/auth/errors";
 import { getAuthRepository } from "@/lib/repositories/factory";
 import { USE_MOCK_DATA } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,11 @@ interface AuthFormProps {
 
 /** Where a successful auth should lead when no onSuccess override is given. */
 async function defaultDestination(): Promise<string> {
+  // Honour a middleware-provided "next" target (protected-route redirect).
+  if (typeof window !== "undefined") {
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (next?.startsWith("/") && !next.startsWith("//")) return next;
+  }
   const profile = await getAuthRepository().getProfile();
   return profile?.onboardingCompleted ? "/agents" : "/onboarding";
 }
@@ -42,6 +48,7 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirmEmailSentTo, setConfirmEmailSentTo] = useState<string | null>(null);
 
   const signIn = useSignIn();
   const signUp = useSignUp();
@@ -73,23 +80,39 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
       if (mode === "login") {
         await signIn.mutateAsync({ email, password });
       } else {
-        await signUp.mutateAsync({ email, password });
+        const result = await signUp.mutateAsync({ email, password });
+        if (result.requiresEmailConfirmation) {
+          setConfirmEmailSentTo(email);
+          return;
+        }
       }
       await finish();
-    } catch {
-      setError(t("errors:generic"));
+    } catch (err) {
+      setError(t(authErrorKey(err)));
     }
   };
 
   const handleGoogle = async () => {
     setError(null);
     try {
-      await google.mutateAsync();
-      await finish();
-    } catch {
-      setError(t("errors:generic"));
+      const user = await google.mutateAsync();
+      // null = OAuth redirect in progress; the provider page takes over.
+      if (user) await finish();
+    } catch (err) {
+      setError(t(authErrorKey(err)));
     }
   };
+
+  if (confirmEmailSentTo) {
+    return (
+      <div className={cn("space-y-3", className)} role="status">
+        <h2 className="text-lg font-semibold">{t("auth:confirmEmail.title")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("auth:confirmEmail.subtitle", { email: confirmEmailSentTo })}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("space-y-4", className)}>

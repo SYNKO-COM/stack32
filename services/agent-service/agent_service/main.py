@@ -8,7 +8,7 @@ from agent_service.config import get_settings
 from agent_service.errors import register_exception_handlers
 from agent_service.logging_config import setup_logging
 from agent_service.middleware import RequestIDMiddleware
-from agent_service.routers import agents, health, live, runs
+from agent_service.routers import agents, builder, health, knowledge, live, runs, webhooks
 
 
 def create_app() -> FastAPI:
@@ -37,8 +37,11 @@ def create_app() -> FastAPI:
 
     v1 = APIRouter(prefix="/v1")
     v1.include_router(agents.router)
+    v1.include_router(builder.router)
     v1.include_router(live.router)
     v1.include_router(runs.router)
+    v1.include_router(knowledge.router)
+    v1.include_router(webhooks.router)
     app.include_router(v1)
 
     return app

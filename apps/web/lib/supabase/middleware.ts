@@ -1,21 +1,33 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isSupabaseConfigured, SUPABASE_KEY, SUPABASE_URL } from "@/lib/env";
+
+/** Route prefixes that require an authenticated user. */
+const PROTECTED_PREFIXES = ["/onboarding", "/agents", "/settings", "/billing"];
+
+/** Auth screens an already-authenticated user should not see again. */
+const AUTH_SCREENS = ["/login", "/signup"];
+
+function isProtectedPath(pathname: string): boolean {
+  return PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 /**
- * Supabase session refresh middleware scaffold.
+ * Session refresh + server-side route protection.
  *
- * Not wired into middleware.ts yet: Phase 1 runs in mock mode.
- * TODO(phase-2): register this in apps/web/middleware.ts once Supabase auth
- * is active, and add route protection for /agents and /onboarding.
+ * Onboarding completeness is enforced by server layouts (lib/auth/guards.ts):
+ * the middleware only guarantees an authenticated session for protected routes
+ * and keeps auth cookies fresh.
  */
 export async function updateSupabaseSession(request: NextRequest): Promise<NextResponse> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
   const response = NextResponse.next({ request });
-  if (!url || !anonKey) return response;
+  // Mock mode: no Supabase — client-side mock guards handle the demo flow.
+  if (!isSupabaseConfigured) return response;
 
-  const supabase = createServerClient(url, anonKey, {
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_KEY, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -28,8 +40,29 @@ export async function updateSupabaseSession(request: NextRequest): Promise<NextR
     },
   });
 
-  // Refresh the session if needed.
-  await supabase.auth.getUser();
+  // IMPORTANT: getUser() validates the session with the auth server and
+  // refreshes cookies. Do not remove or reorder.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+
+  if (!user && isProtectedPath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    // Preserve the intended destination across login.
+    url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  if (user && AUTH_SCREENS.includes(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/agents";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   return response;
 }

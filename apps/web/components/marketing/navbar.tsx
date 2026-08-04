@@ -22,9 +22,9 @@ import { useUiStore } from "@/store/ui-store";
 
 const NAV_LINKS = [
   { href: "/features", key: "product" },
-  { href: "/templates", key: "templates" },
   { href: "/pricing", key: "pricing" },
-  { href: "/docs", key: "docs" },
+  { href: "/faq", key: "faq" },
+  { href: "/contact", key: "contact" },
 ] as const;
 
 export function Navbar() {

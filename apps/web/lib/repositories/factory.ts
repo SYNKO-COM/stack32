@@ -1,3 +1,4 @@
+import { isSupabaseConfigured } from "@/lib/env";
 import { USE_MOCK_DATA } from "@/lib/site";
 
 import type {
@@ -14,22 +15,32 @@ import { MockBillingRepository } from "./mock/billing";
 import { MockBuilderRepository } from "./mock/builder";
 import { MockKnowledgeRepository } from "./mock/knowledge";
 import { MockLiveRepository } from "./mock/live";
+import { SupabaseAgentRepository } from "./supabase/agents";
+import { SupabaseAuthRepository } from "./supabase/auth";
+import { SupabaseBillingRepository } from "./supabase/billing";
+import { SupabaseBuilderRepository } from "./supabase/builder";
+import { SupabaseKnowledgeRepository } from "./supabase/knowledge";
+import { SupabaseLiveRepository } from "./supabase/live";
 
 /**
- * Repository factory.
+ * Repository factory — the single place where the data mode is decided.
  *
- * Phase 1: always returns mock implementations (also when Supabase env vars
- * are missing). TODO(phase-2/3): return Supabase / agent-service backed
- * implementations when USE_MOCK_DATA is false.
+ * NEXT_PUBLIC_DATA_MODE=supabase → real Supabase-backed repositories.
+ * NEXT_PUBLIC_DATA_MODE=mock     → localStorage mocks (isolated frontend dev).
+ *
+ * UI components never check the mode themselves: they depend on these
+ * interfaces (usually through the TanStack Query hooks).
  */
 
-function assertMockMode(): void {
-  if (!USE_MOCK_DATA) {
-    // Real implementations are not available yet — fall back to mocks loudly.
+function shouldUseSupabase(): boolean {
+  if (USE_MOCK_DATA) return false;
+  if (!isSupabaseConfigured) {
     console.warn(
-      "[stack32] NEXT_PUBLIC_USE_MOCK_DATA=false but real repositories are not implemented yet (Phase 2+). Using mocks.",
+      "[stack32] NEXT_PUBLIC_DATA_MODE=supabase but Supabase env vars are missing. Falling back to mocks.",
     );
+    return false;
   }
+  return true;
 }
 
 let auth: AuthRepository | undefined;
@@ -40,37 +51,31 @@ let billing: BillingRepository | undefined;
 let knowledge: KnowledgeRepository | undefined;
 
 export function getAuthRepository(): AuthRepository {
-  assertMockMode();
-  auth ??= new MockAuthRepository();
+  auth ??= shouldUseSupabase() ? new SupabaseAuthRepository() : new MockAuthRepository();
   return auth;
 }
 
 export function getAgentRepository(): AgentRepository {
-  assertMockMode();
-  agents ??= new MockAgentRepository();
+  agents ??= shouldUseSupabase() ? new SupabaseAgentRepository() : new MockAgentRepository();
   return agents;
 }
 
 export function getBuilderRepository(): BuilderRepository {
-  assertMockMode();
-  builder ??= new MockBuilderRepository();
+  builder ??= shouldUseSupabase() ? new SupabaseBuilderRepository() : new MockBuilderRepository();
   return builder;
 }
 
 export function getLiveRepository(): LiveRepository {
-  assertMockMode();
-  live ??= new MockLiveRepository();
+  live ??= shouldUseSupabase() ? new SupabaseLiveRepository() : new MockLiveRepository();
   return live;
 }
 
 export function getBillingRepository(): BillingRepository {
-  assertMockMode();
-  billing ??= new MockBillingRepository();
+  billing ??= shouldUseSupabase() ? new SupabaseBillingRepository() : new MockBillingRepository();
   return billing;
 }
 
 export function getKnowledgeRepository(): KnowledgeRepository {
-  assertMockMode();
-  knowledge ??= new MockKnowledgeRepository();
+  knowledge ??= shouldUseSupabase() ? new SupabaseKnowledgeRepository() : new MockKnowledgeRepository();
   return knowledge;
 }

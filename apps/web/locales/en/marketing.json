@@ -100,91 +100,128 @@
     "cta": "Start building"
   },
   "features": {
-    "title": "Everything you need to run real AI agents",
-    "subtitle": "Stack32 covers the full lifecycle of an agent: creation, testing, iteration and publishing.",
-    "items": [
-      {
-        "title": "Conversational builder",
-        "description": "Create and modify agents by chatting with the Stack32 Builder, the way you would brief a colleague."
-      },
-      {
-        "title": "Automatic testing",
-        "description": "Every version of your agent is validated and smoke-tested before you ever rely on it."
-      },
-      {
-        "title": "Self-repair",
-        "description": "When something is off, Stack32 detects it and proposes an automatic fix — one click and it's handled."
-      },
-      {
-        "title": "Live workspace",
-        "description": "Talk to your agent in a dedicated Live view, with visible progress while it works."
-      },
-      {
-        "title": "Readable structure",
-        "description": "The Structure view shows your agent's goal, tools, rules and output format — no JSON, no canvas."
-      },
-      {
-        "title": "Versioning built in",
-        "description": "Every change creates a new version. Publish when ready, roll back mentally anytime."
-      },
-      {
-        "title": "Knowledge sources",
-        "description": "Connect documents so your agent answers from your content, with citations."
-      },
-      {
-        "title": "Multilingual interface",
-        "description": "Use Stack32 in English or French, with more languages on the way."
-      }
-    ]
-  },
-  "templates": {
-    "title": "Start from a template",
-    "subtitle": "Pick a starting point and make it yours in a few prompts.",
-    "useTemplate": "Use this template",
-    "items": [
-      {
-        "name": "Sales Research Agent",
-        "description": "Research companies, score leads and draft personalized outreach emails.",
-        "prompt": "Create an agent that researches a company, scores the lead and drafts a personalized email."
-      },
-      {
-        "name": "Competitor Watch Agent",
-        "description": "Track competitors and summarize meaningful changes with sources.",
-        "prompt": "Create an agent that researches competitors and summarizes changes."
-      },
-      {
-        "name": "Docs Q&A Agent",
-        "description": "Answer questions from your documents, with citations.",
-        "prompt": "Build an agent that reads my documents and answers questions."
-      },
-      {
-        "name": "Report Writer Agent",
-        "description": "Turn rough notes into structured, publishable reports.",
-        "prompt": "Build an agent that turns notes into structured reports."
-      },
-      {
-        "name": "Lead Scoring Agent",
-        "description": "Qualify and score incoming leads against your ideal customer profile.",
-        "prompt": "Create an agent that researches and scores sales leads."
-      },
-      {
-        "name": "Meeting Summary Agent",
-        "description": "Summarize meeting notes into decisions, action items and owners.",
-        "prompt": "Build an agent that turns meeting notes into decisions and action items."
-      }
-    ]
+    "title": "Product",
+    "subtitle": "Stack32 turns a plain-language brief into a working AI agent you can chat with, improve and publish — without nodes, code or a canvas.",
+    "exploreCta": "Explore the product",
+    "intro": {
+      "title": "What Stack32 is",
+      "body": "Stack32 is a web product for creating and using AI agents in everyday language. You describe a job — research, answer from your docs, draft outreach, summarize notes — and Stack32 assembles an agent that can do that work. You stay in a conversation: create in Build, try in Live, inspect in Structure. There is no workflow editor and no need to pick tools yourself."
+    },
+    "lifecycle": {
+      "title": "Three views, one loop",
+      "subtitle": "Creation, use and clarity live side by side so you never lose the thread.",
+      "items": [
+        {
+          "title": "Build",
+          "description": "Chat with the Builder like you brief a teammate. Stack32 proposes a first version of your agent, runs a smoke test, and shows progress while it works. Ask for changes — stricter rules, a different tone, a new output format — and it applies them, retests and keeps history."
+        },
+        {
+          "title": "Live",
+          "description": "Open a dedicated workspace and talk to your agent as a user would. See steps unfold while it researches, reads sources or drafts. Live is where you validate that the agent actually helps before you rely on it day to day."
+        },
+        {
+          "title": "Structure",
+          "description": "Read a clear breakdown of the agent: goal, capabilities, rules and expected output — in human language, not JSON. Structure is how you (and your team) understand what the agent is allowed to do without opening a technical panel."
+        }
+      ]
+    },
+    "capabilities": {
+      "title": "What you get out of the box",
+      "subtitle": "The essentials to go from idea to a trustworthy agent you can improve over time.",
+      "items": [
+        {
+          "title": "Conversational builder",
+          "description": "Create and refine agents by chatting. No nodes, no YAML, no prompt engineering degree required."
+        },
+        {
+          "title": "Automatic testing",
+          "description": "Each meaningful version is checked before you lean on it, so surprises show up early — not in production conversations."
+        },
+        {
+          "title": "Guided repair",
+          "description": "When something is off, Stack32 surfaces the issue and can propose a fix you confirm in one step."
+        },
+        {
+          "title": "Live workspace",
+          "description": "A focused chat where your agent works with visible progress, so you always know what it is doing."
+        },
+        {
+          "title": "Readable structure",
+          "description": "Goal, tools, rules and output format explained plainly — transparency without technical noise."
+        },
+        {
+          "title": "Version history",
+          "description": "Every change can become a new version. Publish when ready; keep earlier versions as a safety net."
+        },
+        {
+          "title": "Knowledge sources",
+          "description": "Connect documents so answers stay grounded in your content, with citations when sources are used."
+        },
+        {
+          "title": "English & French UI",
+          "description": "Work in the language you prefer. More locales can be added without changing how agents are built."
+        }
+      ]
+    },
+    "usecases": {
+      "title": "Jobs agents are good at",
+      "subtitle": "Start from a real task, not a blank canvas. One sentence is usually enough.",
+      "items": [
+        {
+          "title": "Sales & outreach",
+          "description": "Research companies, qualify leads and draft personalized emails that sound like your voice."
+        },
+        {
+          "title": "Competitive watch",
+          "description": "Track public pages and summarize what actually changed — with sources you can verify."
+        },
+        {
+          "title": "Document Q&A",
+          "description": "Answer questions from your files instead of hunting through folders and PDFs."
+        },
+        {
+          "title": "Reporting & notes",
+          "description": "Turn rough notes, bullets or meeting scribbles into structured reports and action lists."
+        }
+      ]
+    },
+    "trust": {
+      "title": "Clarity and control",
+      "subtitle": "Enough depth to trust the product — without exposing internals you do not need.",
+      "items": [
+        {
+          "title": "You stay in charge",
+          "description": "You decide what to build, what to change and when to publish. Stack32 proposes; you confirm."
+        },
+        {
+          "title": "Account & billing hygiene",
+          "description": "Sign-in and subscriptions are handled with standard industry providers. Payment is processed securely via Whop."
+        },
+        {
+          "title": "Your content, your context",
+          "description": "Documents you attach are used to ground answers. We do not ask you to configure infrastructure or API keys to get started."
+        }
+      ]
+    },
+    "cta": {
+      "title": "Ready to try it?",
+      "subtitle": "Describe an agent in one sentence and see the Build → Live → Structure loop for yourself.",
+      "button": "Start building"
+    }
   },
   "pricing": {
     "title": "Pricing",
-    "subtitle": "One simple subscription. Cancel anytime.",
+    "subtitle": "Start free. Upgrade when Stack32 becomes part of how you work every day.",
     "perMonth": "/month",
+    "intro": "One clear Free tier to explore, one Pro plan when agents are in daily use. No per-seat complexity during the beta — just the capacity you need.",
     "free": {
       "name": "Free",
       "price": "$0",
-      "description": "Explore Stack32 and build your first agent.",
+      "description": "Explore Stack32 and ship your first working agent.",
       "features": [
         "1 agent",
         "Build, Live and Structure views",
+        "Conversational creation and iteration",
         "Community support"
       ],
       "cta": "Get started"
@@ -192,103 +229,153 @@
     "pro": {
       "name": "Pro",
       "price": "$29",
-      "description": "For people who use their agents every day.",
+      "description": "For people who rely on their agents every week.",
       "badge": "Most popular",
       "features": [
         "Unlimited agents",
-        "Automatic testing and repair",
+        "Automatic testing and guided repair",
         "Knowledge sources with citations",
         "Version history",
         "Priority support"
       ],
       "cta": "Upgrade to Pro"
     },
+    "included": {
+      "title": "Included on every plan",
+      "items": [
+        "Natural-language builder — no code or workflow canvas",
+        "Live chat with visible progress while the agent works",
+        "Structure view that explains goal, rules and capabilities",
+        "English and French interface"
+      ]
+    },
+    "faq": {
+      "title": "Billing questions",
+      "items": [
+        {
+          "question": "Can I cancel anytime?",
+          "answer": "Yes. Subscriptions are monthly and can be cancelled when you no longer need Pro. You keep Free access within Free limits."
+        },
+        {
+          "question": "Who handles payment?",
+          "answer": "Billing is processed securely by Whop. Stack32 never asks you to paste card numbers into a custom form."
+        },
+        {
+          "question": "Will prices change?",
+          "answer": "Amounts shown are indicative during beta. If pricing evolves before launch, we communicate clearly before charging differently."
+        }
+      ]
+    },
     "note": "Prices shown for illustration during the beta. Billing is handled securely by Whop."
-  },
-  "docs": {
-    "title": "Documentation",
-    "subtitle": "Everything you need to get the most out of Stack32.",
-    "sections": [
-      {
-        "title": "Getting started",
-        "description": "Create your account, describe your first agent and understand the Build, Live and Structure views."
-      },
-      {
-        "title": "Writing good prompts",
-        "description": "How to describe your needs so Stack32 builds exactly the agent you want."
-      },
-      {
-        "title": "Improving your agent",
-        "description": "Iterate by conversation: change the goal, add rules, adjust the output format."
-      },
-      {
-        "title": "Knowledge sources",
-        "description": "Connect documents so your agent can answer from your own content."
-      },
-      {
-        "title": "Publishing",
-        "description": "Understand draft versus published versions and when to publish."
-      },
-      {
-        "title": "Billing and account",
-        "description": "Manage your subscription, plan limits and account settings."
-      }
-    ],
-    "comingSoon": "Full documentation is being written and will be available soon."
   },
   "faq": {
     "title": "Frequently asked questions",
-    "subtitle": "Everything you might want to know before building your first agent.",
-    "items": [
+    "subtitle": "How Stack32 works, what agents can do, and what to expect before you build your first one.",
+    "groups": [
       {
-        "question": "Do I need to know how to code?",
-        "answer": "No. Stack32 is designed for non-technical users. You describe what you need in plain language and Stack32 builds, tests and runs the agent for you."
+        "title": "Product basics",
+        "items": [
+          {
+            "question": "Do I need to know how to code?",
+            "answer": "No. Stack32 is designed for non-technical users. You describe the job in plain language; Stack32 builds, tests and runs the agent. You never open a code editor or a node canvas."
+          },
+          {
+            "question": "Is this like n8n, Make or Zapier?",
+            "answer": "No. Those tools chain steps on a visual workflow. Stack32 is agent-first: you brief a builder, get something you can chat with immediately, then refine by conversation."
+          },
+          {
+            "question": "What is an “agent” here?",
+            "answer": "An agent is a reusable assistant with a clear goal, capabilities (for example web research or your documents), rules and a preferred output style. You create it once, then talk to it whenever you need that job done."
+          },
+          {
+            "question": "How is Stack32 different from a generic chatbot?",
+            "answer": "A chatbot answers in the moment. A Stack32 agent is shaped for a specific job, tested as you iterate, inspectable in Structure, and improvable over versions — closer to a teammate than a blank chat window."
+          }
+        ]
       },
       {
-        "question": "Is this like n8n, Make or Zapier?",
-        "answer": "No. There are no nodes, no workflows and no drag-and-drop canvas. You talk to a builder, and you get a working agent you can immediately chat with."
+        "title": "Capabilities",
+        "items": [
+          {
+            "question": "What can my agent do?",
+            "answer": "Typical work includes web research, reading documents you connect, analyzing information, drafting structured text (emails, reports, tables) and following rules you set in Build."
+          },
+          {
+            "question": "Can it use my own documents?",
+            "answer": "Yes. You can attach knowledge sources so answers stay grounded in your material, with citations when sources are used. You stay in control of what you upload."
+          },
+          {
+            "question": "How long does it take to get a first version?",
+            "answer": "A first working version often appears in under a minute. Most people reach a satisfying result within a few follow-up prompts in Build."
+          },
+          {
+            "question": "Can I change an agent after creating it?",
+            "answer": "Yes — that is the core loop. Ask for changes in Build; Stack32 applies them, retests and keeps previous versions so you can evolve safely."
+          }
+        ]
       },
       {
-        "question": "What can my agent do?",
-        "answer": "Agents can search the web, read the documents you connect, analyze information, do calculations and produce structured answers such as reports and tables."
-      },
-      {
-        "question": "How long does it take to create an agent?",
-        "answer": "A first working version typically appears in under a minute. Most agents reach a satisfying result within four to five prompts."
-      },
-      {
-        "question": "Can I modify an agent after creating it?",
-        "answer": "Yes — that's the core of Stack32. Ask for changes in the Build view and Stack32 applies them, retests your agent and keeps every previous version."
-      },
-      {
-        "question": "What languages does the interface support?",
-        "answer": "English and French today. The architecture is ready for more languages."
-      },
-      {
-        "question": "How does billing work?",
-        "answer": "Stack32 uses a simple monthly subscription handled securely by Whop. You can cancel anytime."
-      },
-      {
-        "question": "Who is behind Stack32?",
-        "answer": "Stack32 is a Synko product, operated by Zeldia, a company registered in France."
+        "title": "Account & trust",
+        "items": [
+          {
+            "question": "What languages does the interface support?",
+            "answer": "English and French today. The product is structured so more languages can be added without changing how you build agents."
+          },
+          {
+            "question": "How does billing work?",
+            "answer": "A simple monthly subscription for Pro, handled securely by Whop. Free lets you explore with limits. Cancel anytime."
+          },
+          {
+            "question": "Who is behind Stack32?",
+            "answer": "Stack32 is a Synko product, operated by Zeldia, a company registered in France."
+          },
+          {
+            "question": "Where can I get help?",
+            "answer": "Start with this FAQ, then use the Contact page for product questions, billing or feedback. We read every message."
+          }
+        ]
       }
     ]
   },
   "contact": {
-    "title": "Contact us",
-    "subtitle": "A question, a problem, an idea? We read everything.",
+    "title": "Contact",
+    "subtitle": "Product questions, billing, partnerships or feedback — tell us how we can help.",
+    "intro": "Whether you are evaluating Stack32, stuck on a first agent, or want to share an idea, this is the right place. We keep responses practical and human.",
+    "topics": {
+      "title": "What people write about",
+      "items": [
+        {
+          "title": "Getting started",
+          "description": "How Build, Live and Structure fit together, or what to write in your first prompt."
+        },
+        {
+          "title": "Plans & billing",
+          "description": "Free vs Pro, upgrades, cancellations and how Whop handles payment."
+        },
+        {
+          "title": "Feedback & ideas",
+          "description": "What works, what is missing, and use cases you want Stack32 to support next."
+        }
+      ]
+    },
     "form": {
       "name": "Your name",
       "namePlaceholder": "Ada Lovelace",
       "email": "Your email",
       "emailPlaceholder": "you@example.com",
+      "subject": "Subject",
+      "subjectPlaceholder": "Getting started / billing / feedback…",
       "message": "Your message",
       "messagePlaceholder": "Tell us how we can help…",
       "submit": "Send message",
       "success": "Thank you! Your message has been recorded. We will get back to you soon.",
-      "mockNotice": "Phase 1: this form stores nothing yet — a support inbox will be connected before launch."
+      "mockNotice": "During early access this form confirms locally — a support inbox will be connected before public launch."
     },
-    "companyTitle": "Company",
-    "emailTitle": "Email"
+    "aside": {
+      "responseTitle": "Response time",
+      "responseBody": "We aim to reply within a few business days. Billing and access issues are prioritized.",
+      "companyTitle": "Company",
+      "emailTitle": "Email"
+    }
   }
 }

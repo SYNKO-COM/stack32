@@ -11,10 +11,8 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   const productLinks = [
-    { href: "/features", label: t("nav.features") },
-    { href: "/templates", label: t("nav.templates") },
+    { href: "/features", label: t("nav.product") },
     { href: "/pricing", label: t("nav.pricing") },
-    { href: "/docs", label: t("nav.docs") },
   ];
 
   const companyLinks = [

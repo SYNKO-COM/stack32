@@ -10,7 +10,7 @@ schemas = ["public", "storage", "graphql_public"]
 
 [db]
 port = 54322
-major_version = 15
+major_version = 17
 
 [studio]
 enabled = true
@@ -19,6 +19,16 @@ port = 54323
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback", "http://localhost:3000/auth/confirm"]
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
 
 [storage]
 enabled = true
+
+# Disabled locally: the analytics container needs to mount the Docker socket,
+# which is not supported by colima on macOS.
+[analytics]
+enabled = false

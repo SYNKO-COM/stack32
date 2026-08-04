@@ -12,8 +12,20 @@
     "dev:agent": "sh -c 'cd services/agent-service && [ -d .venv ] && .venv/bin/uvicorn agent_service.main:app --reload --port 8000 || echo \"agent-service venv missing — see services/agent-service/README.md\"'",
     "lint": "pnpm --filter @stack32/web lint",
     "typecheck": "pnpm --filter @stack32/web typecheck",
-    "test": "sh -c 'cd services/agent-service && [ -d .venv ] && .venv/bin/pytest || echo \"agent-service venv missing — see services/agent-service/README.md\"'",
+    "test": "pnpm test:web && pnpm test:agent",
+    "test:web": "pnpm --filter @stack32/web test",
+    "test:e2e": "pnpm --filter @stack32/web test:e2e",
+    "test:agent": "sh -c 'cd services/agent-service && [ -d .venv ] && .venv/bin/pytest || echo \"agent-service venv missing — see services/agent-service/README.md\"'",
     "build": "pnpm --filter @stack32/web build",
-    "clean": "pnpm --filter @stack32/web clean"
+    "clean": "pnpm --filter @stack32/web clean",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:reset": "supabase db reset --local",
+    "supabase:link": "supabase link --project-ref mhwzxpscyvuavpfqxfgm",
+    "supabase:push": "supabase db push --linked",
+    "supabase:types": "supabase gen types typescript --local --schema public > apps/web/lib/supabase/database.types.ts",
+    "supabase:lint": "supabase db lint --local --level warning",
+    "supabase:test": "supabase test db"
   }
 }

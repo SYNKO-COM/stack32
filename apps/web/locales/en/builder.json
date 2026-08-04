@@ -59,7 +59,8 @@
     "warningResponse": "Your agent is built, but the test surfaced a minor issue: one answer was less precise than expected. You can test it as is, or let me fix it automatically.",
     "errorResponse": "I couldn't complete the build this time: the test failed while checking the agent's answers. I can fix this automatically — or you can rephrase your request with more detail.",
     "repairInProgress": "Repairing the agent…",
-    "repairResponse": "Fixed. I adjusted the agent's instructions and reran the test — it passes now. Your agent is ready to use."
+    "repairResponse": "Fixed. I adjusted the agent's instructions and reran the test — it passes now. Your agent is ready to use.",
+    "executionDisabled": "Agent building is currently unavailable. Your message has been saved — building will resume as soon as the service is back."
   },
   "composer": {
     "placeholder": "Describe what to build or change…"

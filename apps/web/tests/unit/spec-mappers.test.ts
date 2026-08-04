@@ -1,0 +1,121 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  mapBuilderMessage,
+  mapLiveMessage,
+  specFromDb,
+  specToDb,
+} from "@/lib/domain/mappers";
+import { makeSpecForPrompt } from "@/lib/repositories/mock/seed";
+import type { Database } from "@/lib/supabase/database.types";
+
+type BuilderMessageRow = Database["public"]["Tables"]["builder_messages"]["Row"];
+type LiveMessageRow = Database["public"]["Tables"]["live_messages"]["Row"];
+
+describe("AgentSpec mappers", () => {
+  it("round-trips a domain spec through the DB skeleton shape", () => {
+    const original = makeSpecForPrompt("Sales Agent", "Research leads for me");
+    const db = specToDb(original);
+    const restored = specFromDb(db);
+
+    expect(restored.name).toBe(original.name);
+    expect(restored.goal).toBe(original.goal);
+    expect(restored.instructions).toBe(original.instructions);
+    expect(restored.tools).toEqual(original.tools);
+    expect(restored.knowledge).toEqual(original.knowledge);
+    expect(restored.starterPrompts).toEqual(original.starterPrompts);
+    expect(restored.runtime).toEqual(original.runtime);
+  });
+
+  it("maps the Phase 2 DB skeleton to a renderable domain spec", () => {
+    const skeleton = {
+      schema_version: "1.0",
+      name: "Support Agent",
+      goal: "Answer customer questions",
+      instructions: { system: "Be helpful", tone: "professional", language: "auto" },
+      model_profile: "balanced",
+      input: { channels: ["chat"], attachments: [] },
+      tools: [],
+      knowledge: { source_ids: [], retrieval_enabled: false },
+      memory: { conversation: true, semantic: false },
+      rules: [],
+      output: { format: "markdown", schema: null },
+      starter_prompts: [],
+      runtime: { max_steps: 8, timeout_seconds: 60, max_tool_calls: 6 },
+    };
+
+    const spec = specFromDb(skeleton);
+    expect(spec.name).toBe("Support Agent");
+    expect(spec.goal).toBe("Answer customer questions");
+    expect(spec.instructions).toBe("Be helpful");
+    expect(spec.modelProfile.profile).toBe("standard");
+    expect(spec.output.format).toBe("markdown");
+    expect(spec.knowledge.enabled).toBe(false);
+  });
+
+  it("tolerates unknown/empty specs without crashing", () => {
+    const spec = specFromDb({}, "Fallback name");
+    expect(spec.name).toBe("Fallback name");
+    expect(spec.tools).toEqual([]);
+    expect(spec.runtime.maxSteps).toBe(8);
+  });
+});
+
+function builderRow(overrides: Partial<BuilderMessageRow>): BuilderMessageRow {
+  return {
+    id: "m1",
+    thread_id: "t1",
+    agent_id: "a1",
+    user_id: "u1",
+    role: "user",
+    content: "hello",
+    metadata: {},
+    run_id: null,
+    created_at: "2026-08-04T10:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("message mappers", () => {
+  it("maps builder metadata (steps, tone, actions)", () => {
+    const mapped = mapBuilderMessage(
+      builderRow({
+        role: "assistant",
+        content: "builder:mock.successResponse",
+        metadata: {
+          steps: [{ labelKey: "understanding", state: "done" }],
+          tone: "success",
+          actions: ["test_agent"],
+        },
+      }),
+    );
+    expect(mapped).not.toBeNull();
+    expect(mapped?.steps?.[0].labelKey).toBe("understanding");
+    expect(mapped?.tone).toBe("success");
+    expect(mapped?.actions).toEqual(["test_agent"]);
+  });
+
+  it("filters out system/tool roles the UI does not render", () => {
+    expect(mapBuilderMessage(builderRow({ role: "system" }))).toBeNull();
+    expect(mapBuilderMessage(builderRow({ role: "tool" }))).toBeNull();
+  });
+
+  it("maps live pending state from metadata", () => {
+    const row: LiveMessageRow = {
+      id: "m2",
+      thread_id: "t2",
+      agent_id: "a1",
+      user_id: "u1",
+      role: "assistant",
+      content: "",
+      artifacts: [],
+      citations: [],
+      metadata: { pending: true, statusKey: "searching" },
+      run_id: null,
+      created_at: "2026-08-04T10:00:00Z",
+    };
+    const mapped = mapLiveMessage(row);
+    expect(mapped?.pending).toBe(true);
+    expect(mapped?.statusKey).toBe("searching");
+  });
+});

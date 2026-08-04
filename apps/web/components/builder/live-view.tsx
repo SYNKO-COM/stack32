@@ -62,7 +62,10 @@ function LiveBubble({ message, agentIcon }: { message: LiveMessage; agentIcon: s
             isUser ? "bg-brand/15" : "glass",
           )}
         >
-          <Markdown content={message.content} />
+          {/* Controlled notices (e.g. execution disabled) reference i18n keys. */}
+          <Markdown
+            content={message.content.startsWith("live:") ? t(message.content.replace(/^live:/, "")) : message.content}
+          />
 
           {message.artifacts && message.artifacts.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">

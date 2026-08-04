@@ -5,9 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  SUPABASE_CLI_VERSION: 2.84.2
+
 jobs:
   web:
-    name: Web (lint, typecheck, build)
+    name: Web (lint, typecheck, unit tests, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,9 +24,58 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm --filter @stack32/web test
       - run: pnpm build
         env:
-          NEXT_PUBLIC_USE_MOCK_DATA: "true"
+          NEXT_PUBLIC_DATA_MODE: mock
+
+  db:
+    name: Database (lint, pgTAP, generated types)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Start local Supabase
+        run: supabase start
+      - name: Lint database
+        run: supabase db lint --local --level warning
+      - name: Run pgTAP tests
+        run: supabase test db
+      - name: Check generated types are up to date
+        run: |
+          supabase gen types typescript --local --schema public > apps/web/lib/supabase/database.types.ts
+          git diff --exit-code apps/web/lib/supabase/database.types.ts
+
+  e2e:
+    name: E2E (Playwright against local Supabase)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - name: Start local Supabase
+        run: supabase start
+      - name: Install Playwright browsers
+        run: pnpm --filter @stack32/web exec playwright install --with-deps chromium
+      - name: Run E2E tests
+        run: pnpm --filter @stack32/web test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/test-results/
+          retention-days: 7
 
   agent-service:
     name: Agent service (lint, tests)

@@ -1,5 +1,5 @@
 import type { OnboardingAnswers, Profile, User } from "@/lib/domain/types";
-import type { AuthRepository } from "@/lib/repositories/interfaces";
+import type { AuthRepository, SignUpResult } from "@/lib/repositories/interfaces";
 
 import { emitMockChange } from "./events";
 import { delay, readStore, removeStore, writeStore } from "./storage";
@@ -53,14 +53,14 @@ export class MockAuthRepository implements AuthRepository {
     return user;
   }
 
-  async signUpWithPassword(email: string, _password: string): Promise<User> {
+  async signUpWithPassword(email: string, _password: string): Promise<SignUpResult> {
     await delay(600);
     const user = makeUser(email);
     writeState({ user, profile: makeProfile(user.id) });
-    return user;
+    return { user, requiresEmailConfirmation: false };
   }
 
-  async signInWithGoogle(): Promise<User> {
+  async signInWithGoogle(): Promise<User | null> {
     await delay(600);
     const user = makeUser("demo@stack32.com");
     const previous = readState();

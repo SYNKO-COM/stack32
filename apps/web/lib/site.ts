@@ -1,8 +1,9 @@
-export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://stack32.com";
+import { DATA_MODE, publicEnv } from "@/lib/env";
 
-export const USE_MOCK_DATA =
-  process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
+export const SITE_URL = publicEnv.NEXT_PUBLIC_APP_URL;
+
+/** True when the app runs on local mock data instead of Supabase. */
+export const USE_MOCK_DATA = DATA_MODE !== "supabase";
 
 export const AGENT_SERVICE_URL =
   process.env.NEXT_PUBLIC_AGENT_SERVICE_URL ?? "http://localhost:8000";

@@ -16,6 +16,9 @@
     "analyzing": "Analyzing…",
     "preparing": "Preparing the answer…"
   },
+  "execution": {
+    "disabled": "Agent execution is currently unavailable. Your message has been saved and previous conversations remain accessible."
+  },
   "composer": {
     "placeholder": "Ask your agent anything…"
   },

@@ -20,11 +20,18 @@ import type {
  * touching UI components.
  */
 
+export interface SignUpResult {
+  user: User;
+  /** True when the provider requires an email confirmation before login. */
+  requiresEmailConfirmation: boolean;
+}
+
 export interface AuthRepository {
   getCurrentUser(): Promise<User | null>;
   signInWithPassword(email: string, password: string): Promise<User>;
-  signUpWithPassword(email: string, password: string): Promise<User>;
-  signInWithGoogle(): Promise<User>;
+  signUpWithPassword(email: string, password: string): Promise<SignUpResult>;
+  /** Returns null when an OAuth redirect is in progress. */
+  signInWithGoogle(): Promise<User | null>;
   sendPasswordReset(email: string): Promise<void>;
   updatePassword(newPassword: string): Promise<void>;
   signOut(): Promise<void>;
@@ -47,6 +54,8 @@ export interface AgentRepository {
 export interface BuilderRepository {
   getThread(agentId: string): Promise<BuilderThread>;
   sendMessage(agentId: string, content: string): Promise<void>;
+  /** "Fix automatically" action — mock repair until the real Builder Agent. */
+  repairAgent(agentId: string): Promise<void>;
 }
 
 export interface LiveRepository {

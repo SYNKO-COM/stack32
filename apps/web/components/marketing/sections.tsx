@@ -114,8 +114,8 @@ export function ExampleAgents() {
       </div>
       <div className="mt-8 text-center">
         <Button asChild variant="ghost" className="gap-1.5">
-          <Link href="/templates">
-            {t("templates.title")}
+          <Link href="/features">
+            {t("features.exploreCta")}
             <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
         </Button>

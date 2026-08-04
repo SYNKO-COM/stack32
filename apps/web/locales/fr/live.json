@@ -16,6 +16,9 @@
     "analyzing": "Analyse…",
     "preparing": "Préparation de la réponse…"
   },
+  "execution": {
+    "disabled": "L'exécution des agents est momentanément indisponible. Votre message a été enregistré et les conversations précédentes restent accessibles."
+  },
   "composer": {
     "placeholder": "Demandez ce que vous voulez à votre agent…"
   },

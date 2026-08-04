@@ -17,8 +17,10 @@ def test_404_returns_error_envelope(client):
 
 
 def test_validation_error_returns_envelope_with_details(client):
-    # Missing required "name" field.
-    response = client.post("/v1/agents", json={}, headers=AUTH_HEADERS)
+    # Missing required "content" field.
+    response = client.post(
+        "/v1/builder/threads/thread-1/messages", json={}, headers=AUTH_HEADERS
+    )
     assert response.status_code == 422
     body = response.json()
     assert_envelope(body, "validation_error")
@@ -27,15 +29,27 @@ def test_validation_error_returns_envelope_with_details(client):
 
 
 def test_unauthenticated_request_returns_401_envelope(client):
-    response = client.get("/v1/agents")
+    response = client.get("/v1/agents/some-id")
     assert response.status_code == 401
     assert_envelope(response.json(), "unauthorized")
 
 
-def test_any_bearer_token_is_accepted_in_phase_1(client):
-    response = client.get("/v1/agents", headers={"Authorization": "Bearer anything-goes"})
-    assert response.status_code == 200
-    agents = response.json()
-    assert len(agents) >= 2
-    assert all(a["status"] in {"draft", "building", "ready", "needs_attention", "published"}
-               for a in agents)
+def test_execution_endpoints_return_typed_not_implemented(client):
+    for path in [
+        "/v1/builder/threads/t1/messages",
+        "/v1/live/threads/t1/messages",
+    ]:
+        response = client.post(path, json={"content": "hello"}, headers=AUTH_HEADERS)
+        assert response.status_code == 501, path
+        assert_envelope(response.json(), "not_implemented")
+
+    response = client.post("/v1/agents/a1/test", headers=AUTH_HEADERS)
+    assert response.status_code == 501
+    assert_envelope(response.json(), "not_implemented")
+
+
+def test_agent_read_requires_supabase_configuration(client):
+    # Dev token is accepted (no 401), but persistence is not configured (503).
+    response = client.get("/v1/agents/some-id", headers=AUTH_HEADERS)
+    assert response.status_code == 503
+    assert_envelope(response.json(), "not_configured")
