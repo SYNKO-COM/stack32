@@ -1,0 +1,51 @@
+{
+  "intro": {
+    "welcome": "Welcome to Stack32",
+    "subtitle": "Let's set things up in under a minute."
+  },
+  "progress": "Step {{current}} of {{total}}",
+  "step1": {
+    "title": "How did you hear about Stack32?",
+    "subtitle": "Please answer honestly — it helps us know which channels actually work.",
+    "options": {
+      "googleSearch": "Google Search",
+      "youtube": "YouTube",
+      "twitter": "X (Twitter)",
+      "linkedin": "LinkedIn",
+      "tiktok": "TikTok",
+      "reddit": "Reddit",
+      "chatgpt": "ChatGPT, Perplexity or other AI",
+      "friends": "Friends or family",
+      "other": "Other"
+    }
+  },
+  "step2": {
+    "title": "What best describes you?",
+    "subtitle": "Pick the closest match. We'll tailor Stack32 to your workflow.",
+    "options": {
+      "founder": "Founder",
+      "freelancer": "Freelancer",
+      "marketer": "Marketer",
+      "developer": "Developer",
+      "sales": "Sales",
+      "student": "Student",
+      "other": "Other"
+    }
+  },
+  "step3": {
+    "title": "Tell us a bit about you",
+    "subtitle": "Your first name, and optionally how you plan to use Stack32.",
+    "firstName": "First name",
+    "firstNamePlaceholder": "Ada",
+    "phone": "Phone number",
+    "phonePlaceholder": "6 12 34 56 78",
+    "phoneHint": "Optional — choose your country code, then enter your number without the leading 0.",
+    "useCase": "What will your first agent do? (optional)",
+    "useCasePlaceholder": "e.g. Research prospects for my agency",
+    "finish": "Finish"
+  },
+  "completing": "Preparing your workspace…",
+  "a11y": {
+    "stepper": "Onboarding steps"
+  }
+}

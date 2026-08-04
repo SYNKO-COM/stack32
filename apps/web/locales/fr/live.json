@@ -1,0 +1,38 @@
+{
+  "badge": {
+    "draft": "Brouillon",
+    "published": "Publié"
+  },
+  "empty": {
+    "title": "Parlez à {{name}}",
+    "subtitle": "C'est l'espace de travail de votre agent. Confiez-lui une tâche et regardez-le travailler."
+  },
+  "starters": {
+    "title": "Essayez de demander"
+  },
+  "status": {
+    "searching": "Recherche sur le web…",
+    "reading": "Lecture de vos documents…",
+    "analyzing": "Analyse…",
+    "preparing": "Préparation de la réponse…"
+  },
+  "composer": {
+    "placeholder": "Demandez ce que vous voulez à votre agent…"
+  },
+  "actions": {
+    "retry": "Réessayer",
+    "stop": "Arrêter",
+    "clear": "Effacer la conversation"
+  },
+  "citations": {
+    "title": "Sources"
+  },
+  "artifact": {
+    "table": "Tableau",
+    "markdown": "Document"
+  },
+  "agentLabel": "Agent",
+  "a11y": {
+    "conversation": "Conversation avec votre agent"
+  }
+}

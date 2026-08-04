@@ -1,0 +1,68 @@
+{
+  "title": "Structure",
+  "subtitle": "What your agent is made of — no code, no configuration.",
+  "sections": {
+    "goal": "Goal",
+    "instructions": "Instructions",
+    "modelProfile": "Model profile",
+    "tools": "Tools",
+    "knowledge": "Knowledge",
+    "memory": "Memory",
+    "rules": "Rules",
+    "output": "Output",
+    "starterPrompts": "Starter prompts",
+    "testStatus": "Test status",
+    "currentVersion": "Current version"
+  },
+  "actions": {
+    "changeInBuild": "Change in Build",
+    "addKnowledge": "Add knowledge",
+    "runTest": "Run test"
+  },
+  "values": {
+    "modelFast": "Fast — quick answers for simple tasks",
+    "modelStandard": "Standard — balanced quality and speed",
+    "modelHeavy": "Heavy — deepest reasoning for complex tasks",
+    "temperature": "Creativity",
+    "conversationWindow": "Remembers the last {{count}} messages of a conversation",
+    "outputMarkdown": "Formatted text (Markdown)",
+    "outputTable": "Structured table",
+    "outputText": "Plain text",
+    "tablesAllowed": "Uses tables when relevant",
+    "testPassed": "All tests passed",
+    "testFailed": "Last test failed",
+    "testPending": "Not tested yet",
+    "version": "Version {{number}}",
+    "versionCreated": "Created {{date}}",
+    "noKnowledge": "No knowledge sources connected yet",
+    "knowledgeEnabled": "{{count}} source connected",
+    "knowledgeEnabled_other": "{{count}} sources connected",
+    "maxSteps": "Up to {{count}} steps per task",
+    "timeout": "Stops after {{count}} seconds",
+    "maxToolCalls": "Up to {{count}} tool calls per task",
+    "toolEnabled": "Enabled",
+    "toolDisabled": "Disabled"
+  },
+  "tools": {
+    "web_search": "Web search",
+    "fetch_url": "Read web pages",
+    "knowledge_search": "Knowledge search",
+    "calculator": "Calculator",
+    "current_datetime": "Date & time",
+    "structured_output": "Structured output",
+    "http_request": "HTTP requests (advanced)"
+  },
+  "prefill": {
+    "goal": "I want to change my agent's goal: ",
+    "instructions": "I want to adjust my agent's instructions: ",
+    "tools": "I want to change my agent's tools: ",
+    "rules": "I want to update my agent's rules: ",
+    "output": "I want to change my agent's output format: ",
+    "test": "Run a test on my agent and tell me the result."
+  },
+  "empty": {
+    "title": "No structure yet",
+    "subtitle": "Describe your agent in Build and its structure will appear here.",
+    "cta": "Go to Build"
+  }
+}

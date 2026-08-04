@@ -1,0 +1,294 @@
+{
+  "hero": {
+    "titleLine1": "Créez votre prochain",
+    "titleLine2": "agent IA",
+    "subtitle": "Décrivez ce dont vous avez besoin. Stack32 construit l'agent, le teste et le rend prêt à l'emploi.",
+    "promptExamples": [
+      "Crée un agent qui surveille mes concurrents et résume les changements.",
+      "Crée un agent qui lit mes documents et répond aux questions.",
+      "Crée un agent qui recherche et note des prospects commerciaux.",
+      "Crée un agent qui transforme mes notes en rapports structurés."
+    ]
+  },
+  "howItWorks": {
+    "title": "Comment ça marche",
+    "subtitle": "Pas de code. Pas de workflows. Pas de configuration. Juste une conversation.",
+    "describe": {
+      "title": "Décrivez",
+      "description": "Écrivez ce dont vous avez besoin en langage naturel, comme si vous l'expliquiez à un nouveau collègue."
+    },
+    "build": {
+      "title": "Créez",
+      "description": "Stack32 conçoit votre agent, choisit ses capacités et lance automatiquement un premier test."
+    },
+    "run": {
+      "title": "Utilisez",
+      "description": "Parlez immédiatement à votre agent dans Live, affinez-le en quelques prompts, puis publiez-le."
+    }
+  },
+  "exampleAgents": {
+    "title": "Les agents créés avec Stack32",
+    "subtitle": "De la recherche commerciale aux questions-réponses documentaires — une phrase suffit pour commencer.",
+    "items": [
+      {
+        "name": "Agent de recherche commerciale",
+        "description": "Recherche des entreprises, note les prospects et rédige des emails personnalisés."
+      },
+      {
+        "name": "Agent de veille concurrentielle",
+        "description": "Surveille les pages de vos concurrents et résume les changements importants avec les sources."
+      },
+      {
+        "name": "Agent Q&R documentaire",
+        "description": "Lit vos documents et répond aux questions en s'appuyant uniquement sur votre base de connaissances."
+      },
+      {
+        "name": "Agent rédacteur de rapports",
+        "description": "Transforme des notes brutes en rapports propres et structurés."
+      }
+    ]
+  },
+  "benefits": {
+    "title": "Pourquoi Stack32",
+    "items": [
+      {
+        "title": "Zéro code, pour toujours",
+        "description": "Vous n'écrivez jamais de code, ne déplacez aucun nœud et ne configurez aucun JSON. Vous décrivez, Stack32 construit."
+      },
+      {
+        "title": "Testable immédiatement",
+        "description": "Chaque agent est testé pendant sa création et prêt à l'essai dans Live en quelques secondes."
+      },
+      {
+        "title": "Amélioration par conversation",
+        "description": "Demandez des modifications en langage naturel. Stack32 les applique, reteste et versionne votre agent."
+      },
+      {
+        "title": "Structure transparente",
+        "description": "Voyez exactement de quoi votre agent est composé — objectif, outils, règles — sans aucun bruit technique."
+      }
+    ]
+  },
+  "faqPreview": {
+    "title": "Questions fréquentes",
+    "items": [
+      {
+        "question": "Dois-je savoir coder ?",
+        "answer": "Non. Stack32 est conçu pour les utilisateurs non techniques. Vous décrivez ce dont vous avez besoin en langage naturel et Stack32 s'occupe de tout le reste."
+      },
+      {
+        "question": "Que peut réellement faire mon agent ?",
+        "answer": "Les agents peuvent rechercher sur le web, lire vos documents, analyser des informations et produire des réponses structurées, des tableaux et des rapports."
+      },
+      {
+        "question": "En combien de temps ai-je un agent fonctionnel ?",
+        "answer": "Une première version fonctionnelle est généralement prête en moins d'une minute, et la plupart des agents atteignent un résultat satisfaisant en quatre à cinq prompts."
+      },
+      {
+        "question": "Puis-je modifier mon agent après sa création ?",
+        "answer": "Oui. Dites simplement au Builder ce qu'il faut changer. Stack32 applique la modification, reteste l'agent et conserve chaque version précédente."
+      }
+    ]
+  },
+  "pricingPreview": {
+    "title": "Une tarification simple",
+    "subtitle": "Commencez gratuitement, passez au niveau supérieur quand vos agents font partie de votre quotidien."
+  },
+  "finalCta": {
+    "title": "Votre premier agent est à une phrase de vous",
+    "subtitle": "Décrivez ce dont vous avez besoin et regardez-le prendre vie.",
+    "cta": "Commencer à créer"
+  },
+  "features": {
+    "title": "Tout ce qu'il faut pour de vrais agents IA",
+    "subtitle": "Stack32 couvre le cycle de vie complet d'un agent : création, tests, itération et publication.",
+    "items": [
+      {
+        "title": "Builder conversationnel",
+        "description": "Créez et modifiez vos agents en discutant avec le Builder Stack32, comme vous briefez un collègue."
+      },
+      {
+        "title": "Tests automatiques",
+        "description": "Chaque version de votre agent est validée et testée avant que vous ne comptiez dessus."
+      },
+      {
+        "title": "Auto-réparation",
+        "description": "Quand quelque chose ne va pas, Stack32 le détecte et propose une correction automatique — un clic et c'est réglé."
+      },
+      {
+        "title": "Espace Live",
+        "description": "Parlez à votre agent dans une vue Live dédiée, avec une progression visible pendant qu'il travaille."
+      },
+      {
+        "title": "Structure lisible",
+        "description": "La vue Structure montre l'objectif, les outils, les règles et le format de sortie de votre agent — sans JSON, sans canvas."
+      },
+      {
+        "title": "Versionnage intégré",
+        "description": "Chaque modification crée une nouvelle version. Publiez quand vous êtes prêt."
+      },
+      {
+        "title": "Sources de connaissances",
+        "description": "Connectez des documents pour que votre agent réponde à partir de votre contenu, avec citations."
+      },
+      {
+        "title": "Interface multilingue",
+        "description": "Utilisez Stack32 en anglais ou en français, avec d'autres langues à venir."
+      }
+    ]
+  },
+  "templates": {
+    "title": "Partez d'un modèle",
+    "subtitle": "Choisissez un point de départ et adaptez-le en quelques prompts.",
+    "useTemplate": "Utiliser ce modèle",
+    "items": [
+      {
+        "name": "Agent de recherche commerciale",
+        "description": "Recherchez des entreprises, notez les prospects et rédigez des emails personnalisés.",
+        "prompt": "Crée un agent qui recherche une entreprise, note le prospect et rédige un email personnalisé."
+      },
+      {
+        "name": "Agent de veille concurrentielle",
+        "description": "Surveillez vos concurrents et résumez les changements importants avec les sources.",
+        "prompt": "Crée un agent qui surveille mes concurrents et résume les changements."
+      },
+      {
+        "name": "Agent Q&R documentaire",
+        "description": "Répondez aux questions à partir de vos documents, avec citations.",
+        "prompt": "Crée un agent qui lit mes documents et répond aux questions."
+      },
+      {
+        "name": "Agent rédacteur de rapports",
+        "description": "Transformez des notes brutes en rapports structurés et publiables.",
+        "prompt": "Crée un agent qui transforme mes notes en rapports structurés."
+      },
+      {
+        "name": "Agent de scoring de prospects",
+        "description": "Qualifiez et notez les prospects entrants selon votre profil client idéal.",
+        "prompt": "Crée un agent qui recherche et note des prospects commerciaux."
+      },
+      {
+        "name": "Agent de synthèse de réunions",
+        "description": "Résumez vos notes de réunion en décisions, actions et responsables.",
+        "prompt": "Crée un agent qui transforme mes notes de réunion en décisions et actions."
+      }
+    ]
+  },
+  "pricing": {
+    "title": "Tarifs",
+    "subtitle": "Un abonnement simple. Annulable à tout moment.",
+    "perMonth": "/mois",
+    "free": {
+      "name": "Gratuit",
+      "price": "0 $",
+      "description": "Explorez Stack32 et créez votre premier agent.",
+      "features": [
+        "1 agent",
+        "Vues Build, Live et Structure",
+        "Support communautaire"
+      ],
+      "cta": "Commencer"
+    },
+    "pro": {
+      "name": "Pro",
+      "price": "29 $",
+      "description": "Pour celles et ceux qui utilisent leurs agents au quotidien.",
+      "badge": "Le plus populaire",
+      "features": [
+        "Agents illimités",
+        "Tests et réparation automatiques",
+        "Sources de connaissances avec citations",
+        "Historique des versions",
+        "Support prioritaire"
+      ],
+      "cta": "Passer à Pro"
+    },
+    "note": "Prix affichés à titre indicatif pendant la bêta. La facturation est gérée de manière sécurisée par Whop."
+  },
+  "docs": {
+    "title": "Documentation",
+    "subtitle": "Tout ce qu'il faut pour tirer le meilleur de Stack32.",
+    "sections": [
+      {
+        "title": "Premiers pas",
+        "description": "Créez votre compte, décrivez votre premier agent et comprenez les vues Build, Live et Structure."
+      },
+      {
+        "title": "Écrire de bons prompts",
+        "description": "Comment décrire vos besoins pour que Stack32 construise exactement l'agent que vous voulez."
+      },
+      {
+        "title": "Améliorer votre agent",
+        "description": "Itérez par la conversation : changez l'objectif, ajoutez des règles, ajustez le format de sortie."
+      },
+      {
+        "title": "Sources de connaissances",
+        "description": "Connectez des documents pour que votre agent réponde à partir de votre propre contenu."
+      },
+      {
+        "title": "Publication",
+        "description": "Comprenez la différence entre brouillon et version publiée, et quand publier."
+      },
+      {
+        "title": "Facturation et compte",
+        "description": "Gérez votre abonnement, les limites de votre plan et les paramètres de votre compte."
+      }
+    ],
+    "comingSoon": "La documentation complète est en cours de rédaction et sera bientôt disponible."
+  },
+  "faq": {
+    "title": "Questions fréquentes",
+    "subtitle": "Tout ce que vous voulez savoir avant de créer votre premier agent.",
+    "items": [
+      {
+        "question": "Dois-je savoir coder ?",
+        "answer": "Non. Stack32 est conçu pour les utilisateurs non techniques. Vous décrivez ce dont vous avez besoin en langage naturel et Stack32 construit, teste et exécute l'agent pour vous."
+      },
+      {
+        "question": "Est-ce comme n8n, Make ou Zapier ?",
+        "answer": "Non. Il n'y a ni nœuds, ni workflows, ni canvas en glisser-déposer. Vous parlez à un builder, et vous obtenez un agent fonctionnel avec lequel vous pouvez immédiatement discuter."
+      },
+      {
+        "question": "Que peut faire mon agent ?",
+        "answer": "Les agents peuvent chercher sur le web, lire les documents que vous connectez, analyser des informations, faire des calculs et produire des réponses structurées comme des rapports et des tableaux."
+      },
+      {
+        "question": "Combien de temps faut-il pour créer un agent ?",
+        "answer": "Une première version fonctionnelle apparaît généralement en moins d'une minute. La plupart des agents atteignent un résultat satisfaisant en quatre à cinq prompts."
+      },
+      {
+        "question": "Puis-je modifier un agent après sa création ?",
+        "answer": "Oui — c'est le cœur de Stack32. Demandez des modifications dans la vue Build et Stack32 les applique, reteste votre agent et conserve chaque version précédente."
+      },
+      {
+        "question": "Quelles langues l'interface prend-elle en charge ?",
+        "answer": "L'anglais et le français aujourd'hui. L'architecture est prête pour d'autres langues."
+      },
+      {
+        "question": "Comment fonctionne la facturation ?",
+        "answer": "Stack32 utilise un abonnement mensuel simple géré de manière sécurisée par Whop. Vous pouvez annuler à tout moment."
+      },
+      {
+        "question": "Qui est derrière Stack32 ?",
+        "answer": "Stack32 est un produit Synko, opéré par Zeldia, une société immatriculée en France."
+      }
+    ]
+  },
+  "contact": {
+    "title": "Contactez-nous",
+    "subtitle": "Une question, un problème, une idée ? Nous lisons tout.",
+    "form": {
+      "name": "Votre nom",
+      "namePlaceholder": "Ada Lovelace",
+      "email": "Votre email",
+      "emailPlaceholder": "vous@exemple.com",
+      "message": "Votre message",
+      "messagePlaceholder": "Dites-nous comment nous pouvons vous aider…",
+      "submit": "Envoyer le message",
+      "success": "Merci ! Votre message a bien été enregistré. Nous reviendrons vers vous rapidement.",
+      "mockNotice": "Phase 1 : ce formulaire n'enregistre rien pour le moment — une boîte de support sera connectée avant le lancement."
+    },
+    "companyTitle": "Entreprise",
+    "emailTitle": "Email"
+  }
+}

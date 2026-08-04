@@ -1,0 +1,38 @@
+{
+  "badge": {
+    "draft": "Draft",
+    "published": "Published"
+  },
+  "empty": {
+    "title": "Talk to {{name}}",
+    "subtitle": "This is your agent's workspace. Give it a task and watch it work."
+  },
+  "starters": {
+    "title": "Try asking"
+  },
+  "status": {
+    "searching": "Searching the web…",
+    "reading": "Reading your documents…",
+    "analyzing": "Analyzing…",
+    "preparing": "Preparing the answer…"
+  },
+  "composer": {
+    "placeholder": "Ask your agent anything…"
+  },
+  "actions": {
+    "retry": "Retry",
+    "stop": "Stop",
+    "clear": "Clear conversation"
+  },
+  "citations": {
+    "title": "Sources"
+  },
+  "artifact": {
+    "table": "Table",
+    "markdown": "Document"
+  },
+  "agentLabel": "Agent",
+  "a11y": {
+    "conversation": "Conversation with your agent"
+  }
+}

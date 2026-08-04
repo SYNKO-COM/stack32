@@ -1,0 +1,39 @@
+{
+  "status": {
+    "title": "Facturation",
+    "planLabel": "Plan actuel",
+    "statusLabel": "Statut",
+    "active": "Actif",
+    "trialing": "Période d'essai",
+    "past_due": "Paiement en retard",
+    "canceled": "Annulé",
+    "expired": "Expiré",
+    "inactive": "Inactif",
+    "renewsOn": "Renouvellement le {{date}}",
+    "manage": "Gérer l'abonnement",
+    "mockNotice": "Mode démo : ceci simule un abonnement Pro actif. La facturation réelle (Whop) sera connectée dans une phase ultérieure."
+  },
+  "upgrade": {
+    "title": "Passer à Pro",
+    "subtitle": "Débloquez les agents illimités et tout ce que Stack32 a à offrir.",
+    "features": [
+      "Agents illimités",
+      "Tests et réparation automatiques",
+      "Sources de connaissances avec citations",
+      "Historique des versions",
+      "Support prioritaire"
+    ],
+    "cta": "Passer à Pro",
+    "processing": "Redirection vers le paiement…"
+  },
+  "success": {
+    "title": "Tout est prêt",
+    "subtitle": "Votre abonnement est actif. Il est temps de créer votre prochain agent.",
+    "cta": "Ouvrir l'application"
+  },
+  "canceled": {
+    "title": "Paiement annulé",
+    "subtitle": "Aucun montant n'a été prélevé. Vous pouvez passer à Pro quand vous voulez.",
+    "cta": "Retour à l'application"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "generic": "Une erreur est survenue. Veuillez réessayer.",
+  "network": "Problème de connexion. Vérifiez votre réseau et réessayez.",
+  "notFound": {
+    "title": "Page introuvable",
+    "subtitle": "La page que vous cherchez n'existe pas ou a été déplacée.",
+    "cta": "Retour à l'accueil"
+  },
+  "agentNotFound": {
+    "title": "Agent introuvable",
+    "subtitle": "Cet agent n'existe pas ou a été supprimé.",
+    "cta": "Retour à vos agents"
+  },
+  "form": {
+    "required": "Ce champ est obligatoire.",
+    "emailInvalid": "Veuillez saisir une adresse email valide.",
+    "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères."
+  }
+}

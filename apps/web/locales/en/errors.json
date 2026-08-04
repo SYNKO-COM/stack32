@@ -1,0 +1,19 @@
+{
+  "generic": "Something went wrong. Please try again.",
+  "network": "Connection problem. Check your network and try again.",
+  "notFound": {
+    "title": "Page not found",
+    "subtitle": "The page you're looking for doesn't exist or has moved.",
+    "cta": "Back to home"
+  },
+  "agentNotFound": {
+    "title": "Agent not found",
+    "subtitle": "This agent doesn't exist or was deleted.",
+    "cta": "Back to your agents"
+  },
+  "form": {
+    "required": "This field is required.",
+    "emailInvalid": "Please enter a valid email address.",
+    "passwordTooShort": "Password must be at least 8 characters."
+  }
+}

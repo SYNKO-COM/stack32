@@ -1,0 +1,220 @@
+{
+  "banner": {
+    "devWarning": "Development notice: some legal company information must be completed before production. Missing fields: {{fields}}."
+  },
+  "common": {
+    "lastUpdated": "Last updated: {{date}}",
+    "tableOfContents": "Contents",
+    "backToLegal": "All legal pages",
+    "draftNotice": "This document is a professionally structured draft. It has not been reviewed by a lawyer and does not constitute legal advice."
+  },
+  "index": {
+    "title": "Legal",
+    "subtitle": "Stack32 is a Synko product, operated by Zeldia. Find all our legal documents below.",
+    "links": {
+      "notice": "Legal notice",
+      "noticeDescription": "Publisher, hosting and contact information.",
+      "terms": "Terms of use",
+      "termsDescription": "The rules that apply when you use Stack32.",
+      "privacy": "Privacy policy",
+      "privacyDescription": "What data we collect and how we use it.",
+      "cookies": "Cookie policy",
+      "cookiesDescription": "The cookies and trackers we use.",
+      "sales": "Subscription & sales terms",
+      "salesDescription": "Conditions applying to paid subscriptions.",
+      "refunds": "Refund policy",
+      "refundsDescription": "When and how you can get refunded."
+    }
+  },
+  "notice": {
+    "title": "Legal notice",
+    "sections": [
+      {
+        "title": "Publisher",
+        "body": "The Stack32 website and service ({{website}}) are published by {{companyName}}, a {{legalForm}} with a share capital of {{shareCapital}}, registered under SIREN {{siren}} ({{rcs}}), with its registered office at {{registeredAddress}}. Intra-community VAT number: {{vatNumber}}. Stack32 is a {{parentBrand}} product."
+      },
+      {
+        "title": "Publication director",
+        "body": "The publication director is {{publicationDirector}}."
+      },
+      {
+        "title": "Contact",
+        "body": "You can contact us by email at {{contactEmail}} or by mail at {{registeredAddress}}."
+      },
+      {
+        "title": "Hosting",
+        "body": "The service is hosted by {{hostingProvider}}, {{hostingAddress}}."
+      },
+      {
+        "title": "Intellectual property",
+        "body": "All elements of the Stack32 service (structure, texts, visuals, logos, code) are protected by intellectual-property law and remain the exclusive property of {{companyName}} or its licensors. Any reproduction without prior written authorization is prohibited."
+      }
+    ]
+  },
+  "terms": {
+    "title": "Terms of use",
+    "intro": "These terms of use govern access to and use of the Stack32 service, published by {{companyName}}. By creating an account or using Stack32, you accept these terms.",
+    "sections": [
+      {
+        "title": "1. The service",
+        "body": "Stack32 lets you create, test and use AI agents by describing them in natural language. The service includes a builder interface, a live chat with your agents, and a structure view of their configuration. Stack32 is provided as a web application accessible with a compatible browser."
+      },
+      {
+        "title": "2. Account",
+        "body": "You must create an account to use the product. You are responsible for the confidentiality of your credentials and for all activity performed through your account. You must provide accurate information and be at least 15 years old, or have parental consent."
+      },
+      {
+        "title": "3. Acceptable use",
+        "body": "You agree not to use Stack32 to generate or spread illegal, harmful or misleading content; not to attempt to bypass technical limits or security measures; not to infringe third-party rights; and not to resell the service without authorization. We may suspend accounts that violate these rules."
+      },
+      {
+        "title": "4. AI-generated content",
+        "body": "Agents produce content automatically. Despite automated testing, results may be incomplete, inaccurate or inappropriate for your use case. You remain responsible for reviewing and using agent outputs. Stack32 does not guarantee the accuracy of generated content."
+      },
+      {
+        "title": "5. Your content",
+        "body": "You retain ownership of the content you submit (prompts, documents, knowledge sources). You grant {{companyName}} the licenses strictly necessary to operate the service, including processing your content through third-party AI model providers."
+      },
+      {
+        "title": "6. Subscriptions",
+        "body": "Some features require a paid subscription. Prices, billing and cancellation are described in the Subscription & Sales Terms. Billing is handled by our payment provider, Whop."
+      },
+      {
+        "title": "7. Availability",
+        "body": "We strive to keep Stack32 available and reliable, but the service is provided \"as is\", without guarantee of uninterrupted availability. We may modify or discontinue features with reasonable notice."
+      },
+      {
+        "title": "8. Liability",
+        "body": "To the extent permitted by law, {{companyName}}'s liability is limited to the amounts you paid for the service during the twelve months preceding the event giving rise to the claim. Nothing in these terms excludes liability that cannot be excluded by law."
+      },
+      {
+        "title": "9. Termination",
+        "body": "You may stop using the service and delete your account at any time. We may suspend or terminate accounts in case of breach of these terms, with notice where reasonably possible."
+      },
+      {
+        "title": "10. Governing law",
+        "body": "These terms are governed by French law. Any dispute that cannot be resolved amicably will be submitted to the competent French courts."
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Privacy policy",
+    "intro": "This policy explains what personal data {{companyName}} collects through Stack32, why, and what your rights are.",
+    "sections": [
+      {
+        "title": "1. Data controller",
+        "body": "The data controller is {{companyName}}, {{registeredAddress}}. Contact: {{contactEmail}}."
+      },
+      {
+        "title": "2. Data we collect",
+        "body": "Account data (email, name, password hash); profile data provided during onboarding (first name, phone number, role, discovery source, use case); content you submit (prompts, conversations, documents); usage data (features used, technical logs); and billing data processed by our payment provider."
+      },
+      {
+        "title": "3. Why we process it",
+        "body": "To provide the service (create and run your agents), to secure accounts, to improve the product, to provide support, to handle billing, and to comply with legal obligations. Legal bases include contract performance, legitimate interest and legal obligations."
+      },
+      {
+        "title": "4. AI processing",
+        "body": "Your prompts and connected documents are processed by AI model providers acting as processors, strictly to generate your agents' answers. We do not use your private content to train our own models."
+      },
+      {
+        "title": "5. Sharing",
+        "body": "Data is shared only with processors necessary to run the service (hosting, database, AI model providers, payment provider, analytics), under data-processing agreements. We do not sell personal data."
+      },
+      {
+        "title": "6. Retention",
+        "body": "Account data is kept while your account is active, then deleted or anonymized within the legal limitation periods. You can request deletion at any time."
+      },
+      {
+        "title": "7. Your rights",
+        "body": "You have rights of access, rectification, erasure, portability, restriction and objection, and the right to lodge a complaint with the CNIL (French supervisory authority). To exercise your rights, contact {{contactEmail}}."
+      },
+      {
+        "title": "8. Security",
+        "body": "We apply appropriate technical and organizational measures: encryption in transit, access controls, isolation of customer data and least-privilege access."
+      },
+      {
+        "title": "9. Transfers outside the EU",
+        "body": "Some processors may be located outside the European Union. In that case, transfers are protected by appropriate safeguards such as the European Commission's standard contractual clauses."
+      }
+    ]
+  },
+  "cookies": {
+    "title": "Cookie policy",
+    "intro": "This policy describes the cookies and similar technologies used by Stack32.",
+    "sections": [
+      {
+        "title": "1. What cookies are",
+        "body": "Cookies are small files stored on your device by your browser. They can be strictly necessary to run the service, or used for measurement and personalization."
+      },
+      {
+        "title": "2. Cookies we use",
+        "body": "Strictly necessary cookies: authentication session, security, language preference. These do not require consent. Measurement cookies: if we add privacy-friendly analytics, this policy will be updated and consent requested where required."
+      },
+      {
+        "title": "3. Local storage",
+        "body": "Stack32 uses your browser's local storage to remember your language and, in development mode, to store demo data locally on your device."
+      },
+      {
+        "title": "4. Managing cookies",
+        "body": "You can delete cookies and local storage at any time in your browser settings. Blocking strictly necessary cookies may prevent the service from working."
+      }
+    ]
+  },
+  "sales": {
+    "title": "Subscription & sales terms",
+    "intro": "These terms apply to paid subscriptions to Stack32, sold by {{companyName}}.",
+    "sections": [
+      {
+        "title": "1. Offer",
+        "body": "Stack32 is offered as a monthly subscription giving access to the features described on the pricing page. Features and limits of each plan are described at the time of purchase."
+      },
+      {
+        "title": "2. Price and payment",
+        "body": "Prices are shown in the checkout flow, taxes indicated where applicable. Payment is processed by our payment provider, Whop. The subscription renews automatically each period until canceled."
+      },
+      {
+        "title": "3. Right of withdrawal",
+        "body": "For consumers in the EU, the subscription gives immediate access to digital content. By subscribing, you expressly request immediate execution and acknowledge that the 14-day right of withdrawal is waived once the service has been fully accessed, in accordance with the French Consumer Code."
+      },
+      {
+        "title": "4. Cancellation",
+        "body": "You can cancel at any time from your billing settings. Cancellation takes effect at the end of the current billing period. Access remains active until then."
+      },
+      {
+        "title": "5. Price changes",
+        "body": "We may change prices with at least 30 days' notice. Changes apply from the next renewal. If you disagree, you can cancel before the new price takes effect."
+      },
+      {
+        "title": "6. Fair use",
+        "body": "Usage limits (number of agents, runs, knowledge volume) are described per plan. We may throttle abusive usage that threatens platform stability, with notice where possible."
+      }
+    ]
+  },
+  "refunds": {
+    "title": "Refund policy",
+    "intro": "This policy explains when refunds apply to Stack32 subscriptions sold by {{companyName}}.",
+    "sections": [
+      {
+        "title": "1. General principle",
+        "body": "Subscription periods already started are in principle non-refundable, since the service is a digital content made available immediately."
+      },
+      {
+        "title": "2. Service failure",
+        "body": "If a major malfunction attributable to Stack32 prevented you from using the service for a significant part of a billing period, contact us: we will examine a pro-rata refund or credit in good faith."
+      },
+      {
+        "title": "3. Billing errors",
+        "body": "Any duplicate or erroneous charge will be refunded in full after verification."
+      },
+      {
+        "title": "4. How to ask",
+        "body": "Send your request to {{contactEmail}} with the email of your account and the invoice concerned. We answer within 7 business days. Refunds are issued through the original payment method via our payment provider."
+      },
+      {
+        "title": "5. Statutory rights",
+        "body": "Nothing in this policy limits your statutory rights, including legal guarantees applicable to digital services."
+      }
+    ]
+  }
+}

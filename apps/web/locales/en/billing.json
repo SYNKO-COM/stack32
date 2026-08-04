@@ -1,0 +1,39 @@
+{
+  "status": {
+    "title": "Billing",
+    "planLabel": "Current plan",
+    "statusLabel": "Status",
+    "active": "Active",
+    "trialing": "Trial",
+    "past_due": "Payment past due",
+    "canceled": "Canceled",
+    "expired": "Expired",
+    "inactive": "Inactive",
+    "renewsOn": "Renews on {{date}}",
+    "manage": "Manage subscription",
+    "mockNotice": "Mock mode: this simulates an active Pro subscription. Real billing (Whop) will be connected in a later phase."
+  },
+  "upgrade": {
+    "title": "Upgrade to Pro",
+    "subtitle": "Unlock unlimited agents and everything Stack32 has to offer.",
+    "features": [
+      "Unlimited agents",
+      "Automatic testing and repair",
+      "Knowledge sources with citations",
+      "Version history",
+      "Priority support"
+    ],
+    "cta": "Upgrade now",
+    "processing": "Redirecting to checkout…"
+  },
+  "success": {
+    "title": "You're all set",
+    "subtitle": "Your subscription is active. Time to build your next agent.",
+    "cta": "Open the app"
+  },
+  "canceled": {
+    "title": "Checkout canceled",
+    "subtitle": "No charge was made. You can upgrade whenever you're ready.",
+    "cta": "Back to the app"
+  }
+}

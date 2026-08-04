@@ -1,0 +1,51 @@
+{
+  "intro": {
+    "welcome": "Bienvenue sur Stack32",
+    "subtitle": "Configurons tout en moins d'une minute."
+  },
+  "progress": "Étape {{current}} sur {{total}}",
+  "step1": {
+    "title": "Comment avez-vous connu Stack32 ?",
+    "subtitle": "Répondez honnêtement — cela nous aide à savoir quels canaux fonctionnent vraiment.",
+    "options": {
+      "googleSearch": "Recherche Google",
+      "youtube": "YouTube",
+      "twitter": "X (Twitter)",
+      "linkedin": "LinkedIn",
+      "tiktok": "TikTok",
+      "reddit": "Reddit",
+      "chatgpt": "ChatGPT, Perplexity ou autre IA",
+      "friends": "Amis ou famille",
+      "other": "Autre"
+    }
+  },
+  "step2": {
+    "title": "Qu'est-ce qui vous décrit le mieux ?",
+    "subtitle": "Choisissez ce qui vous correspond le plus. Nous adapterons Stack32 à votre façon de travailler.",
+    "options": {
+      "founder": "Fondateur",
+      "freelancer": "Freelance",
+      "marketer": "Marketing",
+      "developer": "Développeur",
+      "sales": "Commercial",
+      "student": "Étudiant",
+      "other": "Autre"
+    }
+  },
+  "step3": {
+    "title": "Parlez-nous un peu de vous",
+    "subtitle": "Votre prénom, et éventuellement comment vous comptez utiliser Stack32.",
+    "firstName": "Prénom",
+    "firstNamePlaceholder": "Ada",
+    "phone": "Numéro de téléphone",
+    "phonePlaceholder": "6 12 34 56 78",
+    "phoneHint": "Facultatif — choisissez votre indicatif, puis saisissez votre numéro sans le 0 initial.",
+    "useCase": "Que fera votre premier agent ? (facultatif)",
+    "useCasePlaceholder": "ex. Rechercher des prospects pour mon agence",
+    "finish": "Terminer"
+  },
+  "completing": "Préparation de votre espace de travail…",
+  "a11y": {
+    "stepper": "Étapes d'inscription"
+  }
+}

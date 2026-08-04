@@ -1,0 +1,98 @@
+{
+  "brand": {
+    "tagline": "Describe the agent you need. Build it. Use it immediately.",
+    "byline": "A Synko product by Zeldia",
+    "shortByline": "Stack32 by Synko"
+  },
+  "nav": {
+    "product": "Product",
+    "features": "Features",
+    "templates": "Templates",
+    "pricing": "Pricing",
+    "docs": "Docs",
+    "faq": "FAQ",
+    "contact": "Contact",
+    "legal": "Legal"
+  },
+  "actions": {
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "getStarted": "Get started",
+    "logout": "Log out",
+    "continue": "Continue",
+    "back": "Back",
+    "next": "Next",
+    "skip": "Skip",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "delete": "Delete",
+    "rename": "Rename",
+    "duplicate": "Duplicate",
+    "retry": "Retry",
+    "settings": "Settings",
+    "newAgent": "New agent",
+    "publish": "Publish",
+    "upgrade": "Upgrade",
+    "openApp": "Open the app",
+    "gotIt": "Got it",
+    "confirm": "Confirm",
+    "learnMore": "Learn more",
+    "viewAll": "View all",
+    "backHome": "Back to home"
+  },
+  "composer": {
+    "label": "Describe what you want to build",
+    "attach": "Add an attachment",
+    "voice": "Use voice input",
+    "send": "Send",
+    "build": "Build",
+    "sending": "Sending…",
+    "stop": "Stop"
+  },
+  "status": {
+    "draft": "Draft",
+    "building": "Building",
+    "ready": "Ready",
+    "needsAttention": "Needs attention",
+    "published": "Published"
+  },
+  "plan": {
+    "free": "Free",
+    "pro": "Pro"
+  },
+  "autosave": {
+    "saved": "Saved",
+    "saving": "Saving…"
+  },
+  "footer": {
+    "product": "Product",
+    "company": "Company",
+    "legalSection": "Legal",
+    "resources": "Resources",
+    "copyright": "© {{year}} {{company}}. All rights reserved.",
+    "legalNotice": "Legal notice",
+    "terms": "Terms of use",
+    "privacy": "Privacy policy",
+    "cookies": "Cookie policy",
+    "sales": "Sales terms",
+    "refunds": "Refund policy"
+  },
+  "theme": {
+    "appearance": "Appearance"
+  },
+  "a11y": {
+    "languageSelector": "Change language",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "userMenu": "Open user menu",
+    "toggleSidebar": "Toggle agent list",
+    "agentMenu": "Open agent options",
+    "mainNavigation": "Main navigation",
+    "generationStatus": "Generation status",
+    "switchToDark": "Switch to dark mode",
+    "switchToLight": "Switch to light mode"
+  },
+  "loading": "Loading…",
+  "comingSoon": "Coming soon"
+}

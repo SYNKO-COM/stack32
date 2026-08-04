@@ -1,0 +1,241 @@
+"use client";
+
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  Check,
+  Hammer,
+  Layers,
+  Menu,
+  MessageCircle,
+  MoreHorizontal,
+  Rocket,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { useAgent, usePublishAgent } from "@/hooks/use-agents";
+import { useCurrentUser, useSignOut } from "@/hooks/use-auth";
+import { useTranslation } from "@/hooks/use-translation";
+import { cn } from "@/lib/utils";
+import { useUiStore } from "@/store/ui-store";
+
+const TABS = [
+  { id: "build", icon: Hammer },
+  { id: "live", icon: MessageCircle },
+  { id: "structure", icon: Layers },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+function ViewTabs({ agentId }: { agentId: string }) {
+  const { t } = useTranslation("builder");
+  const pathname = usePathname();
+  const reducedMotion = useReducedMotion();
+
+  const active: TabId = pathname.endsWith("/live")
+    ? "live"
+    : pathname.endsWith("/structure")
+      ? "structure"
+      : "build";
+
+  return (
+    <nav
+      aria-label={t("a11y.viewTabs")}
+      className="glass flex items-center gap-1 rounded-full p-1"
+    >
+      {TABS.map(({ id, icon: Icon }) => {
+        const isActive = id === active;
+        return (
+          <Link
+            key={id}
+            href={`/agents/${agentId}/${id}`}
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors",
+              isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground/80",
+            )}
+          >
+            {isActive ? (
+              <motion.span
+                layoutId="active-view-tab"
+                transition={
+                  reducedMotion ? { duration: 0 } : { type: "spring", bounce: 0.2, duration: 0.5 }
+                }
+                className="glass-strong absolute inset-0 rounded-full bg-foreground/[0.06]"
+                aria-hidden="true"
+              />
+            ) : null}
+            <Icon className="relative z-10 size-4" aria-hidden="true" />
+            <span
+              className={cn(
+                "relative z-10",
+                isActive ? "inline" : "hidden sm:inline sm:opacity-70",
+              )}
+            >
+              {t(`tabs.${id}`)}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function Topbar({ agentId }: { agentId: string }) {
+  const { t } = useTranslation(["builder", "common"]);
+  const router = useRouter();
+  const { data: agent } = useAgent(agentId);
+  const { data: user } = useCurrentUser();
+  const publishAgent = usePublishAgent();
+  const signOut = useSignOut();
+  const openDialog = useUiStore((s) => s.openDialog);
+  const setMobileSidebarOpen = useUiStore((s) => s.setMobileSidebarOpen);
+
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishedOpen, setPublishedOpen] = useState(false);
+
+  const handlePublish = async () => {
+    setPublishOpen(false);
+    await publishAgent.mutateAsync(agentId);
+    setPublishedOpen(true);
+  };
+
+  return (
+    <header className="flex items-center justify-between gap-3 px-4 py-3 md:px-6">
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="lg:hidden"
+          aria-label={t("common:a11y.toggleSidebar")}
+          onClick={() => setMobileSidebarOpen(true)}
+        >
+          <Menu aria-hidden="true" />
+        </Button>
+        <ViewTabs agentId={agentId} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span
+          className="hidden items-center gap-1.5 font-mono text-xs text-muted-foreground/70 sm:flex"
+          role="status"
+        >
+          <Check className="size-3.5 text-emerald-500/80" aria-hidden="true" />
+          {t("common:autosave.saved")}
+        </span>
+
+        <ThemeToggle />
+
+        <Button
+          size="sm"
+          className="gap-1.5 rounded-full"
+          onClick={() => setPublishOpen(true)}
+          disabled={publishAgent.isPending || agent?.status === "building"}
+        >
+          <Rocket className="size-3.5" aria-hidden="true" />
+          {publishAgent.isPending ? t("builder:topbar.publishing") : t("builder:topbar.publish")}
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={t("common:a11y.openMenu")}>
+              <MoreHorizontal aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => openDialog("settings")}>
+              {t("builder:topbar.menu.settings")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openDialog("billing")}>
+              {t("builder:topbar.menu.billing")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full"
+              aria-label={t("common:a11y.userMenu")}
+            >
+              <Avatar className="size-7">
+                <AvatarFallback className="bg-brand/30 text-xs">
+                  {(user?.name ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => openDialog("settings")}>
+              {t("common:actions.settings")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => openDialog("billing")}>
+              {t("builder:topbar.menu.billing")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                void signOut.mutateAsync().then(() => router.push("/"));
+              }}
+            >
+              {t("common:actions.logout")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
+        <DialogContent className="glass-strong border-border sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("builder:publishDialog.title")}</DialogTitle>
+            <DialogDescription>{t("builder:publishDialog.body")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPublishOpen(false)}>
+              {t("common:actions.cancel")}
+            </Button>
+            <Button onClick={() => void handlePublish()}>
+              {t("builder:publishDialog.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={publishedOpen} onOpenChange={setPublishedOpen}>
+        <DialogContent className="glass-strong border-border sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Check className="size-5 text-emerald-400" aria-hidden="true" />
+              {t("builder:publishDialog.successTitle")}
+            </DialogTitle>
+            <DialogDescription>{t("builder:publishDialog.successBody")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setPublishedOpen(false)}>{t("common:actions.gotIt")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </header>
+  );
+}

@@ -1,0 +1,68 @@
+{
+  "title": "Structure",
+  "subtitle": "De quoi votre agent est composé — sans code, sans configuration.",
+  "sections": {
+    "goal": "Objectif",
+    "instructions": "Instructions",
+    "modelProfile": "Profil de modèle",
+    "tools": "Outils",
+    "knowledge": "Connaissances",
+    "memory": "Mémoire",
+    "rules": "Règles",
+    "output": "Sortie",
+    "starterPrompts": "Suggestions de départ",
+    "testStatus": "État des tests",
+    "currentVersion": "Version actuelle"
+  },
+  "actions": {
+    "changeInBuild": "Modifier dans Build",
+    "addKnowledge": "Ajouter des connaissances",
+    "runTest": "Lancer un test"
+  },
+  "values": {
+    "modelFast": "Rapide — réponses rapides pour les tâches simples",
+    "modelStandard": "Standard — équilibre entre qualité et vitesse",
+    "modelHeavy": "Approfondi — raisonnement maximal pour les tâches complexes",
+    "temperature": "Créativité",
+    "conversationWindow": "Se souvient des {{count}} derniers messages d'une conversation",
+    "outputMarkdown": "Texte mis en forme (Markdown)",
+    "outputTable": "Tableau structuré",
+    "outputText": "Texte brut",
+    "tablesAllowed": "Utilise des tableaux quand c'est pertinent",
+    "testPassed": "Tous les tests sont validés",
+    "testFailed": "Le dernier test a échoué",
+    "testPending": "Pas encore testé",
+    "version": "Version {{number}}",
+    "versionCreated": "Créée le {{date}}",
+    "noKnowledge": "Aucune source de connaissances connectée pour l'instant",
+    "knowledgeEnabled": "{{count}} source connectée",
+    "knowledgeEnabled_other": "{{count}} sources connectées",
+    "maxSteps": "Jusqu'à {{count}} étapes par tâche",
+    "timeout": "S'arrête après {{count}} secondes",
+    "maxToolCalls": "Jusqu'à {{count}} appels d'outils par tâche",
+    "toolEnabled": "Activé",
+    "toolDisabled": "Désactivé"
+  },
+  "tools": {
+    "web_search": "Recherche web",
+    "fetch_url": "Lecture de pages web",
+    "knowledge_search": "Recherche documentaire",
+    "calculator": "Calculatrice",
+    "current_datetime": "Date et heure",
+    "structured_output": "Sortie structurée",
+    "http_request": "Requêtes HTTP (avancé)"
+  },
+  "prefill": {
+    "goal": "Je veux changer l'objectif de mon agent : ",
+    "instructions": "Je veux ajuster les instructions de mon agent : ",
+    "tools": "Je veux modifier les outils de mon agent : ",
+    "rules": "Je veux mettre à jour les règles de mon agent : ",
+    "output": "Je veux changer le format de sortie de mon agent : ",
+    "test": "Lance un test sur mon agent et donne-moi le résultat."
+  },
+  "empty": {
+    "title": "Pas encore de structure",
+    "subtitle": "Décrivez votre agent dans Build et sa structure apparaîtra ici.",
+    "cta": "Aller dans Build"
+  }
+}

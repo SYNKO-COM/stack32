@@ -1,0 +1,73 @@
+{
+  "tabs": {
+    "build": "Build",
+    "live": "Live",
+    "structure": "Structure"
+  },
+  "sidebar": {
+    "agentsTitle": "AI agents",
+    "newAgent": "New agent",
+    "untitledAgent": "Untitled agent",
+    "empty": "No agents yet. Create your first one.",
+    "menu": {
+      "rename": "Rename",
+      "duplicate": "Duplicate",
+      "delete": "Delete"
+    },
+    "renameTitle": "Rename agent",
+    "renamePlaceholder": "Agent name",
+    "deleteTitle": "Delete this agent?",
+    "deleteBody": "\"{{name}}\" and its conversations will be removed. This cannot be undone.",
+    "planLabel": "Plan"
+  },
+  "topbar": {
+    "publish": "Publish",
+    "publishing": "Publishing…",
+    "menu": {
+      "settings": "Settings",
+      "billing": "Billing",
+      "duplicate": "Duplicate agent",
+      "delete": "Delete agent"
+    }
+  },
+  "publishDialog": {
+    "title": "Publish this agent?",
+    "body": "Publishing makes the current version the stable one your agent uses in Live.",
+    "confirm": "Publish now",
+    "successTitle": "Agent published",
+    "successBody": "Your agent is live. The published version will keep working while you iterate on new drafts."
+  },
+  "empty": {
+    "title": "Describe the agent you need",
+    "subtitle": "One clear sentence is enough. Stack32 will build a first version, test it, and let you try it immediately.",
+    "examplesTitle": "Try something like"
+  },
+  "steps": {
+    "understanding": "Understanding your goal",
+    "capabilities": "Selecting capabilities",
+    "building": "Building the agent",
+    "testing": "Running a test",
+    "repairing": "Repairing the agent"
+  },
+  "actions": {
+    "testAgent": "Test agent",
+    "viewStructure": "View structure",
+    "fixAutomatically": "Fix automatically"
+  },
+  "mock": {
+    "successResponse": "Your agent is ready to test. I set up its goal, selected the right capabilities and ran a first test — everything passed. You can try it now in Live, or review its composition in Structure.",
+    "warningResponse": "Your agent is built, but the test surfaced a minor issue: one answer was less precise than expected. You can test it as is, or let me fix it automatically.",
+    "errorResponse": "I couldn't complete the build this time: the test failed while checking the agent's answers. I can fix this automatically — or you can rephrase your request with more detail.",
+    "repairInProgress": "Repairing the agent…",
+    "repairResponse": "Fixed. I adjusted the agent's instructions and reran the test — it passes now. Your agent is ready to use."
+  },
+  "composer": {
+    "placeholder": "Describe what to build or change…"
+  },
+  "builderName": "Stack32",
+  "you": "You",
+  "a11y": {
+    "conversation": "Builder conversation",
+    "viewTabs": "Agent views"
+  }
+}

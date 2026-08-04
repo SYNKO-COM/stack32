@@ -1,0 +1,68 @@
+import type {
+  Agent,
+  AgentSpec,
+  AgentVersion,
+  BuilderThread,
+  KnowledgeSource,
+  LiveThread,
+  OnboardingAnswers,
+  Profile,
+  Subscription,
+  User,
+} from "@/lib/domain/types";
+
+/**
+ * Repository abstractions.
+ *
+ * Phase 1 ships mock implementations backed by localStorage
+ * (lib/repositories/mock). TODO(phase-2/3): add Supabase + agent-service
+ * implementations and switch via lib/repositories/factory.ts without
+ * touching UI components.
+ */
+
+export interface AuthRepository {
+  getCurrentUser(): Promise<User | null>;
+  signInWithPassword(email: string, password: string): Promise<User>;
+  signUpWithPassword(email: string, password: string): Promise<User>;
+  signInWithGoogle(): Promise<User>;
+  sendPasswordReset(email: string): Promise<void>;
+  updatePassword(newPassword: string): Promise<void>;
+  signOut(): Promise<void>;
+  getProfile(): Promise<Profile | null>;
+  completeOnboarding(answers: OnboardingAnswers): Promise<Profile>;
+}
+
+export interface AgentRepository {
+  listAgents(): Promise<Agent[]>;
+  getAgent(agentId: string): Promise<Agent | null>;
+  createAgent(name?: string): Promise<Agent>;
+  renameAgent(agentId: string, name: string): Promise<Agent>;
+  duplicateAgent(agentId: string): Promise<Agent>;
+  deleteAgent(agentId: string): Promise<void>;
+  publishAgent(agentId: string): Promise<Agent>;
+  getCurrentVersion(agentId: string): Promise<AgentVersion | null>;
+  getSpec(agentId: string): Promise<AgentSpec | null>;
+}
+
+export interface BuilderRepository {
+  getThread(agentId: string): Promise<BuilderThread>;
+  sendMessage(agentId: string, content: string): Promise<void>;
+}
+
+export interface LiveRepository {
+  getThread(agentId: string): Promise<LiveThread>;
+  sendMessage(agentId: string, content: string): Promise<void>;
+  clearThread(agentId: string): Promise<void>;
+}
+
+export interface BillingRepository {
+  getSubscription(): Promise<Subscription | null>;
+  /** Returns a checkout URL. TODO(phase-7): real Whop checkout session. */
+  createCheckout(planId: string): Promise<{ url: string }>;
+}
+
+export interface KnowledgeRepository {
+  listSources(agentId: string): Promise<KnowledgeSource[]>;
+  addSource(agentId: string, name: string, kind: KnowledgeSource["kind"]): Promise<KnowledgeSource>;
+  removeSource(sourceId: string): Promise<void>;
+}

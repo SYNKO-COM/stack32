@@ -1,0 +1,98 @@
+{
+  "brand": {
+    "tagline": "Décrivez l'agent dont vous avez besoin. Créez-le. Utilisez-le immédiatement.",
+    "byline": "Un produit Synko par Zeldia",
+    "shortByline": "Stack32 par Synko"
+  },
+  "nav": {
+    "product": "Produit",
+    "features": "Fonctionnalités",
+    "templates": "Modèles",
+    "pricing": "Tarifs",
+    "docs": "Docs",
+    "faq": "FAQ",
+    "contact": "Contact",
+    "legal": "Mentions légales"
+  },
+  "actions": {
+    "signIn": "Se connecter",
+    "signUp": "S'inscrire",
+    "getStarted": "Commencer",
+    "logout": "Se déconnecter",
+    "continue": "Continuer",
+    "back": "Retour",
+    "next": "Suivant",
+    "skip": "Passer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "close": "Fermer",
+    "delete": "Supprimer",
+    "rename": "Renommer",
+    "duplicate": "Dupliquer",
+    "retry": "Réessayer",
+    "settings": "Paramètres",
+    "newAgent": "Nouvel agent",
+    "publish": "Publier",
+    "upgrade": "Passer au niveau supérieur",
+    "openApp": "Ouvrir l'application",
+    "gotIt": "Compris",
+    "confirm": "Confirmer",
+    "learnMore": "En savoir plus",
+    "viewAll": "Tout voir",
+    "backHome": "Retour à l'accueil"
+  },
+  "composer": {
+    "label": "Décrivez ce que vous voulez créer",
+    "attach": "Ajouter une pièce jointe",
+    "voice": "Utiliser la saisie vocale",
+    "send": "Envoyer",
+    "build": "Créer",
+    "sending": "Envoi…",
+    "stop": "Arrêter"
+  },
+  "status": {
+    "draft": "Brouillon",
+    "building": "En construction",
+    "ready": "Prêt",
+    "needsAttention": "Attention requise",
+    "published": "Publié"
+  },
+  "plan": {
+    "free": "Gratuit",
+    "pro": "Pro"
+  },
+  "autosave": {
+    "saved": "Enregistré",
+    "saving": "Enregistrement…"
+  },
+  "footer": {
+    "product": "Produit",
+    "company": "Entreprise",
+    "legalSection": "Légal",
+    "resources": "Ressources",
+    "copyright": "© {{year}} {{company}}. Tous droits réservés.",
+    "legalNotice": "Mentions légales",
+    "terms": "Conditions d'utilisation",
+    "privacy": "Politique de confidentialité",
+    "cookies": "Politique de cookies",
+    "sales": "Conditions de vente",
+    "refunds": "Politique de remboursement"
+  },
+  "theme": {
+    "appearance": "Apparence"
+  },
+  "a11y": {
+    "languageSelector": "Changer de langue",
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu",
+    "userMenu": "Ouvrir le menu utilisateur",
+    "toggleSidebar": "Afficher ou masquer la liste des agents",
+    "agentMenu": "Ouvrir les options de l'agent",
+    "mainNavigation": "Navigation principale",
+    "generationStatus": "État de la génération",
+    "switchToDark": "Passer en mode sombre",
+    "switchToLight": "Passer en mode clair"
+  },
+  "loading": "Chargement…",
+  "comingSoon": "Bientôt disponible"
+}

@@ -1,0 +1,73 @@
+{
+  "tabs": {
+    "build": "Build",
+    "live": "Live",
+    "structure": "Structure"
+  },
+  "sidebar": {
+    "agentsTitle": "Agents IA",
+    "newAgent": "Nouvel agent",
+    "untitledAgent": "Agent sans titre",
+    "empty": "Aucun agent pour l'instant. Créez le premier.",
+    "menu": {
+      "rename": "Renommer",
+      "duplicate": "Dupliquer",
+      "delete": "Supprimer"
+    },
+    "renameTitle": "Renommer l'agent",
+    "renamePlaceholder": "Nom de l'agent",
+    "deleteTitle": "Supprimer cet agent ?",
+    "deleteBody": "« {{name}} » et ses conversations seront supprimés. Cette action est irréversible.",
+    "planLabel": "Plan"
+  },
+  "topbar": {
+    "publish": "Publier",
+    "publishing": "Publication…",
+    "menu": {
+      "settings": "Paramètres",
+      "billing": "Facturation",
+      "duplicate": "Dupliquer l'agent",
+      "delete": "Supprimer l'agent"
+    }
+  },
+  "publishDialog": {
+    "title": "Publier cet agent ?",
+    "body": "La publication fait de la version actuelle la version stable utilisée par votre agent dans Live.",
+    "confirm": "Publier maintenant",
+    "successTitle": "Agent publié",
+    "successBody": "Votre agent est en ligne. La version publiée continuera de fonctionner pendant que vous itérez sur de nouveaux brouillons."
+  },
+  "empty": {
+    "title": "Décrivez l'agent dont vous avez besoin",
+    "subtitle": "Une phrase claire suffit. Stack32 construira une première version, la testera, et vous pourrez l'essayer immédiatement.",
+    "examplesTitle": "Essayez par exemple"
+  },
+  "steps": {
+    "understanding": "Compréhension de votre objectif",
+    "capabilities": "Sélection des capacités",
+    "building": "Construction de l'agent",
+    "testing": "Exécution d'un test",
+    "repairing": "Réparation de l'agent"
+  },
+  "actions": {
+    "testAgent": "Tester l'agent",
+    "viewStructure": "Voir la structure",
+    "fixAutomatically": "Corriger automatiquement"
+  },
+  "mock": {
+    "successResponse": "Votre agent est prêt à être testé. J'ai défini son objectif, sélectionné les bonnes capacités et lancé un premier test — tout est validé. Vous pouvez l'essayer dans Live, ou consulter sa composition dans Structure.",
+    "warningResponse": "Votre agent est construit, mais le test a révélé un point mineur : une réponse était moins précise qu'attendu. Vous pouvez le tester tel quel, ou me laisser corriger automatiquement.",
+    "errorResponse": "Je n'ai pas pu terminer la construction cette fois : le test a échoué lors de la vérification des réponses de l'agent. Je peux corriger cela automatiquement — ou vous pouvez reformuler votre demande avec plus de détails.",
+    "repairInProgress": "Réparation de l'agent…",
+    "repairResponse": "C'est corrigé. J'ai ajusté les instructions de l'agent et relancé le test — il passe maintenant. Votre agent est prêt à l'emploi."
+  },
+  "composer": {
+    "placeholder": "Décrivez quoi construire ou modifier…"
+  },
+  "builderName": "Stack32",
+  "you": "Vous",
+  "a11y": {
+    "conversation": "Conversation avec le Builder",
+    "viewTabs": "Vues de l'agent"
+  }
+}

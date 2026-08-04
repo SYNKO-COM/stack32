@@ -1,0 +1,220 @@
+{
+  "banner": {
+    "devWarning": "Avertissement de développement : certaines informations légales de l'entreprise doivent être complétées avant la mise en production. Champs manquants : {{fields}}."
+  },
+  "common": {
+    "lastUpdated": "Dernière mise à jour : {{date}}",
+    "tableOfContents": "Sommaire",
+    "backToLegal": "Toutes les pages légales",
+    "draftNotice": "Ce document est un premier projet structuré. Il n'a pas été relu par un avocat et ne constitue pas un conseil juridique."
+  },
+  "index": {
+    "title": "Mentions légales et documents",
+    "subtitle": "Stack32 est un produit Synko, opéré par Zeldia. Retrouvez tous nos documents légaux ci-dessous.",
+    "links": {
+      "notice": "Mentions légales",
+      "noticeDescription": "Éditeur, hébergement et coordonnées.",
+      "terms": "Conditions d'utilisation",
+      "termsDescription": "Les règles applicables à l'utilisation de Stack32.",
+      "privacy": "Politique de confidentialité",
+      "privacyDescription": "Les données que nous collectons et leur usage.",
+      "cookies": "Politique de cookies",
+      "cookiesDescription": "Les cookies et traceurs que nous utilisons.",
+      "sales": "Conditions d'abonnement et de vente",
+      "salesDescription": "Conditions applicables aux abonnements payants.",
+      "refunds": "Politique de remboursement",
+      "refundsDescription": "Quand et comment être remboursé."
+    }
+  },
+  "notice": {
+    "title": "Mentions légales",
+    "sections": [
+      {
+        "title": "Éditeur",
+        "body": "Le site et le service Stack32 ({{website}}) sont édités par {{companyName}}, {{legalForm}} au capital de {{shareCapital}}, immatriculée sous le SIREN {{siren}} ({{rcs}}), dont le siège social est situé {{registeredAddress}}. Numéro de TVA intracommunautaire : {{vatNumber}}. Stack32 est un produit {{parentBrand}}."
+      },
+      {
+        "title": "Directeur de la publication",
+        "body": "Le directeur de la publication est {{publicationDirector}}."
+      },
+      {
+        "title": "Contact",
+        "body": "Vous pouvez nous contacter par email à {{contactEmail}} ou par courrier à {{registeredAddress}}."
+      },
+      {
+        "title": "Hébergement",
+        "body": "Le service est hébergé par {{hostingProvider}}, {{hostingAddress}}."
+      },
+      {
+        "title": "Propriété intellectuelle",
+        "body": "L'ensemble des éléments du service Stack32 (structure, textes, visuels, logos, code) est protégé par le droit de la propriété intellectuelle et demeure la propriété exclusive de {{companyName}} ou de ses concédants. Toute reproduction sans autorisation écrite préalable est interdite."
+      }
+    ]
+  },
+  "terms": {
+    "title": "Conditions générales d'utilisation",
+    "intro": "Les présentes conditions générales d'utilisation encadrent l'accès et l'utilisation du service Stack32, édité par {{companyName}}. En créant un compte ou en utilisant Stack32, vous les acceptez.",
+    "sections": [
+      {
+        "title": "1. Le service",
+        "body": "Stack32 permet de créer, tester et utiliser des agents IA en les décrivant en langage naturel. Le service comprend une interface de création (Builder), un chat en direct avec vos agents (Live), et une vue de leur configuration (Structure). Stack32 est fourni comme application web accessible depuis un navigateur compatible."
+      },
+      {
+        "title": "2. Compte",
+        "body": "La création d'un compte est nécessaire pour utiliser le produit. Vous êtes responsable de la confidentialité de vos identifiants et de toute activité réalisée via votre compte. Vous devez fournir des informations exactes et être âgé d'au moins 15 ans, ou disposer de l'accord d'un représentant légal."
+      },
+      {
+        "title": "3. Usage acceptable",
+        "body": "Vous vous engagez à ne pas utiliser Stack32 pour générer ou diffuser des contenus illicites, préjudiciables ou trompeurs ; à ne pas tenter de contourner les limites techniques ou mesures de sécurité ; à ne pas porter atteinte aux droits de tiers ; et à ne pas revendre le service sans autorisation. Nous pouvons suspendre les comptes qui enfreignent ces règles."
+      },
+      {
+        "title": "4. Contenus générés par l'IA",
+        "body": "Les agents produisent des contenus de manière automatique. Malgré les tests automatisés, les résultats peuvent être incomplets, inexacts ou inadaptés à votre usage. Vous restez responsable de la vérification et de l'utilisation des réponses de vos agents. Stack32 ne garantit pas l'exactitude des contenus générés."
+      },
+      {
+        "title": "5. Vos contenus",
+        "body": "Vous restez propriétaire des contenus que vous soumettez (prompts, documents, sources de connaissances). Vous accordez à {{companyName}} les licences strictement nécessaires au fonctionnement du service, y compris le traitement de vos contenus par des fournisseurs tiers de modèles d'IA."
+      },
+      {
+        "title": "6. Abonnements",
+        "body": "Certaines fonctionnalités nécessitent un abonnement payant. Les prix, la facturation et la résiliation sont décrits dans les Conditions d'abonnement et de vente. La facturation est assurée par notre prestataire de paiement, Whop."
+      },
+      {
+        "title": "7. Disponibilité",
+        "body": "Nous nous efforçons de maintenir Stack32 disponible et fiable, mais le service est fourni « en l'état », sans garantie de disponibilité ininterrompue. Nous pouvons modifier ou arrêter des fonctionnalités avec un préavis raisonnable."
+      },
+      {
+        "title": "8. Responsabilité",
+        "body": "Dans la limite permise par la loi, la responsabilité de {{companyName}} est limitée aux montants que vous avez payés pour le service au cours des douze mois précédant le fait générateur. Aucune stipulation des présentes n'exclut une responsabilité qui ne peut être exclue par la loi."
+      },
+      {
+        "title": "9. Résiliation",
+        "body": "Vous pouvez cesser d'utiliser le service et supprimer votre compte à tout moment. Nous pouvons suspendre ou résilier un compte en cas de manquement aux présentes conditions, avec préavis lorsque cela est raisonnablement possible."
+      },
+      {
+        "title": "10. Droit applicable",
+        "body": "Les présentes conditions sont soumises au droit français. Tout litige qui ne pourrait être résolu à l'amiable sera soumis aux tribunaux français compétents."
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Politique de confidentialité",
+    "intro": "Cette politique explique quelles données personnelles {{companyName}} collecte via Stack32, pourquoi, et quels sont vos droits.",
+    "sections": [
+      {
+        "title": "1. Responsable de traitement",
+        "body": "Le responsable de traitement est {{companyName}}, {{registeredAddress}}. Contact : {{contactEmail}}."
+      },
+      {
+        "title": "2. Données collectées",
+        "body": "Données de compte (email, nom, mot de passe haché) ; données de profil fournies lors de l'inscription (prénom, numéro de téléphone, rôle, canal de découverte, cas d'usage) ; contenus soumis (prompts, conversations, documents) ; données d'usage (fonctionnalités utilisées, journaux techniques) ; et données de facturation traitées par notre prestataire de paiement."
+      },
+      {
+        "title": "3. Finalités",
+        "body": "Fournir le service (créer et exécuter vos agents), sécuriser les comptes, améliorer le produit, assurer le support, gérer la facturation et respecter nos obligations légales. Les bases légales incluent l'exécution du contrat, l'intérêt légitime et les obligations légales."
+      },
+      {
+        "title": "4. Traitement par l'IA",
+        "body": "Vos prompts et documents connectés sont traités par des fournisseurs de modèles d'IA agissant comme sous-traitants, strictement pour générer les réponses de vos agents. Nous n'utilisons pas vos contenus privés pour entraîner nos propres modèles."
+      },
+      {
+        "title": "5. Partage",
+        "body": "Les données ne sont partagées qu'avec les sous-traitants nécessaires au fonctionnement du service (hébergement, base de données, fournisseurs de modèles d'IA, prestataire de paiement, mesure d'audience), dans le cadre d'accords de sous-traitance. Nous ne vendons pas de données personnelles."
+      },
+      {
+        "title": "6. Durées de conservation",
+        "body": "Les données de compte sont conservées tant que votre compte est actif, puis supprimées ou anonymisées dans les délais légaux de prescription. Vous pouvez demander la suppression à tout moment."
+      },
+      {
+        "title": "7. Vos droits",
+        "body": "Vous disposez des droits d'accès, de rectification, d'effacement, de portabilité, de limitation et d'opposition, ainsi que du droit d'introduire une réclamation auprès de la CNIL. Pour exercer vos droits, contactez {{contactEmail}}."
+      },
+      {
+        "title": "8. Sécurité",
+        "body": "Nous appliquons des mesures techniques et organisationnelles appropriées : chiffrement en transit, contrôles d'accès, isolation des données clients et principe du moindre privilège."
+      },
+      {
+        "title": "9. Transferts hors UE",
+        "body": "Certains sous-traitants peuvent être situés en dehors de l'Union européenne. Dans ce cas, les transferts sont encadrés par des garanties appropriées telles que les clauses contractuelles types de la Commission européenne."
+      }
+    ]
+  },
+  "cookies": {
+    "title": "Politique de cookies",
+    "intro": "Cette politique décrit les cookies et technologies similaires utilisés par Stack32.",
+    "sections": [
+      {
+        "title": "1. Qu'est-ce qu'un cookie",
+        "body": "Les cookies sont de petits fichiers déposés sur votre appareil par votre navigateur. Ils peuvent être strictement nécessaires au fonctionnement du service, ou servir à la mesure d'audience et à la personnalisation."
+      },
+      {
+        "title": "2. Cookies utilisés",
+        "body": "Cookies strictement nécessaires : session d'authentification, sécurité, préférence de langue. Ils ne nécessitent pas de consentement. Cookies de mesure : si nous ajoutons une mesure d'audience respectueuse de la vie privée, cette politique sera mise à jour et le consentement demandé lorsque requis."
+      },
+      {
+        "title": "3. Stockage local",
+        "body": "Stack32 utilise le stockage local de votre navigateur pour mémoriser votre langue et, en mode développement, pour stocker des données de démonstration localement sur votre appareil."
+      },
+      {
+        "title": "4. Gérer les cookies",
+        "body": "Vous pouvez supprimer les cookies et le stockage local à tout moment dans les réglages de votre navigateur. Le blocage des cookies strictement nécessaires peut empêcher le service de fonctionner."
+      }
+    ]
+  },
+  "sales": {
+    "title": "Conditions d'abonnement et de vente",
+    "intro": "Les présentes conditions s'appliquent aux abonnements payants à Stack32, vendus par {{companyName}}.",
+    "sections": [
+      {
+        "title": "1. Offre",
+        "body": "Stack32 est proposé sous forme d'abonnement mensuel donnant accès aux fonctionnalités décrites sur la page tarifs. Les fonctionnalités et limites de chaque plan sont décrites au moment de l'achat."
+      },
+      {
+        "title": "2. Prix et paiement",
+        "body": "Les prix sont indiqués lors du parcours de paiement, taxes précisées le cas échéant. Le paiement est traité par notre prestataire, Whop. L'abonnement se renouvelle automatiquement à chaque période jusqu'à résiliation."
+      },
+      {
+        "title": "3. Droit de rétractation",
+        "body": "Pour les consommateurs de l'UE, l'abonnement donne un accès immédiat à un contenu numérique. En souscrivant, vous demandez expressément l'exécution immédiate et reconnaissez renoncer au droit de rétractation de 14 jours une fois le service pleinement accessible, conformément au Code de la consommation."
+      },
+      {
+        "title": "4. Résiliation",
+        "body": "Vous pouvez résilier à tout moment depuis vos paramètres de facturation. La résiliation prend effet à la fin de la période de facturation en cours. L'accès reste actif jusqu'à cette date."
+      },
+      {
+        "title": "5. Évolution des prix",
+        "body": "Nous pouvons modifier les prix avec un préavis d'au moins 30 jours. Les changements s'appliquent au renouvellement suivant. En cas de désaccord, vous pouvez résilier avant l'entrée en vigueur du nouveau prix."
+      },
+      {
+        "title": "6. Usage raisonnable",
+        "body": "Les limites d'usage (nombre d'agents, exécutions, volume de connaissances) sont décrites par plan. Nous pouvons limiter un usage abusif menaçant la stabilité de la plateforme, avec préavis lorsque possible."
+      }
+    ]
+  },
+  "refunds": {
+    "title": "Politique de remboursement",
+    "intro": "Cette politique précise les cas de remboursement des abonnements Stack32 vendus par {{companyName}}.",
+    "sections": [
+      {
+        "title": "1. Principe général",
+        "body": "Les périodes d'abonnement déjà entamées ne sont en principe pas remboursables, le service étant un contenu numérique mis à disposition immédiatement."
+      },
+      {
+        "title": "2. Défaillance du service",
+        "body": "Si un dysfonctionnement majeur imputable à Stack32 vous a empêché d'utiliser le service pendant une partie significative d'une période de facturation, contactez-nous : nous étudierons de bonne foi un remboursement au prorata ou un avoir."
+      },
+      {
+        "title": "3. Erreurs de facturation",
+        "body": "Tout prélèvement en double ou erroné sera intégralement remboursé après vérification."
+      },
+      {
+        "title": "4. Comment demander",
+        "body": "Envoyez votre demande à {{contactEmail}} en précisant l'email de votre compte et la facture concernée. Nous répondons sous 7 jours ouvrés. Les remboursements sont effectués sur le moyen de paiement d'origine via notre prestataire de paiement."
+      },
+      {
+        "title": "5. Droits légaux",
+        "body": "Rien dans cette politique ne limite vos droits légaux, notamment les garanties légales applicables aux services numériques."
+      }
+    ]
+  }
+}

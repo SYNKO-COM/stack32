@@ -1,0 +1,19 @@
+{
+  "name": "stack32",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stack32 — Describe the agent you need. Build it. Use it immediately.",
+  "packageManager": "pnpm@10.4.1",
+  "scripts": {
+    "dev": "pnpm dev:web",
+    "dev:all": "pnpm run --parallel --aggregate-output /^dev:/",
+    "dev:web": "pnpm --filter @stack32/web dev",
+    "dev:web:turbo": "pnpm --filter @stack32/web dev:turbo",
+    "dev:agent": "sh -c 'cd services/agent-service && [ -d .venv ] && .venv/bin/uvicorn agent_service.main:app --reload --port 8000 || echo \"agent-service venv missing — see services/agent-service/README.md\"'",
+    "lint": "pnpm --filter @stack32/web lint",
+    "typecheck": "pnpm --filter @stack32/web typecheck",
+    "test": "sh -c 'cd services/agent-service && [ -d .venv ] && .venv/bin/pytest || echo \"agent-service venv missing — see services/agent-service/README.md\"'",
+    "build": "pnpm --filter @stack32/web build",
+    "clean": "pnpm --filter @stack32/web clean"
+  }
+}
