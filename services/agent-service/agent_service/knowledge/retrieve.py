@@ -30,6 +30,7 @@ async def retrieve_knowledge(
         response = await client.post(
             "/rpc/match_knowledge_chunks",
             json={
+                "p_user_id": user_id,
                 "p_agent_id": agent_id,
                 "p_query_embedding": vec_literal,
                 "p_match_count": max_chunks,
@@ -39,23 +40,7 @@ async def retrieve_knowledge(
     if response.status_code >= 400:
         return await _keyword_fallback(user_id, agent_id, query, max_chunks)
     rows = response.json()
-    # Enforce user isolation in case RPC was called with service role
-    filtered = []
-    async with get_supabase_admin_client() as client:
-        owned = await client.get(
-            "/knowledge_chunks",
-            params={
-                "user_id": f"eq.{user_id}",
-                "agent_id": f"eq.{agent_id}",
-                "select": "id",
-                "limit": "500",
-            },
-        )
-    owned_ids = {r["id"] for r in (owned.json() if owned.status_code < 400 else [])}
-    for row in rows if isinstance(rows, list) else []:
-        if row.get("id") in owned_ids:
-            filtered.append(row)
-    return filtered
+    return rows if isinstance(rows, list) else []
 
 
 async def _keyword_fallback(

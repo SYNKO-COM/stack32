@@ -211,3 +211,24 @@ export async function submitBuilderCapabilities(input: {
     },
   });
 }
+
+/** Resume builder after dynamic clarifying questions. */
+export async function submitBuilderQuestions(input: {
+  runId: string;
+  answers: Record<string, string>;
+}): Promise<void> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("questions_require_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  await agentServiceFetch(`/v1/builder/runs/${input.runId}/questions`, {
+    method: "POST",
+    accessToken,
+    body: { answers: input.answers },
+  });
+}

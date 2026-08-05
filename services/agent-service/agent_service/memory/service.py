@@ -14,6 +14,76 @@ logger = logging.getLogger(__name__)
 _SECRETISH = re.compile(
     r"(?i)(password|api[_-]?key|secret|token|bearer\s+\S+|sk-\S+|credit\s*card)"
 )
+_EXPLICIT_REMEMBER = re.compile(
+    r"(?i)\b(?:remember(?:\s+that)?|note\s+that|save\s+(?:this|that)|ne\s+oublie\s+pas(?:\s+que)?|"
+    r"souviens[- ]toi(?:\s+que)?)\b[:\s]+(.+)"
+)
+
+
+def extract_memory_candidate(text: str, *, policy: str = "explicit") -> str | None:
+    """Extract a memory candidate from user text according to write policy."""
+    content = (text or "").strip()
+    if not content or policy == "never":
+        return None
+    if policy == "explicit":
+        match = _EXPLICIT_REMEMBER.search(content)
+        if not match:
+            return None
+        candidate = match.group(1).strip()
+        return candidate[:800] if candidate else None
+    # automatic: short factual lines only
+    if len(content) <= 280 and content.count("\n") <= 1 and not content.endswith("?"):
+        return content[:500]
+    match = _EXPLICIT_REMEMBER.search(content)
+    if match:
+        return match.group(1).strip()[:800]
+    return None
+
+
+async def upsert_conversation_summary(
+    *,
+    user_id: str,
+    agent_id: str,
+    thread_id: str,
+    summary: str,
+    source_message_count: int,
+) -> None:
+    if not summary.strip():
+        return
+    async with get_supabase_admin_client() as client:
+        await client.post(
+            "/conversation_summaries",
+            json={
+                "user_id": user_id,
+                "agent_id": agent_id,
+                "thread_id": thread_id,
+                "summary": summary[:4000],
+                "source_message_count": source_message_count,
+            },
+        )
+
+
+async def latest_conversation_summary(
+    *, user_id: str, agent_id: str, thread_id: str
+) -> str | None:
+    async with get_supabase_admin_client() as client:
+        response = await client.get(
+            "/conversation_summaries",
+            params={
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "thread_id": f"eq.{thread_id}",
+                "select": "summary",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+    if response.status_code >= 400:
+        return None
+    rows = response.json()
+    if isinstance(rows, list) and rows:
+        return str(rows[0].get("summary") or "") or None
+    return None
 
 
 async def read_memories(*, user_id: str, agent_id: str, query: str) -> list[dict[str, Any]]:
@@ -32,20 +102,16 @@ async def read_memories(*, user_id: str, agent_id: str, query: str) -> list[dict
         response = await client.post(
             "/rpc/match_agent_memories",
             json={
+                "p_user_id": user_id,
                 "p_agent_id": agent_id,
                 "p_query_embedding": vec_literal,
                 "p_match_count": 8,
                 "p_min_similarity": 0.75,
             },
-            headers={
-                "Authorization": client.headers["Authorization"],
-                # Impersonation not available; service role filters by params + we add user filter in fallback
-            },
         )
     if response.status_code >= 400:
         return await _list_recent(user_id, agent_id)
     rows = response.json()
-    # Defense in depth — only return if we also verify via list
     return rows if isinstance(rows, list) else []
 
 

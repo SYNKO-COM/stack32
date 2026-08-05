@@ -57,6 +57,49 @@ async def has_llm_secret(*, user_id: str, agent_id: str) -> bool:
     return any(r.get("secret_kind") == "llm_api_key" for r in rows)
 
 
+async def validate_llm_api_key(*, provider: str, api_key: str) -> None:
+    """Minimal provider ping before encrypt. Raises ValueError on invalid key."""
+    provider = provider.lower().strip()
+    key = (api_key or "").strip()
+    if len(key) < 8:
+        raise ValueError("INVALID_LLM_KEY")
+    from agent_service.config import get_settings
+
+    settings = get_settings()
+    if settings.AI_EXECUTION_MODE == "mock":
+        if key.lower() in {"invalid", "bad-key", "fail"}:
+            raise ValueError("INVALID_LLM_KEY")
+        return
+    if settings.AI_EXECUTION_MODE == "disabled":
+        return
+
+    # Cheap probe via LiteLLM — one tiny completion (or models.list when available).
+    try:
+        import litellm
+
+        model_map = {
+            "openai": "openai/gpt-4.1-nano",
+            "anthropic": "anthropic/claude-3-5-haiku-latest",
+            "google": "gemini/gemini-2.0-flash",
+            "gemini": "gemini/gemini-2.0-flash",
+            "xai": "xai/grok-3-mini",
+            "mistral": "mistral/mistral-small-latest",
+            "groq": "groq/llama-3.1-8b-instant",
+            "openrouter": "openrouter/openai/gpt-4o-mini",
+        }
+        model = model_map.get(provider, f"{provider}/probe")
+        await litellm.acompletion(
+            model=model,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=1,
+            api_key=key,
+            timeout=15,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.info("llm key probe failed provider=%s err=%s", provider, type(exc).__name__)
+        raise ValueError("INVALID_LLM_KEY") from exc
+
+
 async def upsert_llm_secret(
     *,
     user_id: str,
@@ -68,6 +111,7 @@ async def upsert_llm_secret(
     provider = provider.lower().strip()
     if provider not in PROVIDER_ENV_PREFIX and provider != "custom":
         raise ValueError("Unsupported provider")
+    await validate_llm_api_key(provider=provider, api_key=api_key)
     ciphertext = encrypt_secret(api_key)
     hint = secret_hint(api_key)
     payload = {

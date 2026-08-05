@@ -72,6 +72,15 @@ class Settings(BaseSettings):
 
     # Execution / cost controls (Starter ~$20 plan targets)
     AI_EXECUTION_MODE: Literal["live", "mock", "disabled"] = "mock"
+    # Generated-agent graph runner: legacy while-loop vs LangGraph StateGraph
+    AGENT_RUNTIME_VERSION: Literal["legacy", "langgraph"] = "legacy"
+    # When true (dev default): execute inline and skip enqueue.
+    # When false (prod): enqueue only; worker claims via lease_run_queue_job.
+    QUEUE_INLINE: bool = True
+    QUEUE_WORKER_ENABLED: bool = False
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_OAUTH_CLIENT_SECRET: str = ""
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:3000/api/connections/google/callback"
     MONTHLY_USER_BUDGET_USD: float = 10.0
     MAX_CONCURRENT_BUILDER_RUNS: int = 2
     MAX_CONCURRENT_LIVE_RUNS: int = 3

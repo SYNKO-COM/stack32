@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from typing import Any
 from urllib.parse import urlparse
 
 from agent_service.gateway.model_gateway import get_model_gateway
+from agent_service.knowledge.extract import ExtractionError, extract_text
+from agent_service.knowledge.storage import (
+    BUCKET,
+    download_bytes,
+    source_row_storage_fields,
+    storage_object_path,
+    upload_bytes,
+)
 from agent_service.security.ssrf import UnsafeURLError, validate_public_http_url
 from agent_service.supabase_client import get_supabase_admin_client
 
@@ -33,11 +42,21 @@ def sanitize_filename(name: str) -> str:
 
 
 async def mark_source_status(
-    source_id: str, user_id: str, status: str, error: str | None = None
+    source_id: str,
+    user_id: str,
+    status: str,
+    error: str | None = None,
+    *,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     payload: dict[str, Any] = {"status": status}
     if error:
         payload["error_message"] = error[:500]
+        payload["extraction_status"] = error[:120]
+    elif status == "ready":
+        payload["extraction_status"] = "ok"
+    if extra:
+        payload.update(extra)
     async with get_supabase_admin_client() as client:
         await client.patch(
             "/knowledge_sources",
@@ -105,6 +124,67 @@ async def ingest_url_source(*, user_id: str, agent_id: str, source_id: str, url:
     except UnsafeURLError:
         await mark_source_status(source_id, user_id, "failed", "Unsafe URL")
     except Exception:  # noqa: BLE001
+        await mark_source_status(source_id, user_id, "failed", "KNOWLEDGE_INGESTION_FAILED")
+
+
+async def store_and_queue_file(
+    *,
+    user_id: str,
+    agent_id: str,
+    source_id: str,
+    filename: str,
+    mime_type: str,
+    data: bytes,
+) -> str:
+    """Upload bytes to Storage and return the object path."""
+    path = storage_object_path(
+        user_id=user_id, agent_id=agent_id, source_id=source_id, filename=filename
+    )
+    content_hash = hashlib.sha256(data).hexdigest()
+    await upload_bytes(path=path, data=data, content_type=mime_type)
+    async with get_supabase_admin_client() as client:
+        await client.patch(
+            "/knowledge_sources",
+            params={"id": f"eq.{source_id}", "user_id": f"eq.{user_id}"},
+            json={
+                **source_row_storage_fields(bucket=BUCKET, path=path, content_hash=content_hash),
+                "status": "queued",
+                "size_bytes": len(data),
+                "mime_type": mime_type,
+            },
+        )
+    return path
+
+
+async def ingest_storage_source(
+    *,
+    user_id: str,
+    agent_id: str,
+    source_id: str,
+    storage_path: str,
+    filename: str,
+    mime_type: str | None = None,
+) -> None:
+    """Download from Storage, extract, chunk, embed."""
+    await mark_source_status(source_id, user_id, "processing", extra={"extraction_status": "running"})
+    try:
+        data = await download_bytes(path=storage_path)
+        if len(data) > MAX_FILE_BYTES:
+            raise ExtractionError("FILE_TOO_LARGE", "File exceeds size limit.")
+        text, meta = extract_text(filename=filename, mime_type=mime_type, data=data)
+        await mark_source_status(
+            source_id,
+            user_id,
+            "processing",
+            extra={"extraction_metadata": meta, "extraction_status": "extracted"},
+        )
+        await ingest_text_source(
+            user_id=user_id, agent_id=agent_id, source_id=source_id, text=text
+        )
+    except ExtractionError as exc:
+        await mark_source_status(source_id, user_id, "failed", exc.code)
+    except Exception:  # noqa: BLE001
+        logger.exception("storage ingest failed source=%s", source_id)
         await mark_source_status(source_id, user_id, "failed", "KNOWLEDGE_INGESTION_FAILED")
 
 

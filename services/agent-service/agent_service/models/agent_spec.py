@@ -126,10 +126,33 @@ class AgentSecurityPolicy(BaseModel):
     blocked_domains: list[str] = Field(default_factory=list, max_length=100)
 
 
-class AgentSpec(BaseModel):
-    """Versioned, declarative specification of a Stack32 agent (V2)."""
+class ConnectionRequirement(BaseModel):
+    provider: Literal["google", "microsoft", "slack", "notion"]
+    tool_ids: list[str] = Field(default_factory=list, max_length=20)
+    required: bool = True
 
-    schema_version: Literal["2.0"] = "2.0"
+
+class ConnectionBindingRef(BaseModel):
+    connection_id: str = Field(min_length=1, max_length=64)
+    tool_ids: list[str] = Field(default_factory=list, max_length=20)
+    enabled: bool = True
+
+
+class ApprovalPolicy(BaseModel):
+    require_for_side_effects: bool = True
+    require_for_email_send: bool = True
+
+
+class TriggerConfig(BaseModel):
+    kind: Literal["manual", "schedule", "webhook"] = "manual"
+    enabled: bool = False
+    cron: str | None = Field(default=None, max_length=120)
+
+
+class AgentSpec(BaseModel):
+    """Versioned, declarative specification of a Stack32 agent (V2/V3)."""
+
+    schema_version: Literal["2.0", "3.0"] = "2.0"
     identity: AgentIdentity
     goal: str = Field(min_length=1, max_length=4000)
     instructions: AgentInstructions
@@ -144,6 +167,11 @@ class AgentSpec(BaseModel):
     graph: GraphSpec
     runtime: RuntimeLimits = Field(default_factory=RuntimeLimits)
     security: AgentSecurityPolicy = Field(default_factory=AgentSecurityPolicy)
+    # V3 additive (ignored by V2 consumers)
+    connection_requirements: list[ConnectionRequirement] = Field(default_factory=list, max_length=20)
+    connection_bindings: list[ConnectionBindingRef] = Field(default_factory=list, max_length=20)
+    approvals: ApprovalPolicy = Field(default_factory=ApprovalPolicy)
+    triggers: list[TriggerConfig] = Field(default_factory=list, max_length=20)
 
     @field_validator("tools")
     @classmethod
@@ -154,11 +182,21 @@ class AgentSpec(BaseModel):
         return tools
 
 
+def migrate_v2_to_v3(spec: AgentSpec | dict[str, Any]) -> AgentSpec:
+    """Additive upgrade: keep graph/tools; set schema_version 3.0 + empty connection fields."""
+    data = spec.model_dump() if isinstance(spec, AgentSpec) else dict(spec)
+    data["schema_version"] = "3.0"
+    data.setdefault("connection_requirements", [])
+    data.setdefault("connection_bindings", [])
+    data.setdefault("approvals", ApprovalPolicy().model_dump())
+    data.setdefault("triggers", [])
+    return AgentSpec.model_validate(data)
+
 def migrate_v1_to_v2(raw: dict[str, Any]) -> AgentSpec:
     """Best-effort loader from Phase 2 skeleton / V1 AgentSpec."""
     from agent_service.models.graph_spec import default_linear_graph
 
-    if raw.get("schema_version") == "2.0" or raw.get("schemaVersion") == "2.0":
+    if raw.get("schema_version") in ("2.0", "3.0") or raw.get("schemaVersion") in ("2.0", "3.0"):
         return AgentSpec.model_validate(_camel_to_snake_spec(raw))
 
     name = str(raw.get("name") or "Untitled agent")

@@ -20,6 +20,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { ConnectGoogleCard } from "@/components/builder/connect-google-card";
 import { StructureGraph } from "@/components/builder/structure-graph";
 import { Button } from "@/components/ui/button";
 import { useAgentGraph, useAgentSpec, useAgentVersion } from "@/hooks/use-agents";
@@ -129,6 +130,8 @@ export function StructureView({ agentId }: { agentId: string }) {
         ) : (
           <p className="mb-4 text-sm text-muted-foreground">{t("graph.fallback")}</p>
         )}
+
+        <ConnectGoogleCard agentId={agentId} />
 
         <SectionCard
           id="goal"

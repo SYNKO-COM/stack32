@@ -24,6 +24,11 @@
     "subtitle": "This agent doesn't exist or was deleted.",
     "cta": "Back to your agents"
   },
+  "noAgentsYet": {
+    "title": "No agents created yet",
+    "subtitle": "Create your first agent to start building.",
+    "cta": "Create a new agent"
+  },
   "form": {
     "required": "This field is required.",
     "emailInvalid": "Please enter a valid email address.",

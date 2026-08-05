@@ -1,16 +1,20 @@
 "use client";
 
-import { ArrowRight, Boxes, Wand2 } from "lucide-react";
+import { ArrowRight, Boxes, FileDiff, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { TypewriterText } from "@/components/builder/message-motion";
-import { Button } from "@/components/ui/button";
+import { SecretForm } from "@/components/builder/secret-form";
+import { ViewChangesDrawer } from "@/components/builder/view-changes-drawer";
 import { Markdown } from "@/components/shared/markdown";
+import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
+import { listAgentSecretsMeta } from "@/lib/actions/agents";
 import type {
   BuilderAction,
   BuilderSuggestion,
+  BuilderUiComponent,
   IdentitySummary,
 } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
@@ -89,6 +93,9 @@ export function ReadyCard({
   const { t } = useTranslation("builder");
   const router = useRouter();
   const [typedDone, setTypedDone] = useState(!animate);
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [needsKey, setNeedsKey] = useState(false);
+  const [checkingKey, setCheckingKey] = useState(false);
   const name = identitySummary?.name;
 
   const lead = name ? t("ready.titleNamed", { name }) : t("ready.title");
@@ -99,6 +106,23 @@ export function ReadyCard({
     onDone?.();
   };
 
+  const goLive = async () => {
+    setCheckingKey(true);
+    try {
+      const secrets = await listAgentSecretsMeta(agentId);
+      const hasLlm = secrets.some((s) => s.secret_kind === "llm_api_key");
+      if (!hasLlm) {
+        setNeedsKey(true);
+        return;
+      }
+      router.push(`/agents/${agentId}/live`);
+    } catch {
+      router.push(`/agents/${agentId}/live`);
+    } finally {
+      setCheckingKey(false);
+    }
+  };
+
   if (animate && !typedDone) {
     return (
       <p>
@@ -107,19 +131,50 @@ export function ReadyCard({
     );
   }
 
+  const liveGateForm: BuilderUiComponent = {
+    type: "secret_form",
+    version: "1",
+    requestId: `ready-live-${agentId}`,
+    context: "live",
+    fields: [
+      { key: "provider", type: "select", required: true, suggested_value: "openai" },
+      { key: "api_key", type: "password", required: true },
+    ],
+  };
+
   return (
     <div className="space-y-4">
       <Markdown content={`${lead}\n\n${content}`} />
 
+      {needsKey ? (
+        <div className="rounded-xl border border-border p-3">
+          <p className="mb-2 text-sm text-muted-foreground">
+            {t("ready.llmKeyRequired", {
+              defaultValue: "Add your LLM API key before testing Live.",
+            })}
+          </p>
+          <SecretForm
+            uiComponent={liveGateForm}
+            agentId={agentId}
+            runId={liveGateForm.requestId}
+            onSubmitted={() => {
+              setNeedsKey(false);
+              router.push(`/agents/${agentId}/live`);
+            }}
+          />
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
-        {(actions ?? ["test_agent", "view_structure"]).map((action) => {
+        {(actions ?? ["test_agent", "view_structure", "view_changes"]).map((action) => {
           if (action === "test_agent") {
             return (
               <Button
                 key={action}
                 size="sm"
                 className="rounded-full"
-                onClick={() => router.push(`/agents/${agentId}/live`)}
+                disabled={checkingKey}
+                onClick={() => void goLive()}
               >
                 {t("actions.testAgent")}
                 <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
@@ -137,6 +192,20 @@ export function ReadyCard({
               >
                 <Boxes className="mr-1 size-3.5" aria-hidden="true" />
                 {t("actions.viewStructure")}
+              </Button>
+            );
+          }
+          if (action === "view_changes") {
+            return (
+              <Button
+                key={action}
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setChangesOpen(true)}
+              >
+                <FileDiff className="mr-1 size-3.5" aria-hidden="true" />
+                {t("actions.viewChanges", { defaultValue: "View changes" })}
               </Button>
             );
           }
@@ -168,7 +237,7 @@ export function ReadyCard({
                     type="button"
                     onClick={() => {
                       if (s.action === "test_agent") {
-                        router.push(`/agents/${agentId}/live`);
+                        void goLive();
                         return;
                       }
                       if (s.prompt) onSuggestion(s.prompt);
@@ -190,6 +259,12 @@ export function ReadyCard({
           </ul>
         </div>
       ) : null}
+
+      <ViewChangesDrawer
+        agentId={agentId}
+        open={changesOpen}
+        onClose={() => setChangesOpen(false)}
+      />
     </div>
   );
 }

@@ -24,6 +24,11 @@
     "subtitle": "Cet agent n'existe pas ou a été supprimé.",
     "cta": "Retour à vos agents"
   },
+  "noAgentsYet": {
+    "title": "Aucun agent n'est créé pour l'instant",
+    "subtitle": "Créez votre premier agent pour commencer à construire.",
+    "cta": "Créer un nouvel agent"
+  },
   "form": {
     "required": "Ce champ est obligatoire.",
     "emailInvalid": "Veuillez saisir une adresse email valide.",

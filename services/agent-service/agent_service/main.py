@@ -9,7 +9,18 @@ from agent_service.errors import register_exception_handlers
 from agent_service.gateway.model_gateway import provider_health
 from agent_service.logging_config import setup_logging
 from agent_service.middleware import RequestIDMiddleware
-from agent_service.routers import agents, builder, health, knowledge, live, runs, secrets, tasks, webhooks
+from agent_service.routers import (
+    agents,
+    builder,
+    connections,
+    health,
+    knowledge,
+    live,
+    runs,
+    secrets,
+    tasks,
+    webhooks,
+)
 
 
 def create_app() -> FastAPI:
@@ -43,6 +54,7 @@ def create_app() -> FastAPI:
     v1.include_router(live.router)
     v1.include_router(runs.router)
     v1.include_router(knowledge.router)
+    v1.include_router(connections.router)
     v1.include_router(tasks.router)
     v1.include_router(webhooks.router)
     app.include_router(v1)
@@ -50,6 +62,24 @@ def create_app() -> FastAPI:
     @app.get("/v1/providers/health")
     async def providers_health() -> dict:
         return {"providers": [p.model_dump() for p in provider_health()]}
+
+    @app.on_event("startup")
+    async def _maybe_start_queue_worker() -> None:
+        if not settings.QUEUE_WORKER_ENABLED or settings.QUEUE_INLINE:
+            return
+        import asyncio
+
+        async def _loop() -> None:
+            from agent_service.queue.worker import poll_and_process_once
+
+            while True:
+                try:
+                    await poll_and_process_once()
+                except Exception:  # noqa: BLE001
+                    pass
+                await asyncio.sleep(2.0)
+
+        asyncio.create_task(_loop())
 
     return app
 

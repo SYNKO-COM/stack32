@@ -188,7 +188,11 @@ export interface BuildStep {
 
 export type BuilderMessageTone = "normal" | "success" | "warning" | "error";
 
-export type BuilderAction = "test_agent" | "view_structure" | "fix_automatically";
+export type BuilderAction =
+  | "test_agent"
+  | "view_structure"
+  | "fix_automatically"
+  | "view_changes";
 
 export interface BuilderUiComponentField {
   key: string;
@@ -196,10 +200,15 @@ export interface BuilderUiComponentField {
   required: boolean;
   suggested_value?: string;
   options?: string[];
+  label?: string;
 }
 
 export interface BuilderUiComponent {
-  type: "agent_identity_form" | "secret_form" | "agent_capabilities_form";
+  type:
+    | "agent_identity_form"
+    | "secret_form"
+    | "agent_capabilities_form"
+    | "dynamic_questions_form";
   version: "1";
   requestId: string;
   context?: "builder" | "live";

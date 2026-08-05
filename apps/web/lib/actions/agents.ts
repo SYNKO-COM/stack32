@@ -187,3 +187,25 @@ export async function getAgentGraphAction(agentId: string): Promise<AgentGraphRe
           : null,
   };
 }
+
+export async function listAgentProjectFiles(
+  agentId: string,
+): Promise<Array<{ path: string; checksum?: string; updated_at?: string }>> {
+  if (currentAiExecutionMode() !== "agent-service") return [];
+  const accessToken = await requireAccessToken();
+  const result = await agentServiceFetch<{
+    files: Array<{ path: string; checksum?: string; updated_at?: string }>;
+  }>(`/v1/agents/${agentId}/project/files`, { method: "GET", accessToken });
+  return result.files ?? [];
+}
+
+export async function listAgentSecretsMeta(
+  agentId: string,
+): Promise<Array<{ secret_kind?: string; provider?: string; key_hint?: string }>> {
+  if (currentAiExecutionMode() !== "agent-service") return [];
+  const accessToken = await requireAccessToken();
+  const result = await agentServiceFetch<{
+    secrets: Array<{ secret_kind?: string; provider?: string; key_hint?: string }>;
+  }>(`/v1/agents/${agentId}/secrets`, { method: "GET", accessToken });
+  return result.secrets ?? [];
+}

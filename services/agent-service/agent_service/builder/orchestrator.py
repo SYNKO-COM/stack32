@@ -79,17 +79,21 @@ class BuilderOrchestrator:
             status="queued",
             input_payload={"prompt": content},
         )
-        await self.db.enqueue_run(run_id=run_id, user_id=user_id)
-        # Execute inline for responsiveness; queue worker can also pick it up.
-        result = await self.execute_build_run(
+        from agent_service.queue.dispatch import dispatch_run
+
+        return await dispatch_run(
+            db=self.db,
             run_id=run_id,
             user_id=user_id,
-            agent_id=agent_id,
-            thread_id=thread_id,
-            content=content,
-            agent_row=agent,
+            execute=lambda: self.execute_build_run(
+                run_id=run_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                thread_id=thread_id,
+                content=content,
+                agent_row=agent,
+            ),
         )
-        return result
 
     async def execute_build_run(
         self,
@@ -190,23 +194,7 @@ class BuilderOrchestrator:
 
             await self.db.clear_thinking_messages(thread_id=thread_id)
 
-            # Every agent needs an LLM brain before the first Live-ready build.
-            from agent_service.security.user_secrets import has_llm_secret
-
-            if not await has_llm_secret(user_id=user_id, agent_id=agent_id):
-                identity = current_spec.identity if current_spec else AgentIdentity(
-                    name=str(agent.get("name") or "Agent")[:120],
-                    role="Assist the user",
-                )
-                return await self._request_llm_secret(
-                    run_id=run_id,
-                    user_id=user_id,
-                    agent_id=agent_id,
-                    thread_id=thread_id,
-                    prompt=content,
-                    identity=identity,
-                )
-
+            # M3: BYOK is deferred to Live / Ready→Live — build uses platform keys.
             return await self._continue_build(
                 run_id=run_id,
                 user_id=user_id,
@@ -274,21 +262,9 @@ class BuilderOrchestrator:
         await self.db.clear_builder_interrupt(run_id, user_id)
         await self.db.update_run_status(run_id, "running")
 
-        # Require LLM key before capabilities / build.
-        from agent_service.security.user_secrets import has_llm_secret
-
-        if not await has_llm_secret(user_id=user_id, agent_id=agent_id):
-            return await self._request_llm_secret(
-                run_id=run_id,
-                user_id=user_id,
-                agent_id=agent_id,
-                thread_id=thread_id,
-                prompt=prompt,
-                identity=identity,
-            )
-
+        # M3: skip BYOK here — identity → dynamic questions → capabilities → build.
         await self.db.update_agent_status(agent_id, user_id, "building")
-        return await self._request_capabilities_or_build(
+        return await self._request_dynamic_questions_or_capabilities(
             run_id=run_id,
             user_id=user_id,
             agent_id=agent_id,
@@ -458,6 +434,21 @@ class BuilderOrchestrator:
             "schedule_hourly": schedule_hourly,
             "context_notes": notes,
         }
+        if schedule_hourly:
+            from agent_service.supabase_client import get_supabase_admin_client
+
+            async with get_supabase_admin_client() as client:
+                await client.post(
+                    "/agent_schedules",
+                    json={
+                        "user_id": user_id,
+                        "agent_id": agent_id,
+                        "cron_expression": "0 * * * *",
+                        "timezone": "UTC",
+                        "enabled": True,
+                        "config": {"source": "builder_capabilities"},
+                    },
+                )
         await self.db.clear_builder_interrupt(run_id, user_id)
         await self.db.update_run_status(run_id, "running")
         await self.db.update_agent_status(agent_id, user_id, "building")
@@ -572,6 +563,160 @@ class BuilderOrchestrator:
         await self.db.update_run_status(run_id, "waiting_for_input")
         await self.db.update_agent_status(agent_id, user_id, "draft")
         return {"status": "interrupted", "run_id": run_id, "reason": "capabilities"}
+
+    def _analyze_dynamic_questions(
+        self, prompt: str, identity: AgentIdentity
+    ) -> list[dict[str, Any]]:
+        """Return clarifying question fields when the prompt is underspecified."""
+        lower = prompt.lower()
+        fields: list[dict[str, Any]] = []
+        if len(prompt.strip()) < 40:
+            fields.append(
+                {
+                    "key": "goal_details",
+                    "type": "textarea",
+                    "required": True,
+                    "label": "What should this agent accomplish?",
+                    "suggested_value": "",
+                }
+            )
+        needs_docs = any(k in lower for k in ("document", "pdf", "knowledge", "rag", "fichier"))
+        needs_mail = any(k in lower for k in ("email", "gmail", "mail", "inbox"))
+        needs_cal = any(k in lower for k in ("calendar", "agenda", "meeting", "rdv"))
+        if needs_docs:
+            fields.append(
+                {
+                    "key": "knowledge_scope",
+                    "type": "textarea",
+                    "required": False,
+                    "label": "Which documents or topics should the agent know?",
+                    "suggested_value": "",
+                }
+            )
+        if needs_mail or needs_cal:
+            fields.append(
+                {
+                    "key": "connection_intent",
+                    "type": "select",
+                    "required": False,
+                    "label": "External accounts needed",
+                    "suggested_value": "google" if (needs_mail or needs_cal) else "none",
+                    "options": ["none", "google", "later"],
+                }
+            )
+        if "audience" not in lower and "pour" not in lower and identity.role == "Assist the user":
+            fields.append(
+                {
+                    "key": "audience",
+                    "type": "text",
+                    "required": False,
+                    "label": "Who will use this agent?",
+                    "suggested_value": "",
+                }
+            )
+        return fields[:4]
+
+    async def _request_dynamic_questions_or_capabilities(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        prompt: str,
+        identity: AgentIdentity,
+    ) -> dict[str, Any]:
+        fields = self._analyze_dynamic_questions(prompt, identity)
+        if not fields:
+            return await self._request_capabilities_or_build(
+                run_id=run_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                thread_id=thread_id,
+                prompt=prompt,
+                identity=identity,
+            )
+        await self.db.emit_event(
+            run_id,
+            "builder.questions.requested",
+            {"mapping_key": "builder.progress.questions", "count": len(fields)},
+        )
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content="builder:questions.prompt",
+            metadata={
+                "tone": "normal",
+                "interrupt_run_id": run_id,
+                "ui_component": {
+                    "type": "dynamic_questions_form",
+                    "version": "1",
+                    "request_id": str(uuid.uuid4()),
+                    "context": "builder",
+                    "fields": fields,
+                },
+            },
+        )
+        await self.db.save_builder_interrupt(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity_draft={
+                **identity.model_dump(),
+                "_interrupt_type": "questions",
+                "_identity_locked": True,
+            },
+        )
+        await self.db.update_run_status(run_id, "waiting_for_input")
+        await self.db.update_agent_status(agent_id, user_id, "draft")
+        return {"status": "interrupted", "run_id": run_id, "reason": "questions"}
+
+    async def resume_with_questions(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        answers: dict[str, Any],
+    ) -> dict[str, Any]:
+        interrupt = await self.db.get_builder_interrupt(run_id, user_id)
+        if not interrupt or interrupt.get("status") == "completed":
+            return {"error": "BUILDER_INTERRUPTED"}
+        agent_id = interrupt["agent_id"]
+        thread_id = interrupt["thread_id"]
+        prompt = interrupt["prompt"]
+        draft = interrupt.get("identity_draft") or {}
+        identity = AgentIdentity(
+            name=str(draft.get("name") or "Agent")[:120],
+            role=str(draft.get("role") or "Assist the user")[:240],
+            tone=str(draft.get("tone") or "professional")[:64],
+            description=str(draft.get("description") or "")[:2000],
+        )
+        extras = []
+        for key, value in (answers or {}).items():
+            text = str(value or "").strip()
+            if text:
+                extras.append(f"{key}: {text}")
+        if extras:
+            prompt = (prompt + "\n\nClarifications:\n" + "\n".join(extras)).strip()[:8000]
+        await self.db.resolve_builder_form(thread_id=thread_id, request_id=run_id)
+        await self.db.clear_builder_interrupt(run_id, user_id)
+        await self.db.update_run_status(run_id, "running")
+        await self.db.emit_event(
+            run_id,
+            "builder.questions.completed",
+            {"mapping_key": "builder.progress.questionsDone"},
+        )
+        return await self._request_capabilities_or_build(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity=identity,
+        )
 
     async def _continue_build(
         self,
@@ -885,6 +1030,31 @@ class BuilderOrchestrator:
             change_summary=f"Builder update from prompt ({complexity.value})",
         )
 
+        from agent_service.builder.project_files import upsert_project_files
+
+        project_files = await upsert_project_files(
+            user_id=user_id,
+            agent_id=agent_id,
+            version_id=version.get("id"),
+            spec=spec,
+        )
+        for pf in project_files:
+            await self.db.emit_event(
+                run_id,
+                "project.file.created",
+                {
+                    "path": pf.get("path"),
+                    "checksum": pf.get("checksum"),
+                    "version_id": version.get("id"),
+                },
+            )
+        if project_files:
+            await self.db.emit_event(
+                run_id,
+                "project.updated",
+                {"files": [p.get("path") for p in project_files], "version_id": version.get("id")},
+            )
+
         status = (
             "ready"
             if test_report["status"].startswith("passed")
@@ -944,7 +1114,7 @@ class BuilderOrchestrator:
             metadata={
                 "tone": "success" if status == "ready" else "warning",
                 "card": "ready",
-                "actions": ["test_agent", "view_structure"]
+                "actions": ["test_agent", "view_structure", "view_changes"]
                 + ([] if status == "ready" else ["fix_automatically"]),
                 "version_id": version.get("id"),
                 "test_report": test_report,
@@ -952,6 +1122,8 @@ class BuilderOrchestrator:
                 "identity_summary": identity.model_dump(),
                 "suggestions": suggestions,
                 "steps": final_steps,
+                "project_files": [p.get("path") for p in project_files],
+                "requires_llm_key_for_live": True,
             },
         )
         await self.db.emit_event(
@@ -1149,7 +1321,21 @@ class BuilderOrchestrator:
         notes = str(caps.get("context_notes") or "").strip()
         design = await self._design_agent_blueprint(content, identity, notes)
         tools = self._select_tools(content + " " + notes + " " + " ".join(design.get("tool_hints") or []))
-        graph = self._build_graph(tools, content)
+        knowledge_enabled = bool(caps.get("knowledge_enabled")) or any(
+            k in content.lower() for k in ("document", "knowledge", "pdf", "rag")
+        )
+        memory_conversation = (
+            bool(caps["memory_conversation"])
+            if "memory_conversation" in caps
+            else True
+        )
+        memory_semantic = bool(caps.get("memory_semantic")) or "remember" in content.lower()
+        graph = self._build_graph(
+            tools,
+            content,
+            knowledge_enabled=knowledge_enabled,
+            memory_enabled=memory_semantic,
+        )
         system_extra = str(design.get("system_extra") or "").strip()
         instructions = AgentInstructions(
             system=(
@@ -1179,16 +1365,6 @@ class BuilderOrchestrator:
             text = str(extra_rule).strip()[:500]
             if text:
                 rules.append(AgentRule(id=f"custom_{len(rules)+1}", text=text))
-
-        knowledge_enabled = bool(caps.get("knowledge_enabled")) or any(
-            k in content.lower() for k in ("document", "knowledge", "pdf", "rag")
-        )
-        memory_conversation = (
-            bool(caps["memory_conversation"])
-            if "memory_conversation" in caps
-            else True
-        )
-        memory_semantic = bool(caps.get("memory_semantic")) or "remember" in content.lower()
 
         starters = design.get("starter_prompts") or []
         starter_prompts = [
@@ -1308,7 +1484,14 @@ class BuilderOrchestrator:
                 break
         return out
 
-    def _build_graph(self, tools: list[ToolBinding], content: str) -> GraphSpec:
+    def _build_graph(
+        self,
+        tools: list[ToolBinding],
+        content: str,
+        *,
+        knowledge_enabled: bool = False,
+        memory_enabled: bool = False,
+    ) -> GraphSpec:
         # Only build a branched graph when the user explicitly asks for branching.
         # Avoid matching accidental "if " substrings in natural language.
         lower = content.lower()
@@ -1359,7 +1542,11 @@ class BuilderOrchestrator:
             edges[2].condition = EdgeCondition(type="equals", path="complexity", value="fast")
             edges[3].condition = EdgeCondition(type="always")
             return GraphSpec(entry_node_id="input", nodes=nodes, edges=edges)
-        return default_linear_graph(tools)
+        return default_linear_graph(
+            tools,
+            knowledge_enabled=knowledge_enabled,
+            memory_enabled=memory_enabled,
+        )
 
     def _validate(self, spec: AgentSpec) -> dict[str, Any]:
         errors: list[str] = []
@@ -1385,6 +1572,8 @@ class BuilderOrchestrator:
     async def _run_smoke_test(
         self, spec: AgentSpec, *, user_id: str, agent_id: str
     ) -> dict[str, Any]:
+        from agent_service.models.failure_report import failure_from_smoke
+
         try:
             compiled = compile_graph(spec)
             state = await __import__(
@@ -1401,26 +1590,83 @@ class BuilderOrchestrator:
                 max_steps=min(4, spec.runtime.max_steps),
             )
             if state.get("error"):
-                return {"status": "failed", "reason": state["error"], "input": spec.goal[:200]}
-            return {
-                "status": "passed_with_warnings" if state.get("warning") else "passed",
-                "input": spec.goal[:200],
-                "visited": state.get("visited_nodes", []),
-            }
+                report = failure_from_smoke(
+                    status="failed",
+                    reason=str(state["error"]),
+                    input_text=spec.goal[:200],
+                    visited=list(state.get("visited_nodes") or []),
+                    error_code=str(state["error"]),
+                )
+                return report.to_dict()
+            status = "passed_with_warnings" if state.get("warning") else "passed"
+            report = failure_from_smoke(
+                status=status,
+                reason=str(state.get("warning") or ""),
+                input_text=spec.goal[:200],
+                visited=list(state.get("visited_nodes") or []),
+            )
+            return report.to_dict()
         except Exception as exc:  # noqa: BLE001
-            return {"status": "failed", "reason": type(exc).__name__, "input": spec.goal[:200]}
+            report = failure_from_smoke(
+                status="failed",
+                reason=type(exc).__name__,
+                input_text=spec.goal[:200],
+                error_code=type(exc).__name__,
+            )
+            return report.to_dict()
 
     async def _repair(self, spec: AgentSpec, test_report: dict[str, Any]) -> AgentSpec:
+        from agent_service.models.failure_report import AgentFailureReport, SuggestedPatch
+
+        try:
+            report = AgentFailureReport.model_validate(test_report)
+        except Exception:  # noqa: BLE001
+            report = AgentFailureReport(status="failed", reason=str(test_report.get("reason") or ""))
+
         data = spec.model_dump()
-        # Minimal repair: ensure linear graph + datetime tool
-        data["graph"] = default_linear_graph(spec.tools).model_dump()
-        if not any(t.tool_id == "current_datetime" for t in spec.tools):
-            data["tools"].append({"tool_id": "current_datetime", "enabled": True})
-        data["instructions"]["system"] = (
-            data["instructions"]["system"]
-            + "\nFollow safety policies. Prefer concise accurate answers."
-        )[:20000]
-        return AgentSpec.model_validate(data)
+        patches = report.suggested_patches or [
+            SuggestedPatch(kind="reset_linear_graph", reason="fallback"),
+            SuggestedPatch(
+                kind="append_system_instruction",
+                text="Follow safety policies. Prefer concise accurate answers.",
+                reason="fallback",
+            ),
+        ]
+        for patch in patches:
+            if patch.kind == "reset_linear_graph":
+                data["graph"] = default_linear_graph(
+                    spec.tools,
+                    knowledge_enabled=spec.knowledge.enabled,
+                    memory_enabled=spec.memory.semantic_enabled,
+                ).model_dump()
+            elif patch.kind == "add_tool" and patch.tool_id:
+                if not any(t.tool_id == patch.tool_id for t in spec.tools):
+                    data["tools"].append({"tool_id": patch.tool_id, "enabled": True})
+            elif patch.kind == "append_system_instruction" and patch.text:
+                data["instructions"]["system"] = (
+                    data["instructions"]["system"] + "\n" + patch.text
+                )[:20000]
+            elif patch.kind == "disable_tool" and patch.tool_id:
+                data["tools"] = [
+                    {**t, "enabled": False} if t.get("tool_id") == patch.tool_id else t
+                    for t in data["tools"]
+                ]
+            elif patch.kind == "enable_knowledge":
+                data["knowledge"]["enabled"] = True
+            elif patch.kind == "enable_memory":
+                data["memory"]["semantic_enabled"] = True
+
+        repaired = AgentSpec.model_validate(data)
+        validation = self._validate(repaired)
+        if not validation["ok"]:
+            # Fall back to linear graph only if typed patch produced invalid spec
+            data["graph"] = default_linear_graph(
+                repaired.tools,
+                knowledge_enabled=repaired.knowledge.enabled,
+                memory_enabled=repaired.memory.semantic_enabled,
+            ).model_dump()
+            repaired = AgentSpec.model_validate(data)
+        return repaired
 
     async def repair_agent(self, *, user_id: str, agent_id: str, thread_id: str) -> dict[str, Any]:
         spec = await self.db.load_draft_spec(agent_id, user_id)

@@ -23,6 +23,9 @@ export function agentServiceErrorKey(error: unknown): string {
       RATE_LIMIT_EXCEEDED: "errors:rateLimit",
       BUDGET_EXCEEDED: "errors:budgetExceeded",
       TEST_FAILED: "errors:publish.testFailed",
+      INVALID_LLM_KEY: "errors:secrets.invalidKey",
+      INVALID_PROVIDER: "errors:secrets.invalidProvider",
+      GOOGLE_OAUTH_NOT_CONFIGURED: "errors:connections.oauthNotConfigured",
     };
     return map[error.code] ?? "errors:agentService";
   }

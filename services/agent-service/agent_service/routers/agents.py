@@ -191,3 +191,29 @@ async def patch_memory_settings(
         change_summary="Memory settings updated",
     )
     return {"version_id": version.get("id"), "memory": updated.memory.model_dump()}
+
+
+@router.get("/{agent_id}/project/files")
+async def list_project_files(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    db = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise _not_found()
+    from agent_service.builder.project_files import list_project_files as _list
+
+    files = await _list(user_id=user.user_id, agent_id=str(agent_id))
+    return {"files": files}
+
+
+@router.get("/{agent_id}/project/files/{path:path}")
+async def get_project_file(agent_id: UUID, path: str, user: CurrentUser) -> dict[str, Any]:
+    db = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise _not_found()
+    from agent_service.builder.project_files import get_project_file as _get
+
+    row = await _get(user_id=user.user_id, agent_id=str(agent_id), path=path)
+    if not row:
+        raise _not_found()
+    return {"file": row}

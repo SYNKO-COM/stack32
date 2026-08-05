@@ -160,7 +160,8 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
   if (
     type !== "agent_identity_form" &&
     type !== "secret_form" &&
-    type !== "agent_capabilities_form"
+    type !== "agent_capabilities_form" &&
+    type !== "dynamic_questions_form"
   ) {
     return undefined;
   }
@@ -194,6 +195,7 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
                   ? field.suggestedValue
                   : undefined,
             options,
+            label: typeof field.label === "string" ? field.label : undefined,
           };
         })
         .filter((f): f is NonNullable<typeof f> => f !== null)
@@ -506,7 +508,8 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
           const action: BuilderAction | undefined =
             actionRaw === "test_agent" ||
             actionRaw === "view_structure" ||
-            actionRaw === "fix_automatically"
+            actionRaw === "fix_automatically" ||
+            actionRaw === "view_changes"
               ? actionRaw
               : undefined;
           return {

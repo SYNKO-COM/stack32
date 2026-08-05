@@ -9,9 +9,11 @@ import { AgentCapabilitiesForm } from "@/components/builder/agent-capabilities-f
 import { AgentIdentityForm } from "@/components/builder/agent-identity-form";
 import { BuildProgressPanel } from "@/components/builder/build-progress-panel";
 import { BuilderWorkingPanel } from "@/components/builder/builder-working-panel";
+import { DynamicQuestionsForm } from "@/components/builder/dynamic-questions-form";
 import { MessageEntrance, TypewriterText } from "@/components/builder/message-motion";
 import { IdentityConfirmedMessage, ReadyCard } from "@/components/builder/ready-card";
 import { SecretForm } from "@/components/builder/secret-form";
+import { ViewChangesDrawer } from "@/components/builder/view-changes-drawer";
 import { LogoMark } from "@/components/shared/logo";
 import { Markdown } from "@/components/shared/markdown";
 import { PromptComposer } from "@/components/shared/prompt-composer";
@@ -92,6 +94,19 @@ function MessageActions({
               onClick={() => router.push(`/agents/${agentId}/structure`)}
             >
               {t("actions.viewStructure")}
+            </Button>
+          );
+        }
+        if (action === "view_changes") {
+          return (
+            <Button
+              key={action}
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => router.push(`/agents/${agentId}/structure?panel=project`)}
+            >
+              {t("actions.viewChanges", { defaultValue: "View changes" })}
             </Button>
           );
         }
@@ -314,6 +329,14 @@ function BuilderBubble({
 
             {showForms && message.uiComponent?.type === "agent_capabilities_form" ? (
               <AgentCapabilitiesForm
+                uiComponent={message.uiComponent}
+                runId={runId || message.uiComponent.requestId}
+                onSubmitted={() => onFormSubmitted?.(formRequestId ?? "")}
+              />
+            ) : null}
+
+            {showForms && message.uiComponent?.type === "dynamic_questions_form" ? (
+              <DynamicQuestionsForm
                 uiComponent={message.uiComponent}
                 runId={runId || message.uiComponent.requestId}
                 onSubmitted={() => onFormSubmitted?.(formRequestId ?? "")}
