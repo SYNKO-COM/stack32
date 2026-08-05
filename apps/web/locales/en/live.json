@@ -34,6 +34,10 @@
     "table": "Table",
     "markdown": "Document"
   },
+  "errors": {
+    "missingUserLlmKey": "To chat with this agent, connect a brain (LLM) with your API key below. It is stored securely.",
+    "runFailed": "Something went wrong. Check your API key and try again."
+  },
   "agentLabel": "Agent",
   "a11y": {
     "conversation": "Conversation with your agent"

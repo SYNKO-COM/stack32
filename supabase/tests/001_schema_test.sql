@@ -42,8 +42,8 @@ from (values
 -- Tool catalog seed + key functions present.
 select is(
   (select count(*)::int from public.tool_catalog),
-  6,
-  'tool_catalog seeded with 6 placeholder tools'
+  14,
+  'tool_catalog seeded with MVP tools + disabled Phase 4 placeholders'
 );
 select has_function('public', 'complete_onboarding', 'complete_onboarding RPC exists');
 select has_function('public', 'create_agent_workspace', 'create_agent_workspace RPC exists');

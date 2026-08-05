@@ -1,0 +1,15 @@
+{
+  "title": "Memory",
+  "conversation": "Conversation memory",
+  "semantic": "Semantic memory",
+  "writePolicy": {
+    "never": "Never writes automatically",
+    "explicit": "Writes only when asked",
+    "automatic": "May write when relevant"
+  },
+  "retention": "Retained for {{days}} days",
+  "window": "Last {{count}} messages in context",
+  "empty": "No stored memories yet",
+  "clear": "Clear all memories",
+  "clearConfirm": "Delete all memories for this agent?"
+}

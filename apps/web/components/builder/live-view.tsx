@@ -2,8 +2,10 @@
 
 import { ExternalLink, Loader2, Table2, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { AgentIcon } from "@/components/builder/agent-icon";
+import { SecretForm } from "@/components/builder/secret-form";
 import { Markdown } from "@/components/shared/markdown";
 import { PromptComposer } from "@/components/shared/prompt-composer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -16,8 +18,18 @@ import { useTranslation } from "@/hooks/use-translation";
 import type { LiveMessage } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
-function LiveBubble({ message, agentIcon }: { message: LiveMessage; agentIcon: string }) {
-  const { t, i18n } = useTranslation("live");
+function LiveBubble({
+  message,
+  agentId,
+  agentIcon,
+  onSecretSubmitted,
+}: {
+  message: LiveMessage;
+  agentId: string;
+  agentIcon: string;
+  onSecretSubmitted?: () => void;
+}) {
+  const { t, i18n } = useTranslation(["live", "builder"]);
   const { data: user } = useCurrentUser();
   const isUser = message.role === "user";
 
@@ -64,8 +76,22 @@ function LiveBubble({ message, agentIcon }: { message: LiveMessage; agentIcon: s
         >
           {/* Controlled notices (e.g. execution disabled) reference i18n keys. */}
           <Markdown
-            content={message.content.startsWith("live:") ? t(message.content.replace(/^live:/, "")) : message.content}
+            content={
+              message.content.startsWith("live:")
+                ? t(message.content.replace(/^live:/, ""))
+                : message.content.startsWith("builder:")
+                  ? t(message.content)
+                  : message.content
+            }
           />
+
+          {message.uiComponent?.type === "secret_form" ? (
+            <SecretForm
+              uiComponent={message.uiComponent}
+              agentId={agentId}
+              onSubmitted={onSecretSubmitted}
+            />
+          ) : null}
 
           {message.artifacts && message.artifacts.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -110,6 +136,7 @@ function LiveBubble({ message, agentIcon }: { message: LiveMessage; agentIcon: s
 
 export function LiveView({ agentId }: { agentId: string }) {
   const { t } = useTranslation(["live", "builder"]);
+  const queryClient = useQueryClient();
   const { data: agent } = useAgent(agentId);
   const { data: spec } = useAgentSpec(agentId);
   const { data: thread } = useLiveThread(agentId);
@@ -194,7 +221,15 @@ export function LiveView({ agentId }: { agentId: string }) {
             </div>
           ) : (
             messages.map((message) => (
-              <LiveBubble key={message.id} message={message} agentIcon={agent?.icon ?? "bot"} />
+              <LiveBubble
+                key={message.id}
+                message={message}
+                agentId={agentId}
+                agentIcon={agent?.icon ?? "bot"}
+                onSecretSubmitted={() => {
+                  void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
+                }}
+              />
             ))
           )}
           <div ref={bottomRef} />

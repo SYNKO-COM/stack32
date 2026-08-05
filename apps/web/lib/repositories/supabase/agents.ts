@@ -64,21 +64,8 @@ export class SupabaseAgentRepository implements AgentRepository {
   }
 
   async publishAgent(agentId: string): Promise<Agent> {
-    const supabase = requireSupabaseBrowserClient();
-    const { data: current, error: readError } = await supabase
-      .from("agents")
-      .select("draft_version_id")
-      .eq("id", agentId)
-      .single();
-    if (readError) throw readError;
-    const { data, error } = await supabase
-      .from("agents")
-      .update({ status: "published", published_version_id: current.draft_version_id })
-      .eq("id", agentId)
-      .select("*")
-      .single();
-    if (error) throw error;
-    return mapAgent(data);
+    const { publishAgentAction } = await import("@/lib/actions/agents");
+    return publishAgentAction(agentId);
   }
 
   async getCurrentVersion(agentId: string): Promise<AgentVersion | null> {

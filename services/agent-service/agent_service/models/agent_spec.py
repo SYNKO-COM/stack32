@@ -1,64 +1,307 @@
-"""AgentSpec: the declarative description of a Stack32 agent."""
+"""AgentSpec V2 — versioned declarative agent configuration."""
+
+from __future__ import annotations
 
 from typing import Any, Literal
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-ToolName = Literal[
+from agent_service.models.graph_spec import GraphSpec
+
+TrustedToolId = Literal[
     "web_search",
     "fetch_url",
     "knowledge_search",
     "calculator",
     "current_datetime",
     "structured_output",
-    "http_request",
 ]
 
+TRUSTED_TOOL_IDS: frozenset[str] = frozenset(
+    {
+        "web_search",
+        "fetch_url",
+        "knowledge_search",
+        "calculator",
+        "current_datetime",
+        "structured_output",
+    }
+)
 
-class ModelProfile(BaseModel):
-    profile: Literal["fast", "standard", "heavy"] = "standard"
-    temperature: float = Field(default=0.4, ge=0.0, le=2.0)
+ModelProfileName = Literal["fast", "balanced", "reasoning"]
+ApprovalMode = Literal["never", "always", "conditional"]
+WritePolicy = Literal["never", "explicit", "automatic"]
 
 
-class ToolConfig(BaseModel):
-    tool: ToolName
+class AgentIdentity(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    role: str = Field(min_length=1, max_length=240)
+    description: str = Field(default="", max_length=2000)
+    tone: str = Field(default="professional", max_length=64)
+    avatar_key: str | None = Field(default=None, max_length=120)
+
+
+class AgentInstructions(BaseModel):
+    system: str = Field(min_length=1, max_length=20000)
+    behavioral_rules: list[str] = Field(default_factory=list, max_length=50)
+    uncertainty_policy: str = Field(
+        default="Ask clarifying questions when uncertain.",
+        max_length=2000,
+    )
+    output_expectations: str = Field(default="", max_length=4000)
+    prohibited_actions: list[str] = Field(default_factory=list, max_length=50)
+
+
+class ModelPolicy(BaseModel):
+    profile: ModelProfileName = "balanced"
+    allow_fallback: bool = True
+    max_input_tokens: int = Field(default=32000, ge=1024, le=200000)
+    max_output_tokens: int = Field(default=4096, ge=256, le=32000)
+
+
+class InputConfig(BaseModel):
+    accept_files: bool = False
+    accept_urls: bool = True
+    max_message_chars: int = Field(default=8000, ge=100, le=100000)
+
+
+class ToolBinding(BaseModel):
+    tool_id: TrustedToolId
     enabled: bool = True
+    approval_mode: ApprovalMode = "never"
     config: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("config")
+    @classmethod
+    def _no_code_payloads(cls, value: dict[str, Any]) -> dict[str, Any]:
+        banned = {"code", "python", "shell", "eval", "exec", "module"}
+        if banned.intersection(value.keys()):
+            raise ValueError("Tool config contains banned executable keys.")
+        return value
 
 
 class KnowledgeConfig(BaseModel):
     enabled: bool = False
-    source_ids: list[str] = Field(default_factory=list)
+    source_ids: list[str] = Field(default_factory=list, max_length=100)
+    require_citations: bool = True
+    max_chunks: int = Field(default=8, ge=1, le=32)
+    min_similarity: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
 class MemoryConfig(BaseModel):
+    conversation_enabled: bool = True
+    semantic_enabled: bool = False
+    retention_days: int = Field(default=90, ge=1, le=3650)
+    max_memory_items: int = Field(default=200, ge=0, le=5000)
+    write_policy: WritePolicy = "explicit"
     conversation_window: int = Field(default=12, ge=1, le=100)
+
+
+class AgentRule(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    text: str = Field(min_length=1, max_length=2000)
+    priority: int = Field(default=100, ge=0, le=1000)
+
+
+class OutputConfig(BaseModel):
+    format: Literal["markdown", "table", "text", "json"] = "markdown"
+    allow_tables: bool = True
+    allow_citations: bool = True
 
 
 class RuntimeLimits(BaseModel):
     max_steps: int = Field(default=8, ge=1, le=50)
-    timeout_seconds: int = Field(default=60, ge=5, le=600)
+    max_model_calls: int = Field(default=12, ge=1, le=100)
     max_tool_calls: int = Field(default=6, ge=0, le=50)
+    timeout_seconds: int = Field(default=60, ge=5, le=600)
+    max_repair_attempts: int = Field(default=2, ge=0, le=2)
 
 
-class OutputConfig(BaseModel):
-    format: Literal["markdown", "table", "text"] = "markdown"
-    allow_tables: bool = True
+class AgentSecurityPolicy(BaseModel):
+    treat_external_content_as_untrusted: bool = True
+    require_citations_for_retrieval: bool = True
+    approval_required_for_side_effects: bool = True
+    allowed_domains: list[str] = Field(default_factory=list, max_length=100)
+    blocked_domains: list[str] = Field(default_factory=list, max_length=100)
 
 
 class AgentSpec(BaseModel):
-    """Versioned, declarative specification of an agent."""
+    """Versioned, declarative specification of a Stack32 agent (V2)."""
 
-    schema_version: str = "1.0"
-    name: str = Field(min_length=1, max_length=120)
-    slug: str
-    goal: str
-    instructions: str
-    model_profile: ModelProfile = Field(default_factory=ModelProfile)
-    tools: list[ToolConfig] = Field(default_factory=list)
+    schema_version: Literal["2.0"] = "2.0"
+    identity: AgentIdentity
+    goal: str = Field(min_length=1, max_length=4000)
+    instructions: AgentInstructions
+    model_policy: ModelPolicy = Field(default_factory=ModelPolicy)
+    input_config: InputConfig = Field(default_factory=InputConfig)
+    tools: list[ToolBinding] = Field(default_factory=list, max_length=20)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
-    rules: list[str] = Field(default_factory=list)
+    rules: list[AgentRule] = Field(default_factory=list, max_length=50)
     output: OutputConfig = Field(default_factory=OutputConfig)
-    starter_prompts: list[str] = Field(default_factory=list)
+    starter_prompts: list[str] = Field(default_factory=list, max_length=12)
+    graph: GraphSpec
     runtime: RuntimeLimits = Field(default_factory=RuntimeLimits)
+    security: AgentSecurityPolicy = Field(default_factory=AgentSecurityPolicy)
+
+    @field_validator("tools")
+    @classmethod
+    def _unique_tools(cls, tools: list[ToolBinding]) -> list[ToolBinding]:
+        ids = [t.tool_id for t in tools]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate tool bindings are not allowed.")
+        return tools
+
+
+def migrate_v1_to_v2(raw: dict[str, Any]) -> AgentSpec:
+    """Best-effort loader from Phase 2 skeleton / V1 AgentSpec."""
+    from agent_service.models.graph_spec import default_linear_graph
+
+    if raw.get("schema_version") == "2.0" or raw.get("schemaVersion") == "2.0":
+        return AgentSpec.model_validate(_camel_to_snake_spec(raw))
+
+    name = str(raw.get("name") or "Untitled agent")
+    goal = str(raw.get("goal") or "Help the user achieve their goal.")
+    instructions_raw = raw.get("instructions")
+    if isinstance(instructions_raw, dict):
+        system = str(instructions_raw.get("system") or instructions_raw.get("persona") or goal)
+    else:
+        system = str(instructions_raw or f"You are {name}. {goal}")
+
+    tools_in = raw.get("tools") or []
+    tools: list[ToolBinding] = []
+    for item in tools_in:
+        if isinstance(item, dict):
+            tool_id = item.get("tool") or item.get("tool_id")
+            if tool_id in TRUSTED_TOOL_IDS:
+                tools.append(
+                    ToolBinding(
+                        tool_id=tool_id,  # type: ignore[arg-type]
+                        enabled=bool(item.get("enabled", True)),
+                    )
+                )
+
+    profile = "balanced"
+    mp = raw.get("model_profile") or raw.get("modelProfile") or {}
+    if isinstance(mp, dict):
+        p = mp.get("profile")
+        if p == "fast":
+            profile = "fast"
+        elif p in ("heavy", "reasoning"):
+            profile = "reasoning"
+        elif p in ("standard", "balanced"):
+            profile = "balanced"
+    elif isinstance(mp, str):
+        if mp in ("fast", "balanced", "reasoning"):
+            profile = mp
+        elif mp == "heavy":
+            profile = "reasoning"
+
+    memory_raw = raw.get("memory") or {}
+    knowledge_raw = raw.get("knowledge") or {}
+    runtime_raw = raw.get("runtime") or {}
+    rules_raw = raw.get("rules") or []
+    rules: list[AgentRule] = []
+    for idx, rule in enumerate(rules_raw):
+        if isinstance(rule, str) and rule.strip():
+            rules.append(AgentRule(id=f"rule_{idx + 1}", text=rule.strip()))
+        elif isinstance(rule, dict) and rule.get("text"):
+            rules.append(
+                AgentRule(
+                    id=str(rule.get("id") or f"rule_{idx + 1}"),
+                    text=str(rule["text"]),
+                )
+            )
+
+    graph_raw = raw.get("graph") or raw.get("graph_spec")
+    graph = GraphSpec.model_validate(graph_raw) if graph_raw else default_linear_graph(tools)
+
+    return AgentSpec(
+        identity=AgentIdentity(
+            name=name,
+            role=str(raw.get("role") or goal[:240] or "Assistant"),
+            description=str(raw.get("description") or ""),
+            tone=str(raw.get("tone") or "professional"),
+        ),
+        goal=goal,
+        instructions=AgentInstructions(system=system),
+        model_policy=ModelPolicy(profile=profile),  # type: ignore[arg-type]
+        tools=tools,
+        knowledge=KnowledgeConfig(
+            enabled=bool(knowledge_raw.get("enabled", False)),
+            source_ids=[str(x) for x in knowledge_raw.get("source_ids") or knowledge_raw.get("sourceIds") or []],
+        ),
+        memory=MemoryConfig(
+            conversation_window=int(
+                memory_raw.get("conversation_window")
+                or memory_raw.get("conversationWindow")
+                or 12
+            ),
+            semantic_enabled=bool(memory_raw.get("semantic_enabled", False)),
+            write_policy=memory_raw.get("write_policy") or "explicit",  # type: ignore[arg-type]
+        ),
+        rules=rules,
+        output=OutputConfig(
+            format=(raw.get("output") or {}).get("format", "markdown")
+            if isinstance(raw.get("output"), dict)
+            else "markdown"
+        ),
+        starter_prompts=[str(x) for x in raw.get("starter_prompts") or raw.get("starterPrompts") or []],
+        graph=graph,
+        runtime=RuntimeLimits(
+            max_steps=int(runtime_raw.get("max_steps") or runtime_raw.get("maxSteps") or 8),
+            timeout_seconds=int(
+                runtime_raw.get("timeout_seconds") or runtime_raw.get("timeoutSeconds") or 60
+            ),
+            max_tool_calls=int(
+                runtime_raw.get("max_tool_calls") or runtime_raw.get("maxToolCalls") or 6
+            ),
+        ),
+    )
+
+
+def _camel_to_snake_spec(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize common camelCase keys used by the web mappers."""
+    if "schemaVersion" in raw and "schema_version" not in raw:
+        data = dict(raw)
+        data["schema_version"] = data.pop("schemaVersion")
+        mapping = {
+            "modelPolicy": "model_policy",
+            "inputConfig": "input_config",
+            "starterPrompts": "starter_prompts",
+        }
+        for camel, snake in mapping.items():
+            if camel in data and snake not in data:
+                data[snake] = data.pop(camel)
+        return data
+    return raw
+
+
+class AgentSpecPatch(BaseModel):
+    base_version_id: UUID
+    operations: list[dict[str, Any]] = Field(min_length=1, max_length=50)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+ALLOWED_PATCH_OPS = frozenset(
+    {
+        "replace_identity",
+        "replace_goal",
+        "replace_instructions",
+        "add_tool",
+        "remove_tool",
+        "update_tool",
+        "update_memory",
+        "update_knowledge",
+        "add_rule",
+        "remove_rule",
+        "update_output",
+        "replace_graph",
+        "update_graph_node",
+        "add_graph_node",
+        "remove_graph_node",
+        "add_graph_edge",
+        "remove_graph_edge",
+    }
+)

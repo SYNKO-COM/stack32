@@ -9,6 +9,7 @@ const agentKeys = {
   detail: (id: string) => ["agents", id] as const,
   spec: (id: string) => ["agents", id, "spec"] as const,
   version: (id: string) => ["agents", id, "version"] as const,
+  graph: (id: string) => ["agents", id, "graph"] as const,
 };
 
 export function useAgents() {
@@ -42,11 +43,31 @@ export function useAgentVersion(agentId: string) {
   });
 }
 
+export function useAgentGraph(agentId: string) {
+  return useQuery({
+    queryKey: agentKeys.graph(agentId),
+    queryFn: async () => {
+      const { getAgentGraphAction } = await import("@/lib/actions/agents");
+      return getAgentGraphAction(agentId);
+    },
+    enabled: Boolean(agentId),
+  });
+}
+
 export function useCreateAgent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name?: string) => getAgentRepository().createAgent(name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: agentKeys.list }),
+    onSuccess: (agent) => {
+      // Seed detail cache immediately so /agents/[id] never flashes "not found".
+      queryClient.setQueryData(agentKeys.detail(agent.id), agent);
+      queryClient.setQueryData(agentKeys.list, (prev: unknown) => {
+        if (!Array.isArray(prev)) return [agent];
+        if (prev.some((a: { id?: string }) => a?.id === agent.id)) return prev;
+        return [agent, ...prev];
+      });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.list });
+    },
   });
 }
 
@@ -79,6 +100,10 @@ export function usePublishAgent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (agentId: string) => getAgentRepository().publishAgent(agentId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: agentKeys.list }),
+    onSuccess: (_data, agentId) => {
+      queryClient.invalidateQueries({ queryKey: agentKeys.list });
+      queryClient.invalidateQueries({ queryKey: agentKeys.detail(agentId) });
+      queryClient.invalidateQueries({ queryKey: agentKeys.graph(agentId) });
+    },
   });
 }

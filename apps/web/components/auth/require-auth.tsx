@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { BrandLoader } from "@/components/shared/brand-loader";
 import { useCurrentUser, useProfile } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 
@@ -32,12 +33,8 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (settling || !user || !profile?.onboardingCompleted) {
     return (
-      <div
-        className="flex min-h-screen items-center justify-center text-sm text-muted-foreground"
-        role="status"
-        aria-live="polite"
-      >
-        {t("loading")}
+      <div className="flex min-h-screen items-center justify-center">
+        <BrandLoader label={t("loading")} size="lg" />
       </div>
     );
   }

@@ -45,6 +45,7 @@
     "send": "Envoyer",
     "build": "Créer",
     "sending": "Envoi…",
+    "working": "En cours…",
     "stop": "Arrêter"
   },
   "status": {

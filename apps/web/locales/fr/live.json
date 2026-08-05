@@ -34,6 +34,10 @@
     "table": "Tableau",
     "markdown": "Document"
   },
+  "errors": {
+    "missingUserLlmKey": "Pour discuter avec cet agent, connectez un cerveau (LLM) avec votre clé API ci-dessous. Elle est stockée de façon sécurisée.",
+    "runFailed": "Un problème est survenu. Vérifiez votre clé API et réessayez."
+  },
   "agentLabel": "Agent",
   "a11y": {
     "conversation": "Conversation avec votre agent"

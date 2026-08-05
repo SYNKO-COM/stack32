@@ -91,3 +91,5 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest
+      - run: bandit -r agent_service -ll
+        continue-on-error: false

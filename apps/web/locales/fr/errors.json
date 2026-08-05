@@ -1,6 +1,19 @@
 {
   "generic": "Une erreur est survenue. Veuillez réessayer.",
   "network": "Problème de connexion. Vérifiez votre réseau et réessayez.",
+  "agentService": "Le service agent est momentanément indisponible. Veuillez réessayer.",
+  "rateLimit": "Trop de requêtes. Patientez un instant et réessayez.",
+  "budgetExceeded": "Votre limite mensuelle d'utilisation IA est atteinte.",
+  "builder": {
+    "inputRejected": "Ce message n'a pas pu être traité. Reformulez votre demande.",
+    "interrupted": "Cette étape de construction ne peut plus être reprise. Envoyez un nouveau message pour continuer.",
+    "identityUnavailable": "La confirmation d'identité nécessite le service agent."
+  },
+  "publish": {
+    "specInvalid": "Votre agent n'a pas encore de configuration valide. Terminez la construction avant de publier.",
+    "validationFailed": "La publication a échoué à la validation. Consultez Structure et lancez un test d'abord.",
+    "testFailed": "Le dernier test n'a pas réussi. Corrigez les problèmes dans Build avant de publier."
+  },
   "notFound": {
     "title": "Page introuvable",
     "subtitle": "La page que vous cherchez n'existe pas ou a été déplacée.",

@@ -15,7 +15,7 @@ const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   AGENT_SERVICE_URL: z.string().url().default("http://localhost:8000"),
   AGENT_SERVICE_INTERNAL_TOKEN: z.string().optional(),
-  AI_EXECUTION_MODE: z.enum(["mock", "disabled"]).default("disabled"),
+  AI_EXECUTION_MODE: z.enum(["mock", "disabled", "agent-service"]).default("disabled"),
   BILLING_MODE: z.enum(["mock", "whop"]).default("mock"),
 });
 
@@ -41,7 +41,7 @@ export function getServerEnv(): ServerEnv {
   return cached;
 }
 
-export function getAiExecutionMode(): "mock" | "disabled" {
+export function getAiExecutionMode(): "mock" | "disabled" | "agent-service" {
   return getServerEnv().AI_EXECUTION_MODE;
 }
 

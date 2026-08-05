@@ -6,13 +6,14 @@ from agent_service.main import create_app
 
 AUTH_HEADERS = {"Authorization": "Bearer test-token"}
 
-# Modules that captured get_settings by name at import time.
 _SETTINGS_CONSUMERS = [
     "agent_service.auth",
     "agent_service.config",
     "agent_service.main",
     "agent_service.supabase_client",
     "agent_service.routers.health",
+    "agent_service.security.rate_limit",
+    "agent_service.gateway.model_gateway",
 ]
 
 
@@ -21,7 +22,9 @@ def make_settings(monkeypatch):
     """Install hermetic Settings (ignores the local .env file) everywhere."""
 
     def _apply(**overrides) -> Settings:
-        settings = Settings(_env_file=None, **overrides)
+        defaults = {"ALLOW_UNVERIFIED_JWT": True, "AI_EXECUTION_MODE": "mock"}
+        defaults.update(overrides)
+        settings = Settings(_env_file=None, **defaults)
         for module_path in _SETTINGS_CONSUMERS:
             module = __import__(module_path, fromlist=["get_settings"])
             monkeypatch.setattr(module, "get_settings", lambda s=settings: s, raising=False)

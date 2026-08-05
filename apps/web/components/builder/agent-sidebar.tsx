@@ -3,10 +3,11 @@
 import { MoreHorizontal, Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AgentIcon } from "@/components/builder/agent-icon";
-import { Logo } from "@/components/shared/logo";
+import { CreatingAgentOverlay } from "@/components/shared/brand-loader";
+import { Logo, LogoMark } from "@/components/shared/logo";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,13 @@ import { useTranslation } from "@/hooks/use-translation";
 import type { Agent } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
+
+const CREATE_MIN_MS = 900;
+const CREATE_MAX_MS = 2200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function AgentRow({
   agent,
@@ -183,11 +191,48 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
   const { data: subscription } = useSubscription();
   const createAgent = useCreateAgent();
   const openDialog = useUiStore((s) => s.openDialog);
+  const creatingLockRef = useRef(false);
+  const pendingAgentIdRef = useRef<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  // Clear the overlay once the new agent route is actually open.
+  useEffect(() => {
+    if (!creating || !pendingAgentIdRef.current) return;
+    if (params.agentId === pendingAgentIdRef.current) {
+      setCreating(false);
+      creatingLockRef.current = false;
+      pendingAgentIdRef.current = null;
+    }
+  }, [params.agentId, creating]);
+
+  // Safety: never leave the overlay stuck longer than ~2s.
+  useEffect(() => {
+    if (!creating) return;
+    const timeout = window.setTimeout(() => {
+      setCreating(false);
+      creatingLockRef.current = false;
+      pendingAgentIdRef.current = null;
+    }, CREATE_MAX_MS);
+    return () => window.clearTimeout(timeout);
+  }, [creating]);
 
   const handleNewAgent = async () => {
-    const agent = await createAgent.mutateAsync(undefined);
-    onNavigate();
-    router.push(`/agents/${agent.id}/build`);
+    if (creatingLockRef.current || createAgent.isPending || creating) return;
+    creatingLockRef.current = true;
+    setCreating(true);
+    try {
+      const [agent] = await Promise.all([
+        createAgent.mutateAsync(undefined),
+        sleep(CREATE_MIN_MS),
+      ]);
+      pendingAgentIdRef.current = agent.id;
+      onNavigate();
+      router.push(`/agents/${agent.id}/build`);
+    } catch {
+      creatingLockRef.current = false;
+      pendingAgentIdRef.current = null;
+      setCreating(false);
+    }
   };
 
   return (
@@ -198,10 +243,15 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
           className="w-full justify-start gap-2 rounded-2xl"
           variant="secondary"
           onClick={() => void handleNewAgent()}
-          disabled={createAgent.isPending}
+          disabled={creating || createAgent.isPending}
+          aria-busy={creating}
         >
-          <Plus className="size-4" aria-hidden="true" />
-          {t("builder:sidebar.newAgent")}
+          {creating ? (
+            <LogoMark className="size-4 animate-pulse" />
+          ) : (
+            <Plus className="size-4" aria-hidden="true" />
+          )}
+          {creating ? t("builder:sidebar.creatingAgent") : t("builder:sidebar.newAgent")}
         </Button>
       </div>
 
@@ -251,6 +301,12 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
           </Button>
         </div>
       </div>
+
+      <CreatingAgentOverlay
+        open={creating}
+        title={t("builder:sidebar.creatingAgent")}
+        hint={t("builder:sidebar.creatingAgentHint")}
+      />
     </div>
   );
 }

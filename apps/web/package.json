@@ -15,11 +15,13 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.0",
     "@stack32/config": "workspace:*",
     "@stack32/generated-api-types": "workspace:*",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.1",
     "@tanstack/react-query": "^5.100.6",
+    "@xyflow/react": "^12.11.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
@@ -43,6 +45,7 @@
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@tailwindcss/typography": "^0.5.19",
+    "@types/dagre": "^0.7.54",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

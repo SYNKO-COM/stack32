@@ -95,6 +95,54 @@ describe("message mappers", () => {
     expect(mapped?.actions).toEqual(["test_agent"]);
   });
 
+    it("maps builder ui_component identity form metadata", () => {
+    const mapped = mapBuilderMessage(
+      builderRow({
+        role: "assistant",
+        content: "builder:identity.prompt",
+        metadata: {
+          ui_component: {
+            type: "agent_identity_form",
+            version: "1",
+            request_id: "run-123",
+            fields: [
+              { key: "name", type: "text", required: true, suggested_value: "Sales Bot" },
+            ],
+          },
+          interrupt_run_id: "run-123",
+        },
+      }),
+    );
+    expect(mapped?.uiComponent?.type).toBe("agent_identity_form");
+    expect(mapped?.uiComponent?.requestId).toBe("run-123");
+    expect(mapped?.interruptRunId).toBe("run-123");
+  });
+
+  it("maps secret_form and playReadySound metadata", () => {
+    const mapped = mapBuilderMessage(
+      builderRow({
+        role: "assistant",
+        content: "builder:secrets.prompt",
+        metadata: {
+          ui_component: {
+            type: "secret_form",
+            version: "1",
+            request_id: "run-456",
+            context: "builder",
+            fields: [
+              { key: "api_key", type: "secret", required: true },
+            ],
+          },
+          interrupt_run_id: "run-456",
+          playReadySound: true,
+        },
+      }),
+    );
+    expect(mapped?.uiComponent?.type).toBe("secret_form");
+    expect(mapped?.uiComponent?.context).toBe("builder");
+    expect(mapped?.playReadySound).toBe(true);
+  });
+
   it("filters out system/tool roles the UI does not render", () => {
     expect(mapBuilderMessage(builderRow({ role: "system" }))).toBeNull();
     expect(mapBuilderMessage(builderRow({ role: "tool" }))).toBeNull();

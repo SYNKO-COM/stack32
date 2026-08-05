@@ -1,17 +1,9 @@
-"""Supabase JWT verification and service authentication dependencies.
+"""Supabase JWT verification and service authentication dependencies."""
 
-Verification strategy (Phase 2):
-1. SUPABASE_JWKS_URL configured  -> asymmetric verification via JWKS (preferred).
-2. SUPABASE_JWT_SECRET configured -> legacy HS256 shared-secret verification.
-3. Neither configured             -> development-only unverified decode
-                                     (settings validation forbids this in
-                                     production).
-"""
+from __future__ import annotations
 
-import base64
-import binascii
 import hashlib
-import json
+import hmac
 import logging
 from typing import Annotated, Any
 
@@ -47,26 +39,8 @@ def _unauthorized(message: str) -> HTTPException:
     )
 
 
-def _decode_unverified(token: str) -> dict[str, Any]:
-    """Development fallback: best-effort decode WITHOUT verification."""
-    parts = token.split(".")
-    if len(parts) == 3:
-        try:
-            padded = parts[1] + "=" * (-len(parts[1]) % 4)
-            payload = json.loads(base64.urlsafe_b64decode(padded))
-            if isinstance(payload, dict):
-                return payload
-        except (ValueError, binascii.Error):
-            pass
-    return {"sub": f"stub-user-{hashlib.sha256(token.encode()).hexdigest()[:12]}"}
-
-
 def verify_supabase_jwt(token: str) -> dict[str, Any]:
-    """Verify a Supabase access token and return its claims.
-
-    Raises HTTPException(401) for expired, malformed or badly-signed tokens
-    whenever a verification mechanism is configured.
-    """
+    """Verify a Supabase access token and return its claims."""
     settings = get_settings()
     options = {"require": ["exp", "sub"]}
     issuer = settings.SUPABASE_JWT_ISSUER or None
@@ -87,8 +61,6 @@ def verify_supabase_jwt(token: str) -> dict[str, Any]:
         except pyjwt.ExpiredSignatureError as exc:
             raise _unauthorized("Token has expired.") from exc
         except pyjwt.PyJWTError as exc:
-            # HS256-signed tokens (legacy projects) fall through to the shared
-            # secret when configured; anything else is rejected.
             if not settings.SUPABASE_JWT_SECRET:
                 raise _unauthorized("Invalid token.") from exc
 
@@ -107,11 +79,15 @@ def verify_supabase_jwt(token: str) -> dict[str, Any]:
         except pyjwt.PyJWTError as exc:
             raise _unauthorized("Invalid token.") from exc
 
-    if get_settings().is_production:  # defense in depth; settings already forbid this
+    if settings.is_production or not settings.ALLOW_UNVERIFIED_JWT:
         raise _unauthorized("Token verification is not configured.")
 
-    logger.warning("JWT verification not configured — using UNVERIFIED decode (development only)")
-    return _decode_unverified(token)
+    # Explicit opt-in only (local stubs). Never enabled in production.
+    logger.warning(
+        "ALLOW_UNVERIFIED_JWT enabled — rejecting forged security guarantees (development stub)"
+    )
+    digest = hashlib.sha256(token.encode()).hexdigest()[:12]
+    return {"sub": f"stub-user-{digest}", "exp": 2**31 - 1}
 
 
 async def get_current_user(
@@ -135,7 +111,8 @@ async def require_internal_service(
 ) -> None:
     """Dependency for internal service-to-service endpoints."""
     settings = get_settings()
-    if not settings.INTERNAL_SERVICE_TOKEN:
+    expected = settings.INTERNAL_SERVICE_TOKEN
+    if not expected:
         raise HTTPException(
             status_code=503,
             detail={
@@ -143,7 +120,8 @@ async def require_internal_service(
                 "message": "INTERNAL_SERVICE_TOKEN is not configured.",
             },
         )
-    if x_internal_token != settings.INTERNAL_SERVICE_TOKEN:
+    provided = x_internal_token or ""
+    if not hmac.compare_digest(provided, expected):
         raise HTTPException(
             status_code=403,
             detail={"code": "forbidden", "message": "Invalid internal service token."},

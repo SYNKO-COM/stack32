@@ -7,6 +7,8 @@
   "sidebar": {
     "agentsTitle": "AI agents",
     "newAgent": "New agent",
+    "creatingAgent": "Opening a new agent…",
+    "creatingAgentHint": "Preparing your workspace",
     "untitledAgent": "Untitled agent",
     "empty": "No agents yet. Create your first one.",
     "menu": {
@@ -20,6 +22,17 @@
     "deleteBody": "\"{{name}}\" and its conversations will be removed. This cannot be undone.",
     "planLabel": "Plan"
   },
+  "working": {
+    "title": "Stack32 is working…",
+    "hint": "I'm preparing your agent. This usually takes a few seconds.",
+    "activities": {
+      "reading": "Reading what you asked",
+      "understanding": "Understanding the goal",
+      "draftingIdentity": "Choosing a name and role",
+      "mappingCapabilities": "Picking useful abilities",
+      "preparingStructure": "Preparing the structure"
+    }
+  },
   "topbar": {
     "publish": "Publish",
     "publishing": "Publishing…",
@@ -32,35 +45,35 @@
   },
   "publishDialog": {
     "title": "Publish this agent?",
-    "body": "Publishing makes the current version the stable one your agent uses in Live.",
+    "body": "Publishing makes this version the one used in Live.",
     "confirm": "Publish now",
     "successTitle": "Agent published",
-    "successBody": "Your agent is live. The published version will keep working while you iterate on new drafts."
+    "successBody": "Your agent is live. You can keep improving drafts without breaking the published version."
   },
   "empty": {
     "title": "Describe the agent you need",
-    "subtitle": "One clear sentence is enough. Stack32 will build a first version, test it, and let you try it immediately.",
+    "subtitle": "One clear sentence is enough. Stack32 will build a first version, test it, and let you try it right away.",
     "examplesTitle": "Try something like"
   },
   "steps": {
     "understanding": "Understanding your goal",
-    "capabilities": "Selecting capabilities",
+    "capabilities": "Choosing abilities",
     "building": "Building the agent",
-    "testing": "Running a test",
-    "repairing": "Repairing the agent"
+    "testing": "Running a quick test",
+    "repairing": "Fixing issues"
   },
   "actions": {
-    "testAgent": "Test agent",
-    "viewStructure": "View structure",
-    "fixAutomatically": "Fix automatically"
+    "testAgent": "Try the agent",
+    "viewStructure": "See the structure",
+    "fixAutomatically": "Fix it for me"
   },
   "mock": {
-    "successResponse": "Your agent is ready to test. I set up its goal, selected the right capabilities and ran a first test — everything passed. You can try it now in Live, or review its composition in Structure.",
-    "warningResponse": "Your agent is built, but the test surfaced a minor issue: one answer was less precise than expected. You can test it as is, or let me fix it automatically.",
-    "errorResponse": "I couldn't complete the build this time: the test failed while checking the agent's answers. I can fix this automatically — or you can rephrase your request with more detail.",
-    "repairInProgress": "Repairing the agent…",
-    "repairResponse": "Fixed. I adjusted the agent's instructions and reran the test — it passes now. Your agent is ready to use.",
-    "executionDisabled": "Agent building is currently unavailable. Your message has been saved — building will resume as soon as the service is back."
+    "successResponse": "Your agent is ready to try. I set its goal, chose the right abilities, and ran a first test. Everything looks good. Open Live to talk to it, or Structure to see how it works.",
+    "warningResponse": "Your agent is built, but the test found a small issue: one answer was a bit unclear. You can try it as is, or let me fix it.",
+    "errorResponse": "I couldn't finish this build. The test failed while checking answers. I can fix it for you, or you can rephrase your request with a bit more detail.",
+    "repairInProgress": "Fixing the agent…",
+    "repairResponse": "All set. I adjusted the instructions and ran the test again. Your agent is ready to use.",
+    "executionDisabled": "Building is temporarily unavailable. Your message was saved. We'll continue as soon as the service is back."
   },
   "composer": {
     "placeholder": "Describe what to build or change…"
@@ -70,5 +83,126 @@
   "a11y": {
     "conversation": "Builder conversation",
     "viewTabs": "Agent views"
+  },
+  "identity": {
+    "prompt": "Before I build your agent, tell me how it should introduce itself.",
+    "name": "Agent name",
+    "role": "What it does",
+    "tone": "Tone",
+    "description": "Short description",
+    "continue": "Continue",
+    "submitting": "Saving…",
+    "formClosed": "Got it. Identity saved for {{name}}.",
+    "confirmed": "Identity confirmed.",
+    "confirmedLead": "Perfect — noted for **{{name}}**.",
+    "confirmedNext": "Next step: connect a brain (LLM) with your API key so the agent can actually think.",
+    "toneOptions": {
+      "professional": "Professional",
+      "friendly": "Friendly",
+      "concise": "Concise",
+      "formal": "Formal"
+    }
+  },
+  "buildBoard": {
+    "title": "Build progress",
+    "nodes": {
+      "identity": "Identity",
+      "tools": "Abilities",
+      "memory": "Memory",
+      "graph": "Structure",
+      "tests": "Tests"
+    },
+    "states": {
+      "pending": "Waiting",
+      "running": "Working",
+      "done": "Done",
+      "failed": "Failed",
+      "locked": "Locked"
+    }
+  },
+  "ready": {
+    "title": "First version ready",
+    "titleNamed": "{{name}} is ready",
+    "success": "Your agent is ready to try. I wrote its instructions, unlocked abilities and memory, built the structure, and passed a quick test. Open Live to chat with it, or keep improving it here.",
+    "improveTitle": "Want to make it better?",
+    "suggestions": {
+      "tryLive": "Try it in Live now",
+      "refineTone": "Make answers clearer",
+      "addKnowledge": "Add my documents",
+      "longMemory": "Remember things long term",
+      "socratic": "Guide me with questions first",
+      "connectApps": "Prepare app connections later"
+    }
+  },
+  "secrets": {
+    "prompt": "For your agent to think, connect a brain (LLM) with your API key.\n\nPick a provider, paste your key, then save. It is encrypted and will never be shown in full again.",
+    "saved": "Saved.\n\nYour key is in place.",
+    "secureNotice": "Your key is encrypted and used only to power this agent.",
+    "provider": "Provider",
+    "apiKey": "API key",
+    "apiKeyPlaceholder": "Paste your key here",
+    "byokHint": "Paste your key. You can show or hide it while typing. We only keep a short masked hint.",
+    "show": "Show key",
+    "hide": "Hide key",
+    "continue": "Save key",
+    "submitting": "Saving…",
+    "formClosed": "Key saved.",
+    "providers": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic",
+      "google": "Google (Gemini)",
+      "gemini": "Google (Gemini)",
+      "xai": "xAI (Grok)",
+      "mistral": "Mistral",
+      "groq": "Groq",
+      "openrouter": "OpenRouter"
+    }
+  },
+  "capabilities": {
+    "prompt": "Almost there. Tell me how this agent should work:\n\n• remember this chat?\n• keep long-term memory?\n• use your documents?\n• run on a schedule?\n\nToggle what you want below, add a note if useful, then build.",
+    "promptAfterSecret": "Key saved — thank you.\n\nNow, how should this agent work?\n\n• remember this chat?\n• keep long-term memory?\n• use your documents?\n• run on a schedule?\n\nToggle your choices below, then build the agent.",
+    "saved": "Got it.\n\nI'm building the first version with these settings. This can take a moment.",
+    "memoryConversation": "Remember this chat",
+    "memoryConversationHint": "Keeps the conversation coherent as you talk.",
+    "memorySemantic": "Long-term memory",
+    "memorySemanticHint": "Remembers important facts between sessions (you stay in control).",
+    "knowledge": "Documents (knowledge base)",
+    "knowledgeHint": "Lets the agent search files you add later.",
+    "scheduleHourly": "Run every hour",
+    "scheduleHourlyHint": "Prepares an automatic hourly run (coming soon). We already save it in the config.",
+    "contextNotes": "Anything else I should know?",
+    "contextNotesPlaceholder": "e.g. short answers, school level, tools to connect later…",
+    "appsComingSoon": "App connections (email, Slack, Drive) arrive next. Leave a note if you want them.",
+    "continue": "Build my agent",
+    "submitting": "Building…",
+    "formClosed": "Settings saved. Building now."
+  },
+  "errors": {
+    "buildFailed": "Build stopped.",
+    "buildFailedDetail": "I couldn't finish this build. You can retry, rephrase, or ask me to fix it.",
+    "validationFailed": "The agent configuration is invalid. Rephrase or ask for a fix."
+  },
+  "progress": {
+    "started": "Starting…",
+    "understanding": "Understanding your goal",
+    "identity": "Confirming identity",
+    "identityDone": "Identity confirmed",
+    "secret": "Connecting your brain (LLM)",
+    "capabilities": "Setting memory and documents",
+    "capabilitiesDone": "Settings saved",
+    "architecture": "Designing the structure",
+    "spec": "Writing instructions",
+    "graph": "Connecting the pieces",
+    "security": "Safety checks",
+    "validated": "Checks done",
+    "testing": "Quick test",
+    "tested": "Test finished",
+    "repair": "Fixing",
+    "repairDone": "Fix applied",
+    "ready": "First version ready",
+    "buildingDeep": "Building a personalized agent: instructions, abilities, memory, and structure…",
+    "building": "Building the agent",
+    "repairing": "Fixing the agent",
+    "complete": "Build complete"
   }
 }

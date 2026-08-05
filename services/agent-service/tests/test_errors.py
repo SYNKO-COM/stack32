@@ -17,7 +17,6 @@ def test_404_returns_error_envelope(client):
 
 
 def test_validation_error_returns_envelope_with_details(client):
-    # Missing required "content" field.
     response = client.post(
         "/v1/builder/threads/thread-1/messages", json={}, headers=AUTH_HEADERS
     )
@@ -34,22 +33,18 @@ def test_unauthenticated_request_returns_401_envelope(client):
     assert_envelope(response.json(), "unauthorized")
 
 
-def test_execution_endpoints_return_typed_not_implemented(client):
+def test_execution_endpoints_require_supabase(client):
+    tid = "11111111-1111-1111-1111-111111111111"
     for path in [
-        "/v1/builder/threads/t1/messages",
-        "/v1/live/threads/t1/messages",
+        f"/v1/builder/threads/{tid}/messages",
+        f"/v1/live/threads/{tid}/messages",
     ]:
         response = client.post(path, json={"content": "hello"}, headers=AUTH_HEADERS)
-        assert response.status_code == 501, path
-        assert_envelope(response.json(), "not_implemented")
-
-    response = client.post("/v1/agents/a1/test", headers=AUTH_HEADERS)
-    assert response.status_code == 501
-    assert_envelope(response.json(), "not_implemented")
+        assert response.status_code == 503, path
+        assert_envelope(response.json(), "not_configured")
 
 
 def test_agent_read_requires_supabase_configuration(client):
-    # Dev token is accepted (no 401), but persistence is not configured (503).
     response = client.get("/v1/agents/some-id", headers=AUTH_HEADERS)
     assert response.status_code == 503
     assert_envelope(response.json(), "not_configured")

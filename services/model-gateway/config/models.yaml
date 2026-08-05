@@ -1,0 +1,56 @@
+# Stack32 model profiles — names only, no secrets.
+# Override via environment variables MODEL_*_PRIMARY / MODEL_*_FALLBACK.
+
+profiles:
+  fast:
+    primary: ${MODEL_FAST_PRIMARY}
+    fallbacks:
+      - ${MODEL_FAST_FALLBACK}
+    purpose: intent classification, identity suggestions, simple patches
+
+  balanced:
+    primary: ${MODEL_BALANCED_PRIMARY}
+    fallbacks:
+      - ${MODEL_BALANCED_FALLBACK}
+    purpose: instructions, Live chat, moderate generation
+
+  reasoning:
+    primary: ${MODEL_REASONING_PRIMARY}
+    fallbacks:
+      - ${MODEL_REASONING_FALLBACK}
+    purpose: architecture, GraphSpec, heavy repair
+
+  coding:
+    primary: ${MODEL_CODING_PRIMARY}
+    fallbacks:
+      - ${MODEL_CODING_FALLBACK}
+    purpose: agent blueprint, GraphSpec, structured patches, repair
+
+  validator:
+    primary: ${MODEL_VALIDATOR_PRIMARY}
+    fallbacks:
+      - ${MODEL_VALIDATOR_FALLBACK}
+    purpose: validation feedback, smoke-test evaluation
+
+  embedding:
+    primary: ${MODEL_EMBEDDING_PRIMARY}
+    dimension: 1536
+    purpose: knowledge and semantic memory embeddings
+
+routing:
+  intent_classification: fast
+  identity: fast
+  simple_patch: fast
+  architecture: coding
+  instructions: coding
+  graph_generation: coding
+  validation_feedback: validator
+  repair: coding
+  live_simple: balanced
+  live_tool_use: reasoning
+  embeddings: embedding
+
+cost_defaults:
+  starter_monthly_budget_usd: 10.0
+  max_repair_attempts: 2
+  prefer_cheap_for_fast_path: true

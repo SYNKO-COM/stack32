@@ -45,6 +45,7 @@
     "send": "Send",
     "build": "Build",
     "sending": "Sending…",
+    "working": "Working…",
     "stop": "Stop"
   },
   "status": {

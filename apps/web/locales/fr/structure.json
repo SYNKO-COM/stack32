@@ -52,17 +52,40 @@
     "structured_output": "Sortie structurée",
     "http_request": "Requêtes HTTP (avancé)"
   },
+  "empty": {
+    "title": "Pas encore de structure",
+    "subtitle": "Décrivez votre agent dans Build et sa structure apparaîtra ici.",
+    "cta": "Aller dans Build"
+  },
+  "graph": {
+    "fallback": "Le flux d'exécution apparaîtra ici une fois votre agent construit."
+  },
+  "nodes": {
+    "input": "Entrée",
+    "guardrail": "Garde-fou",
+    "llm": "Modèle de langage",
+    "router": "Routeur",
+    "tool": "Outil",
+    "knowledge": "Connaissances",
+    "memory_read": "Lecture mémoire",
+    "memory_write": "Écriture mémoire",
+    "approval": "Approbation",
+    "transform": "Transformation",
+    "sub_agent": "Sous-agent",
+    "output": "Sortie"
+  },
+  "nodeStates": {
+    "default": "Aucun détail supplémentaire pour cette étape.",
+    "toolId": "Outil : {{id}}",
+    "modelProfile": "Profil de modèle : {{profile}}"
+  },
   "prefill": {
     "goal": "Je veux changer l'objectif de mon agent : ",
     "instructions": "Je veux ajuster les instructions de mon agent : ",
     "tools": "Je veux modifier les outils de mon agent : ",
     "rules": "Je veux mettre à jour les règles de mon agent : ",
     "output": "Je veux changer le format de sortie de mon agent : ",
-    "test": "Lance un test sur mon agent et donne-moi le résultat."
-  },
-  "empty": {
-    "title": "Pas encore de structure",
-    "subtitle": "Décrivez votre agent dans Build et sa structure apparaîtra ici.",
-    "cta": "Aller dans Build"
+    "test": "Lance un test sur mon agent et donne-moi le résultat.",
+    "graph": "Je veux modifier le flux d'exécution de mon agent : "
   }
 }

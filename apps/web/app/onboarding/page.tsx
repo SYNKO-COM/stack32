@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { AnimatedBackground } from "@/components/shared/animated-background";
+import { BrandLoader } from "@/components/shared/brand-loader";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -61,14 +62,7 @@ export default function OnboardingPage() {
   if (settling) {
     return (
       <OnboardingShell>
-        <div
-          className="flex flex-col items-center gap-3 text-sm text-muted-foreground"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="size-8 animate-pulse rounded-full bg-brand/30" />
-          <p>{t("loading")}</p>
-        </div>
+        <BrandLoader label={t("loading")} size="lg" />
       </OnboardingShell>
     );
   }
@@ -76,9 +70,7 @@ export default function OnboardingPage() {
   if (userError || !user || profile?.onboardingCompleted) {
     return (
       <OnboardingShell>
-        <div className="text-sm text-muted-foreground" role="status">
-          {t("loading")}
-        </div>
+        <BrandLoader label={t("loading")} size="lg" />
       </OnboardingShell>
     );
   }

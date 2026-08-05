@@ -1,5 +1,12 @@
 "use server";
 
+import {
+  agentServiceFetch,
+  requireAccessToken,
+} from "@/lib/ai/agent-service-client";
+import { currentAiExecutionMode } from "@/lib/ai/execution-adapter";
+import { mapAgent, mapGraphSpecFromApi, mapIdentityFromApi } from "@/lib/domain/mappers";
+import type { Agent, AgentGraphResponse } from "@/lib/domain/types";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -21,7 +28,6 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
     .maybeSingle();
   if (!source) throw new Error("agent_not_found");
 
-  // Unique active slug for the copy.
   const baseSlug = `${source.slug}-copy`;
   let slug = baseSlug;
   for (let suffix = 2; ; suffix++) {
@@ -81,4 +87,103 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
   await supabase.from("live_threads").insert({ agent_id: copy.id, user_id: user.id });
 
   return { agentId: copy.id };
+}
+
+/**
+ * Publishes the agent's current draft version.
+ *
+ * - `agent-service` mode: calls Agent API publish gates (spec/graph/compile/smoke).
+ * - `mock` / `disabled`: direct Supabase flip (dev only — no validation gates).
+ */
+export async function publishAgentAction(agentId: string): Promise<Agent> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+
+  const { data: owned } = await supabase
+    .from("agents")
+    .select("id, draft_version_id")
+    .eq("id", agentId)
+    .maybeSingle();
+  if (!owned) throw new Error("agent_not_found");
+
+  if (currentAiExecutionMode() === "agent-service") {
+    const accessToken = await requireAccessToken();
+    await agentServiceFetch(`/v1/agents/${agentId}/publish`, {
+      method: "POST",
+      accessToken,
+      body: {},
+    });
+  } else {
+    if (!owned.draft_version_id) throw new Error("no_draft_version");
+    const { error } = await supabase
+      .from("agents")
+      .update({ status: "published", published_version_id: owned.draft_version_id })
+      .eq("id", agentId);
+    if (error) throw error;
+  }
+
+  const { data: agent, error: readError } = await supabase
+    .from("agents")
+    .select("*")
+    .eq("id", agentId)
+    .single();
+  if (readError || !agent) throw readError ?? new Error("agent_not_found");
+  return mapAgent(agent);
+}
+
+/** Fetches the execution graph for Structure view. */
+export async function getAgentGraphAction(agentId: string): Promise<AgentGraphResponse | null> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+
+  const { data: owned } = await supabase
+    .from("agents")
+    .select("id, draft_version_id")
+    .eq("id", agentId)
+    .maybeSingle();
+  if (!owned) throw new Error("agent_not_found");
+
+  if (currentAiExecutionMode() === "agent-service") {
+    const accessToken = await requireAccessToken();
+    const result = await agentServiceFetch<{
+      graph: unknown;
+      schema_version?: string | null;
+      identity?: unknown;
+      test_ready?: boolean;
+    }>(`/v1/agents/${agentId}/graph`, { accessToken });
+    return {
+      graph: result.graph ? mapGraphSpecFromApi(result.graph) : null,
+      schemaVersion: result.schema_version ?? null,
+      identity: result.identity ? mapIdentityFromApi(result.identity) ?? null : null,
+      testReady: result.test_ready,
+    };
+  }
+
+  if (!owned.draft_version_id) return null;
+
+  const { data: version } = await supabase
+    .from("agent_versions")
+    .select("spec")
+    .eq("id", owned.draft_version_id)
+    .maybeSingle();
+
+  if (!version) return null;
+
+  const specRaw = version.spec as Record<string, unknown>;
+  const graphRaw = specRaw.graph ?? specRaw.graph_spec;
+  return {
+    graph: graphRaw ? mapGraphSpecFromApi(graphRaw) : null,
+    schemaVersion:
+      typeof specRaw.schema_version === "string"
+        ? specRaw.schema_version
+        : typeof specRaw.schemaVersion === "string"
+          ? specRaw.schemaVersion
+          : null,
+  };
 }

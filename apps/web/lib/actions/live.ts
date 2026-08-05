@@ -11,14 +11,16 @@ import { requireSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
 function getAdapter(): LiveExecutionAdapter {
-  return currentAiExecutionMode() === "mock"
-    ? new MockLiveExecutionAdapter()
-    : new RealLiveExecutionAdapter();
+  const mode = currentAiExecutionMode();
+  if (mode === "mock") return new MockLiveExecutionAdapter();
+  if (mode === "agent-service") return new RealLiveExecutionAdapter();
+  return new RealLiveExecutionAdapter();
 }
 
 /**
- * Runs the (mock) live turn for an already-persisted user message.
- * Assistant messages are only ever inserted here, through trusted server code.
+ * Runs the live turn for an already-persisted user message.
+ * Assistant messages are only ever inserted through trusted server code
+ * (mock adapter) or the Agent Service (agent-service mode).
  */
 export async function executeLiveTurn(input: {
   agentId: string;

@@ -7,6 +7,8 @@
   "sidebar": {
     "agentsTitle": "Agents IA",
     "newAgent": "Nouvel agent",
+    "creatingAgent": "Ouverture d’un nouvel agent…",
+    "creatingAgentHint": "Préparation de votre espace",
     "untitledAgent": "Agent sans titre",
     "empty": "Aucun agent pour l'instant. Créez le premier.",
     "menu": {
@@ -20,6 +22,17 @@
     "deleteBody": "« {{name}} » et ses conversations seront supprimés. Cette action est irréversible.",
     "planLabel": "Plan"
   },
+  "working": {
+    "title": "Stack32 travaille…",
+    "hint": "Je prépare votre agent. Cela prend en général quelques secondes.",
+    "activities": {
+      "reading": "Lecture de votre demande",
+      "understanding": "Compréhension de l'objectif",
+      "draftingIdentity": "Choix du nom et du rôle",
+      "mappingCapabilities": "Sélection des capacités",
+      "preparingStructure": "Préparation de la structure"
+    }
+  },
   "topbar": {
     "publish": "Publier",
     "publishing": "Publication…",
@@ -32,35 +45,35 @@
   },
   "publishDialog": {
     "title": "Publier cet agent ?",
-    "body": "La publication fait de la version actuelle la version stable utilisée par votre agent dans Live.",
+    "body": "La publication fait de cette version celle utilisée dans Live.",
     "confirm": "Publier maintenant",
     "successTitle": "Agent publié",
-    "successBody": "Votre agent est en ligne. La version publiée continuera de fonctionner pendant que vous itérez sur de nouveaux brouillons."
+    "successBody": "Votre agent est en ligne. Vous pouvez continuer à améliorer des brouillons sans casser la version publiée."
   },
   "empty": {
     "title": "Décrivez l'agent dont vous avez besoin",
-    "subtitle": "Une phrase claire suffit. Stack32 construira une première version, la testera, et vous pourrez l'essayer immédiatement.",
+    "subtitle": "Une phrase claire suffit. Stack32 construit une première version, la teste, et vous pouvez l'essayer tout de suite.",
     "examplesTitle": "Essayez par exemple"
   },
   "steps": {
     "understanding": "Compréhension de votre objectif",
-    "capabilities": "Sélection des capacités",
+    "capabilities": "Choix des capacités",
     "building": "Construction de l'agent",
-    "testing": "Exécution d'un test",
-    "repairing": "Réparation de l'agent"
+    "testing": "Petit test",
+    "repairing": "Correction"
   },
   "actions": {
-    "testAgent": "Tester l'agent",
+    "testAgent": "Essayer l'agent",
     "viewStructure": "Voir la structure",
-    "fixAutomatically": "Corriger automatiquement"
+    "fixAutomatically": "Corriger pour moi"
   },
   "mock": {
-    "successResponse": "Votre agent est prêt à être testé. J'ai défini son objectif, sélectionné les bonnes capacités et lancé un premier test — tout est validé. Vous pouvez l'essayer dans Live, ou consulter sa composition dans Structure.",
-    "warningResponse": "Votre agent est construit, mais le test a révélé un point mineur : une réponse était moins précise qu'attendu. Vous pouvez le tester tel quel, ou me laisser corriger automatiquement.",
-    "errorResponse": "Je n'ai pas pu terminer la construction cette fois : le test a échoué lors de la vérification des réponses de l'agent. Je peux corriger cela automatiquement — ou vous pouvez reformuler votre demande avec plus de détails.",
-    "repairInProgress": "Réparation de l'agent…",
-    "repairResponse": "C'est corrigé. J'ai ajusté les instructions de l'agent et relancé le test — il passe maintenant. Votre agent est prêt à l'emploi.",
-    "executionDisabled": "La construction d'agents est momentanément indisponible. Votre message a été enregistré — la construction reprendra dès le retour du service."
+    "successResponse": "Votre agent est prêt à essayer. J'ai défini son objectif, choisi les bonnes capacités et lancé un premier test. Tout a l'air bon. Ouvrez Live pour lui parler, ou Structure pour voir comment il fonctionne.",
+    "warningResponse": "Votre agent est construit, mais le test a trouvé un petit souci : une réponse était un peu floue. Vous pouvez l'essayer tel quel, ou me laisser corriger.",
+    "errorResponse": "Je n'ai pas pu terminer cette construction. Le test a échoué. Je peux corriger pour vous, ou vous pouvez reformuler votre demande avec un peu plus de détail.",
+    "repairInProgress": "Correction de l'agent…",
+    "repairResponse": "C'est bon. J'ai ajusté les instructions et relancé le test. Votre agent est prêt.",
+    "executionDisabled": "La construction est temporairement indisponible. Votre message a été enregistré. On reprendra dès que le service revient."
   },
   "composer": {
     "placeholder": "Décrivez quoi construire ou modifier…"
@@ -70,5 +83,126 @@
   "a11y": {
     "conversation": "Conversation avec le Builder",
     "viewTabs": "Vues de l'agent"
+  },
+  "identity": {
+    "prompt": "Avant de construire votre agent, dites-moi comment il doit se présenter.",
+    "name": "Nom de l'agent",
+    "role": "Ce qu'il fait",
+    "tone": "Ton",
+    "description": "Courte description",
+    "continue": "Continuer",
+    "submitting": "Enregistrement…",
+    "formClosed": "C'est noté. Identité enregistrée pour {{name}}.",
+    "confirmed": "Identité confirmée.",
+    "confirmedLead": "Parfait — c'est noté pour **{{name}}**.",
+    "confirmedNext": "Prochaine étape : connecter un cerveau (LLM) avec votre clé API, pour que l'agent puisse vraiment réfléchir.",
+    "toneOptions": {
+      "professional": "Professionnel",
+      "friendly": "Amical",
+      "concise": "Concis",
+      "formal": "Formel"
+    }
+  },
+  "buildBoard": {
+    "title": "Avancement",
+    "nodes": {
+      "identity": "Identité",
+      "tools": "Capacités",
+      "memory": "Mémoire",
+      "graph": "Structure",
+      "tests": "Tests"
+    },
+    "states": {
+      "pending": "En attente",
+      "running": "En cours",
+      "done": "Fait",
+      "failed": "Échoué",
+      "locked": "Verrouillé"
+    }
+  },
+  "ready": {
+    "title": "Première version prête",
+    "titleNamed": "{{name}} est prêt",
+    "success": "Votre agent est prêt à essayer. J'ai écrit ses instructions, débloqué capacités et mémoire, construit la structure, et passé un petit test. Ouvrez Live pour discuter avec lui, ou continuez à l'améliorer ici.",
+    "improveTitle": "Envie de l'améliorer ?",
+    "suggestions": {
+      "tryLive": "L'essayer dans Live maintenant",
+      "refineTone": "Rendre les réponses plus claires",
+      "addKnowledge": "Ajouter mes documents",
+      "longMemory": "Se souvenir sur le long terme",
+      "socratic": "Me guider avec des questions d'abord",
+      "connectApps": "Préparer les connexions d'apps plus tard"
+    }
+  },
+  "secrets": {
+    "prompt": "Pour que votre agent puisse réfléchir, connectez un cerveau (LLM) avec votre clé API.\n\nChoisissez un fournisseur, collez votre clé, puis enregistrez. Elle est chiffrée et ne sera plus jamais affichée en entier.",
+    "saved": "C'est enregistré.\n\nVotre clé est bien prise en compte.",
+    "secureNotice": "Votre clé est chiffrée et utilisée uniquement pour faire fonctionner cet agent.",
+    "provider": "Fournisseur",
+    "apiKey": "Clé API",
+    "apiKeyPlaceholder": "Collez votre clé ici",
+    "byokHint": "Collez votre clé. Vous pouvez l'afficher ou la masquer pendant la saisie. On ne conserve qu'un petit aperçu masqué.",
+    "show": "Afficher la clé",
+    "hide": "Masquer la clé",
+    "continue": "Enregistrer la clé",
+    "submitting": "Enregistrement…",
+    "formClosed": "Clé enregistrée.",
+    "providers": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic",
+      "google": "Google (Gemini)",
+      "gemini": "Google (Gemini)",
+      "xai": "xAI (Grok)",
+      "mistral": "Mistral",
+      "groq": "Groq",
+      "openrouter": "OpenRouter"
+    }
+  },
+  "capabilities": {
+    "prompt": "Presque prêt. Dites-moi comment cet agent doit travailler :\n\n• se souvenir de cette discussion ?\n• garder une mémoire long terme ?\n• utiliser vos documents ?\n• tourner sur un planning ?\n\nCochez ce que vous voulez ci-dessous, ajoutez une note si besoin, puis lancez la construction.",
+    "promptAfterSecret": "Clé enregistrée — merci.\n\nMaintenant, comment cet agent doit-il travailler ?\n\n• se souvenir de cette discussion ?\n• garder une mémoire long terme ?\n• utiliser vos documents ?\n• tourner sur un planning ?\n\nCochez vos choix ci-dessous, puis construisez l'agent.",
+    "saved": "C'est noté.\n\nJe construis maintenant la première version avec ces réglages. Ça peut prendre un moment.",
+    "memoryConversation": "Se souvenir de cette discussion",
+    "memoryConversationHint": "Garde la conversation cohérente au fil des messages.",
+    "memorySemantic": "Mémoire long terme",
+    "memorySemanticHint": "Retient des faits importants entre les sessions (vous restez maître).",
+    "knowledge": "Documents (base de connaissances)",
+    "knowledgeHint": "Permet à l'agent de chercher dans les fichiers que vous ajouterez.",
+    "scheduleHourly": "Déclencher toutes les heures",
+    "scheduleHourlyHint": "Prépare un passage automatique (disponible bientôt). On l'enregistre déjà dans la config.",
+    "contextNotes": "Autre chose à savoir ?",
+    "contextNotesPlaceholder": "ex. réponses courtes, niveau scolaire, outils à connecter plus tard…",
+    "appsComingSoon": "Les connexions d'apps (email, Slack, Drive) arrivent ensuite. Laissez une note si vous les voulez.",
+    "continue": "Construire mon agent",
+    "submitting": "Construction…",
+    "formClosed": "Réglages enregistrés. Construction en cours."
+  },
+  "errors": {
+    "buildFailed": "La construction s'est arrêtée.",
+    "buildFailedDetail": "Je n'ai pas pu terminer cette construction. Vous pouvez réessayer, reformuler, ou me demander de corriger.",
+    "validationFailed": "La configuration de l'agent n'est pas valide. Reformulez ou demandez une correction."
+  },
+  "progress": {
+    "started": "Démarrage…",
+    "understanding": "Compréhension de votre objectif",
+    "identity": "Confirmation de l'identité",
+    "identityDone": "Identité confirmée",
+    "secret": "Connexion du cerveau (LLM)",
+    "capabilities": "Réglage mémoire et documents",
+    "capabilitiesDone": "Réglages enregistrés",
+    "architecture": "Conception de la structure",
+    "spec": "Rédaction des instructions",
+    "graph": "Assemblage des pièces",
+    "security": "Contrôles de sécurité",
+    "validated": "Contrôles terminés",
+    "testing": "Petit test",
+    "tested": "Test terminé",
+    "repair": "Correction",
+    "repairDone": "Correction appliquée",
+    "ready": "Première version prête",
+    "buildingDeep": "Construction d'un agent personnalisé : instructions, capacités, mémoire et structure…",
+    "building": "Construction de l'agent",
+    "repairing": "Correction de l'agent",
+    "complete": "Construction terminée"
   }
 }

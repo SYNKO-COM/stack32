@@ -52,17 +52,40 @@
     "structured_output": "Structured output",
     "http_request": "HTTP requests (advanced)"
   },
+  "empty": {
+    "title": "No structure yet",
+    "subtitle": "Describe your agent in Build and its structure will appear here.",
+    "cta": "Go to Build"
+  },
+  "graph": {
+    "fallback": "Execution flow will appear here once your agent is built."
+  },
+  "nodes": {
+    "input": "Input",
+    "guardrail": "Guardrail",
+    "llm": "Language model",
+    "router": "Router",
+    "tool": "Tool",
+    "knowledge": "Knowledge",
+    "memory_read": "Read memory",
+    "memory_write": "Write memory",
+    "approval": "Approval",
+    "transform": "Transform",
+    "sub_agent": "Sub-agent",
+    "output": "Output"
+  },
+  "nodeStates": {
+    "default": "No additional details for this step.",
+    "toolId": "Tool: {{id}}",
+    "modelProfile": "Model profile: {{profile}}"
+  },
   "prefill": {
     "goal": "I want to change my agent's goal: ",
     "instructions": "I want to adjust my agent's instructions: ",
     "tools": "I want to change my agent's tools: ",
     "rules": "I want to update my agent's rules: ",
     "output": "I want to change my agent's output format: ",
-    "test": "Run a test on my agent and tell me the result."
-  },
-  "empty": {
-    "title": "No structure yet",
-    "subtitle": "Describe your agent in Build and its structure will appear here.",
-    "cta": "Go to Build"
+    "test": "Run a test on my agent and tell me the result.",
+    "graph": "I want to change how my agent's execution flow works: "
   }
 }

@@ -1,12 +1,19 @@
-"""Mock data factories for Phase 1.
-
-# TODO(phase-3): remove this module once agents/runs are persisted in Supabase.
-"""
+"""Test helpers / sample factories for AgentSpec V2."""
 
 import uuid
 from datetime import UTC, datetime
 
-from agent_service.models import Agent, AgentSpec, KnowledgeConfig, ModelProfile, Run, ToolConfig
+from agent_service.models import (
+    Agent,
+    AgentIdentity,
+    AgentInstructions,
+    AgentSpec,
+    KnowledgeConfig,
+    Run,
+    ToolBinding,
+    default_linear_graph,
+)
+from agent_service.models.agent_spec import AgentRule
 
 
 def _now() -> datetime:
@@ -18,31 +25,38 @@ def new_id(prefix: str) -> str:
 
 
 def make_sales_research_spec() -> AgentSpec:
-    """A realistic sample AgentSpec used across mock responses."""
+    tools = [
+        ToolBinding(tool_id="web_search"),
+        ToolBinding(tool_id="knowledge_search"),
+        ToolBinding(tool_id="calculator"),
+    ]
     return AgentSpec(
-        name="Sales Research Agent",
-        slug="sales-research-agent",
-        goal="Research companies, score leads and draft personalized emails",
-        instructions=(
-            "You are a B2B sales research assistant. Given a company name or domain, "
-            "gather public information, summarize the business, score the lead from 1 to 10 "
-            "and draft a short personalized outreach email."
+        identity=AgentIdentity(
+            name="Sales Research Agent",
+            role="Research companies and score leads",
+            description="B2B sales research assistant",
+            tone="professional",
         ),
-        model_profile=ModelProfile(profile="standard", temperature=0.4),
-        tools=[
-            ToolConfig(tool="web_search"),
-            ToolConfig(tool="knowledge_search"),
-            ToolConfig(tool="calculator"),
-        ],
+        goal="Research companies, score leads and draft personalized emails",
+        instructions=AgentInstructions(
+            system=(
+                "You are a B2B sales research assistant. Given a company name or domain, "
+                "gather public information, summarize the business, score the lead from 1 to 10 "
+                "and draft a short personalized outreach email."
+            ),
+            prohibited_actions=["Reveal secrets", "Execute shell commands"],
+        ),
+        tools=tools,
         knowledge=KnowledgeConfig(enabled=True, source_ids=["src_icp_notes"]),
         rules=[
-            "Never invent missing information.",
-            "Clearly identify uncertainty.",
+            AgentRule(id="no_invent", text="Never invent missing information."),
+            AgentRule(id="uncertainty", text="Clearly identify uncertainty."),
         ],
         starter_prompts=[
             "Research acme.com and score them as a lead.",
             "Draft an outreach email for the CTO of Globex.",
         ],
+        graph=default_linear_graph(tools),
     )
 
 
@@ -61,14 +75,6 @@ def make_mock_agent(
             "updated_at": now,
         }
     )
-
-
-def make_mock_agents() -> list[Agent]:
-    return [
-        make_mock_agent(agent_id="agent_mock000001", name="Sales Research Agent", status="ready"),
-        make_mock_agent(agent_id="agent_mock000002", name="Support FAQ Agent", status="published"),
-        make_mock_agent(agent_id="agent_mock000003", name="Weekly Report Agent", status="draft"),
-    ]
 
 
 def make_mock_run(agent_id: str, kind: str, status: str = "succeeded") -> Run:

@@ -8,6 +8,7 @@ import enStructure from "@/locales/en/structure.json";
 import enBilling from "@/locales/en/billing.json";
 import enLegal from "@/locales/en/legal.json";
 import enErrors from "@/locales/en/errors.json";
+import enMemory from "@/locales/en/memory.json";
 
 import frCommon from "@/locales/fr/common.json";
 import frMarketing from "@/locales/fr/marketing.json";
@@ -19,6 +20,7 @@ import frStructure from "@/locales/fr/structure.json";
 import frBilling from "@/locales/fr/billing.json";
 import frLegal from "@/locales/fr/legal.json";
 import frErrors from "@/locales/fr/errors.json";
+import frMemory from "@/locales/fr/memory.json";
 
 export const NAMESPACES = [
   "common",
@@ -31,6 +33,7 @@ export const NAMESPACES = [
   "billing",
   "legal",
   "errors",
+  "memory",
 ] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];
@@ -47,6 +50,7 @@ export const resources = {
     billing: enBilling,
     legal: enLegal,
     errors: enErrors,
+    memory: enMemory,
   },
   fr: {
     common: frCommon,
@@ -59,5 +63,6 @@ export const resources = {
     billing: frBilling,
     legal: frLegal,
     errors: frErrors,
+    memory: frMemory,
   },
 } as const;

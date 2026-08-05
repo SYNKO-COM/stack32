@@ -1,6 +1,19 @@
 {
   "generic": "Something went wrong. Please try again.",
   "network": "Connection problem. Check your network and try again.",
+  "agentService": "The agent service is temporarily unavailable. Please try again.",
+  "rateLimit": "Too many requests. Please wait a moment and try again.",
+  "budgetExceeded": "Your monthly AI usage limit has been reached.",
+  "builder": {
+    "inputRejected": "That message couldn't be processed. Try rephrasing your request.",
+    "interrupted": "This build step can no longer be resumed. Send a new message to continue.",
+    "identityUnavailable": "Identity confirmation requires the agent service."
+  },
+  "publish": {
+    "specInvalid": "Your agent doesn't have a valid configuration yet. Finish building before publishing.",
+    "validationFailed": "Publishing failed validation. Review Structure and run a test first.",
+    "testFailed": "The latest test didn't pass. Fix issues in Build before publishing."
+  },
   "notFound": {
     "title": "Page not found",
     "subtitle": "The page you're looking for doesn't exist or has moved.",

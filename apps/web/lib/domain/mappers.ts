@@ -1,8 +1,13 @@
 import type {
   Agent,
+  AgentIdentity,
   AgentSpec,
   AgentVersion,
   BuilderMessage,
+  BuilderUiComponent,
+  GraphEdge,
+  GraphNode,
+  GraphSpec,
   KnowledgeSource,
   LiveMessage,
   Profile,
@@ -77,17 +82,244 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function mapIdentity(raw: unknown): AgentIdentity | undefined {
+  const rec = asRecord(raw);
+  const name = typeof rec.name === "string" ? rec.name : "";
+  if (!name) return undefined;
+  return {
+    name,
+    role: typeof rec.role === "string" ? rec.role : "",
+    description: typeof rec.description === "string" ? rec.description : undefined,
+    tone: typeof rec.tone === "string" ? rec.tone : undefined,
+  };
+}
+
+function mapGraphNode(raw: unknown): GraphNode | null {
+  const rec = asRecord(raw);
+  const id = typeof rec.id === "string" ? rec.id : "";
+  const type = typeof rec.type === "string" ? rec.type : "";
+  const name = typeof rec.name === "string" ? rec.name : "";
+  if (!id || !type || !name) return null;
+  return {
+    id,
+    type: type as GraphNode["type"],
+    name,
+    description: typeof rec.description === "string" ? rec.description : undefined,
+    config: asRecord(rec.config),
+  };
+}
+
+function mapGraphSpec(raw: unknown): GraphSpec | undefined {
+  const rec = asRecord(raw);
+  const entryNodeId =
+    typeof rec.entry_node_id === "string"
+      ? rec.entry_node_id
+      : typeof rec.entryNodeId === "string"
+        ? rec.entryNodeId
+        : "";
+  const nodesRaw = Array.isArray(rec.nodes) ? rec.nodes : [];
+  const edgesRaw = Array.isArray(rec.edges) ? rec.edges : [];
+  const nodes = nodesRaw.map(mapGraphNode).filter((n): n is GraphNode => n !== null);
+  if (!entryNodeId || nodes.length === 0) return undefined;
+  const edges = edgesRaw
+    .map((e): GraphEdge | null => {
+      const edge = asRecord(e);
+      const id = typeof edge.id === "string" ? edge.id : "";
+      const source = typeof edge.source === "string" ? edge.source : "";
+      const target = typeof edge.target === "string" ? edge.target : "";
+      if (!id || !source || !target) return null;
+      const mapped: GraphEdge = { id, source, target };
+      if (typeof edge.label === "string") mapped.label = edge.label;
+      return mapped;
+    })
+    .filter((e): e is GraphEdge => e !== null);
+  return {
+    version: typeof rec.version === "string" ? rec.version : "1.0",
+    entryNodeId,
+    nodes,
+    edges,
+  };
+}
+
+/** Public alias for API identity payloads. */
+export function mapIdentityFromApi(raw: unknown): AgentIdentity | undefined {
+  return mapIdentity(raw);
+}
+
+/** Public alias for API / action graph payloads. */
+export function mapGraphSpecFromApi(raw: unknown): GraphSpec | null {
+  return mapGraphSpec(raw) ?? null;
+}
+
+function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
+  const rec = asRecord(raw);
+  const type = rec.type;
+  if (
+    type !== "agent_identity_form" &&
+    type !== "secret_form" &&
+    type !== "agent_capabilities_form"
+  ) {
+    return undefined;
+  }
+  const requestId =
+    typeof rec.request_id === "string"
+      ? rec.request_id
+      : typeof rec.requestId === "string"
+        ? rec.requestId
+        : "";
+  if (!requestId) return undefined;
+  const contextRaw = rec.context;
+  const context =
+    contextRaw === "live" || contextRaw === "builder" ? contextRaw : undefined;
+  const fields = Array.isArray(rec.fields)
+    ? rec.fields
+        .map((f) => {
+          const field = asRecord(f);
+          const key = typeof field.key === "string" ? field.key : "";
+          if (!key) return null;
+          const options = Array.isArray(field.options)
+            ? field.options.filter((o): o is string => typeof o === "string")
+            : undefined;
+          return {
+            key,
+            type: typeof field.type === "string" ? field.type : "text",
+            required: field.required === true,
+            suggested_value:
+              typeof field.suggested_value === "string"
+                ? field.suggested_value
+                : typeof field.suggestedValue === "string"
+                  ? field.suggestedValue
+                  : undefined,
+            options,
+          };
+        })
+        .filter((f): f is NonNullable<typeof f> => f !== null)
+    : [];
+  return {
+    type,
+    version: "1",
+    requestId,
+    context,
+    fields,
+  };
+}
+
 /**
  * Convert a stored jsonb spec into the domain AgentSpec the UI renders.
- * Handles both the Phase 2 DB skeleton (snake_case) and specs already stored
- * in the domain shape (camelCase, produced by the mock builder).
+ * Handles Phase 2 DB skeleton (snake_case), domain camelCase, and V2 specs
+ * with identity/graph blocks.
  */
 export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSpec {
   const raw = asRecord(json);
 
+  // V2 spec stored in snake_case (agent-service output).
+  if (raw.schema_version === "2.0" || raw.schemaVersion === "2.0") {
+    const instructions = asRecord(raw.instructions);
+    const modelPolicy = asRecord(raw.model_policy ?? raw.modelPolicy);
+    const profileRaw = typeof modelPolicy.profile === "string" ? modelPolicy.profile : "balanced";
+    const profile =
+      profileRaw === "fast" ? "fast" : profileRaw === "reasoning" || profileRaw === "heavy" ? "heavy" : "standard";
+    const identity = mapIdentity(raw.identity);
+    const name = identity?.name ?? fallbackName;
+    const tools = Array.isArray(raw.tools)
+      ? raw.tools
+          .map((t) => {
+            const rec = asRecord(t);
+            const tool = (rec.tool_id ?? rec.tool ?? rec.id) as ToolId;
+            return { tool, enabled: rec.enabled !== false };
+          })
+          .filter((t) => KNOWN_TOOLS.includes(t.tool))
+      : [];
+    const knowledge = asRecord(raw.knowledge);
+    const memory = asRecord(raw.memory);
+    const output = asRecord(raw.output);
+    const runtime = asRecord(raw.runtime);
+    const rulesRaw = Array.isArray(raw.rules) ? raw.rules : [];
+    const rules = rulesRaw
+      .map((r) => (typeof r === "string" ? r : asRecord(r).text))
+      .filter((r): r is string => typeof r === "string" && r.length > 0);
+    const graph = mapGraphSpec(raw.graph ?? raw.graph_spec);
+
+    return {
+      schemaVersion: "2.0",
+      name,
+      slug:
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "") || "agent",
+      goal: typeof raw.goal === "string" ? raw.goal : "",
+      instructions:
+        typeof instructions.system === "string"
+          ? instructions.system
+          : typeof raw.instructions === "string"
+            ? raw.instructions
+            : "",
+      modelProfile: { profile, temperature: 0.4 },
+      tools,
+      knowledge: {
+        enabled: knowledge.enabled === true || knowledge.retrieval_enabled === true,
+        sourceIds: (() => {
+          const rawIds = knowledge.source_ids ?? knowledge.sourceIds;
+          return Array.isArray(rawIds)
+            ? rawIds.filter((s: unknown): s is string => typeof s === "string")
+            : [];
+        })(),
+      },
+      memory: {
+        conversationWindow:
+          typeof memory.conversation_window === "number"
+            ? memory.conversation_window
+            : typeof memory.conversationWindow === "number"
+              ? memory.conversationWindow
+              : 12,
+        conversationEnabled: memory.conversation_enabled !== false,
+        semanticEnabled: memory.semantic_enabled === true,
+        writePolicy:
+          memory.write_policy === "never" ||
+          memory.write_policy === "explicit" ||
+          memory.write_policy === "automatic"
+            ? memory.write_policy
+            : undefined,
+        retentionDays:
+          typeof memory.retention_days === "number" ? memory.retention_days : undefined,
+      },
+      rules,
+      output: {
+        format:
+          output.format === "table" || output.format === "text"
+            ? output.format
+            : "markdown",
+        allowTables: output.allow_tables !== false && output.allowTables !== false,
+      },
+      starterPrompts: (() => {
+        const prompts = raw.starter_prompts ?? raw.starterPrompts;
+        return Array.isArray(prompts)
+          ? prompts.filter((s: unknown): s is string => typeof s === "string")
+          : [];
+      })(),
+      runtime: {
+        maxSteps: typeof runtime.max_steps === "number" ? runtime.max_steps : 8,
+        timeoutSeconds:
+          typeof runtime.timeout_seconds === "number" ? runtime.timeout_seconds : 60,
+        maxToolCalls:
+          typeof runtime.max_tool_calls === "number" ? runtime.max_tool_calls : 6,
+      },
+      identity,
+      graph,
+    };
+  }
+
   // Already in domain shape (mock builder output).
   if ("schemaVersion" in raw && "modelProfile" in raw) {
-    return raw as unknown as AgentSpec;
+    const domain = raw as unknown as AgentSpec;
+    if (!domain.graph && (raw.graph || raw.graph_spec)) {
+      domain.graph = mapGraphSpec(raw.graph ?? raw.graph_spec);
+    }
+    if (!domain.identity && raw.identity) {
+      domain.identity = mapIdentity(raw.identity);
+    }
+    return domain;
   }
 
   const instructions = asRecord(raw.instructions);
@@ -153,6 +385,7 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
       timeoutSeconds: typeof runtime.timeout_seconds === "number" ? runtime.timeout_seconds : 60,
       maxToolCalls: typeof runtime.max_tool_calls === "number" ? runtime.max_tool_calls : 6,
     },
+    graph: mapGraphSpec(raw.graph ?? raw.graph_spec),
   };
 }
 
@@ -241,6 +474,73 @@ export function mapAgentVersion(row: AgentVersionRow, agentName?: string): Agent
 export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null {
   if (row.role !== "user" && row.role !== "assistant") return null;
   const meta = asRecord(row.metadata);
+  const uiRaw = meta.ui_component ?? meta.uiComponent;
+  const formResolved = meta.form_resolved === true || meta.formResolved === true;
+  const identityRaw = asRecord(meta.identity_summary ?? meta.identitySummary);
+  const boardRaw = asRecord(meta.build_board ?? meta.buildBoard);
+  const cardRaw = meta.card;
+  const card =
+    cardRaw === "identity_confirmed" ||
+    cardRaw === "build_progress" ||
+    cardRaw === "ready" ||
+    cardRaw === "thinking"
+      ? cardRaw
+      : undefined;
+
+  const suggestions = Array.isArray(meta.suggestions)
+    ? meta.suggestions
+        .map((s) => {
+          const rec = asRecord(s);
+          const id = typeof rec.id === "string" ? rec.id : "";
+          const labelKey = typeof rec.labelKey === "string" ? rec.labelKey : typeof rec.label_key === "string" ? rec.label_key : "";
+          if (!id || !labelKey) return null;
+          return {
+            id,
+            labelKey,
+            prompt: typeof rec.prompt === "string" ? rec.prompt : undefined,
+            action:
+              rec.action === "test_agent" ||
+              rec.action === "view_structure" ||
+              rec.action === "fix_automatically"
+                ? rec.action
+                : undefined,
+          };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null)
+    : undefined;
+
+  const nodes = Array.isArray(boardRaw.nodes)
+    ? boardRaw.nodes
+        .map((n) => {
+          const rec = asRecord(n);
+          const id = typeof rec.id === "string" ? rec.id : "";
+          const labelKey =
+            typeof rec.labelKey === "string"
+              ? rec.labelKey
+              : typeof rec.label_key === "string"
+                ? rec.label_key
+                : "";
+          const state = rec.state;
+          if (!id || !labelKey) return null;
+          if (state !== "pending" && state !== "running" && state !== "done" && state !== "failed") {
+            return null;
+          }
+          return { id, labelKey, state };
+        })
+        .filter((n): n is NonNullable<typeof n> => n !== null)
+    : [];
+  const edges = Array.isArray(boardRaw.edges)
+    ? boardRaw.edges
+        .map((e) => {
+          const rec = asRecord(e);
+          const from = typeof rec.from === "string" ? rec.from : "";
+          const to = typeof rec.to === "string" ? rec.to : "";
+          if (!from || !to) return null;
+          return { from, to };
+        })
+        .filter((e): e is NonNullable<typeof e> => e !== null)
+    : [];
+
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -251,6 +551,30 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
       ? (meta.actions as BuilderMessage["actions"])
       : undefined,
     tone: typeof meta.tone === "string" ? (meta.tone as BuilderMessage["tone"]) : undefined,
+    uiComponent: formResolved ? undefined : uiRaw ? mapUiComponent(uiRaw) : undefined,
+    interruptRunId:
+      typeof meta.interrupt_run_id === "string"
+        ? meta.interrupt_run_id
+        : typeof meta.interruptRunId === "string"
+          ? meta.interruptRunId
+          : undefined,
+    playReadySound:
+      meta.playReadySound === true || meta.play_ready_sound === true,
+    formResolved,
+    card,
+    identitySummary:
+      typeof identityRaw.name === "string"
+        ? {
+            name: identityRaw.name,
+            role: typeof identityRaw.role === "string" ? identityRaw.role : "",
+            tone: typeof identityRaw.tone === "string" ? identityRaw.tone : undefined,
+            description:
+              typeof identityRaw.description === "string" ? identityRaw.description : undefined,
+          }
+        : undefined,
+    buildBoard: nodes.length > 0 ? { nodes, edges } : undefined,
+    focus: typeof meta.focus === "string" ? meta.focus : undefined,
+    suggestions,
     createdAt: row.created_at,
   };
 }
@@ -258,6 +582,7 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
 export function mapLiveMessage(row: LiveMessageRow): LiveMessage | null {
   if (row.role !== "user" && row.role !== "assistant") return null;
   const meta = asRecord(row.metadata);
+  const uiRaw = meta.ui_component ?? meta.uiComponent;
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -271,6 +596,7 @@ export function mapLiveMessage(row: LiveMessageRow): LiveMessage | null {
       : undefined,
     pending: meta.pending === true,
     statusKey: typeof meta.statusKey === "string" ? meta.statusKey : undefined,
+    uiComponent: uiRaw ? mapUiComponent(uiRaw) : undefined,
     createdAt: row.created_at,
   };
 }

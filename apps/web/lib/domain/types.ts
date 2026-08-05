@@ -83,6 +83,10 @@ export interface AgentSpec {
   };
   memory: {
     conversationWindow: number;
+    conversationEnabled?: boolean;
+    semanticEnabled?: boolean;
+    writePolicy?: "never" | "explicit" | "automatic";
+    retentionDays?: number;
   };
   rules: string[];
   output: {
@@ -95,6 +99,60 @@ export interface AgentSpec {
     timeoutSeconds: number;
     maxToolCalls: number;
   };
+  /** V2 identity block (optional — absent on V1 skeleton specs). */
+  identity?: AgentIdentity;
+  /** V2 execution graph (optional — absent on V1 skeleton specs). */
+  graph?: GraphSpec;
+}
+
+export interface AgentIdentity {
+  name: string;
+  role: string;
+  description?: string;
+  tone?: string;
+}
+
+export type GraphNodeType =
+  | "input"
+  | "guardrail"
+  | "llm"
+  | "router"
+  | "tool"
+  | "knowledge"
+  | "memory_read"
+  | "memory_write"
+  | "approval"
+  | "transform"
+  | "sub_agent"
+  | "output";
+
+export interface GraphNode {
+  id: string;
+  type: GraphNodeType;
+  name: string;
+  description?: string;
+  config?: Record<string, unknown>;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+}
+
+export interface GraphSpec {
+  version: string;
+  entryNodeId: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface AgentGraphResponse {
+  graph: GraphSpec | null;
+  schemaVersion?: string | null;
+  identity?: AgentIdentity | null;
+  testReady?: boolean;
 }
 
 export type TestStatus = "pending" | "passed" | "failed";
@@ -132,6 +190,54 @@ export type BuilderMessageTone = "normal" | "success" | "warning" | "error";
 
 export type BuilderAction = "test_agent" | "view_structure" | "fix_automatically";
 
+export interface BuilderUiComponentField {
+  key: string;
+  type: string;
+  required: boolean;
+  suggested_value?: string;
+  options?: string[];
+}
+
+export interface BuilderUiComponent {
+  type: "agent_identity_form" | "secret_form" | "agent_capabilities_form";
+  version: "1";
+  requestId: string;
+  context?: "builder" | "live";
+  fields: BuilderUiComponentField[];
+}
+
+export interface BuildBoardNode {
+  id: string;
+  labelKey: string;
+  state: BuildStepState;
+}
+
+export interface BuildBoardEdge {
+  from: string;
+  to: string;
+}
+
+export interface BuildBoard {
+  nodes: BuildBoardNode[];
+  edges: BuildBoardEdge[];
+}
+
+export interface BuilderSuggestion {
+  id: string;
+  labelKey: string;
+  prompt?: string;
+  action?: BuilderAction;
+}
+
+export interface IdentitySummary {
+  name: string;
+  role: string;
+  tone?: string;
+  description?: string;
+}
+
+export type BuilderCard = "identity_confirmed" | "build_progress" | "ready" | "thinking";
+
 export interface BuilderMessage {
   id: string;
   threadId: string;
@@ -140,6 +246,17 @@ export interface BuilderMessage {
   steps?: BuildStep[];
   actions?: BuilderAction[];
   tone?: BuilderMessageTone;
+  uiComponent?: BuilderUiComponent;
+  /** Run id when the builder is waiting on user input (identity form). */
+  interruptRunId?: string;
+  /** Play the first-ready chime once when this message arrives. */
+  playReadySound?: boolean;
+  formResolved?: boolean;
+  card?: BuilderCard;
+  identitySummary?: IdentitySummary;
+  buildBoard?: BuildBoard;
+  focus?: string;
+  suggestions?: BuilderSuggestion[];
   createdAt: string;
 }
 
@@ -170,6 +287,7 @@ export interface LiveMessage {
   pending?: boolean;
   /** i18n key under live:status.* describing the current tool activity. */
   statusKey?: string;
+  uiComponent?: BuilderUiComponent;
   createdAt: string;
 }
 

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
+import { BrandLoader } from "@/components/shared/brand-loader";
 import { useAgents, useCreateAgent } from "@/hooks/use-agents";
 import { useTranslation } from "@/hooks/use-translation";
 import { getPendingPrompt } from "@/lib/pending-prompt";
@@ -35,8 +36,8 @@ export default function AgentsIndexPage() {
   }, [agents, isLoading, createAgent, router]);
 
   return (
-    <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-      {t("loading")}
+    <div className="flex flex-1 items-center justify-center">
+      <BrandLoader label={t("loading")} size="lg" />
     </div>
   );
 }

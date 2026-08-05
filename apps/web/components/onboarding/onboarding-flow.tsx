@@ -24,6 +24,7 @@ import {
   XLogo,
   YoutubeLogo,
 } from "@/components/onboarding/discovery-icons";
+import { BrandLoader } from "@/components/shared/brand-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -214,8 +215,8 @@ export function OnboardingFlow() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-        {t("common:loading")}
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <BrandLoader label={t("common:loading")} />
       </div>
     );
   }

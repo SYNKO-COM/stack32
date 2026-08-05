@@ -1,0 +1,46 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  python-security:
+    name: Python security (bandit, pip-audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/agent-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: bandit -r agent_service -ll
+      - run: pip-audit
+
+  trivy-image:
+    name: Container scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build agent-service image
+        run: docker build -t stack32-agent-service:ci services/agent-service
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: stack32-agent-service:ci
+          severity: CRITICAL,HIGH
+          exit-code: "1"

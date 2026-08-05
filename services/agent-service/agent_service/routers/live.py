@@ -1,25 +1,77 @@
-"""Live (end-user) conversation endpoints — NOT_IMPLEMENTED until Phase 5."""
+"""Live runtime API."""
+
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from agent_service.auth import CurrentUser
+from agent_service.runtime.live import LiveRuntime
+from agent_service.security.rate_limit import (
+    BudgetExceeded,
+    RateLimitExceeded,
+    check_monthly_budget,
+    check_user_rate_limit,
+)
+from agent_service.supabase_client import get_persistence
 
-router = APIRouter(prefix="/live", tags=["live"])
+router = APIRouter(tags=["live"])
 
 
 class LiveMessageRequest(BaseModel):
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=8000)
+    use_published: bool = False
 
 
-@router.post("/threads/{thread_id}/messages")
+@router.post("/live/threads/{thread_id}/messages")
 async def post_live_message(
-    thread_id: str, body: LiveMessageRequest, user: CurrentUser
-) -> None:
-    raise HTTPException(
-        status_code=501,
-        detail={
-            "code": "not_implemented",
-            "message": "Live execution is not implemented yet (arrives with the agent runtime).",
+    thread_id: UUID,
+    body: LiveMessageRequest,
+    user: CurrentUser,
+) -> dict[str, Any]:
+    try:
+        await check_user_rate_limit(user.user_id)
+        await check_monthly_budget(user.user_id)
+    except RateLimitExceeded as exc:
+        raise HTTPException(status_code=429, detail={"code": exc.code, "message": "Rate limit."}) from exc
+    except BudgetExceeded as exc:
+        raise HTTPException(status_code=402, detail={"code": exc.code, "message": "Budget exceeded."}) from exc
+
+    db = get_persistence()
+    rows = await db._select(
+        "live_threads",
+        {
+            "id": f"eq.{thread_id}",
+            "user_id": f"eq.{user.user_id}",
+            "select": "id,agent_id",
+            "limit": "1",
         },
     )
+    if not rows:
+        raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Thread not found."})
+
+    runtime = LiveRuntime(db)
+    result = await runtime.handle_message(
+        user_id=user.user_id,
+        agent_id=rows[0]["agent_id"],
+        thread_id=str(thread_id),
+        content=body.content,
+        use_published=body.use_published,
+    )
+    if result.get("error") == "forbidden":
+        raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Not found."})
+    return result
+
+
+@router.post("/live/runs/{run_id}/resume")
+async def resume_live_run(run_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    from agent_service.queue.worker import process_run_by_id
+
+    db = get_persistence()
+    run = await db.get_owned_run(str(run_id), user.user_id)
+    if not run:
+        raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Run not found."})
+    return await process_run_by_id(str(run_id))

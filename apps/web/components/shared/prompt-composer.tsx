@@ -16,6 +16,8 @@ interface PromptComposerProps {
   animatedPlaceholders?: string[];
   disabled?: boolean;
   busy?: boolean;
+  /** Label shown on the submit button while busy (defaults to “Working…”). */
+  busyLabel?: string;
   autoFocus?: boolean;
   size?: "hero" | "compact";
   className?: string;
@@ -79,6 +81,7 @@ export function PromptComposer({
   animatedPlaceholders,
   disabled = false,
   busy = false,
+  busyLabel,
   autoFocus = false,
   size = "compact",
   className,
@@ -101,6 +104,7 @@ export function PromptComposer({
   }, [value, size]);
 
   const canSend = value.trim().length > 0 && !disabled && !busy;
+  const busyText = busyLabel ?? t("composer.working");
 
   const submit = () => {
     if (!canSend) return;
@@ -131,7 +135,7 @@ export function PromptComposer({
           }
         }}
         placeholder={animatedPlaceholders ? animated : placeholder}
-        disabled={disabled}
+        disabled={disabled || busy}
         rows={size === "hero" ? 3 : 1}
         className={cn(
           "w-full resize-none bg-transparent text-foreground placeholder:text-muted-foreground/70 focus:outline-none",
@@ -154,6 +158,7 @@ export function PromptComposer({
             className="rounded-full text-muted-foreground"
             aria-label={t("composer.attach")}
             title={t("composer.attach")}
+            disabled={busy}
           >
             <Paperclip aria-hidden="true" />
           </Button>
@@ -164,6 +169,7 @@ export function PromptComposer({
             className="rounded-full text-muted-foreground"
             aria-label={t("composer.voice")}
             title={t("composer.voice")}
+            disabled={busy}
           >
             <Mic aria-hidden="true" />
           </Button>
@@ -189,11 +195,15 @@ export function PromptComposer({
             className={cn(
               "gap-1.5 rounded-full",
               size === "hero" && "h-11 px-5 text-base",
+              busy && "opacity-90",
             )}
-            aria-label={t("composer.send")}
+            aria-label={busy ? busyText : t("composer.send")}
+            aria-busy={busy}
           >
-            {busy ? t("composer.sending") : t("composer.build")}
-            <ArrowUp className={size === "hero" ? "size-5" : "size-4"} aria-hidden="true" />
+            {busy ? busyText : t("composer.build")}
+            {!busy ? (
+              <ArrowUp className={size === "hero" ? "size-5" : "size-4"} aria-hidden="true" />
+            ) : null}
           </Button>
         </div>
       </div>

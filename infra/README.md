@@ -1,11 +1,66 @@
-# Infrastructure
+# Stack32 Infrastructure
 
-Phase 1 keeps infrastructure minimal. Planned target (see PRD §22.4):
+## Phase 3 status
 
-- **Web**: Vercel (`apps/web`)
-- **Agent service**: Google Cloud Run (`services/agent-service`, Dockerfile provided)
-- **Database / Auth / Storage / Vectors**: Supabase (`supabase/`)
-- **Billing**: Whop (scaffolded, not integrated yet)
-- **CI**: GitHub Actions (`.github/workflows/ci.yml`)
+| Resource | Status |
+| --- | --- |
+| Agent API Dockerfile | Ready (non-root, healthcheck) |
+| Terraform staging | Scaffolded — **do not apply without billing confirmation** |
+| Cloud Tasks queue | Defined in Terraform |
+| Secret Manager names | Defined in Terraform |
+| Local run queue | PostgreSQL `run_queue` (default `QUEUE_BACKEND=postgres`) |
 
-TODO(phase-7): Terraform / deployment manifests, Cloud Tasks, Secret Manager, observability (Sentry, Langfuse, OpenTelemetry).
+## Local development (no GCP required)
+
+```bash
+# Terminal 1 — Supabase
+pnpm supabase:start
+
+# Terminal 2 — Agent API
+cd services/agent-service
+cp ../../.env.example .env   # fill SUPABASE_* + keys
+# AI_EXECUTION_MODE=mock works without provider keys
+# AI_EXECUTION_MODE=live requires OPENAI_API_KEY and/or XAI_API_KEY
+.venv/bin/uvicorn agent_service.main:app --reload --port 8000
+
+# Terminal 3 — Web
+# apps/web/.env.local: AI_EXECUTION_MODE=agent-service
+pnpm dev:web
+```
+
+Optional queue poller:
+
+```bash
+curl -X POST http://localhost:8000/v1/internal/tasks/run \
+  -H "X-Internal-Token: $INTERNAL_SERVICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"run_id":"<uuid>"}'
+```
+
+## GCP checklist (operator)
+
+1. Create a Google Cloud project and enable billing.
+2. Install `gcloud` and `terraform`.
+3. Authenticate: `gcloud auth login && gcloud auth application-default login`
+4. Set project: `gcloud config set project YOUR_PROJECT_ID`
+5. Choose region (recommended: `europe-west1`).
+6. From `infra/terraform/environments/staging`:
+   - `terraform init`
+   - `terraform plan -var="project_id=YOUR_PROJECT_ID"`
+   - Review plan; apply only when authorized.
+7. Add secret versions (never commit values).
+8. Build and push the agent-service image; re-apply with `image=...`.
+9. Configure Cloud Tasks OIDC to `POST /v1/internal/tasks/run`.
+
+## Secret Manager names (staging prefix)
+
+- `stack32-staging-supabase-service-role-key`
+- `stack32-staging-supabase-database-url`
+- `stack32-staging-openai-api-key`
+- `stack32-staging-xai-api-key`
+- `stack32-staging-litellm-master-key`
+- `stack32-staging-langfuse-secret-key`
+- `stack32-staging-sentry-dsn`
+- `stack32-staging-agent-service-internal-token`
+
+Only create secrets that are actually configured.

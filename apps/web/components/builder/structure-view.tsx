@@ -20,8 +20,9 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { StructureGraph } from "@/components/builder/structure-graph";
 import { Button } from "@/components/ui/button";
-import { useAgentSpec, useAgentVersion } from "@/hooks/use-agents";
+import { useAgentGraph, useAgentSpec, useAgentVersion } from "@/hooks/use-agents";
 import { useTranslation } from "@/hooks/use-translation";
 import { setPrefillDraft } from "@/lib/pending-prompt";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,9 @@ export function StructureView({ agentId }: { agentId: string }) {
   const router = useRouter();
   const { data: spec, isLoading } = useAgentSpec(agentId);
   const { data: version } = useAgentVersion(agentId);
+  const { data: graphData } = useAgentGraph(agentId);
+
+  const graph = graphData?.graph ?? spec?.graph ?? null;
 
   const goToBuildWith = (prefillKey: string) => {
     setPrefillDraft(t(`prefill.${prefillKey}`));
@@ -119,6 +123,12 @@ export function StructureView({ agentId }: { agentId: string }) {
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("title")}</h1>
           <p className="mt-2 text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
+
+        {graph ? (
+          <StructureGraph agentId={agentId} graph={graph} />
+        ) : (
+          <p className="mb-4 text-sm text-muted-foreground">{t("graph.fallback")}</p>
+        )}
 
         <SectionCard
           id="goal"

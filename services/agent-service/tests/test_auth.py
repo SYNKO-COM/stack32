@@ -38,18 +38,18 @@ def make_client(make_settings, **overrides) -> TestClient:
 def test_valid_token_is_accepted(make_settings):
     client = make_client(make_settings)
     response = client.post(
-        "/v1/builder/threads/t1/messages",
+        "/v1/builder/threads/11111111-1111-1111-1111-111111111111/messages",
         json={"content": "hello"},
         headers={"Authorization": f"Bearer {make_token()}"},
     )
-    # Authenticated but the endpoint itself is NOT_IMPLEMENTED.
-    assert response.status_code == 501
+    # Authenticated; persistence not configured in hermetic tests.
+    assert response.status_code == 503
 
 
 def test_expired_token_is_rejected(make_settings):
     client = make_client(make_settings)
     response = client.post(
-        "/v1/builder/threads/t1/messages",
+        "/v1/builder/threads/11111111-1111-1111-1111-111111111111/messages",
         json={"content": "hello"},
         headers={"Authorization": f"Bearer {make_token(expires_in=-60)}"},
     )
@@ -60,7 +60,7 @@ def test_expired_token_is_rejected(make_settings):
 def test_bad_signature_is_rejected(make_settings):
     client = make_client(make_settings)
     response = client.post(
-        "/v1/builder/threads/t1/messages",
+        "/v1/builder/threads/11111111-1111-1111-1111-111111111111/messages",
         json={"content": "hello"},
         headers={"Authorization": f"Bearer {make_token(secret='wrong-secret')}"},
     )
@@ -70,7 +70,7 @@ def test_bad_signature_is_rejected(make_settings):
 def test_wrong_audience_is_rejected(make_settings):
     client = make_client(make_settings)
     response = client.post(
-        "/v1/builder/threads/t1/messages",
+        "/v1/builder/threads/11111111-1111-1111-1111-111111111111/messages",
         json={"content": "hello"},
         headers={"Authorization": f"Bearer {make_token(audience='anon')}"},
     )
