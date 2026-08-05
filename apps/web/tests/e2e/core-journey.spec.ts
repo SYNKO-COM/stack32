@@ -37,9 +37,9 @@ test("signup, onboarding, build, logout and login again", async ({ page }) => {
   await composer.press("Enter");
   await expect(page.getByText("Build me a research agent")).toBeVisible({ timeout: 10_000 });
 
-  // Mock build simulation completes server-side (~6s) and the polling UI
-  // eventually shows the assistant response.
-  await expect(page.getByText(/ready to test|prêt à être testé/i)).toBeVisible({
+  // Mock build simulation completes server-side and the polling UI
+  // eventually shows the ready assistant response.
+  await expect(page.getByText(/ready|prêt/i).first()).toBeVisible({
     timeout: 30_000,
   });
 

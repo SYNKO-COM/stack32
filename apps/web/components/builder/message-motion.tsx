@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,66 @@ function stripForTyping(text: string): string {
     .trim();
 }
 
+function ImmediateText({
+  text,
+  onDone,
+  className,
+}: {
+  text: string;
+  onDone?: () => void;
+  className?: string;
+}) {
+  useEffect(() => {
+    onDone?.();
+  }, [onDone]);
+
+  return <span className={cn("whitespace-pre-wrap", className)}>{text}</span>;
+}
+
+function ActiveTypewriter({
+  plain,
+  cps,
+  onDone,
+  className,
+}: {
+  plain: string;
+  cps: number;
+  onDone?: () => void;
+  className?: string;
+}) {
+  const [shown, setShown] = useState("");
+
+  useEffect(() => {
+    if (!plain) {
+      onDone?.();
+      return;
+    }
+    let i = 0;
+    let doneFired = false;
+    const id = window.setInterval(() => {
+      i += 1;
+      setShown(plain.slice(0, i));
+      if (i >= plain.length) {
+        window.clearInterval(id);
+        if (!doneFired) {
+          doneFired = true;
+          onDone?.();
+        }
+      }
+    }, Math.max(12, Math.round(1000 / cps)));
+    return () => window.clearInterval(id);
+  }, [plain, cps, onDone]);
+
+  return (
+    <span className={cn("whitespace-pre-wrap", className)}>
+      {shown}
+      {shown.length < plain.length ? (
+        <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-[2px] animate-pulse bg-foreground/50" />
+      ) : null}
+    </span>
+  );
+}
+
 /**
  * Typewriter for freshly streamed assistant text.
  * When `active` is false (page reload / history), renders full text immediately.
@@ -50,43 +110,10 @@ export function TypewriterText({
   className?: string;
 }) {
   const plain = stripForTyping(text);
-  const [shown, setShown] = useState(active ? "" : plain);
-  const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
-
-  useEffect(() => {
-    if (!active) {
-      setShown(plain);
-      onDoneRef.current?.();
-      return;
-    }
-    setShown("");
-    if (!plain) {
-      onDoneRef.current?.();
-      return;
-    }
-    let i = 0;
-    let doneFired = false;
-    const id = window.setInterval(() => {
-      i += 1;
-      setShown(plain.slice(0, i));
-      if (i >= plain.length) {
-        window.clearInterval(id);
-        if (!doneFired) {
-          doneFired = true;
-          onDoneRef.current?.();
-        }
-      }
-    }, Math.max(12, Math.round(1000 / cps)));
-    return () => window.clearInterval(id);
-  }, [plain, active, cps]);
-
+  if (!active) {
+    return <ImmediateText text={plain} onDone={onDone} className={className} />;
+  }
   return (
-    <span className={cn("whitespace-pre-wrap", className)}>
-      {shown}
-      {active && shown.length < plain.length ? (
-        <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-[2px] animate-pulse bg-foreground/50" />
-      ) : null}
-    </span>
+    <ActiveTypewriter key={plain} plain={plain} cps={cps} onDone={onDone} className={className} />
   );
 }

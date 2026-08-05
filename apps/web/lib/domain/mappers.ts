@@ -3,7 +3,10 @@ import type {
   AgentIdentity,
   AgentSpec,
   AgentVersion,
+  BuildBoardNode,
+  BuilderAction,
   BuilderMessage,
+  BuilderSuggestion,
   BuilderUiComponent,
   GraphEdge,
   GraphNode,
@@ -487,31 +490,38 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
       ? cardRaw
       : undefined;
 
-  const suggestions = Array.isArray(meta.suggestions)
+  const suggestions: BuilderSuggestion[] | undefined = Array.isArray(meta.suggestions)
     ? meta.suggestions
-        .map((s) => {
+        .map((s): BuilderSuggestion | null => {
           const rec = asRecord(s);
           const id = typeof rec.id === "string" ? rec.id : "";
-          const labelKey = typeof rec.labelKey === "string" ? rec.labelKey : typeof rec.label_key === "string" ? rec.label_key : "";
+          const labelKey =
+            typeof rec.labelKey === "string"
+              ? rec.labelKey
+              : typeof rec.label_key === "string"
+                ? rec.label_key
+                : "";
           if (!id || !labelKey) return null;
+          const actionRaw = rec.action;
+          const action: BuilderAction | undefined =
+            actionRaw === "test_agent" ||
+            actionRaw === "view_structure" ||
+            actionRaw === "fix_automatically"
+              ? actionRaw
+              : undefined;
           return {
             id,
             labelKey,
             prompt: typeof rec.prompt === "string" ? rec.prompt : undefined,
-            action:
-              rec.action === "test_agent" ||
-              rec.action === "view_structure" ||
-              rec.action === "fix_automatically"
-                ? rec.action
-                : undefined,
+            action,
           };
         })
-        .filter((s): s is NonNullable<typeof s> => s !== null)
+        .filter((s): s is BuilderSuggestion => s !== null)
     : undefined;
 
-  const nodes = Array.isArray(boardRaw.nodes)
+  const nodes: BuildBoardNode[] = Array.isArray(boardRaw.nodes)
     ? boardRaw.nodes
-        .map((n) => {
+        .map((n): BuildBoardNode | null => {
           const rec = asRecord(n);
           const id = typeof rec.id === "string" ? rec.id : "";
           const labelKey =
@@ -522,12 +532,17 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
                 : "";
           const state = rec.state;
           if (!id || !labelKey) return null;
-          if (state !== "pending" && state !== "running" && state !== "done" && state !== "failed") {
+          if (
+            state !== "pending" &&
+            state !== "running" &&
+            state !== "done" &&
+            state !== "failed"
+          ) {
             return null;
           }
           return { id, labelKey, state };
         })
-        .filter((n): n is NonNullable<typeof n> => n !== null)
+        .filter((n): n is BuildBoardNode => n !== null)
     : [];
   const edges = Array.isArray(boardRaw.edges)
     ? boardRaw.edges

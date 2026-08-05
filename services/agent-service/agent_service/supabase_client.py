@@ -362,14 +362,14 @@ class Persistence(SupabaseRepository):
 
     async def claim_first_ready_celebration(self, *, agent_id: str, user_id: str) -> bool:
         """Atomically mark first Ready celebration. Returns True only once per agent."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         agent = await self.get_owned_agent(agent_id, user_id)
         if not agent:
             return False
         if agent.get("first_ready_celebrated"):
             return False
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         async with get_supabase_admin_client() as client:
             response = await client.patch(
                 "/agents",

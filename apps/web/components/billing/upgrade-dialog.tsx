@@ -3,7 +3,7 @@
 import { Check, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Trans } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -65,17 +65,20 @@ export function UpgradeDialog() {
   const features = t("upgrade.features", { returnObjects: true }) as string[];
   const canCheckout = acceptedTerms && acceptedImmediate && !checkout.isPending;
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
       setAcceptedTerms(false);
       setAcceptedImmediate(false);
+      closeDialog();
     }
-  }, [open]);
+  };
 
   const handleUpgrade = async () => {
     if (!canCheckout) return;
     // Mock mode returns an internal success URL; real Whop checkout in phase 7.
     const { url } = await checkout.mutateAsync(WHOP_PLAN_ID);
+    setAcceptedTerms(false);
+    setAcceptedImmediate(false);
     closeDialog();
     if (url.startsWith("/")) {
       router.push(url);
@@ -87,7 +90,7 @@ export function UpgradeDialog() {
   const legalLinkClass = "font-medium hover:text-brand";
 
   return (
-    <Dialog open={open} onOpenChange={(o) => (!o ? closeDialog() : undefined)}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="glass-strong border-border sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

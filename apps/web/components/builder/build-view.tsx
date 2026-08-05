@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Check, CircleX, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AgentCapabilitiesForm } from "@/components/builder/agent-capabilities-form";
@@ -180,20 +180,10 @@ function BuilderBubble({
   };
 
   useEffect(() => {
-    if (!animateWrite || !hasTypeableBody) {
-      setTypedDone(true);
-    }
-  }, [animateWrite, hasTypeableBody]);
-
-  useEffect(() => {
-    if (showThinking || showBuildProgress) {
-      notifyRevealDone();
-      return;
-    }
-    if (!animateWrite || typedDone) {
+    if (showThinking || showBuildProgress || !animateWrite || typedDone) {
       notifyRevealDone();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once when ready
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- notify parent once when bubble is ready
   }, [showThinking, showBuildProgress, animateWrite, typedDone]);
 
   if (showThinking) {
@@ -354,16 +344,19 @@ export function BuildView({ agentId }: { agentId: string }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
-  /** Message IDs present on first thread load — no typewriter on refresh. */
-  const initialMessageIdsRef = useRef<Set<string> | null>(null);
   const [prefill, setPrefill] = useState("");
   const [resolvedFormIds, setResolvedFormIds] = useState<Set<string>>(() => new Set());
   /** Fresh assistant messages already finished typing (sequential chat reveal). */
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
-  const [activeRevealId, setActiveRevealId] = useState<string | null>(null);
   const revealPauseRef = useRef<number | null>(null);
+  /** Message IDs present on first thread snapshot — no typewriter on refresh. */
+  const [baselineIds, setBaselineIds] = useState<Set<string> | null>(null);
 
-  const messages = thread?.messages ?? [];
+  const messages = useMemo(() => thread?.messages ?? [], [thread?.messages]);
+  if (thread && baselineIds === null) {
+    setBaselineIds(new Set(thread.messages.map((m) => m.id)));
+  }
+
   const hasReadyMessage = messages.some((m) => m.card === "ready");
   const hasLiveForm = messages.some(
     (m) =>
@@ -378,32 +371,14 @@ export function BuildView({ agentId }: { agentId: string }) {
     return true;
   });
 
-  useEffect(() => {
-    if (!thread || initialMessageIdsRef.current !== null) return;
-    initialMessageIdsRef.current = new Set(thread.messages.map((m) => m.id));
-  }, [thread]);
-
-  // Sequential reveal: one fresh assistant bubble at a time.
-  useEffect(() => {
-    const initialIds = initialMessageIdsRef.current;
-    if (!initialIds) return;
-
-    const pending = visibleMessages.filter(
-      (m) =>
-        m.role === "assistant" &&
-        !initialIds.has(m.id) &&
-        !revealedIds.has(m.id),
-    );
-    if (pending.length === 0) {
-      if (activeRevealId !== null) setActiveRevealId(null);
-      return;
-    }
-    const nextId = pending[0]?.id ?? null;
-    if (activeRevealId && pending.some((m) => m.id === activeRevealId)) return;
-    if (nextId && nextId !== activeRevealId) {
-      setActiveRevealId(nextId);
-    }
-  }, [visibleMessages, revealedIds, activeRevealId]);
+  const pendingReveal = visibleMessages.filter(
+    (m) =>
+      m.role === "assistant" &&
+      baselineIds !== null &&
+      !baselineIds.has(m.id) &&
+      !revealedIds.has(m.id),
+  );
+  const activeRevealId = pendingReveal[0]?.id ?? null;
 
   useEffect(() => {
     return () => {
@@ -425,7 +400,6 @@ export function BuildView({ agentId }: { agentId: string }) {
         next.add(messageId);
         return next;
       });
-      setActiveRevealId(null);
       revealPauseRef.current = null;
     }, 650);
   };
@@ -448,6 +422,23 @@ export function BuildView({ agentId }: { agentId: string }) {
     !waitingOnForm &&
     (awaitingReply || sendMessage.isPending || repair.isPending || (busy && !lastMessage?.uiComponent));
 
+  const lastFocus = messages.at(-1)?.focus;
+  const lastSteps = messages.at(-1)?.steps;
+
+  // Clear local waiting once a real assistant turn arrived.
+  if (
+    awaitingReply &&
+    lastMessage &&
+    lastMessage.role === "assistant" &&
+    lastMessage.card !== "thinking" &&
+    (lastMessage.uiComponent ||
+      lastMessage.card ||
+      lastMessage.content ||
+      (lastMessage.steps && lastMessage.steps.length > 0))
+  ) {
+    setAwaitingReply(false);
+  }
+
   // Consume the landing-page pending prompt exactly once, on an empty thread.
   useEffect(() => {
     if (!thread || bootstrappedRef.current) return;
@@ -455,43 +446,23 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (thread.messages.length === 0) {
       const pending = consumePendingPrompt();
       if (pending) {
-        setAwaitingReply(true);
-        void sendMessage.mutateAsync(pending);
-        return;
+        const timer = window.setTimeout(() => {
+          setAwaitingReply(true);
+          void sendMessage.mutateAsync(pending);
+        }, 0);
+        return () => window.clearTimeout(timer);
       }
     }
     const draft = consumePrefillDraft();
     if (draft) {
-      const timeout = setTimeout(() => setPrefill(draft), 0);
-      return () => clearTimeout(timeout);
+      const timeout = window.setTimeout(() => setPrefill(draft), 0);
+      return () => window.clearTimeout(timeout);
     }
   }, [thread, sendMessage]);
 
   useEffect(() => {
-    if (!awaitingReply) return;
-    const last = messages.at(-1);
-    if (!last) return;
-    // Stop local waiting once a real assistant turn arrived (form, progress, ready…).
-    if (
-      last.role === "assistant" &&
-      last.card !== "thinking" &&
-      (last.uiComponent || last.card || last.content || (last.steps && last.steps.length > 0))
-    ) {
-      setAwaitingReply(false);
-    }
-  }, [messages, awaitingReply]);
-
-  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [
-    messages.length,
-    busy,
-    showLocalWorking,
-    activeRevealId,
-    revealedIds.size,
-    messages.at(-1)?.focus,
-    messages.at(-1)?.steps,
-  ]);
+  }, [messages.length, busy, showLocalWorking, activeRevealId, revealedIds.size, lastFocus, lastSteps]);
 
   useEffect(() => {
     for (const message of messages) {
@@ -559,9 +530,8 @@ export function BuildView({ agentId }: { agentId: string }) {
           ) : (
             <>
               {visibleMessages.map((message) => {
-                const initialIds = initialMessageIdsRef.current;
                 const isFresh =
-                  initialIds !== null && !initialIds.has(message.id);
+                  baselineIds !== null && !baselineIds.has(message.id);
                 const isPendingFresh =
                   isFresh &&
                   message.role === "assistant" &&
