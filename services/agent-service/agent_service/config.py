@@ -72,6 +72,15 @@ class Settings(BaseSettings):
 
     # Execution / cost controls (Starter ~$20 plan targets)
     AI_EXECUTION_MODE: Literal["live", "mock", "disabled"] = "mock"
+    # Generated-agent graph runner: legacy while-loop vs LangGraph StateGraph
+    AGENT_RUNTIME_VERSION: Literal["legacy", "langgraph"] = "legacy"
+    # When true (dev default): execute inline and skip enqueue.
+    # When false (prod): enqueue only; worker claims via lease_run_queue_job.
+    QUEUE_INLINE: bool = True
+    QUEUE_WORKER_ENABLED: bool = False
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_OAUTH_CLIENT_SECRET: str = ""
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:3000/api/connections/google/callback"
     MONTHLY_USER_BUDGET_USD: float = 10.0
     MAX_CONCURRENT_BUILDER_RUNS: int = 2
     MAX_CONCURRENT_LIVE_RUNS: int = 3
@@ -86,6 +95,23 @@ class Settings(BaseSettings):
     SECRETS_ENCRYPTION_KEY: str = ""
     # Builder uses platform keys; Live requires user BYOK by default
     LIVE_REQUIRE_USER_LLM_KEY: bool = True
+
+    # --- Builder coding sandbox (M-A) ---------------------------------------
+    # Master switch for the isolated coding workspace. Off by default so the
+    # legacy declarative Builder keeps working until the coding loop is wired.
+    BUILDER_SANDBOX_ENABLED: bool = False
+    # Provider-neutral selection. "local" is a hardened dev/test backend that
+    # runs under a confined temp dir; it is FORBIDDEN in production. "e2b" uses
+    # isolated Firecracker microVMs and is the production backend.
+    SANDBOX_PROVIDER: Literal["local", "e2b"] = "local"
+    E2B_API_KEY: str = ""
+    E2B_TEMPLATE: str = "base"
+    # Resource / safety envelope applied to every sandbox command.
+    SANDBOX_COMMAND_TIMEOUT_SECONDS: int = 120
+    SANDBOX_WALL_CLOCK_SECONDS: int = 900
+    SANDBOX_MAX_OUTPUT_BYTES: int = 200_000
+    SANDBOX_MAX_FILE_BYTES: int = 2_000_000
+    SANDBOX_ALLOW_NETWORK: bool = False
 
     # Queue
     QUEUE_BACKEND: Literal["postgres", "cloud_tasks"] = "postgres"
@@ -126,6 +152,12 @@ class Settings(BaseSettings):
                 missing.append("SUPABASE_JWKS_URL (or SUPABASE_JWT_SECRET)")
             if self.ALLOW_UNVERIFIED_JWT:
                 raise ValueError("ALLOW_UNVERIFIED_JWT must be false in production")
+            if self.BUILDER_SANDBOX_ENABLED and self.SANDBOX_PROVIDER == "local":
+                raise ValueError(
+                    "SANDBOX_PROVIDER=local is forbidden in production; use e2b."
+                )
+            if self.BUILDER_SANDBOX_ENABLED and self.SANDBOX_PROVIDER == "e2b" and not self.E2B_API_KEY:
+                missing.append("E2B_API_KEY")
             if missing:
                 raise ValueError(
                     f"Missing required production environment variables: {', '.join(missing)}"

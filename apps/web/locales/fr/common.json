@@ -40,13 +40,22 @@
   },
   "composer": {
     "label": "Décrivez ce que vous voulez créer",
-    "attach": "Ajouter une pièce jointe",
-    "voice": "Utiliser la saisie vocale",
+    "attach": "Ajouter un fichier ou une photo",
+    "voice": "Dicter à la voix",
     "send": "Envoyer",
     "build": "Créer",
     "sending": "Envoi…",
     "working": "En cours…",
-    "stop": "Arrêter"
+    "stop": "Arrêter",
+    "dropHint": "Déposez pour ajouter un fichier",
+    "removeAttachment": "Retirer la pièce jointe",
+    "recording": "Écoute… parlez maintenant",
+    "transcribing": "Transcription…",
+    "stopRecording": "Annuler l’enregistrement",
+    "confirmRecording": "Terminer la transcription",
+    "micDenied": "Accès au micro refusé. Autorisez-le dans les réglages du navigateur.",
+    "transcribeError": "La transcription a échoué. Vérifiez la connexion et réessayez.",
+    "transcribeEmpty": "Aucune parole détectée. Réessayez."
   },
   "status": {
     "draft": "Brouillon",

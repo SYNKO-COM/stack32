@@ -15,6 +15,7 @@ const CODE_TO_KEY: Record<string, string> = {
   session_expired: "auth:errors.sessionExpired",
   refresh_token_not_found: "auth:errors.sessionExpired",
   otp_expired: "auth:errors.linkExpired",
+  otp_disabled: "auth:errors.invalidOtp",
   user_not_found: "auth:errors.invalidCredentials",
   same_password: "auth:errors.samePassword",
 };
@@ -41,6 +42,8 @@ export function authErrorKey(error: unknown): string {
       if (lower.includes("invalid login credentials")) return "auth:errors.invalidCredentials";
       if (lower.includes("email not confirmed")) return "auth:errors.emailNotConfirmed";
       if (lower.includes("already registered")) return "auth:errors.emailInUse";
+      if (lower.includes("token") && lower.includes("expired")) return "auth:errors.linkExpired";
+      if (lower.includes("otp") || lower.includes("token is invalid")) return "auth:errors.invalidOtp";
       if (lower.includes("rate limit")) return "auth:errors.rateLimited";
       if (lower.includes("network") || lower.includes("fetch")) return "errors:network";
     }

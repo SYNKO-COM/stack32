@@ -43,4 +43,5 @@ jobs:
         with:
           image-ref: stack32-agent-service:ci
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: "1"

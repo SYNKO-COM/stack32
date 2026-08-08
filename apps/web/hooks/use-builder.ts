@@ -2,7 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { BuilderThread } from "@/lib/domain/types";
+import type { BuilderMessage, BuilderThread } from "@/lib/domain/types";
+import { cancelBuilderRun } from "@/lib/actions/builder";
 import { getBuilderRepository } from "@/lib/repositories/factory";
 
 /** True while the (mock) builder is still producing progressive updates. */
@@ -39,8 +40,23 @@ export function useSendBuilderMessage(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (content: string) => getBuilderRepository().sendMessage(agentId, content),
-    onMutate: async () => {
+    onMutate: async (content) => {
+      await queryClient.cancelQueries({ queryKey: ["builder", agentId] });
       await queryClient.cancelQueries({ queryKey: ["agents", agentId] });
+      const previous = queryClient.getQueryData<BuilderThread>(["builder", agentId]);
+      if (previous) {
+        const optimistic: BuilderMessage = {
+          id: `optimistic-${Date.now()}`,
+          threadId: previous.id,
+          role: "user",
+          content,
+          createdAt: new Date().toISOString(),
+        };
+        queryClient.setQueryData<BuilderThread>(["builder", agentId], {
+          ...previous,
+          messages: [...previous.messages, optimistic],
+        });
+      }
       queryClient.setQueryData(["agents", agentId], (old: { status?: string } | undefined) =>
         old ? { ...old, status: "building" } : old,
       );
@@ -49,6 +65,56 @@ export function useSendBuilderMessage(agentId: string) {
           ? old.map((a) => (a.id === agentId ? { ...a, status: "building" } : a))
           : old,
       );
+      return { previous };
+    },
+    onError: (_err, _content, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["builder", agentId], ctx.previous);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+}
+
+export function useCancelBuilderRun(agentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => cancelBuilderRun({ agentId }),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["builder", agentId] });
+      const previous = queryClient.getQueryData<BuilderThread>(["builder", agentId]);
+      if (previous) {
+        const terminalSteps = (steps: BuilderMessage["steps"]) =>
+          steps?.map((s) => ({
+            ...s,
+            state:
+              s.state === "running" || s.state === "pending" ? ("failed" as const) : s.state,
+          }));
+        // Patch in-flight cards only — do NOT append an optimistic cancel bubble
+        // (that caused appear → vanish → reappear when the real message arrived).
+        const patched = previous.messages.map((m) => {
+          if (m.card !== "thinking" && m.card !== "build_progress") return m;
+          return {
+            ...m,
+            content: m.card === "build_progress" ? "builder:errors.canceled" : m.content,
+            focus: "Stopped by user",
+            steps: terminalSteps(m.steps),
+          };
+        });
+        queryClient.setQueryData<BuilderThread>(["builder", agentId], {
+          ...previous,
+          messages: patched,
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["builder", agentId], ctx.previous);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["builder", agentId] });

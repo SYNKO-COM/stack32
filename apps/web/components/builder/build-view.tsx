@@ -1,14 +1,15 @@
 "use client";
 
-import { AlertTriangle, Check, CircleX, Loader2 } from "lucide-react";
+import { AlertTriangle, CircleX } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AgentCapabilitiesForm } from "@/components/builder/agent-capabilities-form";
 import { AgentIdentityForm } from "@/components/builder/agent-identity-form";
 import { BuildProgressPanel } from "@/components/builder/build-progress-panel";
 import { BuilderWorkingPanel } from "@/components/builder/builder-working-panel";
+import { DynamicQuestionsForm } from "@/components/builder/dynamic-questions-form";
 import { MessageEntrance, TypewriterText } from "@/components/builder/message-motion";
 import { IdentityConfirmedMessage, ReadyCard } from "@/components/builder/ready-card";
 import { SecretForm } from "@/components/builder/secret-form";
@@ -19,41 +20,19 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAgent } from "@/hooks/use-agents";
 import { useCurrentUser } from "@/hooks/use-auth";
-import { useBuilderThread, useRepairAgent, useSendBuilderMessage } from "@/hooks/use-builder";
+import {
+  useBuilderThread,
+  useCancelBuilderRun,
+  useRepairAgent,
+  useSendBuilderMessage,
+} from "@/hooks/use-builder";
+import { summarizeActivity, useRunActivity } from "@/hooks/use-run-activity";
 import { useTranslation } from "@/hooks/use-translation";
 import { playAgentReadyChime } from "@/lib/audio/agent-ready-chime";
-import type { BuilderAction, BuilderMessage, BuildStep } from "@/lib/domain/types";
+import type { BuilderAction, BuilderMessage } from "@/lib/domain/types";
 import { consumePendingPrompt, consumePrefillDraft } from "@/lib/pending-prompt";
 import { cn } from "@/lib/utils";
-
-function StepList({ steps }: { steps: BuildStep[] }) {
-  const { t } = useTranslation("builder");
-
-  return (
-    <ol className="space-y-2" aria-live="polite">
-      {steps.map((step) => (
-        <li key={step.labelKey} className="flex items-center gap-2.5 text-sm">
-          {step.state === "done" ? (
-            <Check className="size-4 text-emerald-400" aria-hidden="true" />
-          ) : step.state === "running" ? (
-            <Loader2 className="size-4 animate-spin text-brand" aria-hidden="true" />
-          ) : step.state === "failed" ? (
-            <CircleX className="size-4 text-destructive" aria-hidden="true" />
-          ) : (
-            <span className="size-4 rounded-full border border-border" aria-hidden="true" />
-          )}
-          <span
-            className={cn(
-              step.state === "pending" ? "text-muted-foreground/60" : "text-foreground/85",
-            )}
-          >
-            {t(`steps.${step.labelKey}`)}
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
+import type { BuilderOperation } from "@/components/builder/builder-working-panel";
 
 function MessageActions({
   actions,
@@ -76,24 +55,14 @@ function MessageActions({
               key={action}
               size="sm"
               className="rounded-full"
-              onClick={() => router.push(`/agents/${agentId}/live`)}
+              onClick={() => router.push(`/agents/${agentId}/agent`)}
             >
               {t("actions.testAgent")}
             </Button>
           );
         }
-        if (action === "view_structure") {
-          return (
-            <Button
-              key={action}
-              size="sm"
-              variant="outline"
-              className="rounded-full"
-              onClick={() => router.push(`/agents/${agentId}/structure`)}
-            >
-              {t("actions.viewStructure")}
-            </Button>
-          );
+        if (action === "view_structure" || action === "view_changes") {
+          return null;
         }
         return (
           <Button
@@ -118,9 +87,11 @@ function BuilderBubble({
   onFormSubmitted,
   onSuggestion,
   resolvedFormIds,
+  formSuperseded,
   isFresh,
   animateNow,
   onRevealDone,
+  activityLines,
 }: {
   message: BuilderMessage;
   agentId: string;
@@ -128,32 +99,56 @@ function BuilderBubble({
   onFormSubmitted?: (requestId: string) => void;
   onSuggestion?: (prompt: string) => void;
   resolvedFormIds: Set<string>;
+  /** True when a later message exists — the user already answered this form. */
+  formSuperseded?: boolean;
   /** True only for messages that arrived after this page session started. */
   isFresh: boolean;
   /** Only the head of the reveal queue animates; others wait. */
   animateNow: boolean;
   onRevealDone?: () => void;
+  activityLines?: { id: string; text: string; active?: boolean }[];
 }) {
   const { t, i18n } = useTranslation(["builder", "common"]);
   const { data: user } = useCurrentUser();
   const isUser = message.role === "user";
   const revealNotified = useRef(false);
 
-  const content = message.content.startsWith("builder:")
-    ? t(message.content)
-    : message.content;
+  const formRequestId = message.uiComponent?.requestId;
+  const formLocked =
+    message.formResolved ||
+    Boolean(formSuperseded) ||
+    (formRequestId ? resolvedFormIds.has(formRequestId) : false);
+  const formHidden = formLocked || !message.uiComponent;
+
+  const contentKey = message.content.startsWith("builder:") ? message.content : null;
+  const isCancelNotice =
+    contentKey === "builder:errors.canceledDetail" ||
+    contentKey === "builder:errors.canceled";
+  let content: string;
+  if (formLocked && contentKey === "builder:questions.prompt") {
+    content = t("builder:questions.formClosed");
+  } else if (formLocked && contentKey === "builder:identity.prompt") {
+    content = t("builder:identity.formClosed", {
+      name: message.identitySummary?.name ?? "…",
+    });
+  } else if (
+    formLocked &&
+    (contentKey === "builder:capabilities.prompt" ||
+      contentKey === "builder:capabilities.promptAfterSecret")
+  ) {
+    content = t("builder:capabilities.formClosed");
+  } else if (formLocked && contentKey === "builder:secrets.prompt") {
+    content = t("builder:secrets.formClosed");
+  } else if (contentKey) {
+    content = t(contentKey, { defaultValue: contentKey.replace(/^builder:/, "") });
+  } else {
+    content = message.content;
+  }
 
   const time = new Intl.DateTimeFormat(i18n.language, {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(message.createdAt));
-
-  // Only the form's own requestId — never interruptRunId (shared across steps).
-  const formRequestId = message.uiComponent?.requestId;
-  const formHidden =
-    message.formResolved ||
-    !message.uiComponent ||
-    (formRequestId ? resolvedFormIds.has(formRequestId) : false);
 
   const showIdentityConfirmed =
     message.card === "identity_confirmed" ||
@@ -161,14 +156,15 @@ function BuilderBubble({
   const showBuildProgress =
     message.card === "build_progress" || Boolean(message.buildBoard);
   const showThinking = message.card === "thinking";
-  const showReady = message.card === "ready" || Boolean(message.suggestions?.length);
+  const showReady = message.card === "ready";
 
   const animateWrite =
     isFresh &&
     animateNow &&
     !isUser &&
     !showThinking &&
-    !showBuildProgress;
+    !showBuildProgress &&
+    !isCancelNotice;
 
   const hasTypeableBody = showIdentityConfirmed || showReady || Boolean(content);
   const [typedDone, setTypedDone] = useState(!animateWrite || !hasTypeableBody);
@@ -180,26 +176,16 @@ function BuilderBubble({
   };
 
   useEffect(() => {
-    if (!animateWrite || !hasTypeableBody) {
-      setTypedDone(true);
-    }
-  }, [animateWrite, hasTypeableBody]);
-
-  useEffect(() => {
-    if (showThinking || showBuildProgress) {
-      notifyRevealDone();
-      return;
-    }
-    if (!animateWrite || typedDone) {
+    if (showThinking || showBuildProgress || !animateWrite || typedDone) {
       notifyRevealDone();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once when ready
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- notify parent once when bubble is ready
   }, [showThinking, showBuildProgress, animateWrite, typedDone]);
 
   if (showThinking) {
     return (
       <MessageEntrance active={isFresh && animateNow}>
-        <BuilderWorkingPanel />
+        <BuilderWorkingPanel activityLines={activityLines} />
       </MessageEntrance>
     );
   }
@@ -242,20 +228,24 @@ function BuilderBubble({
           </p>
           <div
             className={cn(
-              "rounded-3xl px-4 py-3 text-left text-sm leading-relaxed",
-              isUser ? "bg-brand/15 text-foreground" : "glass text-foreground/90",
-              message.tone === "error" && "border border-destructive/40",
-              message.tone === "warning" && "border border-amber-400/40",
-              showReady && "border border-brand/25 bg-gradient-to-br from-brand/[0.08] to-transparent",
+              "text-left text-sm leading-relaxed",
+              isUser
+                ? "rounded-3xl bg-brand/15 px-4 py-3 text-foreground"
+                : "px-0 py-0 text-foreground/90",
+              // Interactive cards keep a light frame; plain chat stays flush.
+              !isUser &&
+                (showReady || showForms) &&
+                "rounded-2xl border border-border/40 bg-foreground/[0.03] px-4 py-3",
+              message.tone === "error" && !isCancelNotice && "text-destructive",
             )}
           >
-            {message.tone === "error" && !showReady ? (
+            {message.tone === "error" && !showReady && !isCancelNotice ? (
               <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-destructive">
                 <CircleX className="size-3.5" aria-hidden="true" />
                 {t("common:status.needsAttention")}
               </p>
             ) : null}
-            {message.tone === "warning" && !showReady ? (
+            {message.tone === "warning" && !showReady && !isCancelNotice ? (
               <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-300">
                 <AlertTriangle className="size-3.5" aria-hidden="true" />
                 {t("common:status.needsAttention")}
@@ -273,34 +263,40 @@ function BuilderBubble({
                 steps={message.steps}
                 board={message.buildBoard}
                 focus={message.focus}
+                activityLines={activityLines}
               />
             ) : showReady ? (
               <ReadyCard
                 agentId={agentId}
                 content={content}
                 identitySummary={message.identitySummary}
-                suggestions={message.suggestions}
                 actions={message.actions}
                 onFix={onFix}
-                onSuggestion={(prompt) => onSuggestion?.(prompt)}
                 animate={animateWrite}
                 onDone={markTyped}
               />
             ) : (
               <>
-                {message.steps && message.steps.length > 0 ? (
-                  <div className={cn(content && "mb-3")}>
-                    <StepList steps={message.steps} />
-                  </div>
-                ) : null}
                 {content ? (
-                  animateWrite && !typedDone ? (
+                  animateWrite && !typedDone && !isCancelNotice ? (
                     <p>
                       <TypewriterText text={content} active onDone={markTyped} />
                     </p>
                   ) : (
                     <Markdown content={content} />
                   )
+                ) : null}
+                {message.projectFiles && message.projectFiles.length > 0 ? (
+                  <ul className="mt-3 flex flex-wrap gap-1.5">
+                    {message.projectFiles.slice(0, 8).map((path) => (
+                      <li
+                        key={path}
+                        className="rounded-md bg-foreground/[0.05] px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
+                      >
+                        {path.split("/").pop() ?? path}
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
               </>
             )}
@@ -330,6 +326,14 @@ function BuilderBubble({
               />
             ) : null}
 
+            {showForms && message.uiComponent?.type === "dynamic_questions_form" ? (
+              <DynamicQuestionsForm
+                uiComponent={message.uiComponent}
+                runId={runId || message.uiComponent.requestId}
+                onSubmitted={() => onFormSubmitted?.(formRequestId ?? "")}
+              />
+            ) : null}
+
             {!showReady && message.actions && message.actions.length > 0 ? (
               <MessageActions actions={message.actions} agentId={agentId} onFix={onFix} />
             ) : null}
@@ -350,60 +354,180 @@ export function BuildView({ agentId }: { agentId: string }) {
     forcePoll: busy || awaitingReply,
   });
   const sendMessage = useSendBuilderMessage(agentId);
+  const cancelRun = useCancelBuilderRun(agentId);
   const repair = useRepairAgent(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
-  /** Message IDs present on first thread load — no typewriter on refresh. */
-  const initialMessageIdsRef = useRef<Set<string> | null>(null);
+  /** Epoch ms of the in-flight send — survives stale refetches & duplicate prompt text. */
+  const [pendingToken, setPendingToken] = useState<number | null>(null);
   const [prefill, setPrefill] = useState("");
   const [resolvedFormIds, setResolvedFormIds] = useState<Set<string>>(() => new Set());
   /** Fresh assistant messages already finished typing (sequential chat reveal). */
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
-  const [activeRevealId, setActiveRevealId] = useState<string | null>(null);
   const revealPauseRef = useRef<number | null>(null);
+  /** Run ids the user stopped this session — hide their progress immediately. */
+  const stoppedRunIdsRef = useRef<Set<string>>(new Set());
+  const [, bumpStopped] = useState(0);
+  /** Message IDs present on first thread snapshot — no typewriter on refresh. */
+  const [baselineIds, setBaselineIds] = useState<Set<string> | null>(null);
 
-  const messages = thread?.messages ?? [];
-  const hasReadyMessage = messages.some((m) => m.card === "ready");
+  const messages = useMemo(() => thread?.messages ?? [], [thread?.messages]);
+  if (thread && baselineIds === null) {
+    setBaselineIds(new Set(thread.messages.map((m) => m.id)));
+  }
+
+  const messageIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    messages.forEach((m, i) => map.set(m.id, i));
+    return map;
+  }, [messages]);
+  const isFormSuperseded = (message: (typeof messages)[number]) => {
+    if (!message.uiComponent && !message.formResolved) return false;
+    const idx = messageIndex.get(message.id) ?? -1;
+    if (idx < 0) return false;
+    // Any later message means this step already continued — lock the form.
+    return messages.slice(idx + 1).length > 0;
+  };
   const hasLiveForm = messages.some(
     (m) =>
       Boolean(m.uiComponent) &&
       !m.formResolved &&
+      !isFormSuperseded(m) &&
       !(m.uiComponent?.requestId && resolvedFormIds.has(m.uiComponent.requestId)),
   );
-  const hasProgress = messages.some((m) => m.card === "build_progress");
-  const visibleMessages = messages.filter((m) => {
-    if (m.card === "thinking" && (hasProgress || hasReadyMessage || hasLiveForm)) return false;
-    if (m.card === "build_progress" && hasReadyMessage) return false;
-    return true;
+  // Hide ephemeral thinking / progress only when a *later* turn superseded them —
+  // never hide all future progress just because a Ready card exists in history.
+  const isCanceledProgress = (m: (typeof messages)[number]) =>
+    m.card === "build_progress" &&
+    (Boolean(m.content?.includes("canceled")) ||
+      m.focus === "Stopped by user" ||
+      stoppedRunIdsRef.current.has(m.interruptRunId ?? ""));
+
+  const visibleMessages = messages
+    .filter((m, i) => {
+      const later = messages.slice(i + 1);
+      if (m.card === "thinking") {
+        if (stoppedRunIdsRef.current.has(m.interruptRunId ?? "")) return false;
+        return !later.some((x) => x.role === "assistant");
+      }
+      if (m.card === "build_progress") {
+        if (isCanceledProgress(m)) return false;
+        // Hide as soon as any later assistant reply exists (result, cancel, form, …).
+        return !later.some(
+          (x) => x.role === "assistant" && x.card !== "thinking",
+        );
+      }
+      return true;
+    })
+    .filter((m, i, arr) => {
+      // Collapse duplicate cancel notices (optimistic/server race or double insert).
+      if (m.content !== "builder:errors.canceledDetail") return true;
+      const prev = arr[i - 1];
+      return prev?.content !== "builder:errors.canceledDetail";
+    });
+
+  const lastUserIdx = (() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === "user") return i;
+    }
+    return -1;
+  })();
+  const turnMessages = lastUserIdx >= 0 ? messages.slice(lastUserIdx + 1) : messages;
+
+  const liveProgress = [...turnMessages]
+    .reverse()
+    .find(
+      (m) =>
+        m.card === "build_progress" &&
+        !isCanceledProgress(m) &&
+        m.steps?.some((s) => s.state === "running" || s.state === "pending"),
+    );
+  const workingOperations: BuilderOperation[] | undefined = liveProgress?.steps?.map((step) => ({
+    event: `step.${step.labelKey}`,
+    state: step.state === "failed" ? "done" : step.state,
+    detail: step.state === "running" ? liveProgress.focus : undefined,
+  }));
+
+  // Only bind activity to the *current* turn's in-flight run (ignore canceled leftovers).
+  const activeRunId =
+    [...turnMessages]
+      .reverse()
+      .find(
+        (m) =>
+          Boolean(m.interruptRunId) &&
+          !stoppedRunIdsRef.current.has(m.interruptRunId ?? "") &&
+          (m.card === "thinking" ||
+            (m.card === "build_progress" &&
+              !isCanceledProgress(m) &&
+              m.steps?.some((s) => s.state === "running" || s.state === "pending"))),
+      )?.interruptRunId ?? null;
+  const activityEnabled =
+    Boolean(activeRunId) &&
+    (awaitingReply ||
+      sendMessage.isPending ||
+      repair.isPending ||
+      busy ||
+      Boolean(liveProgress) ||
+      turnMessages.some((m) => m.card === "thinking"));
+  const { data: runEvents = [] } = useRunActivity(activeRunId, activityEnabled);
+  const activityLines = summarizeActivity(runEvents).lines.map((line) => {
+    const text = t(`builder:activity.${line.key}`, {
+      ...(line.params ?? {}),
+      defaultValue: line.key,
+    });
+    return {
+      id: line.id,
+      text: text.charAt(0).toUpperCase() + text.slice(1),
+      active: line.active,
+    };
   });
 
-  useEffect(() => {
-    if (!thread || initialMessageIdsRef.current !== null) return;
-    initialMessageIdsRef.current = new Set(thread.messages.map((m) => m.id));
-  }, [thread]);
 
-  // Sequential reveal: one fresh assistant bubble at a time.
-  useEffect(() => {
-    const initialIds = initialMessageIdsRef.current;
-    if (!initialIds) return;
-
-    const pending = visibleMessages.filter(
-      (m) =>
-        m.role === "assistant" &&
-        !initialIds.has(m.id) &&
-        !revealedIds.has(m.id),
+  const lastMessage = visibleMessages.at(-1) ?? messages.at(-1);
+  const lastIsUser = lastMessage?.role === "user";
+  const lastIsThinking = lastMessage?.card === "thinking";
+  const progressInFlight =
+    lastMessage?.card === "build_progress" &&
+    Boolean(
+      lastMessage.steps?.some((s) => s.state === "running" || s.state === "pending"),
     );
-    if (pending.length === 0) {
-      if (activeRevealId !== null) setActiveRevealId(null);
-      return;
-    }
-    const nextId = pending[0]?.id ?? null;
-    if (activeRevealId && pending.some((m) => m.id === activeRevealId)) return;
-    if (nextId && nextId !== activeRevealId) {
-      setActiveRevealId(nextId);
-    }
-  }, [visibleMessages, revealedIds, activeRevealId]);
+  const workInFlight = lastIsThinking || progressInFlight;
+  const waitingOnForm = Boolean(
+    lastMessage?.uiComponent &&
+      !lastMessage.formResolved &&
+      !isFormSuperseded(lastMessage) &&
+      !(lastMessage.uiComponent.requestId && resolvedFormIds.has(lastMessage.uiComponent.requestId)),
+  );
+  const showLocalWorking =
+    !waitingOnForm &&
+    !lastIsThinking &&
+    lastMessage?.card !== "build_progress" &&
+    (awaitingReply ||
+      pendingToken !== null ||
+      sendMessage.isPending ||
+      repair.isPending ||
+      (busy && lastIsUser));
+  // Keep Stop available for the whole in-flight turn (not only while awaitingReply).
+  const composerBusy =
+    !waitingOnForm &&
+    (awaitingReply ||
+      pendingToken !== null ||
+      sendMessage.isPending ||
+      repair.isPending ||
+      cancelRun.isPending ||
+      workInFlight ||
+      (busy && !lastMessage?.uiComponent));
+
+  const pendingReveal = visibleMessages.filter(
+    (m) =>
+      m.role === "assistant" &&
+      baselineIds !== null &&
+      !baselineIds.has(m.id) &&
+      !revealedIds.has(m.id),
+  );
+  const activeRevealId = pendingReveal[0]?.id ?? null;
 
   useEffect(() => {
     return () => {
@@ -425,28 +549,55 @@ export function BuildView({ agentId }: { agentId: string }) {
         next.add(messageId);
         return next;
       });
-      setActiveRevealId(null);
       revealPauseRef.current = null;
     }, 650);
   };
 
-  const lastMessage = visibleMessages.at(-1) ?? messages.at(-1);
-  const lastIsUser = lastMessage?.role === "user";
-  const lastIsThinking = lastMessage?.card === "thinking";
-  const waitingOnForm = Boolean(
-    lastMessage?.uiComponent &&
-      !lastMessage.formResolved &&
-      !(lastMessage.uiComponent.requestId && resolvedFormIds.has(lastMessage.uiComponent.requestId)),
-  );
-  const showLocalWorking =
-    !waitingOnForm &&
-    !lastIsThinking &&
-    lastMessage?.card !== "build_progress" &&
-    (awaitingReply || sendMessage.isPending || repair.isPending || (busy && lastIsUser));
-  // Never show “Sending…” while a secure form is waiting for the user.
-  const composerBusy =
-    !waitingOnForm &&
-    (awaitingReply || sendMessage.isPending || repair.isPending || (busy && !lastMessage?.uiComponent));
+  const handleStop = () => {
+    const runToStop = activeRunId;
+    if (runToStop) {
+      stoppedRunIdsRef.current.add(runToStop);
+      bumpStopped((n) => n + 1);
+    }
+    setPendingToken(null);
+    setAwaitingReply(false);
+    void cancelRun.mutateAsync();
+  };
+
+  const lastFocus = messages.at(-1)?.focus;
+  const lastSteps = messages.at(-1)?.steps;
+
+  // Clear waiting only for a final reply after a user message from *this* send window.
+  useEffect(() => {
+    if (pendingToken === null) return;
+    let anchorIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m?.role !== "user") continue;
+      if (m.id.startsWith("optimistic-")) {
+        anchorIdx = i;
+        break;
+      }
+      const created = new Date(m.createdAt).getTime();
+      if (Number.isFinite(created) && created >= pendingToken - 5000) {
+        anchorIdx = i;
+        break;
+      }
+    }
+    // Stale refetch without our user row — keep waiting.
+    if (anchorIdx < 0) return;
+    const hasFinal = messages.slice(anchorIdx + 1).some(
+      (m) =>
+        m.role === "assistant" &&
+        m.card !== "thinking" &&
+        m.card !== "build_progress" &&
+        Boolean(m.uiComponent || m.card || m.content),
+    );
+    if (!hasFinal) return;
+    setPendingToken(null);
+    setAwaitingReply(false);
+  }, [messages, pendingToken]);
+
 
   // Consume the landing-page pending prompt exactly once, on an empty thread.
   useEffect(() => {
@@ -455,53 +606,76 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (thread.messages.length === 0) {
       const pending = consumePendingPrompt();
       if (pending) {
-        setAwaitingReply(true);
-        void sendMessage.mutateAsync(pending);
-        return;
+        const timer = window.setTimeout(() => {
+          setPendingToken(Date.now());
+          setAwaitingReply(true);
+          void sendMessage.mutateAsync(pending);
+        }, 0);
+        return () => window.clearTimeout(timer);
       }
     }
     const draft = consumePrefillDraft();
     if (draft) {
-      const timeout = setTimeout(() => setPrefill(draft), 0);
-      return () => clearTimeout(timeout);
+      const timeout = window.setTimeout(() => setPrefill(draft), 0);
+      return () => window.clearTimeout(timeout);
     }
   }, [thread, sendMessage]);
 
   useEffect(() => {
-    if (!awaitingReply) return;
-    const last = messages.at(-1);
-    if (!last) return;
-    // Stop local waiting once a real assistant turn arrived (form, progress, ready…).
-    if (
-      last.role === "assistant" &&
-      last.card !== "thinking" &&
-      (last.uiComponent || last.card || last.content || (last.steps && last.steps.length > 0))
-    ) {
-      setAwaitingReply(false);
-    }
-  }, [messages, awaitingReply]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const el = scrollRef.current;
+    const anchor = bottomRef.current;
+    if (!el || !anchor) return;
+    // Keep the live conversation above the composer (safety scroll).
+    const pin = () => {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      el.scrollTop = el.scrollHeight;
+    };
+    pin();
+    const raf = window.requestAnimationFrame(pin);
+    return () => window.cancelAnimationFrame(raf);
   }, [
     messages.length,
     busy,
     showLocalWorking,
     activeRevealId,
     revealedIds.size,
-    messages.at(-1)?.focus,
-    messages.at(-1)?.steps,
+    lastFocus,
+    lastSteps,
+    activityLines.length,
+    workInFlight,
+    composerBusy,
   ]);
 
+  // Keep pinned while content grows (typewriter / activity lines).
   useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      root.scrollTop = root.scrollHeight;
+    });
+    observer.observe(root);
+    const inner = root.firstElementChild;
+    if (inner) observer.observe(inner);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    // Wait until baseline is known so refresh never re-chimes historical Ready cards.
+    if (baselineIds === null) return;
+    const soundMsgs = messages.filter((m) => m.playReadySound);
     for (const message of messages) {
       if (!message.playReadySound) continue;
       if (celebratedIdsRef.current.has(message.id)) continue;
+      // Historical Ready from a prior session/load — never play again.
+      if (baselineIds.has(message.id)) {
+        celebratedIdsRef.current.add(message.id);
+        continue;
+      }
       celebratedIdsRef.current.add(message.id);
       playAgentReadyChime();
       break;
     }
-  }, [messages]);
+  }, [messages, baselineIds]);
 
   const refreshAfterForm = (requestId: string) => {
     if (requestId) {
@@ -517,10 +691,13 @@ export function BuildView({ agentId }: { agentId: string }) {
   ];
 
   const handleSend = async (value: string) => {
+    const token = Date.now();
+    setPendingToken(token);
     setAwaitingReply(true);
     try {
       await sendMessage.mutateAsync(value);
     } catch {
+      setPendingToken(null);
       setAwaitingReply(false);
     }
   };
@@ -528,12 +705,21 @@ export function BuildView({ agentId }: { agentId: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
-        className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4"
+        ref={scrollRef}
+        className="scrollbar-thin relative min-h-0 flex-1 overflow-y-auto px-4"
         role="log"
         aria-label={t("builder:a11y.conversation")}
         aria-live="polite"
       >
-        <div className="mx-auto max-w-3xl space-y-6 py-8">
+        {/* Stronger frosted film behind the Build conversation */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0"
+        >
+          <div className="h-full w-full bg-background/55 backdrop-blur-md [mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.55)_6%,black_18%,black_78%,rgba(0,0,0,0.6)_90%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.55)_6%,black_18%,black_78%,rgba(0,0,0,0.6)_90%,transparent_100%)]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/50 to-background/70" />
+        </div>
+        <div className="relative z-[1] mx-auto max-w-3xl space-y-6 py-8">
           {messages.length === 0 && !showLocalWorking ? (
             <div className="flex min-h-[45vh] flex-col items-center justify-center text-center">
               <span className="glass mb-6 flex size-14 items-center justify-center rounded-3xl">
@@ -559,9 +745,8 @@ export function BuildView({ agentId }: { agentId: string }) {
           ) : (
             <>
               {visibleMessages.map((message) => {
-                const initialIds = initialMessageIdsRef.current;
                 const isFresh =
-                  initialIds !== null && !initialIds.has(message.id);
+                  baselineIds !== null && !baselineIds.has(message.id);
                 const isPendingFresh =
                   isFresh &&
                   message.role === "assistant" &&
@@ -575,9 +760,16 @@ export function BuildView({ agentId }: { agentId: string }) {
                     message={message}
                     agentId={agentId}
                     resolvedFormIds={resolvedFormIds}
+                    formSuperseded={isFormSuperseded(message)}
                     isFresh={isFresh}
                     animateNow={
                       message.role === "assistant" && message.id === activeRevealId
+                    }
+                    activityLines={
+                      (message.card === "thinking" || message.card === "build_progress") &&
+                      message.id === (visibleMessages.at(-1)?.id ?? "")
+                        ? activityLines
+                        : undefined
                     }
                     onRevealDone={
                       isFresh && message.role === "assistant"
@@ -597,7 +789,10 @@ export function BuildView({ agentId }: { agentId: string }) {
               })}
               {showLocalWorking ? (
                 <MessageEntrance active>
-                  <BuilderWorkingPanel />
+                  <BuilderWorkingPanel
+                    operations={workingOperations}
+                    activityLines={activityLines}
+                  />
                 </MessageEntrance>
               ) : null}
             </>
@@ -612,6 +807,7 @@ export function BuildView({ agentId }: { agentId: string }) {
           className="mx-auto max-w-3xl"
           placeholder={t("builder:composer.placeholder")}
           onSubmit={(value) => void handleSend(value)}
+          onStop={handleStop}
           busy={composerBusy}
           busyLabel={t("common:composer.working")}
           autoFocus={messages.length === 0}

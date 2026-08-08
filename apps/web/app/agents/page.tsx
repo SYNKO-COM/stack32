@@ -1,43 +1,81 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useTransition } from "react";
 
 import { BrandLoader } from "@/components/shared/brand-loader";
+import { Button } from "@/components/ui/button";
 import { useAgents, useCreateAgent } from "@/hooks/use-agents";
 import { useTranslation } from "@/hooks/use-translation";
 import { getPendingPrompt } from "@/lib/pending-prompt";
 
 /**
  * /agents entry point:
- * - a pending landing prompt creates a fresh agent and opens its Build view;
- * - otherwise redirects to the most recent agent (or creates the first one).
+ * - a pending landing prompt creates a fresh agent and opens Build;
+ * - if agents exist, redirects to the most recent;
+ * - if none exist, shows an empty state (create CTA) instead of auto-creating.
  */
 export default function AgentsIndexPage() {
-  const { t } = useTranslation("common");
+  const { t } = useTranslation(["common", "errors"]);
   const router = useRouter();
   const { data: agents, isLoading } = useAgents();
   const createAgent = useCreateAgent();
   const handledRef = useRef(false);
+  const [creating, startCreate] = useTransition();
 
   useEffect(() => {
     if (isLoading || handledRef.current || !agents) return;
-    handledRef.current = true;
 
-    const go = async () => {
-      if (getPendingPrompt() || agents.length === 0) {
-        const agent = await createAgent.mutateAsync(undefined);
-        router.replace(`/agents/${agent.id}/build`);
-        return;
-      }
-      router.replace(`/agents/${agents[0].id}/build`);
-    };
-    void go();
+    const pending = getPendingPrompt();
+    if (pending || agents.length > 0) {
+      handledRef.current = true;
+      const go = async () => {
+        if (pending || agents.length === 0) {
+          const agent = await createAgent.mutateAsync(undefined);
+          router.replace(`/agents/${agent.id}/build`);
+          return;
+        }
+        router.replace(`/agents/${agents[0].id}/build`);
+      };
+      void go();
+    }
   }, [agents, isLoading, createAgent, router]);
+
+  if (isLoading || !agents) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <BrandLoader label={t("common:loading")} size="lg" />
+      </div>
+    );
+  }
+
+  // Empty workspace — invite the user to create their first agent.
+  if (agents.length === 0 && !getPendingPrompt()) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">{t("errors:noAgentsYet.title")}</h1>
+        <p className="mt-3 max-w-md text-sm text-muted-foreground">
+          {t("errors:noAgentsYet.subtitle")}
+        </p>
+        <Button
+          className="mt-8 rounded-full"
+          disabled={creating || createAgent.isPending}
+          onClick={() => {
+            startCreate(async () => {
+              const created = await createAgent.mutateAsync(undefined);
+              router.replace(`/agents/${created.id}/build`);
+            });
+          }}
+        >
+          {t("errors:noAgentsYet.cta")}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 items-center justify-center">
-      <BrandLoader label={t("loading")} size="lg" />
+      <BrandLoader label={t("common:loading")} size="lg" />
     </div>
   );
 }

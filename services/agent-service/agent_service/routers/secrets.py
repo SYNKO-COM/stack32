@@ -97,8 +97,9 @@ async def store_llm_secret(
             label=body.label,
         )
     except ValueError as exc:
+        code = "INVALID_LLM_KEY" if "INVALID_LLM_KEY" in str(exc) else "INVALID_PROVIDER"
         raise HTTPException(
-            status_code=400, detail={"code": "INVALID_PROVIDER", "message": str(exc)}
+            status_code=400, detail={"code": code, "message": str(exc)}
         ) from exc
     except RuntimeError as exc:
         raise HTTPException(
@@ -134,8 +135,9 @@ async def submit_builder_secret(
             api_key=body.api_key,
         )
     except ValueError as exc:
+        code = "INVALID_LLM_KEY" if "INVALID_LLM_KEY" in str(exc) else "INVALID_PROVIDER"
         raise HTTPException(
-            status_code=400, detail={"code": "INVALID_PROVIDER", "message": str(exc)}
+            status_code=400, detail={"code": code, "message": str(exc)}
         ) from exc
     if result.get("error") == "BUILDER_INTERRUPTED":
         raise HTTPException(
@@ -161,6 +163,31 @@ async def submit_builder_capabilities(
         knowledge_enabled=body.knowledge_enabled,
         schedule_hourly=body.schedule_hourly,
         context_notes=body.context_notes,
+    )
+    if result.get("error") == "BUILDER_INTERRUPTED":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "BUILDER_INTERRUPTED", "message": "Cannot resume this run."},
+        )
+    return result
+
+
+class BuilderQuestionsResumeRequest(BaseModel):
+    answers: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/builder/runs/{run_id}/questions")
+async def submit_builder_questions(
+    run_id: UUID,
+    body: BuilderQuestionsResumeRequest,
+    user: CurrentUser,
+) -> dict[str, Any]:
+    await _guards(user.user_id)
+    orch = BuilderOrchestrator()
+    result = await orch.resume_with_questions(
+        run_id=str(run_id),
+        user_id=user.user_id,
+        answers=body.answers,
     )
     if result.get("error") == "BUILDER_INTERRUPTED":
         raise HTTPException(

@@ -21,9 +21,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/install/bin:$PATH" \
     PYTHONPATH="/install/lib/python3.12/site-packages"
 
-RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
     && mkdir -p /app \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /install
 COPY --chown=appuser:appuser agent_service /app/agent_service

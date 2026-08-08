@@ -60,7 +60,21 @@ Jusqu’à GCP: `QUEUE_BACKEND=postgres` suffit pour les runs sans navigateur.
 
 - Tavily: `WEB_SEARCH_API_KEY`
 
-## 7. Commandes staging smoke (après GCP)
+## 7. Builder sandbox E2B (coding agent)
+
+1. Créer une clé sur https://e2b.dev/dashboard
+2. Dans `services/agent-service/.env` :
+   ```bash
+   BUILDER_SANDBOX_ENABLED=true
+   SANDBOX_PROVIDER=e2b
+   E2B_API_KEY=e2b_…
+   E2B_TEMPLATE=base
+   SANDBOX_ALLOW_NETWORK=false
+   ```
+3. `SANDBOX_PROVIDER=local` est interdit en production.
+4. Tester: créer un workspace E2B via le SDK ou un build Builder avec sandbox activée.
+
+## 8. Commandes staging smoke (après GCP)
 
 ```bash
 gcloud run services describe stack32-agent-api --region=europe-west1

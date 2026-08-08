@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { LogoMark } from "@/components/shared/logo";
@@ -47,10 +46,8 @@ export function CreatingAgentOverlay({
   title: string;
   hint: string;
 }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  if (!open || !mounted) return null;
+  // Client-only portal: avoid SSR/document mismatch without sync setState-in-effect.
+  if (!open || typeof document === "undefined") return null;
 
   return createPortal(
     <div

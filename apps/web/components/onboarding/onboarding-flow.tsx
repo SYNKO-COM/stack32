@@ -127,6 +127,7 @@ export function OnboardingFlow() {
   const createAgent = useCreateAgent();
 
   const [ready, setReady] = useState(false);
+  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
   const [showIntro, setShowIntro] = useState(true);
   const [step, setStep] = useState(1);
   const [finishing, setFinishing] = useState(false);
@@ -138,10 +139,10 @@ export function OnboardingFlow() {
   const [phone, setPhone] = useState("");
   const [useCase, setUseCase] = useState("");
 
-  // Restore draft once we know who the user is.
-  useEffect(() => {
-    if (!userId) return;
+  // Restore draft once we know who the user is (adjust state during render).
+  if (userId && hydratedFor !== userId) {
     const draft = readOnboardingDraft(userId);
+    setHydratedFor(userId);
     setStep(draft.step);
     setShowIntro(draft.showIntro);
     setDiscoverySource(draft.discoverySource);
@@ -155,7 +156,7 @@ export function OnboardingFlow() {
     setPhone(draft.phone);
     setUseCase(draft.useCase);
     setReady(true);
-  }, [userId]);
+  }
 
   // Persist on every meaningful change (after restore).
   useEffect(() => {

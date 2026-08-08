@@ -32,7 +32,8 @@ export class SupabaseAuthRepository implements AuthRepository {
       email,
       password,
       options: {
-        emailRedirectTo: `${appOrigin()}/auth/confirm?next=/onboarding`,
+        // Link fallback → success page; primary UX is the 6-digit OTP page.
+        emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/auth/confirmed")}`,
       },
     });
     if (error) throw error;
@@ -42,6 +43,38 @@ export class SupabaseAuthRepository implements AuthRepository {
       user: mapSupabaseUser(data.user),
       requiresEmailConfirmation: data.session === null,
     };
+  }
+
+  async verifySignupOtp(email: string, token: string): Promise<User> {
+    const supabase = requireSupabaseBrowserClient();
+    let result = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: "signup",
+    });
+    // Some projects deliver the same code as type "email".
+    if (result.error) {
+      result = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "email",
+      });
+    }
+    if (result.error) throw result.error;
+    if (!result.data.user) throw new AuthUiError("errors:generic");
+    return mapSupabaseUser(result.data.user);
+  }
+
+  async resendSignupOtp(email: string): Promise<void> {
+    const supabase = requireSupabaseBrowserClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: {
+        emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/auth/confirmed")}`,
+      },
+    });
+    if (error) throw error;
   }
 
   async signInWithGoogle(): Promise<User | null> {
@@ -70,7 +103,7 @@ export class SupabaseAuthRepository implements AuthRepository {
   async sendPasswordReset(email: string): Promise<void> {
     const supabase = requireSupabaseBrowserClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${appOrigin()}/auth/confirm?next=/reset-password`,
+      redirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/reset-password")}`,
     });
     if (error) throw error;
   }

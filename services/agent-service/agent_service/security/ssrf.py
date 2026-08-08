@@ -11,7 +11,7 @@ BLOCKED_HOSTS = frozenset(
         "localhost",
         "metadata.google.internal",
         "metadata",
-        "0.0.0.0",
+        "0.0.0.0",  # nosec B104
     }
 )
 

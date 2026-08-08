@@ -215,7 +215,35 @@ async def run_compiled_graph(
         next_nodes = compiled.adjacency.get(current) or []
         if not next_nodes:
             break
-        # Simple router: take first matching edge (always / truthy)
+        # Parallel fan-out: when several "always" edges exist (e.g. tool siblings),
+        # execute all of them then continue from their shared successor if unique.
+        always_targets = [
+            target
+            for target, cond in next_nodes
+            if cond is None or cond.get("type") == "always"
+        ]
+        if len(always_targets) > 1:
+            successors: set[str] = set()
+            for target in always_targets:
+                if steps >= max_steps:
+                    break
+                handler = compiled.handlers[target]
+                state = await handler(state)
+                visited_path.append(target)
+                state["visited_nodes"] = visited_path
+                steps += 1
+                state["steps"] = steps
+                for nxt, _cond in compiled.adjacency.get(target) or []:
+                    successors.add(nxt)
+            if len(successors) == 1:
+                current = next(iter(successors))
+                continue
+            if successors:
+                current = sorted(successors)[0]
+                continue
+            break
+
+        # Simple router: take first matching edge (always / truthy / equals)
         chosen = None
         for target, cond in next_nodes:
             if cond is None or cond.get("type") == "always":

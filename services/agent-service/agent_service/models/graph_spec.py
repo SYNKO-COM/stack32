@@ -147,11 +147,15 @@ def _check_branch_depth(adj: dict[str, list[str]], start: str, max_depth: int) -
             stack.append((nxt, depth + 1, path | {nxt}))
 
 
-def default_linear_graph(tools: list[Any] | None = None) -> GraphSpec:
-    """Create a safe shallow graph: input → guard → llm → (tools*) → output.
+def default_linear_graph(
+    tools: list[Any] | None = None,
+    *,
+    knowledge_enabled: bool = False,
+    memory_enabled: bool = False,
+) -> GraphSpec:
+    """Create a safe shallow graph with optional memory/knowledge nodes.
 
-    Tools hang off the LLM in parallel (not a long chain) so branch depth stays
-    well under MAX_BRANCH_DEPTH even with several tools.
+    Layout: input → guard → [memory_read] → [knowledge] → llm → (tools*) → [memory_write] → output
     """
     nodes = [
         GraphNode(id="input", type="input", name="Input", description="User message"),
@@ -165,10 +169,24 @@ def default_linear_graph(tools: list[Any] | None = None) -> GraphSpec:
         ),
         GraphNode(id="output", type="output", name="Output", description="Final answer"),
     ]
-    edges = [
+    edges: list[GraphEdge] = [
         GraphEdge(id="e1", source="input", target="guard"),
-        GraphEdge(id="e2", source="guard", target="llm"),
     ]
+    cursor = "guard"
+    if memory_enabled:
+        nodes.append(
+            GraphNode(id="memory_read", type="memory_read", name="Memory", description="Read memories")
+        )
+        edges.append(GraphEdge(id="e_mem_r", source=cursor, target="memory_read"))
+        cursor = "memory_read"
+    if knowledge_enabled:
+        nodes.append(
+            GraphNode(id="knowledge", type="knowledge", name="Knowledge", description="RAG retrieve")
+        )
+        edges.append(GraphEdge(id="e_know", source=cursor, target="knowledge"))
+        cursor = "knowledge"
+    edges.append(GraphEdge(id="e_llm", source=cursor, target="llm"))
+
     tool_nodes: list[str] = []
     if tools:
         for idx, binding in enumerate(tools[:6]):
@@ -189,7 +207,22 @@ def default_linear_graph(tools: list[Any] | None = None) -> GraphSpec:
                 )
             )
             edges.append(GraphEdge(id=f"et{idx}", source="llm", target=nid))
-            edges.append(GraphEdge(id=f"eto{idx}", source=nid, target="output"))
-    if not tool_nodes:
+            if memory_enabled:
+                edges.append(GraphEdge(id=f"eto_mw{idx}", source=nid, target="memory_write"))
+            else:
+                edges.append(GraphEdge(id=f"eto{idx}", source=nid, target="output"))
+    if memory_enabled:
+        nodes.append(
+            GraphNode(
+                id="memory_write",
+                type="memory_write",
+                name="Remember",
+                description="Write semantic memory",
+            )
+        )
+        if not tool_nodes:
+            edges.append(GraphEdge(id="e_mw", source="llm", target="memory_write"))
+        edges.append(GraphEdge(id="e_out", source="memory_write", target="output"))
+    elif not tool_nodes:
         edges.append(GraphEdge(id="e_out", source="llm", target="output"))
     return GraphSpec(entry_node_id="input", nodes=nodes, edges=edges)

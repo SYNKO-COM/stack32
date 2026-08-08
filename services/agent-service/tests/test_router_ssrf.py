@@ -10,8 +10,8 @@ def test_route_intent_is_fast():
     assert route_profile(TaskType.INTENT_CLASSIFICATION) == ModelProfile.FAST
 
 
-def test_route_architecture_is_reasoning():
-    assert route_profile(TaskType.ARCHITECTURE) == ModelProfile.REASONING
+def test_route_architecture_is_coding():
+    assert route_profile(TaskType.ARCHITECTURE) == ModelProfile.CODING
 
 
 def test_budget_forces_cheaper_profile():

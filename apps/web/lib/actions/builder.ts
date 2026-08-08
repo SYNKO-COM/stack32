@@ -10,9 +10,18 @@ import {
   type BuilderExecutionAdapter,
 } from "@/lib/ai/execution-adapter";
 import { MockBuilderExecutionAdapter } from "@/lib/ai/mock-builder-adapter";
+import { cookies } from "next/headers";
+
+import { LOCALE_COOKIE, readLocaleCookie } from "@/lib/i18n/locales";
 import { requireSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
+
+/** UI language chosen in settings — the assistant must always reply in it. */
+async function currentLocale(): Promise<string> {
+  const store = await cookies();
+  return readLocaleCookie(store.get(LOCALE_COOKIE)?.value);
+}
 
 function getAdapter(): BuilderExecutionAdapter {
   const mode = currentAiExecutionMode();
@@ -85,7 +94,7 @@ export async function executeBuilderTurn(input: {
     } as unknown as Json,
   });
 
-  await getAdapter().execute({ userId, ...input });
+  await getAdapter().execute({ userId, locale: await currentLocale(), ...input });
 }
 
 /** Automatic repair ("Fix automatically" action). */
@@ -98,7 +107,7 @@ export async function executeBuilderRepair(input: {
     await insertDisabledNotice(userId, input.agentId, input.threadId);
     return;
   }
-  await getAdapter().repair({ userId, ...input });
+  await getAdapter().repair({ userId, locale: await currentLocale(), ...input });
 }
 
 /** Resume a builder run after the user submits the identity form. */
@@ -210,4 +219,43 @@ export async function submitBuilderCapabilities(input: {
       context_notes: input.contextNotes,
     },
   });
+}
+
+/** Resume builder after dynamic clarifying questions. */
+export async function submitBuilderQuestions(input: {
+  runId: string;
+  answers: Record<string, string>;
+}): Promise<void> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("questions_require_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  await agentServiceFetch(`/v1/builder/runs/${input.runId}/questions`, {
+    method: "POST",
+    accessToken,
+    body: { answers: input.answers },
+  });
+}
+
+/** Stop the in-flight Builder run (square Stop button). */
+export async function cancelBuilderRun(input: {
+  agentId: string;
+}): Promise<{ status: string; id?: string }> {
+  await requireOwnedAgent(input.agentId);
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { status: "idle" };
+  }
+  const accessToken = await requireAccessToken();
+  return agentServiceFetch<{ status: string; id?: string }>(
+    `/v1/agents/${input.agentId}/builder/cancel`,
+    {
+      method: "POST",
+      accessToken,
+    },
+  );
 }

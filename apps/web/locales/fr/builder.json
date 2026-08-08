@@ -1,8 +1,28 @@
 {
   "tabs": {
     "build": "Build",
-    "live": "Live",
-    "structure": "Structure"
+    "agent": "Agent IA"
+  },
+  "structurePanel": {
+    "title": "Structure exécutable",
+    "subtitle": "Reflète le vrai code que Stack32 a généré et testé.",
+    "openFile": "Ouvrir le fichier",
+    "viewCode": "Voir le code",
+    "boundTo": "Lié à {{provider}}",
+    "notBound": "Aucune connexion liée",
+    "sideEffect": "Peut modifier des données",
+    "empty": "Aucun projet encore construit. Décrivez votre agent pour le générer.",
+    "nodeTypes": {
+      "manifest": "Manifeste",
+      "entrypoint": "Point d'entrée",
+      "orchestrator": "Orchestrateur",
+      "prompts": "Instructions",
+      "security": "Politique de sécurité",
+      "tool_registry": "Outils",
+      "tool": "Outil",
+      "memory": "Mémoire",
+      "tests": "Tests"
+    }
   },
   "sidebar": {
     "agentsTitle": "Agents IA",
@@ -25,13 +45,60 @@
   "working": {
     "title": "Stack32 travaille…",
     "hint": "Je prépare votre agent. Cela prend en général quelques secondes.",
+    "planning": "Planification des prochaines étapes",
     "activities": {
       "reading": "Lecture de votre demande",
       "understanding": "Compréhension de l'objectif",
       "draftingIdentity": "Choix du nom et du rôle",
       "mappingCapabilities": "Sélection des capacités",
       "preparingStructure": "Préparation de la structure"
+    },
+    "operations": {
+      "builder.run.started": "Démarrage de la construction",
+      "builder.sandbox.ready": "Bac à sable prêt",
+      "builder.project.scaffolding": "Génération du projet",
+      "builder.context.indexing": "Indexation du projet",
+      "builder.context.searching": "Recherche dans le projet",
+      "builder.file.read": "Lecture des fichiers",
+      "builder.file.created": "Écriture des fichiers",
+      "builder.file.patch.completed": "Application des modifications",
+      "builder.command.completed": "Exécution d'une commande",
+      "builder.tests.started": "Exécution des tests",
+      "builder.tests.passed": "Tests réussis",
+      "builder.tests.failed": "Tests en échec",
+      "builder.repair.started": "Analyse de l'échec",
+      "builder.security.check": "Vérification du code",
+      "builder.snapshot.created": "Instantané créé",
+      "builder.model.call": "Réflexion",
+      "builder.ready": "Agent prêt",
+      "step.understanding": "Compréhension de votre demande",
+      "step.capabilities": "Choix des capacités",
+      "step.building": "Construction de l'agent",
+      "step.testing": "Petit test",
+      "step.repairing": "Correction"
     }
+  },
+  "activity": {
+    "readOne": "Lecture de {{path}}",
+    "readMany": "Exploration de {{count}} fichiers",
+    "wroteOne": "Mise à jour de {{path}}",
+    "wroteMany": "Mise à jour de {{count}} fichiers",
+    "indexed": "Indexation du projet",
+    "searched": "Recherche dans le projet · {{count}}",
+    "understood": "Demande comprise",
+    "planning": "Planification des prochaines étapes",
+    "identity": "Identité confirmée",
+    "spec": "Instructions de l’agent mises à jour",
+    "graph": "Structure mise à jour",
+    "validation": "Configuration vérifiée",
+    "testsRun": "Tests en cours",
+    "testsOk": "Tests réussis",
+    "testsFail": "Tests en échec — inspection",
+    "repair": "Correction en cours",
+    "sandbox": "Bac à sable prêt",
+    "scaffold": "Génération du projet",
+    "snapshot": "Instantané créé",
+    "thinking": "Réflexion"
   },
   "topbar": {
     "publish": "Publier",
@@ -124,15 +191,11 @@
     "title": "Première version prête",
     "titleNamed": "{{name}} est prêt",
     "success": "Votre agent est prêt à essayer. J'ai écrit ses instructions, débloqué capacités et mémoire, construit la structure, et passé un petit test. Ouvrez Live pour discuter avec lui, ou continuez à l'améliorer ici.",
-    "improveTitle": "Envie de l'améliorer ?",
-    "suggestions": {
-      "tryLive": "L'essayer dans Live maintenant",
-      "refineTone": "Rendre les réponses plus claires",
-      "addKnowledge": "Ajouter mes documents",
-      "longMemory": "Se souvenir sur le long terme",
-      "socratic": "Me guider avec des questions d'abord",
-      "connectApps": "Préparer les connexions d'apps plus tard"
-    }
+    "llmKeyRequired": "Ajoutez votre clé API LLM avant de tester Live."
+  },
+  "modify": {
+    "success": "C’est fait. J’ai appliqué ta demande et mis à jour l’agent. Continue ici pour affiner, ou ouvre Structure pour voir ce qui a changé.",
+    "warning": "J’ai appliqué les changements, mais le test rapide a signalé un petit souci. On peut corriger, ou tu continues à itérer ici."
   },
   "secrets": {
     "prompt": "Pour que votre agent puisse réfléchir, connectez un cerveau (LLM) avec votre clé API.\n\nChoisissez un fournisseur, collez votre clé, puis enregistrez. Elle est chiffrée et ne sera plus jamais affichée en entier.",
@@ -177,10 +240,42 @@
     "submitting": "Construction…",
     "formClosed": "Réglages enregistrés. Construction en cours."
   },
+  "questions": {
+    "prompt": "Avant de continuer, j’ai besoin d’un ou deux détails pour construire l’agent correctement.",
+    "hint": "Répondez ci-dessous. Vous pourrez ajuster plus tard en m’écrivant dans le chat, mais plus via ce formulaire.",
+    "formClosed": "Merci — j’ai bien enregistré vos réponses et je continue.",
+    "continue": "Continuer",
+    "saving": "Enregistrement…",
+    "required": "Merci de remplir les champs obligatoires.",
+    "error": "Impossible d’enregistrer vos réponses. Réessayez.",
+    "fields": {
+      "goal_details": "Que doit accomplir cet agent ?",
+      "knowledge_scope": "Quels documents ou sujets doit-il connaître ?",
+      "connection_intent": "A-t-il besoin d’un compte externe (email, agenda…) ?",
+      "audience": "Qui utilisera cet agent ?"
+    },
+    "placeholders": {
+      "goal_details": "Décrivez la mission principale en une ou deux phrases…",
+      "knowledge_scope": "ex. docs produit, PDF tarifaire…",
+      "audience": "ex. équipe commerciale, fondateurs…"
+    },
+    "options": {
+      "none": "Pas de compte pour l’instant",
+      "google": "Oui — Google (Gmail / Agenda)",
+      "later": "Plus tard — rappel-moi",
+      "connection_intent": {
+        "none": "Pas de compte pour l’instant",
+        "google": "Oui — Google (Gmail / Agenda)",
+        "later": "Plus tard — rappel-moi"
+      }
+    }
+  },
   "errors": {
     "buildFailed": "La construction s'est arrêtée.",
     "buildFailedDetail": "Je n'ai pas pu terminer cette construction. Vous pouvez réessayer, reformuler, ou me demander de corriger.",
-    "validationFailed": "La configuration de l'agent n'est pas valide. Reformulez ou demandez une correction."
+    "validationFailed": "La configuration de l'agent n'est pas valide. Reformulez ou demandez une correction.",
+    "canceled": "Arrêté.",
+    "canceledDetail": "Arrêté. Dis-moi la prochaine modification quand tu veux."
   },
   "progress": {
     "started": "Démarrage…",

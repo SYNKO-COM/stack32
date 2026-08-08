@@ -5,7 +5,10 @@ import {
   RealLiveExecutionAdapter,
   type LiveExecutionAdapter,
 } from "@/lib/ai/execution-adapter";
+import { cookies } from "next/headers";
+
 import { MockLiveExecutionAdapter } from "@/lib/ai/mock-live-adapter";
+import { LOCALE_COOKIE, readLocaleCookie } from "@/lib/i18n/locales";
 import { requireSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
@@ -52,5 +55,7 @@ export async function executeLiveTurn(input: {
     return;
   }
 
-  await getAdapter().execute({ userId: user.id, ...input });
+  const store = await cookies();
+  const locale = readLocaleCookie(store.get(LOCALE_COOKIE)?.value);
+  await getAdapter().execute({ userId: user.id, locale, ...input });
 }

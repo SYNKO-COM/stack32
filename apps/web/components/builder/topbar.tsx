@@ -1,15 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import {
-  Check,
-  Hammer,
-  Layers,
-  Menu,
-  MessageCircle,
-  MoreHorizontal,
-  Rocket,
-} from "lucide-react";
+import { Check, Hammer, Menu, MoreHorizontal, Rocket, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -40,8 +32,7 @@ import { useUiStore } from "@/store/ui-store";
 
 const TABS = [
   { id: "build", icon: Hammer },
-  { id: "live", icon: MessageCircle },
-  { id: "structure", icon: Layers },
+  { id: "agent", icon: Sparkles },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -51,11 +42,7 @@ function ViewTabs({ agentId }: { agentId: string }) {
   const pathname = usePathname();
   const reducedMotion = useReducedMotion();
 
-  const active: TabId = pathname.endsWith("/live")
-    ? "live"
-    : pathname.endsWith("/structure")
-      ? "structure"
-      : "build";
+  const active: TabId = pathname.endsWith("/agent") ? "agent" : "build";
 
   return (
     <nav

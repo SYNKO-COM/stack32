@@ -24,9 +24,18 @@
     "subtitle": "Cet agent n'existe pas ou a été supprimé.",
     "cta": "Retour à vos agents"
   },
+  "noAgentsYet": {
+    "title": "Aucun agent n'est créé pour l'instant",
+    "subtitle": "Créez votre premier agent pour commencer à construire.",
+    "cta": "Créer un nouvel agent"
+  },
   "form": {
     "required": "Ce champ est obligatoire.",
     "emailInvalid": "Veuillez saisir une adresse email valide.",
-    "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères."
+    "passwordTooShort": "Le mot de passe doit contenir au moins 10 caractères.",
+    "passwordMissingLower": "Le mot de passe doit contenir une lettre minuscule.",
+    "passwordMissingUpper": "Le mot de passe doit contenir une lettre majuscule.",
+    "passwordMissingDigit": "Le mot de passe doit contenir un chiffre.",
+    "passwordMissingSymbol": "Le mot de passe doit contenir un symbole (ex. !@#$%)."
   }
 }

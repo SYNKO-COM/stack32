@@ -60,6 +60,9 @@
   "graph": {
     "fallback": "Execution flow will appear here once your agent is built."
   },
+  "project": {
+    "fileMissing": "This file is not available in the current snapshot."
+  },
   "nodes": {
     "input": "Input",
     "guardrail": "Guardrail",
@@ -73,6 +76,36 @@
     "transform": "Transform",
     "sub_agent": "Sub-agent",
     "output": "Output"
+  },
+  "modules": {
+    "title": "Agent structure",
+    "collapse": "Collapse structure",
+    "expand": "Show structure",
+    "resize": "Resize chat and structure panels",
+    "kinds": {
+      "trigger": "Message received",
+      "guard": "Guardrail",
+      "brain": "AI Agent",
+      "router": "Router",
+      "approval": "Approval",
+      "output": "Reply sent",
+      "model": "Model",
+      "memory": "Memory",
+      "knowledge": "Knowledge",
+      "tool": "Tool"
+    },
+    "help": {
+      "trigger": "Starting point: what the user writes to your agent.",
+      "guard": "Checks the message before processing and blocks risky input.",
+      "brain": "The core of the agent: it understands the request and decides what to do.",
+      "router": "Sends the flow one way or another based on the request.",
+      "approval": "Asks for your approval before a sensitive action.",
+      "output": "Formats the final reply sent back to the user.",
+      "model": "The language model used to think and write.",
+      "memory": "What the agent remembers from one message to the next.",
+      "knowledge": "The documents the agent can look into.",
+      "tool": "A concrete action the agent can trigger."
+    }
   },
   "nodeStates": {
     "default": "No additional details for this step.",

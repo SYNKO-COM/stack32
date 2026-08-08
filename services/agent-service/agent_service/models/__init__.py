@@ -11,6 +11,7 @@ from agent_service.models.agent_spec import (
     RuntimeLimits,
     ToolBinding,
     migrate_v1_to_v2,
+    migrate_v2_to_v3,
 )
 from agent_service.models.entities import Agent, AgentVersion, Run, RunEvent
 from agent_service.models.graph_spec import GraphSpec, default_linear_graph
@@ -32,4 +33,5 @@ __all__ = [
     "ToolBinding",
     "default_linear_graph",
     "migrate_v1_to_v2",
+    "migrate_v2_to_v3",
 ]

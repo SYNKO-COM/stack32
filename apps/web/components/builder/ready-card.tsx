@@ -1,19 +1,21 @@
 "use client";
 
-import { ArrowRight, Boxes, Wand2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { TypewriterText } from "@/components/builder/message-motion";
-import { Button } from "@/components/ui/button";
+import { SecretForm } from "@/components/builder/secret-form";
 import { Markdown } from "@/components/shared/markdown";
+import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
+import { listAgentSecretsMeta } from "@/lib/actions/agents";
 import type {
   BuilderAction,
   BuilderSuggestion,
+  BuilderUiComponent,
   IdentitySummary,
 } from "@/lib/domain/types";
-import { cn } from "@/lib/utils";
 
 /** Structured chat reply after identity — no celebration card. */
 export function IdentityConfirmedMessage({
@@ -69,10 +71,8 @@ export function ReadyCard({
   agentId,
   content,
   identitySummary,
-  suggestions,
   actions,
   onFix,
-  onSuggestion,
   animate = false,
   onDone,
 }: {
@@ -82,13 +82,15 @@ export function ReadyCard({
   suggestions?: BuilderSuggestion[];
   actions?: BuilderAction[];
   onFix: () => void;
-  onSuggestion: (prompt: string) => void;
+  onSuggestion?: (prompt: string) => void;
   animate?: boolean;
   onDone?: () => void;
 }) {
   const { t } = useTranslation("builder");
   const router = useRouter();
   const [typedDone, setTypedDone] = useState(!animate);
+  const [needsKey, setNeedsKey] = useState(false);
+  const [checkingKey, setCheckingKey] = useState(false);
   const name = identitySummary?.name;
 
   const lead = name ? t("ready.titleNamed", { name }) : t("ready.title");
@@ -99,6 +101,23 @@ export function ReadyCard({
     onDone?.();
   };
 
+  const goLive = async () => {
+    setCheckingKey(true);
+    try {
+      const secrets = await listAgentSecretsMeta(agentId);
+      const hasLlm = secrets.some((s) => s.secret_kind === "llm_api_key");
+      if (!hasLlm) {
+        setNeedsKey(true);
+        return;
+      }
+      router.push(`/agents/${agentId}/agent`);
+    } catch {
+      router.push(`/agents/${agentId}/agent`);
+    } finally {
+      setCheckingKey(false);
+    }
+  };
+
   if (animate && !typedDone) {
     return (
       <p>
@@ -107,38 +126,58 @@ export function ReadyCard({
     );
   }
 
+  const liveGateForm: BuilderUiComponent = {
+    type: "secret_form",
+    version: "1",
+    requestId: `ready-live-${agentId}`,
+    context: "live",
+    fields: [
+      { key: "provider", type: "select", required: true, suggested_value: "openai" },
+      { key: "api_key", type: "password", required: true },
+    ],
+  };
+
   return (
     <div className="space-y-4">
       <Markdown content={`${lead}\n\n${content}`} />
 
+      {needsKey ? (
+        <div className="rounded-xl border border-border p-3">
+          <p className="mb-2 text-sm text-muted-foreground">
+            {t("ready.llmKeyRequired", {
+              defaultValue: "Add your LLM API key before testing Live.",
+            })}
+          </p>
+          <SecretForm
+            uiComponent={liveGateForm}
+            agentId={agentId}
+            runId={liveGateForm.requestId}
+            onSubmitted={() => {
+              setNeedsKey(false);
+              router.push(`/agents/${agentId}/agent`);
+            }}
+          />
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
-        {(actions ?? ["test_agent", "view_structure"]).map((action) => {
+        {(actions ?? ["test_agent"]).map((action) => {
           if (action === "test_agent") {
             return (
               <Button
                 key={action}
                 size="sm"
                 className="rounded-full"
-                onClick={() => router.push(`/agents/${agentId}/live`)}
+                disabled={checkingKey}
+                onClick={() => void goLive()}
               >
                 {t("actions.testAgent")}
                 <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
               </Button>
             );
           }
-          if (action === "view_structure") {
-            return (
-              <Button
-                key={action}
-                size="sm"
-                variant="outline"
-                className="rounded-full"
-                onClick={() => router.push(`/agents/${agentId}/structure`)}
-              >
-                <Boxes className="mr-1 size-3.5" aria-hidden="true" />
-                {t("actions.viewStructure")}
-              </Button>
-            );
+          if (action === "view_structure" || action === "view_changes") {
+            return null;
           }
           return (
             <Button
@@ -153,43 +192,6 @@ export function ReadyCard({
           );
         })}
       </div>
-
-      {suggestions && suggestions.length > 0 ? (
-        <div className="space-y-2 border-t border-border/50 pt-3">
-          <p className="text-xs font-medium text-muted-foreground">{t("ready.improveTitle")}</p>
-          <ul className="space-y-1.5">
-            {suggestions.map((s) => {
-              const title = t(`ready.suggestions.${s.labelKey}`, {
-                defaultValue: s.labelKey,
-              });
-              return (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (s.action === "test_agent") {
-                        router.push(`/agents/${agentId}/live`);
-                        return;
-                      }
-                      if (s.prompt) onSuggestion(s.prompt);
-                    }}
-                    className={cn(
-                      "group flex w-full items-start gap-2 rounded-xl px-2.5 py-2 text-left text-sm",
-                      "text-foreground/85 transition-colors hover:bg-foreground/[0.04]",
-                    )}
-                  >
-                    <Wand2
-                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground group-hover:text-brand"
-                      aria-hidden="true"
-                    />
-                    <span className="font-medium text-foreground">{title}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 }

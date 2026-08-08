@@ -24,9 +24,18 @@
     "subtitle": "This agent doesn't exist or was deleted.",
     "cta": "Back to your agents"
   },
+  "noAgentsYet": {
+    "title": "No agents created yet",
+    "subtitle": "Create your first agent to start building.",
+    "cta": "Create a new agent"
+  },
   "form": {
     "required": "This field is required.",
     "emailInvalid": "Please enter a valid email address.",
-    "passwordTooShort": "Password must be at least 8 characters."
+    "passwordTooShort": "Password must be at least 10 characters.",
+    "passwordMissingLower": "Password must include a lowercase letter.",
+    "passwordMissingUpper": "Password must include an uppercase letter.",
+    "passwordMissingDigit": "Password must include a digit.",
+    "passwordMissingSymbol": "Password must include a symbol (e.g. !@#$%)."
   }
 }

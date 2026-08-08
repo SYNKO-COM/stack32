@@ -1,8 +1,28 @@
 {
   "tabs": {
     "build": "Build",
-    "live": "Live",
-    "structure": "Structure"
+    "agent": "AI Agent"
+  },
+  "structurePanel": {
+    "title": "Executable structure",
+    "subtitle": "This mirrors the real code Stack32 generated and tested.",
+    "openFile": "Open file",
+    "viewCode": "View code",
+    "boundTo": "Bound to {{provider}}",
+    "notBound": "No connection bound",
+    "sideEffect": "Can change data",
+    "empty": "No project built yet. Describe your agent to generate it.",
+    "nodeTypes": {
+      "manifest": "Manifest",
+      "entrypoint": "Entry point",
+      "orchestrator": "Orchestrator",
+      "prompts": "Instructions",
+      "security": "Security policy",
+      "tool_registry": "Tools",
+      "tool": "Tool",
+      "memory": "Memory",
+      "tests": "Tests"
+    }
   },
   "sidebar": {
     "agentsTitle": "AI agents",
@@ -25,13 +45,60 @@
   "working": {
     "title": "Stack32 is working…",
     "hint": "I'm preparing your agent. This usually takes a few seconds.",
+    "planning": "Planning next moves",
     "activities": {
       "reading": "Reading what you asked",
       "understanding": "Understanding the goal",
       "draftingIdentity": "Choosing a name and role",
       "mappingCapabilities": "Picking useful abilities",
       "preparingStructure": "Preparing the structure"
+    },
+    "operations": {
+      "builder.run.started": "Starting build",
+      "builder.sandbox.ready": "Sandbox ready",
+      "builder.project.scaffolding": "Scaffolding the project",
+      "builder.context.indexing": "Indexing the project",
+      "builder.context.searching": "Searching the project",
+      "builder.file.read": "Reading files",
+      "builder.file.created": "Writing files",
+      "builder.file.patch.completed": "Applying edits",
+      "builder.command.completed": "Running a command",
+      "builder.tests.started": "Running tests",
+      "builder.tests.passed": "Tests passed",
+      "builder.tests.failed": "Tests failed",
+      "builder.repair.started": "Inspecting the failure",
+      "builder.security.check": "Checking the code",
+      "builder.snapshot.created": "Snapshot created",
+      "builder.model.call": "Thinking",
+      "builder.ready": "Agent ready",
+      "step.understanding": "Understanding your request",
+      "step.capabilities": "Choosing abilities",
+      "step.building": "Building the agent",
+      "step.testing": "Running a quick test",
+      "step.repairing": "Fixing issues"
     }
+  },
+  "activity": {
+    "readOne": "Read {{path}}",
+    "readMany": "Explored {{count}} files",
+    "wroteOne": "Updated {{path}}",
+    "wroteMany": "Updated {{count}} files",
+    "indexed": "Indexed the project",
+    "searched": "Searched the project · {{count}}",
+    "understood": "Understood your request",
+    "planning": "Planning next moves",
+    "identity": "Confirmed identity",
+    "spec": "Updated agent instructions",
+    "graph": "Updated structure",
+    "validation": "Checked configuration",
+    "testsRun": "Running tests",
+    "testsOk": "Tests passed",
+    "testsFail": "Tests failed — inspecting",
+    "repair": "Repairing",
+    "sandbox": "Sandbox ready",
+    "scaffold": "Scaffolding project",
+    "snapshot": "Snapshot created",
+    "thinking": "Thinking"
   },
   "topbar": {
     "publish": "Publish",
@@ -124,15 +191,11 @@
     "title": "First version ready",
     "titleNamed": "{{name}} is ready",
     "success": "Your agent is ready to try. I wrote its instructions, unlocked abilities and memory, built the structure, and passed a quick test. Open Live to chat with it, or keep improving it here.",
-    "improveTitle": "Want to make it better?",
-    "suggestions": {
-      "tryLive": "Try it in Live now",
-      "refineTone": "Make answers clearer",
-      "addKnowledge": "Add my documents",
-      "longMemory": "Remember things long term",
-      "socratic": "Guide me with questions first",
-      "connectApps": "Prepare app connections later"
-    }
+    "llmKeyRequired": "Add your LLM API key before testing Live."
+  },
+  "modify": {
+    "success": "Done. I applied your change and updated the agent. Keep chatting here to refine it, or open Structure to inspect what changed.",
+    "warning": "I applied your changes, but the quick test found a small issue. We can fix it, or you can keep iterating here."
   },
   "secrets": {
     "prompt": "For your agent to think, connect a brain (LLM) with your API key.\n\nPick a provider, paste your key, then save. It is encrypted and will never be shown in full again.",
@@ -177,10 +240,42 @@
     "submitting": "Building…",
     "formClosed": "Settings saved. Building now."
   },
+  "questions": {
+    "prompt": "Before I continue, I need one or two quick details so the agent is built the right way.",
+    "hint": "Answer below — you can change this later by asking me in chat, but not by editing this form again.",
+    "formClosed": "Thanks — I saved your answers and I’m continuing.",
+    "continue": "Continue",
+    "saving": "Saving…",
+    "required": "Please fill in the required fields.",
+    "error": "Could not save your answers. Please try again.",
+    "fields": {
+      "goal_details": "What should this agent accomplish?",
+      "knowledge_scope": "Which documents or topics should it know?",
+      "connection_intent": "Does it need an external account (email, calendar…)?",
+      "audience": "Who will use this agent?"
+    },
+    "placeholders": {
+      "goal_details": "Describe the main job in one or two sentences…",
+      "knowledge_scope": "e.g. product docs, pricing PDF…",
+      "audience": "e.g. sales team, founders…"
+    },
+    "options": {
+      "none": "No account for now",
+      "google": "Yes — Google (Gmail / Calendar)",
+      "later": "Maybe later — remind me",
+      "connection_intent": {
+        "none": "No account for now",
+        "google": "Yes — Google (Gmail / Calendar)",
+        "later": "Maybe later — remind me"
+      }
+    }
+  },
   "errors": {
     "buildFailed": "Build stopped.",
     "buildFailedDetail": "I couldn't finish this build. You can retry, rephrase, or ask me to fix it.",
-    "validationFailed": "The agent configuration is invalid. Rephrase or ask for a fix."
+    "validationFailed": "The agent configuration is invalid. Rephrase or ask for a fix.",
+    "canceled": "Stopped.",
+    "canceledDetail": "Stopped. Tell me what to change next whenever you're ready."
   },
   "progress": {
     "started": "Starting…",

@@ -68,7 +68,11 @@ async def process_run_by_id(run_id: str) -> dict[str, Any]:
         )
 
     if run_type == "ingestion":
-        from agent_service.knowledge.ingest import ingest_text_source, ingest_url_source
+        from agent_service.knowledge.ingest import (
+            ingest_storage_source,
+            ingest_text_source,
+            ingest_url_source,
+        )
 
         payload = run.get("input") or {}
         source_id = payload.get("source_id")
@@ -78,6 +82,15 @@ async def process_run_by_id(run_id: str) -> dict[str, Any]:
                 agent_id=agent_id,
                 source_id=source_id,
                 url=payload["url"],
+            )
+        elif payload.get("storage_path"):
+            await ingest_storage_source(
+                user_id=user_id,
+                agent_id=agent_id,
+                source_id=source_id,
+                storage_path=payload["storage_path"],
+                filename=payload.get("filename") or "document.txt",
+                mime_type=payload.get("mime_type"),
             )
         else:
             await ingest_text_source(

@@ -1,4 +1,5 @@
 import type { OnboardingAnswers, Profile, User } from "@/lib/domain/types";
+import { AuthUiError } from "@/lib/auth/errors";
 import type { AuthRepository, SignUpResult } from "@/lib/repositories/interfaces";
 
 import { emitMockChange } from "./events";
@@ -55,9 +56,28 @@ export class MockAuthRepository implements AuthRepository {
 
   async signUpWithPassword(email: string, _password: string): Promise<SignUpResult> {
     await delay(600);
+    // Mirror production: email signup requires OTP before a session exists.
+    writeState({ user: null, profile: makeProfile("user_mock") });
+    writeStore("pending_signup_email", email);
+    return {
+      user: makeUser(email),
+      requiresEmailConfirmation: true,
+    };
+  }
+
+  async verifySignupOtp(email: string, token: string): Promise<User> {
+    await delay(400);
+    if (token !== "123456") {
+      throw new AuthUiError("auth:errors.invalidOtp");
+    }
     const user = makeUser(email);
     writeState({ user, profile: makeProfile(user.id) });
-    return { user, requiresEmailConfirmation: false };
+    removeStore("pending_signup_email");
+    return user;
+  }
+
+  async resendSignupOtp(_email: string): Promise<void> {
+    await delay(400);
   }
 
   async signInWithGoogle(): Promise<User | null> {

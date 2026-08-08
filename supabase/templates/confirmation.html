@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#161616;">
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;width:100%;">
+  <tr>
+    <td align="center" style="padding:40px 16px;">
+
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;width:100%;">
+
+        <!-- LOGO -->
+        <tr>
+          <td style="padding:0 0 22px 0;">
+            <div style="font-size:24px;font-weight:800;letter-spacing:-0.8px;color:#151515;">
+              STACK<span style="color:#fa720b;">32</span>
+            </div>
+          </td>
+        </tr>
+
+        <!-- GRADIENT -->
+        <tr>
+          <td
+            style="
+              height:4px;
+              background:#fa720b;
+              background-image:linear-gradient(90deg,#fcb802 0%,#fa720b 100%);
+              border-radius:14px 14px 0 0;
+              font-size:0;
+              line-height:0;
+            "
+          >
+            &nbsp;
+          </td>
+        </tr>
+
+        <!-- CARD -->
+        <tr>
+          <td
+            style="
+              border:1px solid #e7e7e7;
+              border-top:0;
+              border-radius:0 0 14px 14px;
+              padding:38px 36px;
+              background:#ffffff;
+            "
+          >
+
+            <h1
+              style="
+                margin:0 0 16px 0;
+                font-size:28px;
+                line-height:36px;
+                color:#151515;
+                font-weight:800;
+                letter-spacing:-0.6px;
+              "
+            >
+              Confirm your email address
+            </h1>
+
+            <p
+              style="
+                margin:0 0 12px 0;
+                font-size:15px;
+                line-height:24px;
+                color:#686868;
+              "
+            >
+              Welcome to Stack32.
+            </p>
+
+            <p
+              style="
+                margin:0;
+                font-size:15px;
+                line-height:24px;
+                color:#686868;
+              "
+            >
+              Enter the verification code below in Stack32 to confirm your email address and finish creating your account. This code expires in 60 minutes.
+            </p>
+
+            <!-- OTP -->
+            <div
+              style="
+                margin:28px 0 22px 0;
+                padding:22px 20px;
+                border:1px solid #ebebeb;
+                background:#fafafa;
+                border-radius:12px;
+                text-align:center;
+              "
+            >
+
+              <div
+                style="
+                  margin-bottom:10px;
+                  font-size:11px;
+                  line-height:16px;
+                  text-transform:uppercase;
+                  letter-spacing:1.3px;
+                  color:#999999;
+                  font-weight:700;
+                "
+              >
+                Verification code
+              </div>
+
+              <div
+                style="
+                  font-family:'Courier New',Courier,monospace;
+                  font-size:32px;
+                  line-height:40px;
+                  font-weight:800;
+                  letter-spacing:9px;
+                  color:#fa720b;
+                "
+              >
+                {{ .Token }}
+              </div>
+
+            </div>
+
+            <!-- DIVIDER -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+              <tr>
+                <td style="border-top:1px solid #eeeeee;font-size:0;line-height:0;">
+                  &nbsp;
+                </td>
+              </tr>
+            </table>
+
+            <p
+              style="
+                margin:22px 0 16px 0;
+                font-size:13px;
+                line-height:21px;
+                color:#888888;
+              "
+            >
+              Or confirm your email address directly using the button below.
+            </p>
+
+            <!-- BUTTON -->
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+              <tr>
+                <td
+                  style="
+                    border-radius:10px;
+                    background:#fa720b;
+                    background-image:linear-gradient(135deg,#fcb802 0%,#fa720b 100%);
+                  "
+                >
+                  <a
+                    href="{{ .ConfirmationURL }}"
+                    style="
+                      display:inline-block;
+                      padding:14px 22px;
+                      font-size:14px;
+                      font-weight:800;
+                      color:#151515;
+                      text-decoration:none;
+                      border-radius:10px;
+                    "
+                  >
+                    Confirm email address
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <!-- SECURITY -->
+            <p
+              style="
+                margin:28px 0 0 0;
+                font-size:12px;
+                line-height:19px;
+                color:#999999;
+              "
+            >
+              If you didn’t create a Stack32 account, you can safely ignore this email.
+            </p>
+
+            <p
+              style="
+                margin:8px 0 0 0;
+                font-size:12px;
+                line-height:19px;
+                color:#999999;
+              "
+            >
+              Never share your verification code with anyone.
+            </p>
+
+          </td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+          <td
+            style="
+              padding:20px 0;
+              text-align:center;
+              font-size:11px;
+              line-height:18px;
+              color:#aaaaaa;
+            "
+          >
+            Stack32 · Build powerful AI agents.
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

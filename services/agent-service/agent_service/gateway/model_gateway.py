@@ -40,6 +40,7 @@ class ModelCallResult(BaseModel):
     output_tokens: int = 0
     cost_usd: float = 0.0
     latency_ms: int = 0
+    tool_calls: list[dict[str, Any]] = []
 
 
 class CircuitBreaker:
@@ -144,12 +145,13 @@ class ModelGateway:
         self,
         *,
         profile: ModelProfile,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         response_model: type[T] | None = None,
         temperature: float = 0.3,
         max_tokens: int = 2048,
         api_key: str | None = None,
         provider: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> ModelCallResult | T:
         import asyncio
 
@@ -174,6 +176,7 @@ class ModelGateway:
                     max_tokens=max_tokens,
                     api_key=api_key,
                     provider=provider,
+                    tools=tools,
                 ),
                 timeout=timeout,
             )
@@ -197,16 +200,17 @@ class ModelGateway:
         self,
         *,
         profile: ModelProfile,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         response_model: type[T] | None,
         temperature: float,
         max_tokens: int,
         api_key: str | None,
         provider: str | None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> ModelCallResult | T:
         settings = get_settings()
         if settings.AI_EXECUTION_MODE == "mock":
-            return self._mock_complete(profile, messages, response_model)
+            return self._mock_complete(profile, messages, response_model, tools=tools)
 
         if settings.AI_EXECUTION_MODE == "disabled":
             raise RuntimeError("MODEL_PROVIDER_UNAVAILABLE")
@@ -224,6 +228,7 @@ class ModelGateway:
                     max_tokens=max_tokens,
                     response_model=response_model,
                     api_key=api_key,
+                    tools=tools,
                 )
                 self._breaker.record_success(model)
                 return result
@@ -251,6 +256,7 @@ class ModelGateway:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     response_model=response_model,
+                    tools=tools,
                 )
                 self._breaker.record_success(model)
                 return result
@@ -329,11 +335,12 @@ class ModelGateway:
         self,
         *,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float,
         max_tokens: int,
         response_model: type[T] | None,
         api_key: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> ModelCallResult | T:
         from litellm import acompletion
 
@@ -351,11 +358,14 @@ class ModelGateway:
             kwargs["api_key"] = api_key
         if response_model is not None:
             kwargs["response_format"] = {"type": "json_object"}
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
 
         try:
             response = await acompletion(**kwargs)
         except Exception as chat_exc:  # noqa: BLE001
-            if not is_codex:
+            if not is_codex or tools:
                 raise
             # Fallback: OpenAI Codex often requires the Responses API.
             logger.info("Codex chat failed (%s); trying Responses API", type(chat_exc).__name__)
@@ -368,7 +378,29 @@ class ModelGateway:
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         choice = response.choices[0]
-        content = choice.message.content or ""
+        message = choice.message
+        content = message.content or ""
+        raw_tool_calls = getattr(message, "tool_calls", None) or []
+        parsed_calls: list[dict[str, Any]] = []
+        for tc in raw_tool_calls:
+            fn = getattr(tc, "function", None)
+            name = getattr(fn, "name", None) if fn is not None else None
+            args_raw = getattr(fn, "arguments", "{}") if fn is not None else "{}"
+            call_id = getattr(tc, "id", None) or f"call_{len(parsed_calls)}"
+            if not name:
+                continue
+            try:
+                import json
+
+                arguments = json.loads(args_raw) if isinstance(args_raw, str) else (args_raw or {})
+            except Exception:  # noqa: BLE001
+                arguments = {"_raw": args_raw}
+            if not isinstance(arguments, dict):
+                arguments = {"value": arguments}
+            parsed_calls.append(
+                {"call_id": str(call_id), "tool_id": str(name), "arguments": arguments}
+            )
+
         usage = getattr(response, "usage", None)
         input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
@@ -382,6 +414,7 @@ class ModelGateway:
             output_tokens=output_tokens,
             cost_usd=cost,
             latency_ms=latency_ms,
+            tool_calls=parsed_calls,
         )
         if response_model is not None:
             return response_model.model_validate_json(content)
@@ -452,10 +485,51 @@ class ModelGateway:
     def _mock_complete(
         self,
         profile: ModelProfile,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         response_model: type[T] | None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> ModelCallResult | T:
-        user_text = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+        user_text = next(
+            (str(m.get("content") or "") for m in reversed(messages) if m.get("role") == "user"),
+            "",
+        )
+        tool_names = {
+            (t.get("function") or {}).get("name")
+            for t in (tools or [])
+            if isinstance(t, dict)
+        }
+        # Agentic mock: if calculator is available and expression-like input, emit a tool call.
+        if "calculator" in tool_names and any(ch.isdigit() for ch in user_text) and any(
+            op in user_text for op in ("+", "-", "*", "/", "=")
+        ):
+            # Avoid re-calling tools when observations are already present.
+            has_tool_msg = any(m.get("role") == "tool" for m in messages)
+            if not has_tool_msg:
+                import re
+
+                expr = re.sub(r"[^0-9+\-*/(). ]", "", user_text).strip() or "1+1"
+                return ModelCallResult(
+                    content="",
+                    provider="mock",
+                    model=f"mock/{profile.value}",
+                    input_tokens=40,
+                    output_tokens=20,
+                    tool_calls=[
+                        {
+                            "call_id": "call_mock_calc",
+                            "tool_id": "calculator",
+                            "arguments": {"expression": expr},
+                        }
+                    ],
+                )
+            return ModelCallResult(
+                content=f"Based on the calculator result, the answer is ready. ({user_text[:120]})",
+                provider="mock",
+                model=f"mock/{profile.value}",
+                input_tokens=80,
+                output_tokens=40,
+            )
+
         name = "Research Assistant"
         role = "Help the user research and summarize information"
         if "name" in user_text.lower():
@@ -471,7 +545,7 @@ class ModelGateway:
             except Exception:  # noqa: BLE001
                 return response_model.model_validate({})
         return ModelCallResult(
-            content=content,
+            content=content if not tools else f"Mock live answer for: {user_text[:200]}",
             provider="mock",
             model=f"mock/{profile.value}",
             input_tokens=100,

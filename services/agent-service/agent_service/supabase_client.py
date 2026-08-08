@@ -315,8 +315,11 @@ class Persistence(SupabaseRepository):
             if not isinstance(meta, dict):
                 continue
             ui = meta.get("ui_component") or meta.get("uiComponent") or {}
-            rid = ui.get("request_id") or ui.get("requestId") or meta.get("interrupt_run_id")
-            if rid != request_id:
+            ui_rid = ui.get("request_id") or ui.get("requestId")
+            interrupt_rid = meta.get("interrupt_run_id") or meta.get("interruptRunId")
+            # Forms use a unique ui request_id; resume endpoints pass the run_id
+            # (also stored as interrupt_run_id). Match either so the form collapses.
+            if request_id not in {ui_rid, interrupt_rid}:
                 continue
             patched = {
                 **meta,
@@ -352,6 +355,43 @@ class Persistence(SupabaseRepository):
                     params={"id": f"eq.{row['id']}"},
                 )
 
+    async def tag_thinking_with_run(self, *, thread_id: str, run_id: str) -> None:
+        """Attach the active run id to the latest thinking bubble (for Stop + SSE)."""
+        rows = await self._select(
+            "builder_messages",
+            {
+                "thread_id": f"eq.{thread_id}",
+                "role": "eq.assistant",
+                "select": "id,metadata",
+                "order": "created_at.desc",
+                "limit": "5",
+            },
+        )
+        for row in rows:
+            meta = row.get("metadata") or {}
+            if not isinstance(meta, dict) or meta.get("card") != "thinking":
+                continue
+            patched = {**meta, "run_id": run_id, "interrupt_run_id": run_id}
+            await self.update_assistant_message(message_id=row["id"], metadata=patched)
+            return
+
+    async def get_latest_active_build_run(
+        self, *, agent_id: str, user_id: str
+    ) -> dict[str, Any] | None:
+        rows = await self._select(
+            "runs",
+            {
+                "agent_id": f"eq.{agent_id}",
+                "user_id": f"eq.{user_id}",
+                "run_type": "eq.build",
+                "status": "in.(queued,running)",
+                "select": "*",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+        return rows[0] if rows else None
+
     async def update_agent_status(self, agent_id: str, user_id: str, status: str) -> None:
         async with get_supabase_admin_client() as client:
             await client.patch(
@@ -362,14 +402,14 @@ class Persistence(SupabaseRepository):
 
     async def claim_first_ready_celebration(self, *, agent_id: str, user_id: str) -> bool:
         """Atomically mark first Ready celebration. Returns True only once per agent."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         agent = await self.get_owned_agent(agent_id, user_id)
         if not agent:
             return False
         if agent.get("first_ready_celebrated"):
             return False
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         async with get_supabase_admin_client() as client:
             response = await client.patch(
                 "/agents",
