@@ -310,3 +310,13 @@
     mask-image: radial-gradient(ellipse at center, black 35%, transparent 75%);
   }
 }
+
+@keyframes builder-live-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}

@@ -63,7 +63,9 @@ export function BuilderActivityFeed({
                     <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand/70 opacity-70" />
                     <span className="relative inline-flex size-1.5 rounded-full bg-brand" />
                   </span>
-                  {line.text}
+                  <span className="animate-[builder-live-pulse_1.6s_ease-in-out_infinite]">
+                    {line.text}
+                  </span>
                 </span>
               ) : (
                 line.text

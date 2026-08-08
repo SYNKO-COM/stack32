@@ -24,6 +24,8 @@ router = APIRouter(tags=["builder"])
 class BuilderMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
     thread_id: UUID | None = None
+    # UI language the assistant must answer in, regardless of the prompt language.
+    locale: str = Field(default="en", max_length=8)
 
 
 class IdentityResumeRequest(BaseModel):
@@ -93,6 +95,7 @@ async def post_agent_builder_message(
         agent_id=str(agent_id),
         thread_id=thread_id,
         content=body.content,
+        locale=body.locale,
     )
     return _http_from_result(result)
 

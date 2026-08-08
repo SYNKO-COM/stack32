@@ -21,6 +21,8 @@ export interface BuilderExecutionInput {
   agentId: string;
   threadId: string;
   prompt: string;
+  /** UI language the assistant must answer in ("en" | "fr"). */
+  locale?: string;
 }
 
 export interface LiveExecutionInput {
@@ -28,6 +30,7 @@ export interface LiveExecutionInput {
   agentId: string;
   threadId: string;
   prompt: string;
+  locale?: string;
 }
 
 export interface BuilderExecutionAdapter {
@@ -50,33 +53,33 @@ export class NotImplementedError extends Error {
 
 /** Calls the Agent Service builder endpoints; persistence is handled server-side. */
 export class RealBuilderExecutionAdapter implements BuilderExecutionAdapter {
-  async execute({ agentId, threadId, prompt }: BuilderExecutionInput): Promise<void> {
+  async execute({ agentId, threadId, prompt, locale }: BuilderExecutionInput): Promise<void> {
     const accessToken = await requireAccessToken();
     await agentServiceFetch(`/v1/agents/${agentId}/builder/messages`, {
       method: "POST",
       accessToken,
-      body: { content: prompt, thread_id: threadId },
+      body: { content: prompt, thread_id: threadId, locale },
     });
   }
 
-  async repair({ agentId }: Omit<BuilderExecutionInput, "prompt">): Promise<void> {
+  async repair({ agentId, locale }: Omit<BuilderExecutionInput, "prompt">): Promise<void> {
     const accessToken = await requireAccessToken();
     await agentServiceFetch(`/v1/agents/${agentId}/repair`, {
       method: "POST",
       accessToken,
-      body: {},
+      body: { locale },
     });
   }
 }
 
 /** Calls the Agent Service live runtime; persistence is handled server-side. */
 export class RealLiveExecutionAdapter implements LiveExecutionAdapter {
-  async execute({ threadId, prompt }: LiveExecutionInput): Promise<void> {
+  async execute({ threadId, prompt, locale }: LiveExecutionInput): Promise<void> {
     const accessToken = await requireAccessToken();
     await agentServiceFetch(`/v1/live/threads/${threadId}/messages`, {
       method: "POST",
       accessToken,
-      body: { content: prompt, use_published: false },
+      body: { content: prompt, use_published: false, locale },
     });
   }
 }

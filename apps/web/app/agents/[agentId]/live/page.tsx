@@ -1,10 +1,11 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useParams } from "next/navigation";
-
-import { LiveView } from "@/components/builder/live-view";
-
-export default function LivePage() {
-  const params = useParams<{ agentId: string }>();
-  return <LiveView agentId={params.agentId} />;
+/** Live was merged into the "Agent IA" tab. */
+export default async function LivePage({
+  params,
+}: {
+  params: Promise<{ agentId: string }>;
+}) {
+  const { agentId } = await params;
+  redirect(`/agents/${agentId}/agent`);
 }

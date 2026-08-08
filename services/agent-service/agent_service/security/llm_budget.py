@@ -57,6 +57,16 @@ def get_run_llm_budget() -> RunLlmBudget | None:
 
 
 @asynccontextmanager
+async def llm_budget_bypass():
+    """Temporarily clear the run budget (e.g. final user-facing chat summary)."""
+    token = _current_budget.set(None)
+    try:
+        yield
+    finally:
+        _current_budget.reset(token)
+
+
+@asynccontextmanager
 async def llm_run_budget(
     *,
     run_id: str,

@@ -12,6 +12,14 @@ export type RunActivityEvent = {
   createdAt?: string;
 };
 
+export type ActivityLineSpec = {
+  id: string;
+  /** i18n key under builder:activity.* */
+  key: string;
+  params?: Record<string, string | number>;
+  active?: boolean;
+};
+
 /**
  * Live run_events for the active Builder run — powers Cursor-style activity lines.
  */
@@ -20,6 +28,8 @@ export function useRunActivity(runId: string | null | undefined, enabled: boolea
     queryKey: ["run-activity", runId],
     enabled: Boolean(runId) && enabled,
     refetchInterval: enabled ? 600 : false,
+    // Never blank the feed while a refetch is in flight.
+    placeholderData: (prev) => prev,
     queryFn: async (): Promise<RunActivityEvent[]> => {
       if (!runId) return [];
       const supabase = requireSupabaseBrowserClient();
@@ -48,86 +58,128 @@ export function useRunActivity(runId: string | null | undefined, enabled: boolea
   });
 }
 
-/** Collapse raw events into Cursor-like status lines. */
+function shortPath(path?: string): string {
+  if (!path) return "";
+  const parts = path.split("/");
+  return parts[parts.length - 1] || path;
+}
+
+/** Collapse raw events into Cursor-like status line specs (i18n keys). */
 export function summarizeActivity(events: RunActivityEvent[]): {
-  lines: { id: string; text: string; active: boolean }[];
+  lines: ActivityLineSpec[];
 } {
-  const fileCreates = events.filter((e) =>
-    e.eventType.includes("file.created") || e.eventType.includes("file.write"),
+  const fileCreates = events.filter(
+    (e) => e.eventType.includes("file.created") || e.eventType.includes("file.write"),
   );
   const fileReads = events.filter((e) => e.eventType.includes("file.read"));
   const searches = events.filter(
     (e) =>
-      e.eventType.includes("context.search") ||
-      e.eventType.includes("context.indexing"),
+      e.eventType.includes("context.search") || e.eventType.includes("context.indexing"),
   );
 
-  const lines: { id: string; text: string; active: boolean }[] = [];
+  const lines: (ActivityLineSpec & { order: number })[] = [];
   const seen = new Set<string>();
 
-  const push = (id: string, text: string, active = false) => {
-    if (seen.has(id)) return;
-    seen.add(id);
-    lines.push({ id, text, active });
+  const firstSequence = (matching: RunActivityEvent[]): number =>
+    matching.reduce((min, e) => Math.min(min, e.sequence), Number.MAX_SAFE_INTEGER);
+
+  const push = (spec: ActivityLineSpec, order: number) => {
+    if (seen.has(spec.id)) return;
+    seen.add(spec.id);
+    lines.push({ ...spec, order });
   };
 
   if (fileReads.length > 0) {
     push(
-      "reads",
       fileReads.length === 1
-        ? `Read ${fileReads[0]?.path ?? "a file"}`
-        : `Explored ${fileReads.length} files`,
+        ? {
+            id: "reads",
+            key: "readOne",
+            params: { path: shortPath(fileReads[0]?.path) || "…" },
+          }
+        : { id: "reads", key: "readMany", params: { count: fileReads.length } },
+      firstSequence(fileReads),
     );
   }
   if (fileCreates.length > 0) {
     push(
-      "writes",
       fileCreates.length === 1
-        ? `Wrote ${fileCreates[0]?.path ?? "a file"}`
-        : `Wrote ${fileCreates.length} files`,
+        ? {
+            id: "writes",
+            key: "wroteOne",
+            params: { path: shortPath(fileCreates[0]?.path) || "…" },
+          }
+        : { id: "writes", key: "wroteMany", params: { count: fileCreates.length } },
+      firstSequence(fileCreates),
     );
   }
   if (searches.length > 0) {
     push(
-      "search",
       searches.length === 1
-        ? "Indexed project context"
-        : `Explored context · ${searches.length} searches`,
+        ? { id: "search", key: "indexed" }
+        : { id: "search", key: "searched", params: { count: searches.length } },
+      firstSequence(searches),
     );
   }
 
-  // Prefer high-signal milestones (avoid one line per tiny event).
-  const milestones: { match: (t: string) => boolean; text: string; id: string }[] = [
-    { id: "understood", match: (t) => t.includes("analysis") || t.includes("understanding"), text: "Understood your request" },
-    { id: "planning", match: (t) => t.includes("plan.created") || t.includes("architecture"), text: "Planning next moves" },
-    { id: "identity", match: (t) => t.includes("identity"), text: "Confirmed identity" },
-    { id: "spec", match: (t) => t.includes("spec.updated"), text: "Updated agent instructions" },
-    { id: "graph", match: (t) => t.includes("graph.updated"), text: "Updated structure" },
-    { id: "validation", match: (t) => t.includes("validation"), text: "Checked configuration" },
-    { id: "tests-run", match: (t) => t.includes("test.started") || t.includes("tests.started"), text: "Running tests" },
-    { id: "tests-ok", match: (t) => t.includes("test.completed") || t.includes("tests.passed"), text: "Tests passed" },
-    { id: "tests-fail", match: (t) => t.includes("tests.failed"), text: "Tests failed — inspecting" },
-    { id: "repair", match: (t) => t.includes("repair"), text: "Repairing" },
-    { id: "sandbox", match: (t) => t.includes("sandbox"), text: "Sandbox ready" },
-    { id: "scaffold", match: (t) => t.includes("scaffolding") || t.includes("project.scaffolding"), text: "Scaffolding project" },
-    { id: "snapshot", match: (t) => t.includes("snapshot"), text: "Snapshot created" },
-    { id: "thinking", match: (t) => t.includes("model.call") || t.includes("builder.model"), text: "Thinking" },
+  const milestones: { match: (t: string) => boolean; key: string; id: string }[] = [
+    {
+      id: "understood",
+      match: (t) => t.includes("analysis") || t.includes("understanding"),
+      key: "understood",
+    },
+    {
+      id: "planning",
+      match: (t) => t.includes("plan.created") || t.includes("architecture"),
+      key: "planning",
+    },
+    { id: "identity", match: (t) => t.includes("identity"), key: "identity" },
+    { id: "spec", match: (t) => t.includes("spec.updated"), key: "spec" },
+    { id: "graph", match: (t) => t.includes("graph.updated"), key: "graph" },
+    { id: "validation", match: (t) => t.includes("validation"), key: "validation" },
+    {
+      id: "tests-run",
+      match: (t) => t.includes("test.started") || t.includes("tests.started"),
+      key: "testsRun",
+    },
+    {
+      id: "tests-ok",
+      match: (t) => t.includes("test.completed") || t.includes("tests.passed"),
+      key: "testsOk",
+    },
+    { id: "tests-fail", match: (t) => t.includes("tests.failed"), key: "testsFail" },
+    { id: "repair", match: (t) => t.includes("repair"), key: "repair" },
+    { id: "sandbox", match: (t) => t.includes("sandbox"), key: "sandbox" },
+    {
+      id: "scaffold",
+      match: (t) => t.includes("scaffolding") || t.includes("project.scaffolding"),
+      key: "scaffold",
+    },
+    { id: "snapshot", match: (t) => t.includes("snapshot"), key: "snapshot" },
+    {
+      id: "thinking",
+      match: (t) => t.includes("model.call") || t.includes("builder.model"),
+      key: "thinking",
+    },
   ];
 
   for (const m of milestones) {
-    if (events.some((e) => m.match(e.eventType))) {
-      push(m.id, m.text);
+    const matching = events.filter((e) => m.match(e.eventType));
+    if (matching.length > 0) {
+      push({ id: m.id, key: m.key }, firstSequence(matching));
     }
   }
 
   if (lines.length === 0) {
-    push("boot", "Planning next moves", true);
+    push({ id: "boot", key: "planning", active: true }, 0);
     return { lines };
   }
 
-  // Keep the feed compact like Cursor (last ~8 lines).
-  const compact = lines.slice(-8);
-  const last = compact[compact.length - 1];
+  // Chronological, and never truncated: a line must not vanish once shown.
+  const ordered = [...lines]
+    .sort((a, b) => a.order - b.order)
+    .map(({ order: _order, ...spec }) => spec);
+  const last = ordered[ordered.length - 1];
   if (last) last.active = true;
-  return { lines: compact };
+  return { lines: ordered };
 }

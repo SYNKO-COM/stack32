@@ -47,7 +47,7 @@ async def cancel_run(run_id: UUID, user: CurrentUser) -> dict[str, Any]:
             agent_id=str(agent_id),
             user_id=user.user_id,
             content="builder:errors.canceledDetail",
-            metadata={"tone": "warning"},
+            metadata={"tone": "normal"},
         )
     return run
 

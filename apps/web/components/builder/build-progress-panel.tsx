@@ -7,7 +7,6 @@ import type { BuildStep } from "@/lib/domain/types";
 /** Live build progress — Cursor-style activity lines from steps + optional feed. */
 export function BuildProgressPanel({
   steps,
-  focus,
   activityLines,
 }: {
   steps?: BuildStep[];
@@ -20,16 +19,18 @@ export function BuildProgressPanel({
   const fromSteps: ActivityLine[] =
     activityLines && activityLines.length > 0
       ? activityLines
-      : (steps ?? []).map((step, i) => {
-          const running = step.state === "running";
-          const done = step.state === "done" || step.state === "failed";
-          if (!done && !running) return null;
-          return {
-            id: `${step.labelKey}-${i}`,
-            text: running && focus ? focus : t(`steps.${step.labelKey}`),
-            active: running,
-          };
-        }).filter((x): x is ActivityLine => x !== null);
+      : (steps ?? [])
+          .map((step, i): ActivityLine | null => {
+            const running = step.state === "running";
+            const done = step.state === "done" || step.state === "failed";
+            if (!done && !running) return null;
+            return {
+              id: `${step.labelKey}-${i}`,
+              text: t(`steps.${step.labelKey}`),
+              active: running,
+            };
+          })
+          .filter((line): line is ActivityLine => line !== null);
 
   // Always keep a trailing “Planning next moves” while something is still running.
   const stillRunning = (steps ?? []).some((s) => s.state === "running" || s.state === "pending");
@@ -38,7 +39,7 @@ export function BuildProgressPanel({
       ? [...fromSteps, { id: "planning", text: t("working.planning"), active: true }]
       : fromSteps.length > 0
         ? fromSteps
-        : [{ id: "planning", text: focus || t("working.planning"), active: true }];
+        : [{ id: "planning", text: t("working.planning"), active: true }];
 
   return <BuilderActivityFeed lines={lines} showHeader={false} />;
 }

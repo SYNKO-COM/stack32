@@ -1,8 +1,7 @@
 {
   "tabs": {
     "build": "Build",
-    "live": "Live",
-    "structure": "Structure"
+    "agent": "Agent IA"
   },
   "structurePanel": {
     "title": "Structure exécutable",
@@ -78,6 +77,28 @@
       "step.testing": "Petit test",
       "step.repairing": "Correction"
     }
+  },
+  "activity": {
+    "readOne": "Lecture de {{path}}",
+    "readMany": "Exploration de {{count}} fichiers",
+    "wroteOne": "Mise à jour de {{path}}",
+    "wroteMany": "Mise à jour de {{count}} fichiers",
+    "indexed": "Indexation du projet",
+    "searched": "Recherche dans le projet · {{count}}",
+    "understood": "Demande comprise",
+    "planning": "Planification des prochaines étapes",
+    "identity": "Identité confirmée",
+    "spec": "Instructions de l’agent mises à jour",
+    "graph": "Structure mise à jour",
+    "validation": "Configuration vérifiée",
+    "testsRun": "Tests en cours",
+    "testsOk": "Tests réussis",
+    "testsFail": "Tests en échec — inspection",
+    "repair": "Correction en cours",
+    "sandbox": "Bac à sable prêt",
+    "scaffold": "Génération du projet",
+    "snapshot": "Instantané créé",
+    "thinking": "Réflexion"
   },
   "topbar": {
     "publish": "Publier",

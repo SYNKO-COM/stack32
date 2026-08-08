@@ -64,6 +64,7 @@ class BuilderOrchestrator:
         agent_id: str,
         thread_id: str,
         content: str,
+        locale: str = "en",
     ) -> dict[str, Any]:
         content = redact_text(content.strip())
         if not content:
@@ -81,7 +82,7 @@ class BuilderOrchestrator:
             kind="build",
             thread_id=thread_id,
             status="queued",
-            input_payload={"prompt": content},
+            input_payload={"prompt": content, "locale": locale},
         )
         from agent_service.queue.dispatch import dispatch_run
 
@@ -852,7 +853,7 @@ class BuilderOrchestrator:
                             {"labelKey": "understanding", "state": "done"},
                             {"labelKey": "capabilities", "state": "done"},
                             {"labelKey": "building", "state": "failed"},
-                            {"labelKey": "testing", "state": "pending"},
+                            {"labelKey": "testing", "state": "failed"},
                         ],
                         "focus": "Stopped by user",
                         "completed": True,
@@ -1219,49 +1220,57 @@ class BuilderOrchestrator:
         # Ready celebration + "Try the agent" only on the *first* successful build.
         # Later turns stay conversational (Cursor-style modify chat).
         first_ready = bool(play_ready_sound and status == "ready")
+        file_paths = [str(p.get("path")) for p in project_files if p.get("path")]
+        timeline = await self._build_turn_timeline(run_id=run_id, user_id=user_id)
+        run_input = (current or {}).get("input") or {}
+        reply_locale = str(run_input.get("locale") or "en") if isinstance(run_input, dict) else "en"
+        narrative = await self._compose_builder_reply(
+            user_prompt=content,
+            identity=identity,
+            status=status,
+            first_ready=first_ready,
+            file_paths=file_paths,
+            test_report=test_report,
+            timeline=timeline,
+            locale=reply_locale,
+        )
         if first_ready:
-            content_key = "builder:ready.success"
             meta: dict[str, Any] = {
                 "tone": "success",
                 "card": "ready",
-                "actions": ["test_agent", "view_structure", "view_changes"],
+                "actions": ["test_agent"],
                 "version_id": version.get("id"),
                 "test_report": test_report,
                 "playReadySound": True,
                 "identity_summary": identity.model_dump(),
-                "steps": final_steps,
-                "project_files": [p.get("path") for p in project_files],
+                "project_files": file_paths,
                 "requires_llm_key_for_live": True,
             }
         elif status == "ready":
-            content_key = "builder:modify.success"
             meta = {
                 "tone": "success",
-                "actions": ["view_structure", "view_changes"],
+                "actions": [],
                 "version_id": version.get("id"),
                 "test_report": test_report,
                 "playReadySound": False,
                 "identity_summary": identity.model_dump(),
-                "steps": final_steps,
-                "project_files": [p.get("path") for p in project_files],
+                "project_files": file_paths,
             }
         else:
-            content_key = "builder:modify.warning"
             meta = {
                 "tone": "warning",
-                "actions": ["view_structure", "view_changes", "fix_automatically"],
+                "actions": ["fix_automatically"],
                 "version_id": version.get("id"),
                 "test_report": test_report,
                 "playReadySound": False,
                 "identity_summary": identity.model_dump(),
-                "steps": final_steps,
-                "project_files": [p.get("path") for p in project_files],
+                "project_files": file_paths,
             }
         await self.db.insert_assistant_message(
             thread_id=thread_id,
             agent_id=agent_id,
             user_id=user_id,
-            content=content_key,
+            content=narrative,
             metadata=meta,
         )
         await self.db.emit_event(
@@ -1390,6 +1399,183 @@ class BuilderOrchestrator:
         if current_spec is None:
             return True
         return False
+
+    async def _build_turn_timeline(self, *, run_id: str, user_id: str) -> list[str]:
+        """Collapse run_events into short chronological facts for the final reply."""
+        try:
+            events = await self.db.list_run_events(run_id, user_id)
+        except Exception:  # noqa: BLE001
+            return []
+        lines: list[str] = []
+        seen: set[str] = set()
+
+        def push(text: str) -> None:
+            key = text.strip().lower()
+            if not key or key in seen:
+                return
+            seen.add(key)
+            lines.append(text.strip())
+
+        for ev in events[-60:]:
+            et = str(ev.get("event_type") or "")
+            payload = ev.get("payload") if isinstance(ev.get("payload"), dict) else {}
+            path = str(payload.get("path") or "").strip()
+            short = path.split("/")[-1] if path else ""
+            if "file.read" in et or et.endswith(".read"):
+                push(f"Consulté {short or path or 'un fichier'}")
+            elif "file.created" in et or "file.write" in et or "project.file" in et:
+                push(f"Mis à jour {short or path or 'un fichier'}")
+            elif "context.search" in et or "context.indexing" in et:
+                push("Cherché dans le projet")
+            elif "builder.analysis" in et:
+                push("Analysé ta demande")
+            elif "builder.identity" in et:
+                push("Confirmé l’identité de l’agent")
+            elif "builder.capabilities" in et or "tool" in et.lower() and "catalog" in et:
+                push("Choisi les capacités")
+            elif "builder.repair" in et:
+                push("Corrigé un souci détecté au test")
+            elif "builder.test" in et or et.endswith(".test"):
+                push("Lancé un petit test")
+            elif "sandbox" in et or "coding" in et:
+                push("Appliqué les changements dans le bac à sable")
+            elif "run.completed" in et:
+                push("Terminé le tour")
+        return lines[:18]
+
+    async def _compose_builder_reply(
+        self,
+        *,
+        user_prompt: str,
+        identity: AgentIdentity,
+        status: str,
+        first_ready: bool,
+        file_paths: list[str],
+        test_report: dict[str, Any],
+        timeline: list[str] | None = None,
+        locale: str = "en",
+    ) -> str:
+        """Write a short turn summary for the chat, in the UI language."""
+        from agent_service.security.llm_budget import llm_budget_bypass
+
+        paths = [p for p in file_paths if p][:14]
+        files_blob = ", ".join(paths) if paths else "(none listed)"
+        test_status = str(test_report.get("status") or "unknown")
+        steps = [s for s in (timeline or []) if s][:16]
+        timeline_blob = "\n".join(f"- {s}" for s in steps) if steps else "- (no detailed events)"
+
+        lang = "fr" if str(locale).lower().startswith("fr") else "en"
+
+        file_roles_fr = {
+            "agent.json": "identité + consignes",
+            "agent.yaml": "identité + consignes",
+            "tools.json": "outils branchés (e-mail, recherche…)",
+            "tools.py": "code des outils appelables",
+            "graph.json": "enchaînement de la conversation",
+            "prompts.py": "instructions internes",
+            "memory.py": "mémoire entre les tours",
+            "security.py": "garde-fous",
+            "main.py": "point d’entrée du runtime",
+        }
+        file_roles_en = {
+            "agent.json": "identity + instructions",
+            "agent.yaml": "identity + instructions",
+            "tools.json": "connected tools (email, search…)",
+            "tools.py": "callable tool code",
+            "graph.json": "conversation flow",
+            "prompts.py": "internal instructions",
+            "memory.py": "memory across turns",
+            "security.py": "safety guardrails",
+            "main.py": "runtime entry point",
+        }
+
+        def _why(path: str) -> str:
+            name = path.split("/")[-1]
+            table = file_roles_fr if lang == "fr" else file_roles_en
+            return table.get(name, "config / code de l’agent" if lang == "fr" else "agent config / code")
+
+        file_bits = [f"{p.split('/')[-1]} ({_why(p)})" for p in paths[:5]]
+        if lang == "fr":
+            fallback = (
+                f"J’ai appliqué ta demande sur {identity.name}.\n\n"
+                + (
+                    "**Fichiers mis à jour**\n"
+                    + "\n".join(f"- {bit}" for bit in file_bits)
+                    + "\n\n"
+                    if file_bits
+                    else ""
+                )
+                + (
+                    "Tu peux l’essayer dans Live."
+                    if first_ready
+                    else (
+                        "Le test rapide a signalé un souci — on peut corriger ensemble."
+                        if status != "ready"
+                        else "Dis-moi si tu veux ajuster le comportement."
+                    )
+                )
+            )
+        else:
+            fallback = (
+                f"I applied your request to {identity.name}.\n\n"
+                + (
+                    "**Updated files**\n"
+                    + "\n".join(f"- {bit}" for bit in file_bits)
+                    + "\n\n"
+                    if file_bits
+                    else ""
+                )
+                + (
+                    "You can try it in Live."
+                    if first_ready
+                    else (
+                        "The quick test flagged an issue — we can fix it together."
+                        if status != "ready"
+                        else "Tell me if you want to adjust its behavior."
+                    )
+                )
+            )
+        try:
+            async with llm_budget_bypass():
+                result = await self.gateway.complete(
+                    profile=ModelProfile.FAST,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are Stack32 Builder talking to a beginner.\n"
+                                f"ALWAYS write in {'French' if lang == 'fr' else 'English'} — "
+                                "this is the app language, ignore the language of the user's message.\n"
+                                "Be SHORT: 2 to 5 sentences total, or a one-line intro plus max 4 bullets. "
+                                "Light markdown allowed (bold, bullets, a small heading).\n"
+                                "Say what you changed, why, and what the agent can now do. "
+                                "Mention only the files that matter (max 3). "
+                                "No file-by-file dump, no marketing, no vague filler."
+                            ),
+                        },
+                        {
+                            "role": "user",
+                            "content": (
+                                f"User request:\n{user_prompt[:1800]}\n\n"
+                                f"Agent: {identity.name} — {identity.role}\n"
+                                f"Outcome: {'first ready' if first_ready else status}\n"
+                                f"Test: {test_status}\n"
+                                f"Files: {files_blob}\n"
+                                f"File roles:\n"
+                                + "\n".join(f"- {p}: {_why(p)}" for p in paths[:8])
+                                + f"\nActivity timeline:\n{timeline_blob}\n"
+                            ),
+                        },
+                    ],
+                    temperature=0.4,
+                    max_tokens=300,
+                )
+            text = (getattr(result, "content", None) or "").strip()
+            if text:
+                return text[:3200]
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("builder reply composition failed")
+        return fallback
 
     async def _suggest_identity(self, content: str) -> IdentityDraft:
         # Sensible defaults — never echo the raw user prompt as the agent name.

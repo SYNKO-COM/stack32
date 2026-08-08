@@ -266,6 +266,8 @@ export interface BuilderMessage {
   buildBoard?: BuildBoard;
   focus?: string;
   suggestions?: BuilderSuggestion[];
+  /** Project files touched in this builder turn (for a simple beginner-friendly list). */
+  projectFiles?: string[];
   createdAt: string;
 }
 

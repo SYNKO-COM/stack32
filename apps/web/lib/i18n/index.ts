@@ -32,4 +32,14 @@ if (!i18n.isInitialized) {
   });
 }
 
+/**
+ * The i18n singleton survives dev hot-reloads, so newly added JSON keys would
+ * otherwise never reach the in-memory bundles. Re-registering is idempotent.
+ */
+for (const [lng, namespaces] of Object.entries(resources)) {
+  for (const [ns, bundle] of Object.entries(namespaces)) {
+    i18n.addResourceBundle(lng, ns, bundle, true, true);
+  }
+}
+
 export default i18n;

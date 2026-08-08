@@ -1,10 +1,11 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useParams } from "next/navigation";
-
-import { StructureView } from "@/components/builder/structure-view";
-
-export default function StructurePage() {
-  const params = useParams<{ agentId: string }>();
-  return <StructureView agentId={params.agentId} />;
+/** Structure was merged into the "Agent IA" tab. */
+export default async function StructurePage({
+  params,
+}: {
+  params: Promise<{ agentId: string }>;
+}) {
+  const { agentId } = await params;
+  redirect(`/agents/${agentId}/agent`);
 }

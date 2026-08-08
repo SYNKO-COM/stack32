@@ -1,8 +1,7 @@
 {
   "tabs": {
     "build": "Build",
-    "live": "Live",
-    "structure": "Structure"
+    "agent": "AI Agent"
   },
   "structurePanel": {
     "title": "Executable structure",
@@ -78,6 +77,28 @@
       "step.testing": "Running a quick test",
       "step.repairing": "Fixing issues"
     }
+  },
+  "activity": {
+    "readOne": "Read {{path}}",
+    "readMany": "Explored {{count}} files",
+    "wroteOne": "Updated {{path}}",
+    "wroteMany": "Updated {{count}} files",
+    "indexed": "Indexed the project",
+    "searched": "Searched the project · {{count}}",
+    "understood": "Understood your request",
+    "planning": "Planning next moves",
+    "identity": "Confirmed identity",
+    "spec": "Updated agent instructions",
+    "graph": "Updated structure",
+    "validation": "Checked configuration",
+    "testsRun": "Running tests",
+    "testsOk": "Tests passed",
+    "testsFail": "Tests failed — inspecting",
+    "repair": "Repairing",
+    "sandbox": "Sandbox ready",
+    "scaffold": "Scaffolding project",
+    "snapshot": "Snapshot created",
+    "thinking": "Thinking"
   },
   "topbar": {
     "publish": "Publish",

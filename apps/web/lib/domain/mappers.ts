@@ -597,6 +597,11 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
     buildBoard: nodes.length > 0 ? { nodes, edges } : undefined,
     focus: typeof meta.focus === "string" ? meta.focus : undefined,
     suggestions,
+    projectFiles: Array.isArray(meta.project_files)
+      ? (meta.project_files as unknown[]).filter((p): p is string => typeof p === "string")
+      : Array.isArray(meta.projectFiles)
+        ? (meta.projectFiles as unknown[]).filter((p): p is string => typeof p === "string")
+        : undefined,
     createdAt: row.created_at,
   };
 }

@@ -1,12 +1,11 @@
 "use client";
 
-import { ArrowRight, Boxes, FileDiff } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { TypewriterText } from "@/components/builder/message-motion";
 import { SecretForm } from "@/components/builder/secret-form";
-import { ViewChangesDrawer } from "@/components/builder/view-changes-drawer";
 import { Markdown } from "@/components/shared/markdown";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
@@ -90,7 +89,6 @@ export function ReadyCard({
   const { t } = useTranslation("builder");
   const router = useRouter();
   const [typedDone, setTypedDone] = useState(!animate);
-  const [changesOpen, setChangesOpen] = useState(false);
   const [needsKey, setNeedsKey] = useState(false);
   const [checkingKey, setCheckingKey] = useState(false);
   const name = identitySummary?.name;
@@ -112,9 +110,9 @@ export function ReadyCard({
         setNeedsKey(true);
         return;
       }
-      router.push(`/agents/${agentId}/live`);
+      router.push(`/agents/${agentId}/agent`);
     } catch {
-      router.push(`/agents/${agentId}/live`);
+      router.push(`/agents/${agentId}/agent`);
     } finally {
       setCheckingKey(false);
     }
@@ -156,14 +154,14 @@ export function ReadyCard({
             runId={liveGateForm.requestId}
             onSubmitted={() => {
               setNeedsKey(false);
-              router.push(`/agents/${agentId}/live`);
+              router.push(`/agents/${agentId}/agent`);
             }}
           />
         </div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {(actions ?? ["test_agent", "view_structure", "view_changes"]).map((action) => {
+        {(actions ?? ["test_agent"]).map((action) => {
           if (action === "test_agent") {
             return (
               <Button
@@ -178,33 +176,8 @@ export function ReadyCard({
               </Button>
             );
           }
-          if (action === "view_structure") {
-            return (
-              <Button
-                key={action}
-                size="sm"
-                variant="outline"
-                className="rounded-full"
-                onClick={() => router.push(`/agents/${agentId}/structure`)}
-              >
-                <Boxes className="mr-1 size-3.5" aria-hidden="true" />
-                {t("actions.viewStructure")}
-              </Button>
-            );
-          }
-          if (action === "view_changes") {
-            return (
-              <Button
-                key={action}
-                size="sm"
-                variant="outline"
-                className="rounded-full"
-                onClick={() => setChangesOpen(true)}
-              >
-                <FileDiff className="mr-1 size-3.5" aria-hidden="true" />
-                {t("actions.viewChanges", { defaultValue: "View changes" })}
-              </Button>
-            );
+          if (action === "view_structure" || action === "view_changes") {
+            return null;
           }
           return (
             <Button
@@ -219,12 +192,6 @@ export function ReadyCard({
           );
         })}
       </div>
-
-      <ViewChangesDrawer
-        agentId={agentId}
-        open={changesOpen}
-        onClose={() => setChangesOpen(false)}
-      />
     </div>
   );
 }

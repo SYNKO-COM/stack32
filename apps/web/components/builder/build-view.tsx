@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, CircleX, Loader2 } from "lucide-react";
+import { AlertTriangle, CircleX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,7 +13,6 @@ import { DynamicQuestionsForm } from "@/components/builder/dynamic-questions-for
 import { MessageEntrance, TypewriterText } from "@/components/builder/message-motion";
 import { IdentityConfirmedMessage, ReadyCard } from "@/components/builder/ready-card";
 import { SecretForm } from "@/components/builder/secret-form";
-import { ViewChangesDrawer } from "@/components/builder/view-changes-drawer";
 import { LogoMark } from "@/components/shared/logo";
 import { Markdown } from "@/components/shared/markdown";
 import { PromptComposer } from "@/components/shared/prompt-composer";
@@ -30,39 +29,10 @@ import {
 import { summarizeActivity, useRunActivity } from "@/hooks/use-run-activity";
 import { useTranslation } from "@/hooks/use-translation";
 import { playAgentReadyChime } from "@/lib/audio/agent-ready-chime";
-import type { BuilderAction, BuilderMessage, BuildStep } from "@/lib/domain/types";
+import type { BuilderAction, BuilderMessage } from "@/lib/domain/types";
 import { consumePendingPrompt, consumePrefillDraft } from "@/lib/pending-prompt";
 import { cn } from "@/lib/utils";
 import type { BuilderOperation } from "@/components/builder/builder-working-panel";
-
-function StepList({ steps }: { steps: BuildStep[] }) {
-  const { t } = useTranslation("builder");
-
-  return (
-    <ol className="space-y-2" aria-live="polite">
-      {steps.map((step) => (
-        <li key={step.labelKey} className="flex items-center gap-2.5 text-sm">
-          {step.state === "done" ? (
-            <Check className="size-4 text-emerald-400" aria-hidden="true" />
-          ) : step.state === "running" ? (
-            <Loader2 className="size-4 animate-spin text-brand" aria-hidden="true" />
-          ) : step.state === "failed" ? (
-            <CircleX className="size-4 text-destructive" aria-hidden="true" />
-          ) : (
-            <span className="size-4 rounded-full border border-border" aria-hidden="true" />
-          )}
-          <span
-            className={cn(
-              step.state === "pending" ? "text-muted-foreground/60" : "text-foreground/85",
-            )}
-          >
-            {t(`steps.${step.labelKey}`)}
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
 
 function MessageActions({
   actions,
@@ -85,37 +55,14 @@ function MessageActions({
               key={action}
               size="sm"
               className="rounded-full"
-              onClick={() => router.push(`/agents/${agentId}/live`)}
+              onClick={() => router.push(`/agents/${agentId}/agent`)}
             >
               {t("actions.testAgent")}
             </Button>
           );
         }
-        if (action === "view_structure") {
-          return (
-            <Button
-              key={action}
-              size="sm"
-              variant="outline"
-              className="rounded-full"
-              onClick={() => router.push(`/agents/${agentId}/structure`)}
-            >
-              {t("actions.viewStructure")}
-            </Button>
-          );
-        }
-        if (action === "view_changes") {
-          return (
-            <Button
-              key={action}
-              size="sm"
-              variant="outline"
-              className="rounded-full"
-              onClick={() => router.push(`/agents/${agentId}/structure?panel=project`)}
-            >
-              {t("actions.viewChanges", { defaultValue: "View changes" })}
-            </Button>
-          );
+        if (action === "view_structure" || action === "view_changes") {
+          return null;
         }
         return (
           <Button
@@ -174,6 +121,9 @@ function BuilderBubble({
   const formHidden = formLocked || !message.uiComponent;
 
   const contentKey = message.content.startsWith("builder:") ? message.content : null;
+  const isCancelNotice =
+    contentKey === "builder:errors.canceledDetail" ||
+    contentKey === "builder:errors.canceled";
   let content: string;
   if (formLocked && contentKey === "builder:questions.prompt") {
     content = t("builder:questions.formClosed");
@@ -213,7 +163,8 @@ function BuilderBubble({
     animateNow &&
     !isUser &&
     !showThinking &&
-    !showBuildProgress;
+    !showBuildProgress &&
+    !isCancelNotice;
 
   const hasTypeableBody = showIdentityConfirmed || showReady || Boolean(content);
   const [typedDone, setTypedDone] = useState(!animateWrite || !hasTypeableBody);
@@ -277,20 +228,24 @@ function BuilderBubble({
           </p>
           <div
             className={cn(
-              "rounded-3xl px-4 py-3 text-left text-sm leading-relaxed",
-              isUser ? "bg-brand/15 text-foreground" : "glass text-foreground/90",
-              message.tone === "error" && "border border-destructive/40",
-              message.tone === "warning" && "border border-amber-400/40",
-              showReady && "border border-brand/25 bg-gradient-to-br from-brand/[0.08] to-transparent",
+              "text-left text-sm leading-relaxed",
+              isUser
+                ? "rounded-3xl bg-brand/15 px-4 py-3 text-foreground"
+                : "px-0 py-0 text-foreground/90",
+              // Interactive cards keep a light frame; plain chat stays flush.
+              !isUser &&
+                (showReady || showForms) &&
+                "rounded-2xl border border-border/40 bg-foreground/[0.03] px-4 py-3",
+              message.tone === "error" && !isCancelNotice && "text-destructive",
             )}
           >
-            {message.tone === "error" && !showReady ? (
+            {message.tone === "error" && !showReady && !isCancelNotice ? (
               <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-destructive">
                 <CircleX className="size-3.5" aria-hidden="true" />
                 {t("common:status.needsAttention")}
               </p>
             ) : null}
-            {message.tone === "warning" && !showReady ? (
+            {message.tone === "warning" && !showReady && !isCancelNotice ? (
               <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-300">
                 <AlertTriangle className="size-3.5" aria-hidden="true" />
                 {t("common:status.needsAttention")}
@@ -322,19 +277,26 @@ function BuilderBubble({
               />
             ) : (
               <>
-                {message.steps && message.steps.length > 0 ? (
-                  <div className={cn(content && "mb-3")}>
-                    <StepList steps={message.steps} />
-                  </div>
-                ) : null}
                 {content ? (
-                  animateWrite && !typedDone ? (
+                  animateWrite && !typedDone && !isCancelNotice ? (
                     <p>
                       <TypewriterText text={content} active onDone={markTyped} />
                     </p>
                   ) : (
                     <Markdown content={content} />
                   )
+                ) : null}
+                {message.projectFiles && message.projectFiles.length > 0 ? (
+                  <ul className="mt-3 flex flex-wrap gap-1.5">
+                    {message.projectFiles.slice(0, 8).map((path) => (
+                      <li
+                        key={path}
+                        className="rounded-md bg-foreground/[0.05] px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
+                      >
+                        {path.split("/").pop() ?? path}
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
               </>
             )}
@@ -395,6 +357,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   const cancelRun = useCancelBuilderRun(agentId);
   const repair = useRepairAgent(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
   /** Epoch ms of the in-flight send — survives stale refetches & duplicate prompt text. */
@@ -404,6 +367,9 @@ export function BuildView({ agentId }: { agentId: string }) {
   /** Fresh assistant messages already finished typing (sequential chat reveal). */
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
   const revealPauseRef = useRef<number | null>(null);
+  /** Run ids the user stopped this session — hide their progress immediately. */
+  const stoppedRunIdsRef = useRef<Set<string>>(new Set());
+  const [, bumpStopped] = useState(0);
   /** Message IDs present on first thread snapshot — no typewriter on refresh. */
   const [baselineIds, setBaselineIds] = useState<Set<string> | null>(null);
 
@@ -433,25 +399,49 @@ export function BuildView({ agentId }: { agentId: string }) {
   );
   // Hide ephemeral thinking / progress only when a *later* turn superseded them —
   // never hide all future progress just because a Ready card exists in history.
-  const visibleMessages = messages.filter((m, i) => {
-    const later = messages.slice(i + 1);
-    if (m.card === "thinking") {
-      return !later.some((x) => x.role === "assistant");
-    }
-    if (m.card === "build_progress") {
-      // Hide as soon as any later assistant reply exists (result, cancel, form, …).
-      return !later.some(
-        (x) => x.role === "assistant" && x.card !== "thinking",
-      );
-    }
-    return true;
-  });
+  const isCanceledProgress = (m: (typeof messages)[number]) =>
+    m.card === "build_progress" &&
+    (Boolean(m.content?.includes("canceled")) ||
+      m.focus === "Stopped by user" ||
+      stoppedRunIdsRef.current.has(m.interruptRunId ?? ""));
 
-  const liveProgress = [...messages]
+  const visibleMessages = messages
+    .filter((m, i) => {
+      const later = messages.slice(i + 1);
+      if (m.card === "thinking") {
+        if (stoppedRunIdsRef.current.has(m.interruptRunId ?? "")) return false;
+        return !later.some((x) => x.role === "assistant");
+      }
+      if (m.card === "build_progress") {
+        if (isCanceledProgress(m)) return false;
+        // Hide as soon as any later assistant reply exists (result, cancel, form, …).
+        return !later.some(
+          (x) => x.role === "assistant" && x.card !== "thinking",
+        );
+      }
+      return true;
+    })
+    .filter((m, i, arr) => {
+      // Collapse duplicate cancel notices (optimistic/server race or double insert).
+      if (m.content !== "builder:errors.canceledDetail") return true;
+      const prev = arr[i - 1];
+      return prev?.content !== "builder:errors.canceledDetail";
+    });
+
+  const lastUserIdx = (() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === "user") return i;
+    }
+    return -1;
+  })();
+  const turnMessages = lastUserIdx >= 0 ? messages.slice(lastUserIdx + 1) : messages;
+
+  const liveProgress = [...turnMessages]
     .reverse()
     .find(
       (m) =>
         m.card === "build_progress" &&
+        !isCanceledProgress(m) &&
         m.steps?.some((s) => s.state === "running" || s.state === "pending"),
     );
   const workingOperations: BuilderOperation[] | undefined = liveProgress?.steps?.map((step) => ({
@@ -460,28 +450,40 @@ export function BuildView({ agentId }: { agentId: string }) {
     detail: step.state === "running" ? liveProgress.focus : undefined,
   }));
 
+  // Only bind activity to the *current* turn's in-flight run (ignore canceled leftovers).
   const activeRunId =
-    [...messages]
+    [...turnMessages]
       .reverse()
       .find(
         (m) =>
           Boolean(m.interruptRunId) &&
+          !stoppedRunIdsRef.current.has(m.interruptRunId ?? "") &&
           (m.card === "thinking" ||
             (m.card === "build_progress" &&
+              !isCanceledProgress(m) &&
               m.steps?.some((s) => s.state === "running" || s.state === "pending"))),
       )?.interruptRunId ?? null;
   const activityEnabled =
-    awaitingReply ||
-    sendMessage.isPending ||
-    repair.isPending ||
-    busy ||
-    Boolean(
-      liveProgress ||
-        messages.at(-1)?.card === "thinking" ||
-        messages.at(-1)?.card === "build_progress",
-    );
+    Boolean(activeRunId) &&
+    (awaitingReply ||
+      sendMessage.isPending ||
+      repair.isPending ||
+      busy ||
+      Boolean(liveProgress) ||
+      turnMessages.some((m) => m.card === "thinking"));
   const { data: runEvents = [] } = useRunActivity(activeRunId, activityEnabled);
-  const activityLines = summarizeActivity(runEvents).lines;
+  const activityLines = summarizeActivity(runEvents).lines.map((line) => {
+    const text = t(`builder:activity.${line.key}`, {
+      ...(line.params ?? {}),
+      defaultValue: line.key,
+    });
+    return {
+      id: line.id,
+      text: text.charAt(0).toUpperCase() + text.slice(1),
+      active: line.active,
+    };
+  });
+
 
   const lastMessage = visibleMessages.at(-1) ?? messages.at(-1);
   const lastIsUser = lastMessage?.role === "user";
@@ -552,6 +554,11 @@ export function BuildView({ agentId }: { agentId: string }) {
   };
 
   const handleStop = () => {
+    const runToStop = activeRunId;
+    if (runToStop) {
+      stoppedRunIdsRef.current.add(runToStop);
+      bumpStopped((n) => n + 1);
+    }
     setPendingToken(null);
     setAwaitingReply(false);
     void cancelRun.mutateAsync();
@@ -591,6 +598,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     setAwaitingReply(false);
   }, [messages, pendingToken]);
 
+
   // Consume the landing-page pending prompt exactly once, on an empty thread.
   useEffect(() => {
     if (!thread || bootstrappedRef.current) return;
@@ -614,18 +622,60 @@ export function BuildView({ agentId }: { agentId: string }) {
   }, [thread, sendMessage]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, busy, showLocalWorking, activeRevealId, revealedIds.size, lastFocus, lastSteps]);
+    const el = scrollRef.current;
+    const anchor = bottomRef.current;
+    if (!el || !anchor) return;
+    // Keep the live conversation above the composer (safety scroll).
+    const pin = () => {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      el.scrollTop = el.scrollHeight;
+    };
+    pin();
+    const raf = window.requestAnimationFrame(pin);
+    return () => window.cancelAnimationFrame(raf);
+  }, [
+    messages.length,
+    busy,
+    showLocalWorking,
+    activeRevealId,
+    revealedIds.size,
+    lastFocus,
+    lastSteps,
+    activityLines.length,
+    workInFlight,
+    composerBusy,
+  ]);
+
+  // Keep pinned while content grows (typewriter / activity lines).
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      root.scrollTop = root.scrollHeight;
+    });
+    observer.observe(root);
+    const inner = root.firstElementChild;
+    if (inner) observer.observe(inner);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
+    // Wait until baseline is known so refresh never re-chimes historical Ready cards.
+    if (baselineIds === null) return;
+    const soundMsgs = messages.filter((m) => m.playReadySound);
     for (const message of messages) {
       if (!message.playReadySound) continue;
       if (celebratedIdsRef.current.has(message.id)) continue;
+      // Historical Ready from a prior session/load — never play again.
+      if (baselineIds.has(message.id)) {
+        celebratedIdsRef.current.add(message.id);
+        continue;
+      }
       celebratedIdsRef.current.add(message.id);
       playAgentReadyChime();
       break;
     }
-  }, [messages]);
+  }, [messages, baselineIds]);
 
   const refreshAfterForm = (requestId: string) => {
     if (requestId) {
@@ -655,12 +705,21 @@ export function BuildView({ agentId }: { agentId: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
-        className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4"
+        ref={scrollRef}
+        className="scrollbar-thin relative min-h-0 flex-1 overflow-y-auto px-4"
         role="log"
         aria-label={t("builder:a11y.conversation")}
         aria-live="polite"
       >
-        <div className="mx-auto max-w-3xl space-y-6 py-8">
+        {/* Stronger frosted film behind the Build conversation */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0"
+        >
+          <div className="h-full w-full bg-background/55 backdrop-blur-md [mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.55)_6%,black_18%,black_78%,rgba(0,0,0,0.6)_90%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.55)_6%,black_18%,black_78%,rgba(0,0,0,0.6)_90%,transparent_100%)]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/50 to-background/70" />
+        </div>
+        <div className="relative z-[1] mx-auto max-w-3xl space-y-6 py-8">
           {messages.length === 0 && !showLocalWorking ? (
             <div className="flex min-h-[45vh] flex-col items-center justify-center text-center">
               <span className="glass mb-6 flex size-14 items-center justify-center rounded-3xl">

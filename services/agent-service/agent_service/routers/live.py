@@ -24,6 +24,7 @@ router = APIRouter(tags=["live"])
 class LiveMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
     use_published: bool = False
+    locale: str = Field(default="en", max_length=8)
 
 
 @router.post("/live/threads/{thread_id}/messages")

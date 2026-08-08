@@ -77,6 +77,36 @@
     "sub_agent": "Sous-agent",
     "output": "Sortie"
   },
+  "modules": {
+    "title": "Structure de l'agent",
+    "collapse": "Réduire la structure",
+    "expand": "Afficher la structure",
+    "resize": "Ajuster la largeur du chat et de la structure",
+    "kinds": {
+      "trigger": "Message reçu",
+      "guard": "Garde-fou",
+      "brain": "Agent IA",
+      "router": "Aiguillage",
+      "approval": "Validation",
+      "output": "Réponse envoyée",
+      "model": "Modèle",
+      "memory": "Mémoire",
+      "knowledge": "Connaissances",
+      "tool": "Outil"
+    },
+    "help": {
+      "trigger": "Point de départ : ce que l'utilisateur écrit à votre agent.",
+      "guard": "Vérifie le message avant traitement et bloque ce qui est risqué.",
+      "brain": "Le cœur de l'agent : il comprend la demande et décide quoi faire.",
+      "router": "Oriente la suite selon le contenu de la demande.",
+      "approval": "Demande votre accord avant une action sensible.",
+      "output": "Met en forme la réponse finale envoyée à l'utilisateur.",
+      "model": "Le modèle de langage utilisé pour réfléchir et rédiger.",
+      "memory": "Ce que l'agent retient d'un message à l'autre.",
+      "knowledge": "Les documents que l'agent peut consulter.",
+      "tool": "Une action concrète que l'agent peut déclencher."
+    }
+  },
   "nodeStates": {
     "default": "Aucun détail supplémentaire pour cette étape.",
     "toolId": "Outil : {{id}}",
