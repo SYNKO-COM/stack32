@@ -42,6 +42,48 @@ def stable_live_thread_id(live_thread_id: str) -> str:
     return f"live:{live_thread_id}"
 
 
+def _to_provider_message(msg: dict[str, Any]) -> dict[str, Any]:
+    """Normalize internal messages to OpenAI/LiteLLM chat format."""
+    role = msg.get("role")
+    out: dict[str, Any] = {"role": role, "content": msg.get("content") or ""}
+    if role == "assistant" and msg.get("tool_calls"):
+        provider_calls = []
+        for raw in msg["tool_calls"]:
+            if not isinstance(raw, dict):
+                continue
+            # Already provider-shaped
+            if raw.get("type") == "function" and isinstance(raw.get("function"), dict):
+                provider_calls.append(raw)
+                continue
+            # Compact gateway shape: {call_id, tool_id, arguments}
+            call_id = str(raw.get("call_id") or raw.get("id") or f"call_{len(provider_calls)}")
+            name = str(raw.get("tool_id") or raw.get("name") or "")
+            if not name:
+                continue
+            args = raw.get("arguments", {})
+            if isinstance(args, dict):
+                import json
+
+                args_str = json.dumps(args)
+            else:
+                args_str = str(args or "{}")
+            provider_calls.append(
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": name, "arguments": args_str},
+                }
+            )
+        if provider_calls:
+            out["tool_calls"] = provider_calls
+    if role == "tool":
+        if msg.get("tool_call_id"):
+            out["tool_call_id"] = msg["tool_call_id"]
+        if msg.get("name"):
+            out["name"] = msg["name"]
+    return out
+
+
 async def run_langgraph_agent(
     *,
     db: Persistence,
@@ -104,9 +146,13 @@ async def run_langgraph_agent(
         profile = ModelProfile.REASONING
 
     async def agent_node(state: AgentState) -> dict[str, Any]:
+        # OpenAI requires assistant tool_calls in provider format ({id,type,function}).
+        # Our gateway returns a compact {call_id,tool_id,arguments} shape — normalize
+        # the conversation before every model call.
+        outbound = [_to_provider_message(m) for m in state["messages"]]
         result = await gateway.complete(
             profile=profile,
-            messages=state["messages"],
+            messages=outbound,
             max_tokens=min(2048, spec.model_policy.max_output_tokens),
             api_key=user_creds[1] if user_creds else None,
             provider=user_creds[0] if user_creds else None,
@@ -131,10 +177,20 @@ async def run_langgraph_agent(
         return out
 
     async def tools_node(state: AgentState) -> dict[str, Any]:
+        from agent_service.runtime.approvals import (
+            approved_tool_ids_for_run,
+            create_approval_request,
+            requires_approval,
+            summarize_action,
+        )
+
         last = state["messages"][-1] if state["messages"] else {}
         raw_calls = last.get("tool_calls") or []
         observations: list[dict[str, Any]] = []
         results: list[dict[str, Any]] = []
+        approved_ids = await approved_tool_ids_for_run(user_id=user_id, run_id=run_id)
+        interrupt_reason: str | None = None
+
         for raw in raw_calls:
             try:
                 call = RuntimeToolCall.model_validate(raw)
@@ -142,6 +198,46 @@ async def run_langgraph_agent(
                 continue
             if call.tool_id not in enabled_tools:
                 obs = {"error": "TOOL_NOT_ALLOWED", "tool_id": call.tool_id}
+            elif requires_approval(call.tool_id) and call.tool_id not in approved_ids:
+                # Persist approval + interrupt; return dry-run preview via execute_tool.
+                approval = await create_approval_request(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    tool_id=call.tool_id,
+                    action_summary=summarize_action(call.tool_id, call.arguments),
+                    payload={"arguments": call.arguments, "call_id": call.call_id},
+                )
+                try:
+                    obs = await execute_tool(
+                        call.tool_id,
+                        {**call.arguments, "dry_run": True},
+                        context={
+                            "user_id": user_id,
+                            "agent_id": agent_id,
+                            "thread_id": thread_id,
+                            "run_id": run_id,
+                        },
+                    )
+                except ToolError as exc:
+                    obs = {"error": exc.code, "message": str(exc)}
+                obs = {
+                    **(obs if isinstance(obs, dict) else {"result": obs}),
+                    "approval_required": True,
+                    "approval_id": (approval or {}).get("id"),
+                    "interrupt": True,
+                }
+                interrupt_reason = "APPROVAL_REQUIRED"
+                await db.emit_event(
+                    run_id,
+                    "runtime.approval.requested",
+                    {
+                        "mapping_key": "live.status.approval",
+                        "tool_id": call.tool_id,
+                        "approval_id": (approval or {}).get("id"),
+                    },
+                )
             else:
                 try:
                     await db.emit_event(
@@ -157,6 +253,7 @@ async def run_langgraph_agent(
                             "agent_id": agent_id,
                             "thread_id": thread_id,
                             "run_id": run_id,
+                            "approved_tool_ids": approved_ids,
                         },
                     )
                 except ToolError as exc:
@@ -178,9 +275,17 @@ async def run_langgraph_agent(
                 "runtime.tool.completed",
                 {"mapping_key": "live.status.toolDone", "tool_id": call.tool_id},
             )
-        return {"messages": observations, "tool_results": results}
+            if interrupt_reason:
+                break
+        out: dict[str, Any] = {"messages": observations, "tool_results": results}
+        if interrupt_reason:
+            out["interrupt"] = interrupt_reason
+            out["answer"] = "Waiting for your approval before continuing."
+        return out
 
     def should_continue(state: AgentState) -> str:
+        if state.get("interrupt"):
+            return "end"
         if int(state.get("steps", 0)) >= max_loops:
             return "end"
         last = state["messages"][-1] if state["messages"] else {}
@@ -224,4 +329,6 @@ async def run_langgraph_agent(
         "visited_nodes": ["agent", "tools"] if final.get("tool_results") else ["agent"],
         "steps": final.get("steps") or 0,
         "runtime": "langgraph",
+        "interrupt": final.get("interrupt"),
+        "status": "interrupted" if final.get("interrupt") else "completed",
     }

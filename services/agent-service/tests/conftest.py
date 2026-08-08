@@ -1,10 +1,31 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
-from agent_service.config import Settings
+from agent_service.config import Settings, get_settings
 from agent_service.main import create_app
 
 AUTH_HEADERS = {"Authorization": "Bearer test-token"}
+
+
+@pytest.fixture(autouse=True)
+def _isolate_settings_and_env():
+    """Keep tests hermetic against global-state leakage.
+
+    Tests that exercise the real gateway/pipeline can (a) populate the
+    get_settings lru_cache from the local .env and (b) trigger litellm's
+    load_dotenv(), which injects .env values into os.environ. Snapshot and
+    restore both so hermetic tests are never contaminated.
+    """
+    env_snapshot = dict(os.environ)
+    get_settings.cache_clear()
+    try:
+        yield
+    finally:
+        get_settings.cache_clear()
+        os.environ.clear()
+        os.environ.update(env_snapshot)
 
 _SETTINGS_CONSUMERS = [
     "agent_service.auth",

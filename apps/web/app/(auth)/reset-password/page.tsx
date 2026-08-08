@@ -8,6 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUpdatePassword } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
+import { authErrorKey } from "@/lib/auth/errors";
+import {
+  getPasswordIssues,
+  isPasswordValid,
+  passwordIssueErrorKey,
+} from "@/lib/auth/password";
 
 export default function ResetPasswordPage() {
   const { t } = useTranslation(["auth", "errors"]);
@@ -20,11 +26,15 @@ export default function ResetPasswordPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">{t("auth:reset.title")}</h1>
-      <p className="mt-1.5 mb-6 text-sm text-muted-foreground">{t("auth:reset.subtitle")}</p>
+      <p className="mt-1.5 mb-2 text-sm text-muted-foreground">{t("auth:reset.subtitle")}</p>
+      <p className="mb-6 text-xs text-muted-foreground/80">{t("auth:password.requirements")}</p>
 
       {done ? (
         <>
-          <p role="status" className="rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          <p
+            role="status"
+            className="rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"
+          >
             {t("auth:reset.success")}
           </p>
           <p className="mt-6 text-center text-sm">
@@ -39,16 +49,21 @@ export default function ResetPasswordPage() {
           onSubmit={async (e) => {
             e.preventDefault();
             setError(null);
-            if (password.length < 8) {
-              setError(t("errors:form.passwordTooShort"));
+            if (!isPasswordValid(password)) {
+              const issue = getPasswordIssues(password)[0];
+              setError(t(passwordIssueErrorKey(issue)));
               return;
             }
             if (password !== confirm) {
               setError(t("auth:reset.mismatch"));
               return;
             }
-            await update.mutateAsync(password);
-            setDone(true);
+            try {
+              await update.mutateAsync(password);
+              setDone(true);
+            } catch (err) {
+              setError(t(authErrorKey(err)));
+            }
           }}
         >
           <div className="space-y-1.5">
@@ -60,7 +75,7 @@ export default function ResetPasswordPage() {
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={t("auth:reset.passwordPlaceholder")}
+              placeholder={t("auth:password.placeholder")}
             />
           </div>
           <div className="space-y-1.5">

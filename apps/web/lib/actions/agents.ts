@@ -199,6 +199,64 @@ export async function listAgentProjectFiles(
   return result.files ?? [];
 }
 
+export type ProjectStructureNode = {
+  id: string;
+  label: string;
+  type: string;
+  file: string;
+  config?: Record<string, unknown>;
+  binding?: {
+    connection_id?: string;
+    provider?: string;
+    enabled?: boolean;
+  } | null;
+};
+
+export type ProjectStructure = {
+  nodes: ProjectStructureNode[];
+  edges: Array<{ source: string; target: string }>;
+  source?: string;
+  pattern?: string | null;
+  runtime_version?: string | null;
+};
+
+export async function getAgentProjectStructureAction(
+  agentId: string,
+): Promise<{ structure: ProjectStructure | null; snapshotId: string | null }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { structure: null, snapshotId: null };
+  }
+  const accessToken = await requireAccessToken();
+  const result = await agentServiceFetch<{
+    structure: ProjectStructure | null;
+    snapshot_id?: string | null;
+  }>(`/v1/agents/${agentId}/project/structure`, { method: "GET", accessToken });
+  return {
+    structure: result.structure ?? null,
+    snapshotId: result.snapshot_id ?? null,
+  };
+}
+
+export async function getSnapshotFileAction(
+  agentId: string,
+  snapshotId: string,
+  path: string,
+): Promise<{ path: string; content: string; content_type?: string } | null> {
+  if (currentAiExecutionMode() !== "agent-service") return null;
+  const accessToken = await requireAccessToken();
+  const encoded = path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  const result = await agentServiceFetch<{
+    file: { path: string; content: string; content_type?: string };
+  }>(`/v1/agents/${agentId}/snapshots/${snapshotId}/files/${encoded}`, {
+    method: "GET",
+    accessToken,
+  });
+  return result.file ?? null;
+}
+
 export async function listAgentSecretsMeta(
   agentId: string,
 ): Promise<Array<{ secret_kind?: string; provider?: string; key_hint?: string }>> {

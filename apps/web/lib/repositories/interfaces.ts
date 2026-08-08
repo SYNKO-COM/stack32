@@ -34,6 +34,10 @@ export interface AuthRepository {
   signInWithGoogle(): Promise<User | null>;
   /** Returns null when an OAuth redirect is in progress. */
   signInWithGithub(): Promise<User | null>;
+  /** Verify the 6-digit email OTP sent after signup. */
+  verifySignupOtp(email: string, token: string): Promise<User>;
+  /** Resend the signup confirmation email / OTP. */
+  resendSignupOtp(email: string): Promise<void>;
   sendPasswordReset(email: string): Promise<void>;
   updatePassword(newPassword: string): Promise<void>;
   signOut(): Promise<void>;

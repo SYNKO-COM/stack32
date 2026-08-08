@@ -60,6 +60,9 @@
   "graph": {
     "fallback": "Execution flow will appear here once your agent is built."
   },
+  "project": {
+    "fileMissing": "This file is not available in the current snapshot."
+  },
   "nodes": {
     "input": "Input",
     "guardrail": "Guardrail",

@@ -1,5 +1,4 @@
-# Stack32 — Supabase CLI local dev config (minimal).
-# Values omitted here fall back to CLI defaults.
+# Stack32 — Supabase CLI config (local + pushable to linked hosted project).
 
 project_id = "stack32"
 
@@ -19,11 +18,42 @@ port = 54323
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000/auth/callback", "http://localhost:3000/auth/confirm"]
+additional_redirect_urls = [
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3000/auth/confirm",
+  "http://localhost:3000/auth/confirmed",
+  "http://localhost:3000/verify-email",
+  "http://localhost:3000/reset-password",
+  "https://stack32.com/auth/callback",
+  "https://stack32.com/auth/confirm",
+  "https://stack32.com/auth/confirmed",
+  "https://stack32.com/verify-email",
+  "https://stack32.com/reset-password",
+]
+# Match dashboard policy: min 10 + lower/upper/digits/symbols.
+minimum_password_length = 10
+password_requirements = "lower_upper_letters_digits_symbols"
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
 
 [auth.email]
 enable_signup = true
-enable_confirmations = false
+enable_confirmations = true
+# Match dashboard: 6-digit OTP, 3600s (60 minutes) expiry.
+otp_length = 6
+otp_expiry = 3600
+max_frequency = "1m0s"
+double_confirm_changes = true
+
+[auth.email.template.confirmation]
+subject = "Confirm your email address"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your password"
+content_path = "./supabase/templates/recovery.html"
 
 [storage]
 enabled = true

@@ -575,7 +575,11 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
         ? meta.interrupt_run_id
         : typeof meta.interruptRunId === "string"
           ? meta.interruptRunId
-          : undefined,
+          : typeof meta.run_id === "string"
+            ? meta.run_id
+            : typeof meta.runId === "string"
+              ? meta.runId
+              : undefined,
     playReadySound:
       meta.playReadySound === true || meta.play_ready_sound === true,
     formResolved,

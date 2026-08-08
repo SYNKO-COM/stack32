@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import {
@@ -14,7 +16,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { useUiStore } from "@/store/ui-store";
 
 export function SettingsDialog() {
-  const { t } = useTranslation(["common", "onboarding"]);
+  const { t } = useTranslation(["common", "auth", "onboarding"]);
   const activeDialog = useUiStore((s) => s.activeDialog);
   const closeDialog = useUiStore((s) => s.closeDialog);
   const { data: user } = useCurrentUser();
@@ -42,6 +44,14 @@ export function SettingsDialog() {
             <span className="text-muted-foreground">{t("common:theme.appearance")}</span>
             <ThemeToggle />
           </div>
+          <Separator />
+          <Link
+            href="/settings/password"
+            className="block text-brand hover:underline"
+            onClick={() => closeDialog()}
+          >
+            {t("auth:changePassword.title")}
+          </Link>
         </div>
       </DialogContent>
     </Dialog>

@@ -60,6 +60,9 @@
   "graph": {
     "fallback": "Le flux d'exécution apparaîtra ici une fois votre agent construit."
   },
+  "project": {
+    "fileMissing": "Ce fichier n'est pas disponible dans le snapshot actuel."
+  },
   "nodes": {
     "input": "Entrée",
     "guardrail": "Garde-fou",

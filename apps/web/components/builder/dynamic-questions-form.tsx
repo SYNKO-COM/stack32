@@ -9,6 +9,26 @@ import { useTranslation } from "@/hooks/use-translation";
 import { submitBuilderQuestions } from "@/lib/actions/builder";
 import type { BuilderUiComponent } from "@/lib/domain/types";
 
+function fieldLabel(
+  t: (key: string, opts?: Record<string, string>) => string,
+  key: string,
+  fallback?: string,
+): string {
+  return t(`questions.fields.${key}`, {
+    defaultValue: fallback && !fallback.includes("_") ? fallback : key,
+  });
+}
+
+function optionLabel(
+  t: (key: string, opts?: Record<string, string>) => string,
+  fieldKey: string,
+  option: string,
+): string {
+  return t(`questions.options.${fieldKey}.${option}`, {
+    defaultValue: t(`questions.options.${option}`, { defaultValue: option }),
+  });
+}
+
 export function DynamicQuestionsForm({
   uiComponent,
   runId,
@@ -33,7 +53,7 @@ export function DynamicQuestionsForm({
     setError(null);
     for (const field of uiComponent.fields) {
       if (field.required && !(values[field.key] || "").trim()) {
-        setError(t("questions.required", { defaultValue: "Please fill required fields." }));
+        setError(t("questions.required"));
         return;
       }
     }
@@ -42,17 +62,18 @@ export function DynamicQuestionsForm({
         await submitBuilderQuestions({ runId, answers: values });
         onSubmitted?.();
       } catch {
-        setError(t("questions.error", { defaultValue: "Could not save answers." }));
+        setError(t("questions.error"));
       }
     });
   };
 
   return (
-    <div className="mt-4 space-y-3">
+    <div className="mt-4 space-y-4">
+      <p className="text-sm leading-relaxed text-muted-foreground">{t("questions.hint")}</p>
       {uiComponent.fields.map((field) => (
         <label key={field.key} className="block space-y-1.5">
-          <span className="text-sm text-muted-foreground">
-            {field.label || field.key}
+          <span className="text-sm font-medium text-foreground/90">
+            {fieldLabel(t, field.key, field.label)}
             {field.required ? " *" : ""}
           </span>
           {field.type === "textarea" ? (
@@ -60,6 +81,7 @@ export function DynamicQuestionsForm({
               value={values[field.key] ?? ""}
               onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
               rows={3}
+              placeholder={t(`questions.placeholders.${field.key}`, { defaultValue: "" })}
             />
           ) : field.type === "select" && field.options?.length ? (
             <select
@@ -69,7 +91,7 @@ export function DynamicQuestionsForm({
             >
               {field.options.map((opt) => (
                 <option key={opt} value={opt}>
-                  {opt}
+                  {optionLabel(t, field.key, opt)}
                 </option>
               ))}
             </select>
@@ -77,15 +99,14 @@ export function DynamicQuestionsForm({
             <Input
               value={values[field.key] ?? ""}
               onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+              placeholder={t(`questions.placeholders.${field.key}`, { defaultValue: "" })}
             />
           )}
         </label>
       ))}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="button" onClick={submit} disabled={pending}>
-        {pending
-          ? t("questions.saving", { defaultValue: "Saving…" })
-          : t("questions.continue", { defaultValue: "Continue" })}
+      <Button type="button" onClick={submit} disabled={pending} className="rounded-full">
+        {pending ? t("questions.saving") : t("questions.continue")}
       </Button>
     </div>
   );

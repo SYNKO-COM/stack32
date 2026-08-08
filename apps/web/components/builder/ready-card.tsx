@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Boxes, FileDiff, Wand2 } from "lucide-react";
+import { ArrowRight, Boxes, FileDiff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -17,7 +17,6 @@ import type {
   BuilderUiComponent,
   IdentitySummary,
 } from "@/lib/domain/types";
-import { cn } from "@/lib/utils";
 
 /** Structured chat reply after identity — no celebration card. */
 export function IdentityConfirmedMessage({
@@ -73,10 +72,8 @@ export function ReadyCard({
   agentId,
   content,
   identitySummary,
-  suggestions,
   actions,
   onFix,
-  onSuggestion,
   animate = false,
   onDone,
 }: {
@@ -86,7 +83,7 @@ export function ReadyCard({
   suggestions?: BuilderSuggestion[];
   actions?: BuilderAction[];
   onFix: () => void;
-  onSuggestion: (prompt: string) => void;
+  onSuggestion?: (prompt: string) => void;
   animate?: boolean;
   onDone?: () => void;
 }) {
@@ -222,43 +219,6 @@ export function ReadyCard({
           );
         })}
       </div>
-
-      {suggestions && suggestions.length > 0 ? (
-        <div className="space-y-2 border-t border-border/50 pt-3">
-          <p className="text-xs font-medium text-muted-foreground">{t("ready.improveTitle")}</p>
-          <ul className="space-y-1.5">
-            {suggestions.map((s) => {
-              const title = t(`ready.suggestions.${s.labelKey}`, {
-                defaultValue: s.labelKey,
-              });
-              return (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (s.action === "test_agent") {
-                        void goLive();
-                        return;
-                      }
-                      if (s.prompt) onSuggestion(s.prompt);
-                    }}
-                    className={cn(
-                      "group flex w-full items-start gap-2 rounded-xl px-2.5 py-2 text-left text-sm",
-                      "text-foreground/85 transition-colors hover:bg-foreground/[0.04]",
-                    )}
-                  >
-                    <Wand2
-                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground group-hover:text-brand"
-                      aria-hidden="true"
-                    />
-                    <span className="font-medium text-foreground">{title}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
 
       <ViewChangesDrawer
         agentId={agentId}

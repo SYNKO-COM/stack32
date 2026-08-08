@@ -79,6 +79,21 @@ export function useSendPasswordReset() {
   });
 }
 
+export function useVerifySignupOtp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, token }: { email: string; token: string }) =>
+      getAuthRepository().verifySignupOtp(email, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
+  });
+}
+
+export function useResendSignupOtp() {
+  return useMutation({
+    mutationFn: (email: string) => getAuthRepository().resendSignupOtp(email),
+  });
+}
+
 export function useUpdatePassword() {
   return useMutation({
     mutationFn: (newPassword: string) => getAuthRepository().updatePassword(newPassword),

@@ -121,7 +121,6 @@ class ConnectionManager:
     async def complete_google_oauth(
         self, *, user_id: str, state: str, code: str
     ) -> dict[str, Any]:
-        settings = get_settings()
         async with get_supabase_admin_client() as client:
             response = await client.get(
                 "/oauth_connection_states",
@@ -324,10 +323,43 @@ class ConnectionManager:
             )
         return response.json() if response.status_code < 400 else []
 
+    @staticmethod
+    def _needs_refresh(token_expires_at: str | None, *, skew_seconds: int = 120) -> bool:
+        """True when the token is missing an expiry or expires within `skew_seconds`."""
+        if not token_expires_at:
+            return False
+        try:
+            expires = datetime.fromisoformat(str(token_expires_at).replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        return expires <= datetime.now(UTC) + timedelta(seconds=skew_seconds)
+
+    async def _refresh_google_token(self, refresh_token: str) -> dict[str, Any]:
+        """Exchange a refresh token for a fresh access token."""
+        settings = get_settings()
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_OAUTH_CLIENT_SECRET,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                },
+            )
+        if response.status_code >= 400:
+            logger.warning("google token refresh failed status=%s", response.status_code)
+            raise ConnectionError("OAUTH_TOKEN_REFRESH_FAILED")
+        return response.json()
+
     async def resolve_access_token(
         self, *, user_id: str, agent_id: str, provider: str = "google"
     ) -> str | None:
-        """Resolve bearer token for runtime tools only — never log or return to LLM."""
+        """Resolve bearer token for runtime tools only — never log or return to LLM.
+
+        Automatically refreshes an expired/near-expiry Google token when a
+        refresh token is stored, persisting the new access token + expiry.
+        """
         bindings = await self.list_bindings(user_id=user_id, agent_id=agent_id)
         if not bindings:
             return None
@@ -346,15 +378,37 @@ class ConnectionManager:
                     "limit": "1",
                 },
             )
-        rows = response.json() if response.status_code < 400 else []
-        if not rows:
-            return None
-        row = rows[0]
-        try:
-            return decrypt_secret(row["secret_ref"])
-        except Exception:  # noqa: BLE001
-            logger.warning("failed to decrypt connection secret")
-            return None
+            rows = response.json() if response.status_code < 400 else []
+            if not rows:
+                return None
+            row = rows[0]
+
+            if provider == "google" and self._needs_refresh(row.get("token_expires_at")) and row.get("refresh_secret_ref"):
+                try:
+                    refresh_token = decrypt_secret(row["refresh_secret_ref"])
+                    token = await self._refresh_google_token(refresh_token)
+                    new_access = token.get("access_token")
+                    if new_access:
+                        expires_in = int(token.get("expires_in") or 3600)
+                        new_expires = (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat()
+                        await client.patch(
+                            "/user_connections",
+                            params={"id": f"eq.{row['id']}"},
+                            json={
+                                "secret_ref": encrypt_secret(new_access),
+                                "token_expires_at": new_expires,
+                                "last_validated_at": datetime.now(UTC).isoformat(),
+                            },
+                        )
+                        return new_access
+                except Exception:  # noqa: BLE001
+                    logger.warning("token refresh failed; falling back to stored token")
+
+            try:
+                return decrypt_secret(row["secret_ref"])
+            except Exception:  # noqa: BLE001
+                logger.warning("failed to decrypt connection secret")
+                return None
 
     async def revoke(self, *, user_id: str, connection_id: str) -> bool:
         async with get_supabase_admin_client() as client:

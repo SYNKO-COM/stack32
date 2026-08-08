@@ -75,3 +75,33 @@ async def resume_live_run(run_id: UUID, user: CurrentUser) -> dict[str, Any]:
     if not run:
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Run not found."})
     return await process_run_by_id(str(run_id))
+
+
+class ApprovalDecision(BaseModel):
+    decision: str = Field(pattern="^(approved|denied)$")
+
+
+@router.get("/agents/{agent_id}/approvals")
+async def list_agent_approvals(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    from agent_service.runtime.approvals import list_pending_approvals
+
+    db = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Not found."})
+    rows = await list_pending_approvals(user_id=user.user_id, agent_id=str(agent_id))
+    return {"approvals": rows}
+
+
+@router.post("/approvals/{approval_id}/decide")
+async def decide_approval_endpoint(
+    approval_id: UUID, body: ApprovalDecision, user: CurrentUser
+) -> dict[str, Any]:
+    from agent_service.runtime.approvals import decide_approval
+
+    row = await decide_approval(
+        user_id=user.user_id, approval_id=str(approval_id), decision=body.decision
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Approval not found."})
+    return {"approval": row}

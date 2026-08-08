@@ -40,13 +40,22 @@
   },
   "composer": {
     "label": "Describe what you want to build",
-    "attach": "Add an attachment",
-    "voice": "Use voice input",
+    "attach": "Add a file or photo",
+    "voice": "Dictate with your voice",
     "send": "Send",
-    "build": "Build",
+    "build": "Create",
     "sending": "Sending…",
     "working": "Working…",
-    "stop": "Stop"
+    "stop": "Stop",
+    "dropHint": "Drop to attach a file",
+    "removeAttachment": "Remove attachment",
+    "recording": "Listening… speak now",
+    "transcribing": "Transcribing…",
+    "stopRecording": "Cancel recording",
+    "confirmRecording": "Finish transcription",
+    "micDenied": "Microphone access was denied. Allow it in your browser settings.",
+    "transcribeError": "Transcription failed. Check your connection and try again.",
+    "transcribeEmpty": "No speech detected. Try again."
   },
   "status": {
     "draft": "Draft",

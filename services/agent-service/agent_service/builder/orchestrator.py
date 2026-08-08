@@ -38,6 +38,10 @@ class BuilderIntent(StrEnum):
     REPAIR = "repair"
 
 
+class _BuildCanceled(Exception):
+    """Raised when the user stops an in-flight builder run."""
+
+
 class IdentityDraft(BaseModel):
     name: str
     role: str
@@ -112,6 +116,7 @@ class BuilderOrchestrator:
 
         await self.db.update_run_status(run_id, "running")
         await self.db.emit_event(run_id, "run.started", {"mapping_key": "builder.progress.started"})
+        await self.db.tag_thinking_with_run(thread_id=thread_id, run_id=run_id)
         # Keep draft until identity/setup is done — "building" is reserved for the real compile.
 
         try:
@@ -576,7 +581,7 @@ class BuilderOrchestrator:
                     "key": "goal_details",
                     "type": "textarea",
                     "required": True,
-                    "label": "What should this agent accomplish?",
+                    "label": "goal_details",
                     "suggested_value": "",
                 }
             )
@@ -589,7 +594,7 @@ class BuilderOrchestrator:
                     "key": "knowledge_scope",
                     "type": "textarea",
                     "required": False,
-                    "label": "Which documents or topics should the agent know?",
+                    "label": "knowledge_scope",
                     "suggested_value": "",
                 }
             )
@@ -599,7 +604,7 @@ class BuilderOrchestrator:
                     "key": "connection_intent",
                     "type": "select",
                     "required": False,
-                    "label": "External accounts needed",
+                    "label": "connection_intent",
                     "suggested_value": "google" if (needs_mail or needs_cal) else "none",
                     "options": ["none", "google", "later"],
                 }
@@ -610,7 +615,7 @@ class BuilderOrchestrator:
                     "key": "audience",
                     "type": "text",
                     "required": False,
-                    "label": "Who will use this agent?",
+                    "label": "audience",
                     "suggested_value": "",
                 }
             )
@@ -702,6 +707,13 @@ class BuilderOrchestrator:
         if extras:
             prompt = (prompt + "\n\nClarifications:\n" + "\n".join(extras)).strip()[:8000]
         await self.db.resolve_builder_form(thread_id=thread_id, request_id=run_id)
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content="builder:questions.formClosed",
+            metadata={"tone": "normal", "card": "questions_confirmed"},
+        )
         await self.db.clear_builder_interrupt(run_id, user_id)
         await self.db.update_run_status(run_id, "running")
         await self.db.emit_event(
@@ -780,6 +792,7 @@ class BuilderOrchestrator:
                 "card": "build_progress",
                 "steps": board["steps"],
                 "focus": board["focus"],
+                "run_id": run_id,
             },
         )
 
@@ -790,6 +803,10 @@ class BuilderOrchestrator:
             board_nodes: list[dict[str, str]] | None = None,
             edges: list[dict[str, str]] | None = None,
         ) -> None:
+            # Cooperative cancel — Stop button marks the run canceled in DB.
+            current = await self.db.get_owned_run(run_id, user_id)
+            if current and current.get("status") == "canceled":
+                raise _BuildCanceled()
             if not progress_id:
                 return
             payload: dict[str, Any] = {
@@ -797,6 +814,7 @@ class BuilderOrchestrator:
                 "card": "build_progress",
                 "steps": steps,
                 "focus": focus,
+                "run_id": run_id,
             }
             # Keep board metadata optional for older clients; UI no longer renders it.
             if board_nodes is not None:
@@ -822,6 +840,33 @@ class BuilderOrchestrator:
                 board=board,
                 tick=_tick,
             )
+        except _BuildCanceled:
+            if progress_id:
+                await self.db.update_assistant_message(
+                    message_id=progress_id,
+                    content="builder:errors.canceled",
+                    metadata={
+                        "tone": "warning",
+                        "card": "build_progress",
+                        "steps": [
+                            {"labelKey": "understanding", "state": "done"},
+                            {"labelKey": "capabilities", "state": "done"},
+                            {"labelKey": "building", "state": "failed"},
+                            {"labelKey": "testing", "state": "pending"},
+                        ],
+                        "focus": "Stopped by user",
+                        "completed": True,
+                        "run_id": run_id,
+                    },
+                )
+            agent_row = await self.db.get_owned_agent(agent_id, user_id)
+            restore = (
+                "ready"
+                if agent_row and agent_row.get("first_ready_celebrated")
+                else "draft"
+            )
+            await self.db.update_agent_status(agent_id, user_id, restore)
+            return {"status": "canceled", "run_id": run_id}
         except Exception as exc:  # noqa: BLE001
             failed_steps = [
                 {"labelKey": "understanding", "state": "done"},
@@ -873,10 +918,22 @@ class BuilderOrchestrator:
                 {"labelKey": "building", "state": "pending"},
                 {"labelKey": "testing", "state": "pending"},
             ],
-            focus=f"Locking identity for {identity.name}",
+            focus=f"Planning next moves for {identity.name}",
         )
 
         if complexity == TaskComplexity.FAST and current_spec is not None:
+            await self.db.emit_event(
+                run_id, "builder.plan.created", {"mapping_key": "builder.progress.architecture"}
+            )
+            await tick(
+                steps=[
+                    {"labelKey": "understanding", "state": "done"},
+                    {"labelKey": "capabilities", "state": "running"},
+                    {"labelKey": "building", "state": "pending"},
+                    {"labelKey": "testing", "state": "pending"},
+                ],
+                focus="Planning next moves",
+            )
             spec = await self._fast_patch(current_spec, content, identity)
         else:
             await tick(
@@ -886,7 +943,7 @@ class BuilderOrchestrator:
                     {"labelKey": "building", "state": "running"},
                     {"labelKey": "testing", "state": "pending"},
                 ],
-                focus="Designing instructions and selecting tools…",
+                focus="Planning next moves",
             )
             spec = await self._generate_spec(
                 content, identity, complexity, current_spec, capabilities=capabilities
@@ -1055,6 +1112,63 @@ class BuilderOrchestrator:
                 {"files": [p.get("path") for p in project_files], "version_id": version.get("id")},
             )
 
+        # Optional real sandbox coding pipeline (plan → files → tests → repair).
+        if self.settings.BUILDER_SANDBOX_ENABLED and test_report["status"].startswith("passed"):
+            try:
+                from agent_service.builder.build_pipeline import CodeBuildPipeline
+                from agent_service.builder.templates.blueprint import (
+                    BUILTIN_TOOLS,
+                    default_blueprint,
+                )
+                from agent_service.sandbox.manager import SandboxManager
+
+                system = (
+                    spec.instructions.system
+                    if spec.instructions and spec.instructions.system
+                    else identity.role
+                )
+                requested = [t.tool_id for t in spec.tools][:6]
+                tool_names = [n for n in requested if n in BUILTIN_TOOLS] or None
+                blueprint = default_blueprint(
+                    name=identity.name,
+                    description=identity.description or identity.role,
+                    system_prompt=system,
+                    tool_names=tool_names,
+                )
+
+                async def _emit(event_type: str, payload: dict[str, Any]) -> None:
+                    current = await self.db.get_owned_run(run_id, user_id)
+                    if current and current.get("status") == "canceled":
+                        raise _BuildCanceled()
+                    await self.db.emit_event(run_id, event_type, payload)
+
+                await tick(
+                    steps=[
+                        {"labelKey": "understanding", "state": "done"},
+                        {"labelKey": "capabilities", "state": "done"},
+                        {"labelKey": "building", "state": "running"},
+                        {"labelKey": "testing", "state": "done"},
+                    ],
+                    focus="Applying changes in the sandbox…",
+                )
+                pipeline = CodeBuildPipeline(manager=SandboxManager(), emit=_emit)
+                await pipeline.build(
+                    blueprint,
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    run_id=run_id,
+                    version_id=version.get("id"),
+                )
+            except _BuildCanceled:
+                raise
+            except Exception:  # noqa: BLE001
+                logger.exception("sandbox coding pipeline failed run=%s", run_id)
+
+        # If the user stopped mid-flight, do not emit a success/modify card.
+        current = await self.db.get_owned_run(run_id, user_id)
+        if current and current.get("status") == "canceled":
+            raise _BuildCanceled()
+
         status = (
             "ready"
             if test_report["status"].startswith("passed")
@@ -1098,33 +1212,57 @@ class BuilderOrchestrator:
                     "build_board": {"nodes": final_nodes, "edges": board["board"]["edges"]},
                     "focus": "Build pipeline complete",
                     "completed": True,
+                    "run_id": run_id,
                 },
             )
 
-        suggestions = self._ready_suggestions(identity=identity, spec=spec, content=content)
+        # Ready celebration + "Try the agent" only on the *first* successful build.
+        # Later turns stay conversational (Cursor-style modify chat).
+        first_ready = bool(play_ready_sound and status == "ready")
+        if first_ready:
+            content_key = "builder:ready.success"
+            meta: dict[str, Any] = {
+                "tone": "success",
+                "card": "ready",
+                "actions": ["test_agent", "view_structure", "view_changes"],
+                "version_id": version.get("id"),
+                "test_report": test_report,
+                "playReadySound": True,
+                "identity_summary": identity.model_dump(),
+                "steps": final_steps,
+                "project_files": [p.get("path") for p in project_files],
+                "requires_llm_key_for_live": True,
+            }
+        elif status == "ready":
+            content_key = "builder:modify.success"
+            meta = {
+                "tone": "success",
+                "actions": ["view_structure", "view_changes"],
+                "version_id": version.get("id"),
+                "test_report": test_report,
+                "playReadySound": False,
+                "identity_summary": identity.model_dump(),
+                "steps": final_steps,
+                "project_files": [p.get("path") for p in project_files],
+            }
+        else:
+            content_key = "builder:modify.warning"
+            meta = {
+                "tone": "warning",
+                "actions": ["view_structure", "view_changes", "fix_automatically"],
+                "version_id": version.get("id"),
+                "test_report": test_report,
+                "playReadySound": False,
+                "identity_summary": identity.model_dump(),
+                "steps": final_steps,
+                "project_files": [p.get("path") for p in project_files],
+            }
         await self.db.insert_assistant_message(
             thread_id=thread_id,
             agent_id=agent_id,
             user_id=user_id,
-            content=(
-                "builder:ready.success"
-                if status == "ready"
-                else "builder:mock.warningResponse"
-            ),
-            metadata={
-                "tone": "success" if status == "ready" else "warning",
-                "card": "ready",
-                "actions": ["test_agent", "view_structure", "view_changes"]
-                + ([] if status == "ready" else ["fix_automatically"]),
-                "version_id": version.get("id"),
-                "test_report": test_report,
-                "playReadySound": play_ready_sound,
-                "identity_summary": identity.model_dump(),
-                "suggestions": suggestions,
-                "steps": final_steps,
-                "project_files": [p.get("path") for p in project_files],
-                "requires_llm_key_for_live": True,
-            },
+            content=content_key,
+            metadata=meta,
         )
         await self.db.emit_event(
             run_id,

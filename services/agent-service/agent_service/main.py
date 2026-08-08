@@ -19,6 +19,7 @@ from agent_service.routers import (
     runs,
     secrets,
     tasks,
+    transcribe,
     webhooks,
 )
 
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     v1.include_router(connections.router)
     v1.include_router(tasks.router)
     v1.include_router(webhooks.router)
+    v1.include_router(transcribe.router)
     app.include_router(v1)
 
     @app.get("/v1/providers/health")

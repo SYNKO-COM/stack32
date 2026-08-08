@@ -232,3 +232,21 @@ export async function submitBuilderQuestions(input: {
     body: { answers: input.answers },
   });
 }
+
+/** Stop the in-flight Builder run (square Stop button). */
+export async function cancelBuilderRun(input: {
+  agentId: string;
+}): Promise<{ status: string; id?: string }> {
+  await requireOwnedAgent(input.agentId);
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { status: "idle" };
+  }
+  const accessToken = await requireAccessToken();
+  return agentServiceFetch<{ status: string; id?: string }>(
+    `/v1/agents/${input.agentId}/builder/cancel`,
+    {
+      method: "POST",
+      accessToken,
+    },
+  );
+}

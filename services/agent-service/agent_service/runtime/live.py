@@ -317,7 +317,7 @@ class LiveRuntime:
                     "run.completed",
                     {"mapping_key": "live.status.done", "runtime": "langgraph"},
                 )
-                await self.db.complete_run(run_id, output={"answer": answer[:2000]})
+                await self.db.complete_run(run_id)
                 return {"status": "completed", "run_id": run_id, "answer": answer}
 
             profile = route_profile(
@@ -424,23 +424,43 @@ class LiveRuntime:
             await self.db.complete_run(run_id)
             return {"status": "completed", "run_id": run_id, "content": answer}
         except Exception as exc:  # noqa: BLE001
-            logger.exception("live run failed")
+            logger.exception(
+                "live run failed run_id=%s agent_id=%s err=%s",
+                run_id,
+                agent_id,
+                type(exc).__name__,
+            )
             from agent_service.security.llm_budget import LlmCallBudgetExceeded
 
-            if isinstance(exc, LlmCallBudgetExceeded) or "BUDGET" in str(exc):
+            err_text = str(exc)
+            if isinstance(exc, LlmCallBudgetExceeded) or "BUDGET" in err_text:
                 code = "MODEL_BUDGET_EXCEEDED"
-            elif "MODEL_" in str(exc):
+                content_key = "live:errors.budgetExceeded"
+            elif "tool_calls" in err_text and "type" in err_text:
+                code = "TOOL_CALL_FORMAT"
+                content_key = "live:errors.toolCallFormat"
+            elif "MODEL_" in err_text or "AuthenticationError" in err_text:
                 code = "MODEL_PROVIDER_UNAVAILABLE"
+                content_key = "live:errors.providerUnavailable"
             else:
                 code = "TOOL_FAILED"
-            await self.db.emit_event(run_id, "run.failed", {"mapping_key": "live.status.failed"})
+                content_key = "live:errors.runFailed"
+            await self.db.emit_event(
+                run_id,
+                "run.failed",
+                {
+                    "mapping_key": "live.status.failed",
+                    "code": code,
+                    "error_type": type(exc).__name__,
+                },
+            )
             await self.db.fail_run(run_id, code)
             await self.db.insert_assistant_message(
                 thread_id=thread_id,
                 agent_id=agent_id,
                 user_id=user_id,
-                content="live:errors.runFailed",
-                metadata={"tone": "error", "code": code},
+                content=content_key,
+                metadata={"tone": "error", "code": code, "error_type": type(exc).__name__},
                 table="live_messages",
             )
             return {"error": code, "run_id": run_id}

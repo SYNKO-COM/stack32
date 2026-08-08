@@ -35,7 +35,31 @@ async def cancel_run(run_id: UUID, user: CurrentUser) -> dict[str, Any]:
             detail={"code": "RUN_CANCELED", "message": "Run cannot be canceled."},
         )
     await db.emit_event(str(run_id), "run.canceled", {"mapping_key": "errors.runCanceled"})
+    agent_id = run.get("agent_id")
+    thread_id = run.get("thread_id")
+    if agent_id:
+        agent = await db.get_owned_agent(str(agent_id), user.user_id)
+        restore = "ready" if agent and agent.get("first_ready_celebrated") else "draft"
+        await db.update_agent_status(str(agent_id), user.user_id, restore)
+    if thread_id and agent_id:
+        await db.insert_assistant_message(
+            thread_id=str(thread_id),
+            agent_id=str(agent_id),
+            user_id=user.user_id,
+            content="builder:errors.canceledDetail",
+            metadata={"tone": "warning"},
+        )
     return run
+
+
+@router.post("/agents/{agent_id}/builder/cancel")
+async def cancel_active_builder_run(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    """Cancel the latest in-flight build run for this agent (Stop button)."""
+    db = get_persistence()
+    active = await db.get_latest_active_build_run(agent_id=str(agent_id), user_id=user.user_id)
+    if not active:
+        return {"status": "idle"}
+    return await cancel_run(UUID(str(active["id"])), user)
 
 
 @router.get("/runs/{run_id}/events")

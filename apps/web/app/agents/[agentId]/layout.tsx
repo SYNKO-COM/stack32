@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useTransition } from "react";
 
 import { Topbar } from "@/components/builder/topbar";
 import { BrandLoader } from "@/components/shared/brand-loader";
@@ -17,7 +17,7 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
   const { data: agent, isLoading } = useAgent(params.agentId);
   const { data: agents, isLoading: agentsLoading } = useAgents();
   const createAgent = useCreateAgent();
-  const [creating, setCreating] = useState(false);
+  const [creating, startCreate] = useTransition();
 
   if (isLoading || agentsLoading) {
     return (
@@ -36,26 +36,20 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
           <h1 className="text-2xl font-semibold tracking-tight">
             {t("errors:noAgentsYet.title")}
           </h1>
-          <p className="mt-3 text-sm text-muted-foreground">
+          <p className="mt-3 max-w-md text-sm text-muted-foreground">
             {t("errors:noAgentsYet.subtitle")}
           </p>
           <Button
             className="mt-8 rounded-full"
             disabled={creating || createAgent.isPending}
             onClick={() => {
-              if (creating || createAgent.isPending) return;
-              setCreating(true);
-              void createAgent
-                .mutateAsync(undefined)
-                .then((created) => {
-                  router.replace(`/agents/${created.id}/build`);
-                })
-                .finally(() => setCreating(false));
+              startCreate(async () => {
+                const created = await createAgent.mutateAsync(undefined);
+                router.replace(`/agents/${created.id}/build`);
+              });
             }}
           >
-            {creating || createAgent.isPending
-              ? t("common:loading")
-              : t("errors:noAgentsYet.cta")}
+            {t("errors:noAgentsYet.cta")}
           </Button>
         </div>
       );
@@ -66,7 +60,7 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
         <h1 className="text-2xl font-semibold tracking-tight">{t("errors:agentNotFound.title")}</h1>
         <p className="mt-3 text-sm text-muted-foreground">{t("errors:agentNotFound.subtitle")}</p>
         <Button asChild className="mt-8 rounded-full">
-          <Link href="/agents">{t("errors:agentNotFound.cta")}</Link>
+          <Link href={`/agents/${agents[0].id}/build`}>{t("errors:agentNotFound.cta")}</Link>
         </Button>
       </div>
     );

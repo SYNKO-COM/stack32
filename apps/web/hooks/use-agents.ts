@@ -10,6 +10,7 @@ const agentKeys = {
   spec: (id: string) => ["agents", id, "spec"] as const,
   version: (id: string) => ["agents", id, "version"] as const,
   graph: (id: string) => ["agents", id, "graph"] as const,
+  projectStructure: (id: string) => ["agents", id, "project-structure"] as const,
 };
 
 export function useAgents() {
@@ -49,6 +50,17 @@ export function useAgentGraph(agentId: string) {
     queryFn: async () => {
       const { getAgentGraphAction } = await import("@/lib/actions/agents");
       return getAgentGraphAction(agentId);
+    },
+    enabled: Boolean(agentId),
+  });
+}
+
+export function useAgentProjectStructure(agentId: string) {
+  return useQuery({
+    queryKey: agentKeys.projectStructure(agentId),
+    queryFn: async () => {
+      const { getAgentProjectStructureAction } = await import("@/lib/actions/agents");
+      return getAgentProjectStructureAction(agentId);
     },
     enabled: Boolean(agentId),
   });

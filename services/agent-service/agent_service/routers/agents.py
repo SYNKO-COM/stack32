@@ -217,3 +217,56 @@ async def get_project_file(agent_id: UUID, path: str, user: CurrentUser) -> dict
     if not row:
         raise _not_found()
     return {"file": row}
+
+
+@router.get("/{agent_id}/snapshots")
+async def list_agent_snapshots(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    db = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise _not_found()
+    from agent_service.builder.projects import list_snapshots
+
+    snapshots = await list_snapshots(user_id=user.user_id, agent_id=str(agent_id))
+    return {"snapshots": snapshots}
+
+
+@router.get("/{agent_id}/project/structure")
+async def get_project_structure(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    """Executable structure derived from the latest snapshot's real code."""
+    db = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise _not_found()
+    from agent_service.builder.projects import get_snapshot_files, list_snapshots
+    from agent_service.builder.structure import derive_structure
+    from agent_service.connections.manager import ConnectionManager
+
+    snapshots = await list_snapshots(user_id=user.user_id, agent_id=str(agent_id))
+    if not snapshots:
+        return {"structure": None, "source": "project", "snapshot_id": None}
+    latest = snapshots[0]
+    files = await get_snapshot_files(user_id=user.user_id, snapshot_id=latest["id"])
+    bindings = await ConnectionManager().list_bindings(
+        user_id=user.user_id, agent_id=str(agent_id)
+    )
+    structure = derive_structure(latest.get("manifest"), files, bindings=bindings)
+    return {"structure": structure, "snapshot_id": latest["id"]}
+
+
+@router.get("/{agent_id}/snapshots/{snapshot_id}/files/{path:path}")
+async def get_snapshot_file(
+    agent_id: UUID, snapshot_id: UUID, path: str, user: CurrentUser
+) -> dict[str, Any]:
+    """Open file / View code — return one file's source from an immutable snapshot."""
+    db = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise _not_found()
+    from agent_service.builder.projects import get_snapshot_files
+
+    files = await get_snapshot_files(user_id=user.user_id, snapshot_id=str(snapshot_id))
+    match = next((f for f in files if f.get("path") == path), None)
+    if not match:
+        raise _not_found()
+    return {"file": match}
