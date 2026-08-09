@@ -13,7 +13,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from stack32_agent_runtime import __version__ as RUNTIME_VERSION
+try:
+    from stack32_agent_runtime import __version__ as RUNTIME_VERSION
+except ImportError:  # pragma: no cover - platform packaging gap
+    RUNTIME_VERSION = "0.0.0-missing"
 
 from agent_service.builder.coding.agent import CodingAgent, ModelFn
 from agent_service.builder.coding.prompts import BUILDER_SYSTEM_PROMPT
@@ -26,6 +29,12 @@ from agent_service.sandbox.base import SandboxProvider, WorkspaceHandle
 from agent_service.sandbox.manager import SandboxManager
 
 logger = logging.getLogger(__name__)
+
+if RUNTIME_VERSION == "0.0.0-missing":
+    logger.error(
+        "stack32_agent_runtime is not installed; sandbox coding pipeline cannot run. "
+        "Install with: pip install ../stack32-agent-runtime"
+    )
 
 EmitFn = Callable[[str, dict[str, Any]], Awaitable[None]]
 
@@ -151,20 +160,113 @@ class CodeBuildPipeline:
         # 5. Repair loop when tests fail and a model is available.
         if test_status == "failed" and (repair_model_fn is not None or self.gateway):
             await emit("builder.repair.started", {})
+            failure_excerpt = str(test_result.get("stdout") or test_result.get("stderr") or "")[:500]
+            lesson_block = ""
+            try:
+                from agent_service.learning import (
+                    format_lessons_for_prompt,
+                    lessons_for_repair,
+                    record_error_observation,
+                )
+
+                await record_error_observation(
+                    error_code="SANDBOX_TESTS_FAILED",
+                    reason=failure_excerpt or "sandbox tests failed",
+                    context={"agent_id": agent_id, "project": blueprint.name, "source": "coding_pipeline"},
+                )
+                lessons = await lessons_for_repair(
+                    error_code="SANDBOX_TESTS_FAILED",
+                    reason=failure_excerpt,
+                    limit=5,
+                )
+                # Also pull provider/budget lessons so the repair model avoids known traps.
+                extra = await lessons_for_repair(error_code="MODEL_PROVIDER_UNAVAILABLE", limit=2)
+                lessons = (lessons + extra)[:7]
+                lesson_block = format_lessons_for_prompt(lessons)
+            except Exception:  # noqa: BLE001
+                logger.exception("coding_repair_lessons_load_failed")
+
+            system_prompt = BUILDER_SYSTEM_PROMPT
+            if lesson_block:
+                system_prompt = f"{BUILDER_SYSTEM_PROMPT}\n\n{lesson_block}"
+
             agent = CodingAgent(
                 provider=provider, handle=handle, engine=engine,
                 registry=registry, gateway=self.gateway, emit=emit, max_turns=10,
             )
-            result = await agent.run(
-                f"The project tests are failing. Fix the code so `pytest` passes.\n\nProject: {blueprint.name}",
-                system_prompt=BUILDER_SYSTEM_PROMPT,
-                model_fn=repair_model_fn,
-            )
+            from agent_service.config import get_settings
+            from agent_service.security.llm_budget import llm_run_budget
+
+            settings = get_settings()
+            async with llm_run_budget(
+                run_id=f"{run_id}:coding",
+                user_id=user_id,
+                agent_id=agent_id,
+                max_calls=settings.MAX_LLM_CALLS_PER_CODING_REPAIR,
+            ):
+                result = await agent.run(
+                    f"The project tests are failing. Fix the code so `pytest` passes.\n\nProject: {blueprint.name}",
+                    system_prompt=system_prompt,
+                    model_fn=repair_model_fn,
+                )
             repaired = result.success
             stop_reason = result.stop_reason
             test_status = result.ledger.verification.get("tests", test_status)
             # Re-read files after repair.
             files = await self._read_all(provider, handle, [f["path"] for f in files])
+            if repaired and test_status == "passed":
+                try:
+                    from agent_service.learning import record_repair_lesson
+
+                    await record_repair_lesson(
+                        error_code="SANDBOX_TESTS_FAILED",
+                        reason=failure_excerpt or "sandbox tests failed",
+                        context={
+                            "agent_id": agent_id,
+                            "project": blueprint.name,
+                            "source": "coding_pipeline",
+                        },
+                        resolution={"stop_reason": stop_reason, "test_status": test_status},
+                        resolution_summary=(
+                            f"Coding repair fixed failing tests for {blueprint.name}"
+                        ),
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception("coding_repair_lesson_record_failed")
+            elif not repaired:
+                try:
+                    from agent_service.learning import record_error_observation, record_repair_lesson
+
+                    code = stop_reason if stop_reason in {
+                        "MODEL_PROVIDER_UNAVAILABLE",
+                        "MODEL_BUDGET_EXCEEDED",
+                    } else "SANDBOX_REPAIR_FAILED"
+                    await record_error_observation(
+                        error_code=code,
+                        reason=failure_excerpt or stop_reason,
+                        context={
+                            "agent_id": agent_id,
+                            "project": blueprint.name,
+                            "stop_reason": stop_reason,
+                        },
+                    )
+                    if code in {"MODEL_PROVIDER_UNAVAILABLE", "MODEL_BUDGET_EXCEEDED"}:
+                        await record_repair_lesson(
+                            error_code=code,
+                            reason=failure_excerpt or stop_reason,
+                            context={"source": "coding_pipeline", "project": blueprint.name},
+                            resolution={
+                                "prefer_models": ["openai/gpt-4.1", "openai/gpt-4.1-mini"],
+                                "fallback_profile": "balanced",
+                                "avoid_models": ["openai/gpt-5.1-codex"],
+                            },
+                            resolution_summary=(
+                                "Use gpt-4.1 / balanced profile for coding repairs; "
+                                "skip dead coding model ids; keep a dedicated repair budget."
+                            ),
+                        )
+                except Exception:  # noqa: BLE001
+                    logger.exception("coding_repair_failure_lesson_failed")
 
         success = test_status == "passed"
         structure = sorted(f["path"] for f in files)

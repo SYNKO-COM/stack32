@@ -19,6 +19,7 @@ from agent_service.models.agent_spec import (
     AgentInstructions,
     AgentRule,
     AgentSpec,
+    ConnectionRequirement,
     KnowledgeConfig,
     MemoryConfig,
     ModelPolicy,
@@ -40,6 +41,85 @@ class BuilderIntent(StrEnum):
 
 class _BuildCanceled(Exception):
     """Raised when the user stops an in-flight builder run."""
+
+
+def summarize_detected_problems(
+    *,
+    status: str,
+    test_report: dict[str, Any] | None = None,
+    readiness: Any | None = None,
+    build_ok: bool | None = None,
+    build_failure_reason: str | None = None,
+    error_name: str | None = None,
+) -> list[str]:
+    """Short, user-facing problem bullets for the Fix-it bubble."""
+    problems: list[str] = []
+    report = test_report or {}
+
+    if build_ok is False:
+        reason = str(build_failure_reason or "").strip()
+        if reason:
+            problems.append(f"Sandbox build failed: {reason[:160]}")
+        else:
+            problems.append("Sandbox build or coding verification did not succeed.")
+
+    test_status = str(report.get("status") or "")
+    if test_status and not test_status.startswith("passed"):
+        reason = str(report.get("reason") or report.get("error_code") or "").strip()
+        if reason:
+            problems.append(f"Smoke check failed: {reason[:160]}")
+        else:
+            problems.append("The agent smoke test failed.")
+
+    if readiness is not None:
+        for check in getattr(readiness, "checks", []) or []:
+            if getattr(check, "ok", True):
+                continue
+            severity = str(getattr(check, "severity", "") or "")
+            if severity not in {"error", "warn", "warning"}:
+                continue
+            # Avoid duplicating the sandbox bullet with readiness.build_ok.
+            check_key = str(getattr(check, "key", "") or "")
+            if check_key == "build_ok" and build_ok is False:
+                continue
+            message = str(getattr(check, "message", "") or "").strip()
+            if message:
+                problems.append(message[:160])
+        for miss in (getattr(readiness, "missing_connections", None) or [])[:3]:
+            if isinstance(miss, dict):
+                label = (
+                    miss.get("provider")
+                    or miss.get("app_id")
+                    or miss.get("tool_id")
+                    or "required service"
+                )
+                problems.append(f"Missing connection: {label}")
+            elif miss:
+                problems.append(f"Missing connection: {miss}")
+        for cfg in (getattr(readiness, "missing_config", None) or [])[:2]:
+            if isinstance(cfg, dict):
+                label = cfg.get("key") or cfg.get("tool_id") or "config"
+                problems.append(f"Incomplete setup: {label}")
+
+    if error_name:
+        problems.append(f"Build stopped unexpectedly ({error_name}).")
+
+    if status == "needs_setup" and not any("connection" in p.lower() for p in problems):
+        problems.append("A required connection or setup step is still missing.")
+    if status == "needs_attention" and not problems:
+        problems.append("Stack32 detected an issue that needs a repair pass.")
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in problems:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+        if len(out) >= 5:
+            break
+    return out
 
 
 class IdentityDraft(BaseModel):
@@ -192,7 +272,8 @@ class BuilderOrchestrator:
                     agent_id=agent_id,
                     thread_id=thread_id,
                     prompt=content,
-                    identity_draft=draft.model_dump(),
+                    identity_draft={**draft.model_dump(), "_interrupt_type": "identity"},
+                    interrupt_type="identity",
                 )
                 await self.db.update_run_status(run_id, "waiting_for_input")
                 await self.db.update_agent_status(agent_id, user_id, "draft")
@@ -344,6 +425,7 @@ class BuilderOrchestrator:
                 "_interrupt_type": "secret",
                 "_identity_locked": True,
             },
+            interrupt_type="secret",
         )
         await self.db.update_run_status(run_id, "waiting_for_input")
         await self.db.update_agent_status(agent_id, user_id, "draft")
@@ -565,6 +647,7 @@ class BuilderOrchestrator:
                 "_interrupt_type": "capabilities",
                 "_identity_locked": True,
             },
+            interrupt_type="capabilities",
         )
         await self.db.update_run_status(run_id, "waiting_for_input")
         await self.db.update_agent_status(agent_id, user_id, "draft")
@@ -675,6 +758,7 @@ class BuilderOrchestrator:
                 "_interrupt_type": "questions",
                 "_identity_locked": True,
             },
+            interrupt_type="questions",
         )
         await self.db.update_run_status(run_id, "waiting_for_input")
         await self.db.update_agent_status(agent_id, user_id, "draft")
@@ -729,6 +813,181 @@ class BuilderOrchestrator:
             thread_id=thread_id,
             prompt=prompt,
             identity=identity,
+        )
+
+    async def _connection_providers_bound(self, *, user_id: str, agent_id: str) -> set[str]:
+        bound: set[str] = set()
+        try:
+            from agent_service.connections.manager import ConnectionManager
+
+            mgr = ConnectionManager()
+            conns = await mgr.list_connections(user_id=user_id)
+            for c in conns or []:
+                if not isinstance(c, dict):
+                    continue
+                status = str(c.get("status") or "active").lower()
+                if status in {"active", "connected", "ok", ""} and c.get("provider"):
+                    bound.add(str(c["provider"]))
+        except Exception:  # noqa: BLE001
+            logger.debug("connection list failed", exc_info=True)
+        return bound
+
+    async def _maybe_interrupt_for_connections(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        prompt: str,
+        identity: AgentIdentity,
+        spec: AgentSpec,
+        capabilities: dict[str, Any] | None,
+        progress_id: str | None,
+    ) -> dict[str, Any] | None:
+        reqs = list(spec.connection_requirements or [])
+        if not reqs:
+            return None
+        bound = await self._connection_providers_bound(user_id=user_id, agent_id=agent_id)
+        missing = [
+            r
+            for r in reqs
+            if r.required and r.provider not in bound
+        ]
+        if not missing:
+            return None
+
+        # Persist draft so resume can continue without regenerating from scratch.
+        try:
+            await self.db.persist_version(
+                agent_id=agent_id,
+                user_id=user_id,
+                spec=spec,
+                test_status="pending",
+                change_summary="Draft before connection setup",
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("persist draft before connection interrupt failed", exc_info=True)
+
+        providers = sorted({r.provider for r in missing})
+        tool_ids: list[str] = []
+        for r in missing:
+            tool_ids.extend(r.tool_ids or r.required_for or [])
+        tool_ids = list(dict.fromkeys(tool_ids))
+
+        await self.db.emit_event(
+            run_id,
+            "builder.connection.requested",
+            {
+                "mapping_key": "builder.progress.connection",
+                "providers": providers,
+                "tool_ids": tool_ids,
+            },
+        )
+        if progress_id:
+            await self.db.update_assistant_message(
+                message_id=progress_id,
+                content="builder:connection.required",
+                metadata={
+                    "tone": "normal",
+                    "card": "build_progress",
+                    "focus": "Connect an account to continue",
+                    "completed": False,
+                    "run_id": run_id,
+                },
+            )
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content="builder:connection.prompt",
+            metadata={
+                "tone": "normal",
+                "interrupt_run_id": run_id,
+                "ui_component": {
+                    "type": "connection_form",
+                    "version": "1",
+                    "request_id": str(uuid.uuid4()),
+                    "context": "builder",
+                    "providers": providers,
+                    "tool_ids": tool_ids,
+                    "requirements": [
+                        {
+                            "id": r.id,
+                            "provider": r.provider,
+                            "app_id": r.app_id,
+                            "tool_ids": list(r.tool_ids or []),
+                        }
+                        for r in missing
+                    ],
+                },
+            },
+        )
+        await self.db.save_builder_interrupt(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity_draft={
+                **identity.model_dump(),
+                "_interrupt_type": "connection",
+                "_identity_locked": True,
+                "_capabilities": capabilities or {},
+                "_missing_providers": providers,
+            },
+            interrupt_type="connection",
+        )
+        await self.db.update_run_status(run_id, "waiting_for_input")
+        await self.db.update_agent_status(agent_id, user_id, "needs_setup")
+        return {"status": "interrupted", "run_id": run_id, "reason": "connection"}
+
+    async def resume_with_connection(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+    ) -> dict[str, Any]:
+        """Resume build after the user completed OAuth / connection setup."""
+        interrupt = await self.db.get_builder_interrupt(run_id, user_id)
+        if not interrupt or interrupt.get("status") == "completed":
+            return {"error": "BUILDER_INTERRUPTED"}
+        draft = interrupt.get("identity_draft") or {}
+        itype = interrupt.get("type") or draft.get("_interrupt_type")
+        if itype != "connection":
+            return {"error": "BUILDER_INTERRUPTED"}
+
+        agent_id = interrupt["agent_id"]
+        thread_id = interrupt["thread_id"]
+        prompt = interrupt["prompt"]
+        identity = AgentIdentity(
+            name=str(draft.get("name") or "Agent")[:120],
+            role=str(draft.get("role") or "Assist the user")[:240],
+            tone=str(draft.get("tone") or "professional")[:64],
+            description=str(draft.get("description") or "")[:2000],
+        )
+        caps = draft.get("_capabilities") if isinstance(draft.get("_capabilities"), dict) else {}
+        await self.db.resolve_builder_form(thread_id=thread_id, request_id=run_id)
+        await self.db.clear_builder_interrupt(run_id, user_id)
+        await self.db.update_run_status(run_id, "running")
+        await self.db.update_agent_status(agent_id, user_id, "building")
+        await self.db.emit_event(
+            run_id,
+            "builder.connection.completed",
+            {"mapping_key": "builder.progress.connectionDone"},
+        )
+        current_spec = await self.db.load_draft_spec(agent_id, user_id)
+        complexity = detect_complexity(prompt, is_first_build=True)
+        return await self._continue_build(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            content=prompt,
+            identity=identity,
+            complexity=complexity,
+            current_spec=current_spec,
+            capabilities=caps,
         )
 
     async def _continue_build(
@@ -892,7 +1151,15 @@ class BuilderOrchestrator:
                 agent_id=agent_id,
                 user_id=user_id,
                 content="builder:errors.buildFailedDetail",
-                metadata={"tone": "error", "actions": ["fix_automatically"]},
+                metadata={
+                    "tone": "error",
+                    "actions": ["fix_automatically"],
+                    "detected_problems": summarize_detected_problems(
+                        status="needs_attention",
+                        error_name=type(exc).__name__,
+                        build_ok=False,
+                    ),
+                },
             )
             raise
 
@@ -949,6 +1216,21 @@ class BuilderOrchestrator:
             spec = await self._generate_spec(
                 content, identity, complexity, current_spec, capabilities=capabilities
             )
+
+        # Connection interrupt when requirements exist but no binding yet.
+        conn_interrupt = await self._maybe_interrupt_for_connections(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=content,
+            identity=identity,
+            spec=spec,
+            capabilities=capabilities,
+            progress_id=progress_id,
+        )
+        if conn_interrupt is not None:
+            return conn_interrupt
 
         tool_names = ", ".join(t.tool_id for t in spec.tools[:4]) or "core tools"
         await self.db.emit_event(
@@ -1065,7 +1347,30 @@ class BuilderOrchestrator:
                 validation = self._validate(spec)
                 if not validation["ok"]:
                     break
+                previous_failure = dict(test_report)
                 test_report = await self._run_smoke_test(spec, user_id=user_id, agent_id=agent_id)
+                if str(test_report.get("status") or "").startswith("passed"):
+                    from agent_service.learning import record_repair_lesson
+
+                    await record_repair_lesson(
+                        error_code=previous_failure.get("error_code"),
+                        reason=str(previous_failure.get("reason") or ""),
+                        context={
+                            "agent_id": agent_id,
+                            "attempt": repair_attempts,
+                            "visited": previous_failure.get("visited") or [],
+                            "tools": [t.tool_id for t in spec.tools[:12]],
+                        },
+                        resolution={
+                            "patches": previous_failure.get("suggested_patches") or [],
+                            "test_status": test_report.get("status"),
+                        },
+                        resolution_summary=(
+                            f"Repair attempt {repair_attempts} recovered smoke status "
+                            f"{test_report.get('status')} after: "
+                            f"{str(previous_failure.get('reason') or '')[:180]}"
+                        ),
+                    )
             except Exception:  # noqa: BLE001
                 break
             await self.db.emit_event(
@@ -1078,6 +1383,19 @@ class BuilderOrchestrator:
             run_id,
             "builder.test.completed",
             {"mapping_key": "builder.progress.tested", "status": test_report["status"]},
+        )
+
+        # Quality patterns: router → Plan & Execute / ReAct → self-critique (bounded).
+        spec, test_report = await self._run_quality_gate(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            content=content,
+            identity=identity,
+            complexity=complexity,
+            spec=spec,
+            test_report=test_report,
+            tick=tick,
         )
 
         version = await self.db.persist_version(
@@ -1114,14 +1432,21 @@ class BuilderOrchestrator:
             )
 
         # Optional real sandbox coding pipeline (plan → files → tests → repair).
+        build_ok: bool | None = None
+        build_failure_reason: str | None = None
         if self.settings.BUILDER_SANDBOX_ENABLED and test_report["status"].startswith("passed"):
             try:
-                from agent_service.builder.build_pipeline import CodeBuildPipeline
+                from agent_service.builder.build_pipeline import CodeBuildPipeline, RUNTIME_VERSION
                 from agent_service.builder.templates.blueprint import (
                     BUILTIN_TOOLS,
                     default_blueprint,
                 )
                 from agent_service.sandbox.manager import SandboxManager
+
+                if RUNTIME_VERSION == "0.0.0-missing":
+                    raise ImportError(
+                        "stack32_agent_runtime is not installed in the agent-service environment"
+                    )
 
                 system = (
                     spec.instructions.system
@@ -1153,34 +1478,144 @@ class BuilderOrchestrator:
                     focus="Applying changes in the sandbox…",
                 )
                 pipeline = CodeBuildPipeline(manager=SandboxManager(), emit=_emit)
-                await pipeline.build(
+                build_report = await pipeline.build(
                     blueprint,
                     user_id=user_id,
                     agent_id=agent_id,
                     run_id=run_id,
                     version_id=version.get("id"),
                 )
+                build_ok = bool(getattr(build_report, "success", False))
+                if not build_ok:
+                    build_failure_reason = str(
+                        getattr(build_report, "stop_reason", None)
+                        or getattr(build_report, "test_status", None)
+                        or "FAILED"
+                    )
+                    logger.error(
+                        "sandbox coding pipeline BuildReport not ok run=%s reason=%s",
+                        run_id,
+                        build_failure_reason,
+                    )
+                    try:
+                        from agent_service.learning import record_error_observation
+
+                        await record_error_observation(
+                            error_code=build_failure_reason
+                            if build_failure_reason
+                            in {
+                                "MODEL_PROVIDER_UNAVAILABLE",
+                                "MODEL_BUDGET_EXCEEDED",
+                                "TURN_LIMIT_REACHED",
+                            }
+                            else "SANDBOX_BUILD_FAILED",
+                            reason=build_failure_reason,
+                            context={"agent_id": agent_id, "run_id": run_id, "source": "orchestrator"},
+                        )
+                    except Exception:  # noqa: BLE001
+                        logger.exception("sandbox_failure_observation_failed")
+                    # Platform LLM/budget failures are not agent bugs — don't block readiness.
+                    if build_failure_reason in {
+                        "MODEL_PROVIDER_UNAVAILABLE",
+                        "MODEL_BUDGET_EXCEEDED",
+                        "TURN_LIMIT_REACHED",
+                    }:
+                        build_ok = None
+                        build_failure_reason = None
+                        await self.db.emit_event(
+                            run_id,
+                            "builder.sandbox.soft_skipped",
+                            {
+                                "mapping_key": "builder.progress.sandboxSoftSkipped",
+                                "reason": "model_infra_or_turn_limit",
+                            },
+                        )
             except _BuildCanceled:
                 raise
-            except Exception:  # noqa: BLE001
+            except ImportError as exc:
+                # Platform packaging gap — do not blame the user's agent / Fix loop.
+                logger.error(
+                    "sandbox coding pipeline unavailable (import) run=%s err=%s",
+                    run_id,
+                    exc,
+                )
+                build_ok = None
+                build_failure_reason = None
+                await self.db.emit_event(
+                    run_id,
+                    "builder.sandbox.skipped",
+                    {
+                        "mapping_key": "builder.progress.sandboxSkipped",
+                        "reason": "runtime_missing",
+                        "detail": str(exc)[:200],
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001
                 logger.exception("sandbox coding pipeline failed run=%s", run_id)
+                build_ok = False
+                build_failure_reason = f"{type(exc).__name__}: {exc}"[:200]
 
         # If the user stopped mid-flight, do not emit a success/modify card.
         current = await self.db.get_owned_run(run_id, user_id)
         if current and current.get("status") == "canceled":
             raise _BuildCanceled()
 
-        status = (
-            "ready"
-            if test_report["status"].startswith("passed")
-            else "needs_attention"
+        tests_passed = test_report["status"].startswith("passed")
+        from agent_service.readiness import evaluate_agent_readiness
+
+        readiness = await evaluate_agent_readiness(
+            agent_id=agent_id,
+            user_id=user_id,
+            spec=spec,
+            db=self.db,
+            build_ok=build_ok,
         )
+        if build_ok is False:
+            status = "needs_attention"
+        elif readiness.status == "needs_setup":
+            status = "needs_setup"
+        elif readiness.status == "ready" and tests_passed:
+            status = "ready"
+        else:
+            status = "needs_attention"
         await self.db.update_agent_status(agent_id, user_id, status)
         play_ready_sound = False
         if status == "ready":
             play_ready_sound = await self.db.claim_first_ready_celebration(
                 agent_id=agent_id, user_id=user_id
             )
+
+        # region agent log
+        try:
+            import json
+            import time
+            from pathlib import Path
+
+            _dbg = {
+                "sessionId": "a17c1f",
+                "runId": "pre-fix",
+                "hypothesisId": "B,E",
+                "location": "orchestrator.py:pre-ready-finalize",
+                "message": "About to finalize build status",
+                "data": {
+                    "agent_id": agent_id,
+                    "run_id": run_id,
+                    "status": status,
+                    "tests_passed": tests_passed,
+                    "build_ok": build_ok,
+                    "readiness": getattr(readiness, "status", None),
+                    "test_status": str(test_report.get("status") or ""),
+                    "play_ready_sound": play_ready_sound,
+                    "run_row_status": (current or {}).get("status") if current else None,
+                },
+                "timestamp": int(time.time() * 1000),
+            }
+            Path("/Users/3van/Documents/Stack32/.cursor/debug-a17c1f.log").open("a").write(
+                json.dumps(_dbg) + "\n"
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        # endregion
 
         final_steps = [
             {"labelKey": "understanding", "state": "done"},
@@ -1224,6 +1659,17 @@ class BuilderOrchestrator:
         timeline = await self._build_turn_timeline(run_id=run_id, user_id=user_id)
         run_input = (current or {}).get("input") or {}
         reply_locale = str(run_input.get("locale") or "en") if isinstance(run_input, dict) else "en"
+        detected_problems = (
+            summarize_detected_problems(
+                status=status,
+                test_report=test_report,
+                readiness=readiness,
+                build_ok=build_ok,
+                build_failure_reason=build_failure_reason,
+            )
+            if status != "ready"
+            else []
+        )
         narrative = await self._compose_builder_reply(
             user_prompt=content,
             identity=identity,
@@ -1233,6 +1679,8 @@ class BuilderOrchestrator:
             test_report=test_report,
             timeline=timeline,
             locale=reply_locale,
+            build_ok=build_ok,
+            detected_problems=detected_problems,
         )
         if first_ready:
             meta: dict[str, Any] = {
@@ -1265,6 +1713,7 @@ class BuilderOrchestrator:
                 "playReadySound": False,
                 "identity_summary": identity.model_dump(),
                 "project_files": file_paths,
+                "detected_problems": detected_problems,
             }
         await self.db.insert_assistant_message(
             thread_id=thread_id,
@@ -1273,6 +1722,37 @@ class BuilderOrchestrator:
             content=narrative,
             metadata=meta,
         )
+        # region agent log
+        try:
+            import json
+            import time
+            from pathlib import Path
+
+            _run_after = await self.db.get_owned_run(run_id, user_id)
+            _dbg2 = {
+                "sessionId": "a17c1f",
+                "runId": "pre-fix",
+                "hypothesisId": "B,E",
+                "location": "orchestrator.py:ready-message-inserted",
+                "message": "Assistant ready/final message inserted",
+                "data": {
+                    "agent_id": agent_id,
+                    "run_id": run_id,
+                    "status": status,
+                    "first_ready": first_ready,
+                    "card": meta.get("card"),
+                    "tone": meta.get("tone"),
+                    "run_status_before_complete": (_run_after or {}).get("status"),
+                    "narrative_preview": (narrative or "")[:160],
+                },
+                "timestamp": int(time.time() * 1000),
+            }
+            Path("/Users/3van/Documents/Stack32/.cursor/debug-a17c1f.log").open("a").write(
+                json.dumps(_dbg2) + "\n"
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        # endregion
         await self.db.emit_event(
             run_id,
             "run.completed",
@@ -1454,6 +1934,8 @@ class BuilderOrchestrator:
         test_report: dict[str, Any],
         timeline: list[str] | None = None,
         locale: str = "en",
+        build_ok: bool | None = None,
+        detected_problems: list[str] | None = None,
     ) -> str:
         """Write a short turn summary for the chat, in the UI language."""
         from agent_service.security.llm_budget import llm_budget_bypass
@@ -1463,6 +1945,8 @@ class BuilderOrchestrator:
         test_status = str(test_report.get("status") or "unknown")
         steps = [s for s in (timeline or []) if s][:16]
         timeline_blob = "\n".join(f"- {s}" for s in steps) if steps else "- (no detailed events)"
+        problems = [p for p in (detected_problems or []) if p][:6]
+        problems_blob = "\n".join(f"- {p}" for p in problems) if problems else "- (none)"
 
         lang = "fr" if str(locale).lower().startswith("fr") else "en"
 
@@ -1509,9 +1993,16 @@ class BuilderOrchestrator:
                     "Tu peux l’essayer dans Live."
                     if first_ready
                     else (
-                        "Le test rapide a signalé un souci — on peut corriger ensemble."
-                        if status != "ready"
-                        else "Dis-moi si tu veux ajuster le comportement."
+                        (
+                            "Il reste des points à corriger :\n"
+                            + "\n".join(f"- {p}" for p in problems[:3])
+                        )
+                        if status != "ready" and problems
+                        else (
+                            "Le test rapide a signalé un souci — on peut corriger ensemble."
+                            if status != "ready"
+                            else "Dis-moi si tu veux ajuster le comportement."
+                        )
                     )
                 )
             )
@@ -1529,9 +2020,16 @@ class BuilderOrchestrator:
                     "You can try it in Live."
                     if first_ready
                     else (
-                        "The quick test flagged an issue — we can fix it together."
-                        if status != "ready"
-                        else "Tell me if you want to adjust its behavior."
+                        (
+                            "Some issues remain:\n"
+                            + "\n".join(f"- {p}" for p in problems[:3])
+                        )
+                        if status != "ready" and problems
+                        else (
+                            "The quick test flagged an issue — we can fix it together."
+                            if status != "ready"
+                            else "Tell me if you want to adjust its behavior."
+                        )
                     )
                 )
             )
@@ -1550,7 +2048,10 @@ class BuilderOrchestrator:
                                 "Light markdown allowed (bold, bullets, a small heading).\n"
                                 "Say what you changed, why, and what the agent can now do. "
                                 "Mention only the files that matter (max 3). "
-                                "No file-by-file dump, no marketing, no vague filler."
+                                "No file-by-file dump, no marketing, no vague filler.\n"
+                                "CRITICAL: If Outcome is needs_attention or needs_setup, you MUST NOT "
+                                "claim the build/sandbox succeeded or that errors are fully fixed. "
+                                "Acknowledge remaining Problems honestly and briefly."
                             ),
                         },
                         {
@@ -1559,7 +2060,9 @@ class BuilderOrchestrator:
                                 f"User request:\n{user_prompt[:1800]}\n\n"
                                 f"Agent: {identity.name} — {identity.role}\n"
                                 f"Outcome: {'first ready' if first_ready else status}\n"
+                                f"Build ok: {build_ok}\n"
                                 f"Test: {test_status}\n"
+                                f"Problems:\n{problems_blob}\n"
                                 f"Files: {files_blob}\n"
                                 f"File roles:\n"
                                 + "\n".join(f"- {p}: {_why(p)}" for p in paths[:8])
@@ -1573,7 +2076,7 @@ class BuilderOrchestrator:
             text = (getattr(result, "content", None) or "").strip()
             if text:
                 return text[:3200]
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             logger.exception("builder reply composition failed")
         return fallback
 
@@ -1644,10 +2147,13 @@ class BuilderOrchestrator:
         caps = capabilities or {}
         notes = str(caps.get("context_notes") or "").strip()
         design = await self._design_agent_blueprint(content, identity, notes)
-        tools = self._select_tools(content + " " + notes + " " + " ".join(design.get("tool_hints") or []))
+        tool_prompt = content + " " + notes + " " + " ".join(design.get("tool_hints") or [])
+        tools, connection_requirements, _ambiguous = await self._select_tools(
+            tool_prompt, llm_hints=list(design.get("tool_hints") or [])
+        )
         knowledge_enabled = bool(caps.get("knowledge_enabled")) or any(
             k in content.lower() for k in ("document", "knowledge", "pdf", "rag")
-        )
+        ) or any(t.tool_id == "knowledge_search" for t in tools)
         memory_conversation = (
             bool(caps["memory_conversation"])
             if "memory_conversation" in caps
@@ -1702,6 +2208,7 @@ class BuilderOrchestrator:
 
         profile = "reasoning" if complexity == TaskComplexity.HEAVY else "balanced"
         return AgentSpec(
+            schema_version="4.0",
             identity=identity,
             goal=content[:4000],
             instructions=instructions,
@@ -1719,6 +2226,7 @@ class BuilderOrchestrator:
             rules=rules,
             starter_prompts=starter_prompts,
             graph=graph,
+            connection_requirements=connection_requirements,
         )
 
     async def _design_agent_blueprint(
@@ -1739,11 +2247,15 @@ class BuilderOrchestrator:
                         "content": (
                             "You design production AI agents. Return ONLY JSON with keys: "
                             "system_extra (2-4 sentences of specialized instructions), "
-                            "tool_hints (array of short keywords like web, knowledge, calc), "
+                            "tool_hints (array of short keywords: web, knowledge, calc, "
+                            "email, gmail, calendar, AND any SaaS app the user named — "
+                            "e.g. notion, slack, stripe, airtable, hubspot, shopify, "
+                            "google sheets, linear, jira, github, zoom…), "
                             "extra_rules (array of 0-3 short rules), "
                             "starter_prompts (array of 2-3 example user prompts). "
-                            "Do not invent tools that need OAuth apps — those come later. "
-                            "Keep tool_hints short (max 3)."
+                            "Always include every third-party app the user mentioned; "
+                            "the builder resolves tools via Pipedream Connect (3000+ apps). "
+                            "Keep tool_hints short (max 8)."
                         ),
                     },
                     {
@@ -1784,29 +2296,21 @@ class BuilderOrchestrator:
         data["identity"] = {**data["identity"], **identity.model_dump()}
         return AgentSpec.model_validate(data)
 
-    def _select_tools(self, content: str) -> list[ToolBinding]:
-        lower = content.lower()
-        selected = [
-            ToolBinding(tool_id="current_datetime"),
-            ToolBinding(tool_id="structured_output"),
-        ]
-        if any(k in lower for k in ("search", "research", "web", "news")):
-            selected.append(ToolBinding(tool_id="web_search"))
-            selected.append(ToolBinding(tool_id="fetch_url"))
-        if any(k in lower for k in ("document", "pdf", "knowledge", "rag", "file")):
-            selected.append(ToolBinding(tool_id="knowledge_search"))
-        if any(k in lower for k in ("calc", "math", "number", "score")):
-            selected.append(ToolBinding(tool_id="calculator"))
-        # Dedupe + hard cap (keeps graphs shallow and cheap).
-        seen: set[str] = set()
-        out: list[ToolBinding] = []
-        for t in selected:
-            if t.tool_id not in seen:
-                seen.add(t.tool_id)
-                out.append(t)
-            if len(out) >= 4:
-                break
-        return out
+    async def _select_tools(
+        self,
+        content: str,
+        *,
+        llm_hints: list[str] | None = None,
+    ) -> tuple[list[ToolBinding], list[ConnectionRequirement], list[dict[str, Any]]]:
+        from agent_service.builder.capabilities import (
+            extract_capabilities,
+            resolve_tools_for_capabilities,
+        )
+
+        caps = extract_capabilities(content, llm_hints=llm_hints)
+        return await resolve_tools_for_capabilities(
+            caps, prompt=content, llm_hints=llm_hints
+        )
 
     def _build_graph(
         self,
@@ -1879,16 +2383,33 @@ class BuilderOrchestrator:
             GraphSpec.model_validate(spec.graph.model_dump())
         except Exception as exc:  # noqa: BLE001
             errors.append(str(exc))
+        # V4: registry validates tool_ids at readiness; allow known hybrid tools here.
+        known = {
+            "web_search",
+            "fetch_url",
+            "knowledge_search",
+            "calculator",
+            "current_datetime",
+            "structured_output",
+            "gmail_list",
+            "gmail_read",
+            "gmail_create_draft",
+            "gmail_send_message",
+            "gmail_send",
+            "calendar_list",
+            "calendar_create_event",
+            "google_docs_create",
+            "google_docs_append",
+            "http_request",
+        }
         for tool in spec.tools:
-            if tool.tool_id not in {
-                "web_search",
-                "fetch_url",
-                "knowledge_search",
-                "calculator",
-                "current_datetime",
-                "structured_output",
-            }:
-                errors.append(f"unknown tool {tool.tool_id}")
+            tid = tool.tool_id
+            if tid in known or tid.startswith("pd:") or tid.startswith("pipedream:"):
+                continue
+            if tool.provider in {"native", "custom_api", "pipedream"}:
+                # Provider-bound tools are accepted; readiness resolves them.
+                continue
+            errors.append(f"unknown tool {tid}")
         if not spec.security.treat_external_content_as_untrusted:
             errors.append("external content must be untrusted")
         return {"ok": not errors, "errors": errors}
@@ -1900,6 +2421,17 @@ class BuilderOrchestrator:
 
         try:
             compiled = compile_graph(spec)
+            # Light structural smoke — never call side-effect / OAuth tools.
+            # Connection completeness is evaluated via readiness (not smoke).
+            safe_builtin = {
+                "current_datetime",
+                "calculator",
+                "structured_output",
+            }
+            enabled_safe = [
+                t.tool_id for t in spec.tools if t.enabled and t.tool_id in safe_builtin
+            ]
+            max_tool_calls = 1 if enabled_safe else 0
             state = await __import__(
                 "agent_service.compiler.graph_compiler", fromlist=["run_compiled_graph"]
             ).run_compiled_graph(
@@ -1908,7 +2440,7 @@ class BuilderOrchestrator:
                     "user_id": user_id,
                     "agent_id": agent_id,
                     "input": f"Smoke test for goal: {spec.goal[:200]}",
-                    "max_tool_calls": 0,  # read-only smoke: no tools
+                    "max_tool_calls": max_tool_calls,
                     "test_marker": True,
                 },
                 max_steps=min(4, spec.runtime.max_steps),
@@ -1939,13 +2471,231 @@ class BuilderOrchestrator:
             )
             return report.to_dict()
 
+    async def _run_quality_gate(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        content: str,
+        identity: AgentIdentity,
+        complexity: TaskComplexity,
+        spec: AgentSpec,
+        test_report: dict[str, Any],
+        tick: Any,
+    ) -> tuple[AgentSpec, dict[str, Any]]:
+        """Router + Plan & Execute / ReAct + self-critique before delivery."""
+        from agent_service.builder.quality_gate import (
+            QualityLoopState,
+            critique_to_repair_reason,
+            default_plan_for_build,
+            max_quality_loops,
+            route_builder_pattern,
+            self_critique,
+        )
+        from agent_service.learning import record_error_observation, record_repair_lesson
+
+        max_critique = int(getattr(self.settings, "MAX_CRITIQUE_ROUNDS", 2) or 2)
+        tool_count = len(spec.tools or [])
+        tests_passed = str(test_report.get("status") or "").startswith("passed")
+        max_loops = max_quality_loops(self.settings, tests_passed=tests_passed)
+        pattern = route_builder_pattern(
+            complexity=complexity,
+            tests_passed=tests_passed,
+            tool_count=tool_count,
+        )
+        state = QualityLoopState(pattern=pattern)
+        state.plan = default_plan_for_build(
+            agent_name=identity.name,
+            user_prompt=content,
+            tests_passed=tests_passed,
+        )
+
+        await self.db.emit_event(
+            run_id,
+            "builder.pattern.selected",
+            {
+                "mapping_key": "builder.progress.pattern",
+                "pattern": pattern,
+                "complexity": complexity.value,
+                "plan": state.plan,
+            },
+        )
+        await tick(
+            steps=[
+                {"labelKey": "understanding", "state": "done"},
+                {"labelKey": "capabilities", "state": "done"},
+                {"labelKey": "building", "state": "running"},
+                {"labelKey": "testing", "state": "done" if tests_passed else "failed"},
+            ],
+            focus=f"Pattern {pattern}: " + " → ".join(state.plan[:3]),
+        )
+
+        critique_rounds = 0
+        while state.loops < max_loops:
+            state.loops += 1
+            tests_passed = str(test_report.get("status") or "").startswith("passed")
+
+            # Self-critique (autocritique) once verification looks green or we need a gate.
+            if tests_passed or critique_rounds < max_critique:
+                await self.db.emit_event(
+                    run_id,
+                    "builder.critique.started",
+                    {"mapping_key": "builder.progress.critique", "loop": state.loops},
+                )
+                await tick(
+                    steps=[
+                        {"labelKey": "understanding", "state": "done"},
+                        {"labelKey": "capabilities", "state": "done"},
+                        {"labelKey": "building", "state": "done"},
+                        {"labelKey": "testing", "state": "running"},
+                    ],
+                    focus=f"Self-critique pass {state.loops}/{max_loops}…",
+                )
+                provisional_status = "ready" if tests_passed else "needs_attention"
+                critique = await self_critique(
+                    gateway=self.gateway,
+                    identity_name=identity.name,
+                    user_prompt=content,
+                    test_report=test_report,
+                    status=provisional_status,
+                    prior_issues=[i for c in state.critiques for i in c.issues][-6:],
+                )
+                state.critiques.append(critique)
+                critique_rounds += 1
+                await self.db.emit_event(
+                    run_id,
+                    "builder.critique.completed",
+                    {
+                        "mapping_key": "builder.progress.critiqueDone",
+                        "ok": critique.ok,
+                        "score": critique.score,
+                        "next_pattern": critique.next_pattern,
+                        "issues": critique.issues[:5],
+                    },
+                )
+
+                if critique.ok and tests_passed:
+                    state.delivered_ok = True
+                    break
+
+                # Critique failed → route repair pattern (ReAct / Plan & Execute).
+                next_pat = route_builder_pattern(
+                    complexity=complexity,
+                    tests_passed=tests_passed,
+                    tool_count=tool_count,
+                    critique_failed=True,
+                    loop_index=state.loops,
+                )
+                state.pattern = next_pat if critique.next_pattern != "done" else "react"
+                try:
+                    await record_error_observation(
+                        error_code="SELF_CRITIQUE_FAILED",
+                        reason=critique_to_repair_reason(critique),
+                        context={
+                            "agent_id": agent_id,
+                            "pattern": state.pattern,
+                            "score": critique.score,
+                            "loop": state.loops,
+                        },
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception("quality_gate_observation_failed")
+
+                enriched = dict(test_report)
+                enriched["status"] = "failed"
+                enriched["reason"] = critique_to_repair_reason(critique)
+                enriched["error_code"] = enriched.get("error_code") or "SELF_CRITIQUE_FAILED"
+
+                await self.db.emit_event(
+                    run_id,
+                    "builder.repair.started",
+                    {
+                        "mapping_key": "builder.progress.repair",
+                        "pattern": state.pattern,
+                        "loop": state.loops,
+                    },
+                )
+                await tick(
+                    steps=[
+                        {"labelKey": "understanding", "state": "done"},
+                        {"labelKey": "capabilities", "state": "done"},
+                        {"labelKey": "building", "state": "running"},
+                        {"labelKey": "testing", "state": "failed"},
+                    ],
+                    focus=(
+                        f"{'Plan & Execute' if state.pattern == 'plan_execute' else 'ReAct'} "
+                        f"repair {state.loops}/{max_loops}…"
+                    ),
+                )
+                previous = dict(test_report)
+                spec = await self._repair(spec, enriched)
+                try:
+                    compile_graph(spec)
+                    validation = self._validate(spec)
+                    if not validation["ok"]:
+                        break
+                    test_report = await self._run_smoke_test(
+                        spec, user_id=user_id, agent_id=agent_id
+                    )
+                    if str(test_report.get("status") or "").startswith("passed"):
+                        try:
+                            await record_repair_lesson(
+                                error_code="SELF_CRITIQUE_FAILED",
+                                reason=str(previous.get("reason") or critique.summary or ""),
+                                context={
+                                    "agent_id": agent_id,
+                                    "pattern": state.pattern,
+                                    "loop": state.loops,
+                                },
+                                resolution={
+                                    "score_before": critique.score,
+                                    "test_status": test_report.get("status"),
+                                },
+                                resolution_summary=(
+                                    f"Quality-gate {state.pattern} recovered after critique: "
+                                    f"{(critique.summary or '')[:160]}"
+                                ),
+                            )
+                        except Exception:  # noqa: BLE001
+                            logger.exception("quality_gate_lesson_failed")
+                except Exception:  # noqa: BLE001
+                    logger.exception("quality_gate_repair_verify_failed")
+                    break
+            else:
+                break
+
+        await self.db.emit_event(
+            run_id,
+            "builder.quality.completed",
+            {
+                "mapping_key": "builder.progress.qualityDone",
+                "loops": state.loops,
+                "delivered_ok": state.delivered_ok,
+                "pattern": state.pattern,
+                "test_status": test_report.get("status"),
+            },
+        )
+        return spec, test_report
+
     async def _repair(self, spec: AgentSpec, test_report: dict[str, Any]) -> AgentSpec:
+        from agent_service.learning import format_lessons_for_prompt
         from agent_service.models.failure_report import AgentFailureReport, SuggestedPatch
 
         try:
             report = AgentFailureReport.model_validate(test_report)
         except Exception:  # noqa: BLE001
             report = AgentFailureReport(status="failed", reason=str(test_report.get("reason") or ""))
+
+        # Enrich repair with platform lessons from past fixed errors.
+        from agent_service.learning import lessons_for_repair
+
+        lessons = await lessons_for_repair(
+            error_code=report.error_code,
+            reason=report.reason,
+            limit=5,
+        )
+        lesson_block = format_lessons_for_prompt(lessons)
 
         data = spec.model_dump()
         patches = report.suggested_patches or [
@@ -1956,6 +2706,14 @@ class BuilderOrchestrator:
                 reason="fallback",
             ),
         ]
+        if lesson_block:
+            patches.append(
+                SuggestedPatch(
+                    kind="append_system_instruction",
+                    text=lesson_block,
+                    reason="Apply proven repairs from prior Stack32 failures",
+                )
+            )
         for patch in patches:
             if patch.kind == "reset_linear_graph":
                 data["graph"] = default_linear_graph(
@@ -2006,8 +2764,28 @@ class BuilderOrchestrator:
             status="running",
         )
         test_report = await self._run_smoke_test(spec, user_id=user_id, agent_id=agent_id)
+        previous_failure = dict(test_report)
         repaired = await self._repair(spec, test_report)
         test_report = await self._run_smoke_test(repaired, user_id=user_id, agent_id=agent_id)
+        if str(test_report.get("status") or "").startswith("passed") and str(
+            previous_failure.get("status") or ""
+        ) == "failed":
+            from agent_service.learning import record_repair_lesson
+
+            await record_repair_lesson(
+                error_code=previous_failure.get("error_code"),
+                reason=str(previous_failure.get("reason") or ""),
+                context={
+                    "agent_id": agent_id,
+                    "source": "repair_agent",
+                    "tools": [t.tool_id for t in repaired.tools[:12]],
+                },
+                resolution={"test_status": test_report.get("status")},
+                resolution_summary=(
+                    "User-triggered Fix it for me recovered after: "
+                    f"{str(previous_failure.get('reason') or '')[:180]}"
+                ),
+            )
         version = await self.db.persist_version(
             agent_id=agent_id,
             user_id=user_id,
@@ -2016,4 +2794,53 @@ class BuilderOrchestrator:
             change_summary="Automatic repair",
         )
         await self.db.complete_run(run_id)
+        from agent_service.readiness import evaluate_agent_readiness
+
+        readiness = await evaluate_agent_readiness(
+            agent_id=agent_id,
+            user_id=user_id,
+            spec=repaired,
+            db=self.db,
+            build_ok=True,
+        )
+        tests_passed = str(test_report.get("status") or "").startswith("passed")
+        if readiness.status == "needs_setup":
+            status = "needs_setup"
+        elif readiness.status == "ready" and tests_passed:
+            status = "ready"
+        else:
+            status = "needs_attention"
+        await self.db.update_agent_status(agent_id, user_id, status)
+        problems = summarize_detected_problems(
+            status=status,
+            test_report=test_report,
+            readiness=readiness,
+        )
+        if status == "ready":
+            reply = (
+                "Repair pass complete. Smoke checks passed and the agent is ready to try."
+            )
+            actions = ["test_agent"]
+            tone = "normal"
+            card = "ready"
+        else:
+            reply = (
+                "I ran a repair pass. Some issues still need attention — "
+                "connect missing apps or try Fix again after setup."
+            )
+            actions = ["fix_automatically", "test_agent"]
+            tone = "warning"
+            card = None
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content=reply,
+            metadata={
+                "tone": tone,
+                **({"card": card} if card else {}),
+                "actions": actions,
+                "detected_problems": problems,
+            },
+        )
         return {"run_id": run_id, "version_id": version.get("id"), "test_report": test_report}

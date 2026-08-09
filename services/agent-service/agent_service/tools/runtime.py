@@ -1,4 +1,4 @@
-"""Trusted tool runtime — allowlisted tools only."""
+"""Trusted tool runtime — hybrid provider registry + native builtins."""
 
 from __future__ import annotations
 
@@ -62,10 +62,54 @@ class CalendarListInput(BaseModel):
     max_results: int = Field(default=10, ge=1, le=25)
 
 
+class CalendarCreateEventInput(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    start: str = Field(min_length=1, max_length=64)
+    end: str = Field(min_length=1, max_length=64)
+    description: str = Field(default="", max_length=10_000)
+    dry_run: bool = True
+
+
+class GoogleDocsCreateInput(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(default="", max_length=50_000)
+    dry_run: bool = True
+
+
+class GoogleDocsAppendInput(BaseModel):
+    document_id: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=50_000)
+    dry_run: bool = True
+
+
 # Tools that mutate external state: default to dry-run and require explicit approval
 # before a real (non-dry-run) execution is permitted.
-SIDE_EFFECT_TOOLS = frozenset({"gmail_send"})
+SIDE_EFFECT_TOOLS = frozenset(
+    {
+        "gmail_send",
+        "gmail_send_message",
+        "gmail_create_draft",
+        "calendar_create_event",
+        "google_docs_create",
+        "google_docs_append",
+        "slack_post_message",
+        "http_request",
+    }
+)
 
+_GOOGLE_TOOLS = frozenset(
+    {
+        "gmail_list",
+        "gmail_read",
+        "gmail_send",
+        "gmail_create_draft",
+        "gmail_send_message",
+        "calendar_list",
+        "calendar_create_event",
+        "google_docs_create",
+        "google_docs_append",
+    }
+)
 
 _SAFE_OPS = {
     ast.Add: operator.add,
@@ -95,12 +139,18 @@ def _safe_eval(expr: str) -> float:
     return _eval(node)
 
 
-async def execute_tool(
+def _is_approved(tool_id: str, context: dict[str, Any]) -> bool:
+    approved = context.get("approved_tool_ids") or []
+    return tool_id in set(approved)
+
+
+async def execute_native_tool(
     tool_id: str,
     args: dict[str, Any],
     *,
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Execute a built-in native / Google connector tool (no registry hop)."""
     context = context or {}
     try:
         if tool_id == "web_search":
@@ -122,16 +172,50 @@ async def execute_tool(
             if len(str(payload.data)) > 50_000:
                 raise ToolError("TOOL_INPUT_INVALID", "Payload too large.")
             return {"schema_name": payload.schema_name, "data": payload.data}
-        if tool_id in {"gmail_list", "gmail_read", "gmail_send", "calendar_list"}:
+        if tool_id in _GOOGLE_TOOLS:
             return await _execute_google_tool(tool_id, args, context=context)
+        if tool_id == "http_request":
+            # Prefer custom_api provider; keep a thin fallback for direct native calls.
+            from agent_service.integrations.custom_api import CustomApiToolProvider
+            from agent_service.integrations.normalize import ToolRef
+
+            return await CustomApiToolProvider().execute_tool(
+                ToolRef(tool_id="http_request", provider="custom_api"),
+                args,
+                context=context,
+            )
         raise ToolError("TOOL_NOT_ALLOWED", f"Tool not allowed: {tool_id}")
     except ValidationError as exc:
         raise ToolError("TOOL_INPUT_INVALID", "Invalid tool arguments.") from exc
 
 
-def _is_approved(tool_id: str, context: dict[str, Any]) -> bool:
-    approved = context.get("approved_tool_ids") or []
-    return tool_id in set(approved)
+async def execute_tool(
+    tool_id: str,
+    args: dict[str, Any],
+    *,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Resolve via ProviderRegistry when possible; fall back to native execution."""
+    context = context or {}
+    try:
+        from agent_service.integrations.registry import get_provider_registry
+
+        registry = get_provider_registry()
+        ref = await registry.resolve_tool_ref(tool_id)
+        if ref is not None:
+            provider = registry.get_provider(ref.provider)
+            if provider is not None:
+                # Native provider calls back into execute_native_tool — avoid recursion
+                # by short-circuiting native here.
+                if ref.provider == "native":
+                    return await execute_native_tool(tool_id, args, context=context)
+                return await provider.execute_tool(ref, args, context=context)
+    except ToolError:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.debug("registry_execute_fallback tool_id=%s", tool_id, exc_info=True)
+
+    return await execute_native_tool(tool_id, args, context=context)
 
 
 async def _execute_google_tool(
@@ -161,9 +245,61 @@ async def _execute_google_tool(
         return await google_tools.calendar_list(
             user_id=user_id, agent_id=agent_id, max_results=inp.max_results
         )
-    if tool_id == "gmail_send":
+    if tool_id == "calendar_create_event":
+        inp = CalendarCreateEventInput.model_validate(args)
+        approved = _is_approved(tool_id, context)
+        effective_dry_run = inp.dry_run or not approved
+        result = await google_tools.calendar_create_event(
+            user_id=user_id,
+            agent_id=agent_id,
+            title=inp.title,
+            start=inp.start,
+            end=inp.end,
+            description=inp.description,
+            dry_run=effective_dry_run,
+        )
+        if effective_dry_run and not inp.dry_run and not approved:
+            result["approval_required"] = True
+            result["message"] = "Real create requires human approval; returned dry-run preview."
+        return result
+    if tool_id == "gmail_create_draft":
         inp = GmailSendInput.model_validate(args)
-        # Side-effect: force dry-run unless the orchestrator granted approval.
+        approved = _is_approved(tool_id, context)
+        # Draft creation is a side-effect; still respect approval + dry_run.
+        effective_dry_run = inp.dry_run or not approved
+        result = await google_tools.gmail_send_draft(
+            user_id=user_id,
+            agent_id=agent_id,
+            to=inp.to,
+            subject=inp.subject,
+            body=inp.body,
+            dry_run=effective_dry_run,
+        )
+        if effective_dry_run and not inp.dry_run and not approved:
+            result["approval_required"] = True
+            result["message"] = "Draft create requires human approval; returned dry-run preview."
+        return result
+    if tool_id == "gmail_send_message":
+        inp = GmailSendInput.model_validate(args)
+        approved = _is_approved(tool_id, context)
+        effective_dry_run = inp.dry_run or not approved
+        result = await google_tools.gmail_send_message(
+            user_id=user_id,
+            agent_id=agent_id,
+            to=inp.to,
+            subject=inp.subject,
+            body=inp.body,
+            dry_run=effective_dry_run,
+        )
+        if effective_dry_run and not inp.dry_run and not approved:
+            result["approval_required"] = True
+            result["message"] = "Real send requires human approval; returned dry-run preview."
+        return result
+    if tool_id == "gmail_send":
+        # Legacy alias: prefer draft path for backward compatibility.
+        # Docs: gmail_send creates a draft (via gmail_send_draft); use
+        # gmail_send_message for an actual send when approved.
+        inp = GmailSendInput.model_validate(args)
         approved = _is_approved(tool_id, context)
         effective_dry_run = inp.dry_run or not approved
         result = await google_tools.gmail_send_draft(
@@ -177,6 +313,36 @@ async def _execute_google_tool(
         if effective_dry_run and not inp.dry_run and not approved:
             result["approval_required"] = True
             result["message"] = "Real send requires human approval; returned dry-run preview."
+        return result
+    if tool_id == "google_docs_create":
+        inp = GoogleDocsCreateInput.model_validate(args)
+        approved = _is_approved(tool_id, context)
+        effective_dry_run = inp.dry_run or not approved
+        result = await google_tools.google_docs_create(
+            user_id=user_id,
+            agent_id=agent_id,
+            title=inp.title,
+            body=inp.body,
+            dry_run=effective_dry_run,
+        )
+        if effective_dry_run and not inp.dry_run and not approved:
+            result["approval_required"] = True
+            result["message"] = "Creating a Doc requires approval; returned dry-run preview."
+        return result
+    if tool_id == "google_docs_append":
+        inp = GoogleDocsAppendInput.model_validate(args)
+        approved = _is_approved(tool_id, context)
+        effective_dry_run = inp.dry_run or not approved
+        result = await google_tools.google_docs_append(
+            user_id=user_id,
+            agent_id=agent_id,
+            document_id=inp.document_id,
+            text=inp.text,
+            dry_run=effective_dry_run,
+        )
+        if effective_dry_run and not inp.dry_run and not approved:
+            result["approval_required"] = True
+            result["message"] = "Updating a Doc requires approval; returned dry-run preview."
         return result
     raise ToolError("TOOL_NOT_ALLOWED", f"Tool not allowed: {tool_id}")
 

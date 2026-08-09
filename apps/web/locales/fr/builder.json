@@ -132,7 +132,13 @@
   "actions": {
     "testAgent": "Essayer l'agent",
     "viewStructure": "Voir la structure",
-    "fixAutomatically": "Corriger pour moi"
+    "fixAutomatically": "Corriger pour moi",
+    "fixAutomaticallyHint": "Cliquer sur le bouton pour pouvoir corriger automatiquement les erreurs que Stack32 a trouvé.",
+    "fixResolved": "Résolu",
+    "fixPrompt": "Corrige ces problèmes détectés (fix) :\n{{problems}}",
+    "fixPromptEmpty": "Corrige les problèmes détectés (fix) et rends l'agent prêt.",
+    "problemsDetectedTitle": "Problèmes détectés",
+    "problemsDetectedFallback": "Stack32 a détecté un souci qui nécessite une correction."
   },
   "mock": {
     "successResponse": "Votre agent est prêt à essayer. J'ai défini son objectif, choisi les bonnes capacités et lancé un premier test. Tout a l'air bon. Ouvrez Live pour lui parler, ou Structure pour voir comment il fonctionne.",
@@ -268,6 +274,47 @@
         "google": "Oui — Google (Gmail / Agenda)",
         "later": "Plus tard — rappel-moi"
       }
+    }
+  },
+  "connections": {
+    "googleTitle": "Google",
+    "googleHint": "Connectez Gmail et Agenda. Un clic suffit — Stack32 gère le reste en sécurité.",
+    "genericHint": "Connectez un compte pour que cet agent puisse utiliser cette app.",
+    "connected": "Connecté",
+    "needsSetup": "À connecter",
+    "errorStatus": "Erreur",
+    "connect": "Connecter {{provider}}",
+    "connectGoogle": "Connecter mon Google",
+    "disconnect": "Déconnecter",
+    "change": "Changer de compte",
+    "account": "Compte",
+    "error": "Impossible de démarrer la connexion. Réessayez dans un instant.",
+    "disconnectError": "Impossible de déconnecter ce compte.",
+    "pipedreamError": "Impossible d'ouvrir la connexion à l'app.",
+    "pipedreamFallback": "Terminez la connexion dans la fenêtre qui s'ouvre, puis revenez ici.",
+    "continuePipedream": "Continuer la connexion",
+    "tokenLabel": "Jeton de connexion",
+    "scaffolded": "Les connecteurs Microsoft, Slack et Notion sont préparés (désactivés).",
+    "toolSetupTitle": "Configuration de l'outil",
+    "approvalMode": "Demander mon accord",
+    "approvalHint": "Choisissez quand l'agent doit vous demander avant d'agir.",
+    "connectionStatus": "Connexion",
+    "providers": {
+      "google": "Google",
+      "pipedream": "Apps connectées",
+      "native": "Intégré",
+      "custom_api": "API personnalisée"
+    },
+    "hints": {
+      "google": "Connectez votre compte Google pour les e-mails, l'agenda et Docs.",
+      "pipedream": "Connectez n'importe quelle app (Notion, Slack, Stripe, Sheets… — 3000+ via Pipedream). Vos identifiants restent chez le fournisseur.",
+      "native": "Déjà inclus — aucun compte externe requis.",
+      "custom_api": "Configurez une connexion API pour cet outil."
+    },
+    "approvalModes": {
+      "never": "Agir directement",
+      "always": "Toujours me demander",
+      "conditional": "Demander si c'est risqué"
     }
   },
   "errors": {

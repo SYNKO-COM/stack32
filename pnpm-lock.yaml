@@ -13,6 +13,9 @@ importers:
       '@dagrejs/dagre':
         specifier: ^3.1.0
         version: 3.1.0
+      '@pipedream/sdk':
+        specifier: ^3.1.2
+        version: 3.1.2
       '@stack32/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -532,6 +535,10 @@ packages:
 
   '@oxc-project/types@0.142.0':
     resolution: {integrity: sha512-7W+2q5AKQVU36fkaryontrHn3YDt1RyUYXatw9i5H8ocYe2sPKSFB6eS8WNPeRKiN1qAWWZUPm7gwFzJGrccqQ==}
+
+  '@pipedream/sdk@3.1.2':
+    resolution: {integrity: sha512-cLhYBk4oge3oMyjlkAY30IaIZqJ7XVnou3NCzQna0VRaauU3HuD0QLnLJakOSV14IB6/bdarL+xVUix50ItFXg==}
+    engines: {node: '>=18.0.0'}
 
   '@playwright/test@1.62.1':
     resolution: {integrity: sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==}
@@ -4123,6 +4130,8 @@ snapshots:
   '@nolyfill/is-core-module@1.0.39': {}
 
   '@oxc-project/types@0.142.0': {}
+
+  '@pipedream/sdk@3.1.2': {}
 
   '@playwright/test@1.62.1':
     dependencies:

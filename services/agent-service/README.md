@@ -6,10 +6,12 @@ FastAPI service that builds and runs Stack32 agents via declarative AgentSpec / 
 
 ```bash
 python3 -m venv .venv
+.venv/bin/pip install ../stack32-agent-runtime
 .venv/bin/pip install -e ".[dev]"
 cp ../../.env.example .env
 # Fill SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWKS_URL, INTERNAL_SERVICE_TOKEN
 # Optional for live LLM: OPENAI_API_KEY, XAI_API_KEY, AI_EXECUTION_MODE=live
+# Optional integrations: GOOGLE_OAUTH_*, PIPEDREAM_*, DATABASE_URL (LangGraph checkpoints)
 .venv/bin/uvicorn agent_service.main:app --reload --port 8000
 ```
 
@@ -26,6 +28,10 @@ cp ../../.env.example .env
 - `POST /v1/live/threads/{id}/messages`
 - `GET  /v1/runs/{id}/stream` (SSE)
 - `POST /v1/agents/{id}/publish`
+- `GET  /v1/agents/{id}/readiness`
+- `POST /v1/integrations/connect-token`
+- `GET  /v1/integrations/tools/search`
+- `GET  /v1/providers/health`
 - `POST /v1/internal/tasks/run`
 
 ## Tests

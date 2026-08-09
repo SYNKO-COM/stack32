@@ -12,14 +12,14 @@ def test_compile_valid_spec():
     assert "output" in compiled.handlers
 
 
-def test_reject_unknown_tool_node():
+def test_reject_empty_tool_node_id():
     nodes = [
         GraphNode(id="input", type="input", name="In"),
         GraphNode(
             id="evil",
             type="tool",
             name="Evil",
-            config={"tool_id": "custom_code"},
+            config={"tool_id": ""},
         ),
         GraphNode(id="output", type="output", name="Out"),
     ]

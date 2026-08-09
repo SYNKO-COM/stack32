@@ -12,7 +12,10 @@ export type AgentStatus =
   | "building"
   | "ready"
   | "needs_attention"
-  | "published";
+  | "published"
+  | "waiting_for_input"
+  | "needs_setup"
+  | "archived";
 
 export type SubscriptionStatus =
   | "active"
@@ -50,18 +53,30 @@ export interface Subscription {
   currentPeriodEnd?: string;
 }
 
-export type ToolId =
-  | "web_search"
-  | "fetch_url"
-  | "knowledge_search"
-  | "calculator"
-  | "current_datetime"
-  | "structured_output"
-  | "http_request";
+/**
+ * Tool identifiers are free-form V4 strings (native, gmail_*, calendar_*, http_request, …).
+ * @deprecated Prefer ToolBinding.toolId — kept as an alias for older ToolConfig usage.
+ */
+export type ToolId = string;
+
+export type ApprovalMode = "never" | "always" | "conditional";
 
 export interface ToolConfig {
   tool: ToolId;
   enabled: boolean;
+}
+
+/** V4 hybrid tool binding (mirrors agent-service ToolBinding). */
+export interface ToolBinding {
+  toolId: string;
+  provider?: string;
+  appId?: string;
+  externalActionId?: string;
+  version?: string;
+  enabled: boolean;
+  approvalMode?: ApprovalMode;
+  config?: Record<string, unknown>;
+  connectionRequirementId?: string;
 }
 
 export type ModelProfileId = "fast" | "standard" | "heavy";
@@ -77,6 +92,8 @@ export interface AgentSpec {
     temperature: number;
   };
   tools: ToolConfig[];
+  /** Richer V4 bindings when present on the stored spec. */
+  toolBindings?: ToolBinding[];
   knowledge: {
     enabled: boolean;
     sourceIds: string[];
@@ -208,7 +225,9 @@ export interface BuilderUiComponent {
     | "agent_identity_form"
     | "secret_form"
     | "agent_capabilities_form"
-    | "dynamic_questions_form";
+    | "dynamic_questions_form"
+    | "connection_form"
+    | "approval_form";
   version: "1";
   requestId: string;
   context?: "builder" | "live";
@@ -268,6 +287,8 @@ export interface BuilderMessage {
   suggestions?: BuilderSuggestion[];
   /** Project files touched in this builder turn (for a simple beginner-friendly list). */
   projectFiles?: string[];
+  /** Short human-readable problems when Fix it for me is offered. */
+  detectedProblems?: string[];
   createdAt: string;
 }
 
@@ -351,4 +372,24 @@ export interface OnboardingAnswers {
   firstName?: string;
   phone?: string;
   primaryUseCase?: string;
+}
+
+/* ----------------------------------------------------------------------- */
+/* Hybrid integrations readiness                                             */
+/* ----------------------------------------------------------------------- */
+
+export type ReadinessStatus = "ready" | "needs_setup" | "needs_attention";
+
+export interface ReadinessCheck {
+  key: string;
+  ok: boolean;
+  message: string;
+  severity: "error" | "warn" | "info";
+}
+
+export interface ReadinessResult {
+  status: ReadinessStatus;
+  checks: ReadinessCheck[];
+  missingConnections: Array<Record<string, unknown>>;
+  missingConfig: Array<Record<string, unknown>>;
 }

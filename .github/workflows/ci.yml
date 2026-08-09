@@ -15,8 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+        # version comes from packageManager in root package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -54,8 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+        # version comes from packageManager in root package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -88,6 +86,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install stack32-agent-runtime
+        run: pip install ../stack32-agent-runtime
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest

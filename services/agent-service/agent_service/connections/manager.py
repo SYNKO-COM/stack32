@@ -32,6 +32,10 @@ GOOGLE_SCOPES = {
         "https://www.googleapis.com/auth/calendar.readonly",
         "https://www.googleapis.com/auth/calendar.events",
     ],
+    "docs": [
+        "https://www.googleapis.com/auth/documents",
+        "https://www.googleapis.com/auth/drive.file",
+    ],
     "openid": [
         "openid",
         "email",
@@ -56,13 +60,38 @@ def _pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
+_GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly"
+_GMAIL_SEND = "https://www.googleapis.com/auth/gmail.send"
+_GMAIL_COMPOSE = "https://www.googleapis.com/auth/gmail.compose"
+_CAL_READONLY = "https://www.googleapis.com/auth/calendar.readonly"
+_CAL_EVENTS = "https://www.googleapis.com/auth/calendar.events"
+_DOCS = "https://www.googleapis.com/auth/documents"
+_DRIVE_FILE = "https://www.googleapis.com/auth/drive.file"
+
+
 def scopes_for_tools(tool_ids: list[str]) -> list[str]:
+    """Least-privilege Google OAuth scopes for the requested tools."""
     scopes: list[str] = list(GOOGLE_SCOPES["openid"])
     for tid in tool_ids:
-        if tid.startswith("gmail"):
+        if tid in {"gmail_list", "gmail_read"}:
+            scopes.append(_GMAIL_READONLY)
+        elif tid == "gmail_create_draft":
+            scopes.append(_GMAIL_COMPOSE)
+        elif tid in {"gmail_send_message", "gmail_send"}:
+            scopes.append(_GMAIL_SEND)
+        elif tid == "calendar_list":
+            scopes.append(_CAL_READONLY)
+        elif tid == "calendar_create_event":
+            scopes.append(_CAL_EVENTS)
+        elif tid in {"google_docs_create", "google_docs_append"} or tid.startswith("google_docs"):
+            scopes.extend(GOOGLE_SCOPES["docs"])
+        elif tid.startswith("gmail") or tid in {"gmail", "email", "mail"}:
+            # Broad fallback for legacy / aggregate requests.
             scopes.extend(GOOGLE_SCOPES["gmail"])
-        if tid.startswith("calendar"):
+        elif tid.startswith("calendar") or tid == "calendar":
             scopes.extend(GOOGLE_SCOPES["calendar"])
+        elif tid in {"docs", "google_docs", "drive"}:
+            scopes.extend(GOOGLE_SCOPES["docs"])
     # unique preserve order
     seen: set[str] = set()
     out: list[str] = []

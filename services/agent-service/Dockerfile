@@ -1,3 +1,4 @@
+# Build context: services/ (see CI: docker build -f agent-service/Dockerfile ...)
 FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,12 +8,17 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
-COPY agent_service ./agent_service
+COPY stack32-agent-runtime /tmp/stack32-agent-runtime
+COPY agent-service/pyproject.toml agent-service/README.md ./
+COPY agent-service/agent_service ./agent_service
 
-RUN pip install --no-cache-dir --prefix=/install .
+# Install runtime + service together so the local path satisfies the dep.
+RUN pip install --no-cache-dir --prefix=/install \
+      /tmp/stack32-agent-runtime \
+      .
 
 FROM python:3.12-slim
 
@@ -23,14 +29,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends libpq5 \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
     && mkdir -p /app \
     && chown -R appuser:appuser /app \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /install
-COPY --chown=appuser:appuser agent_service /app/agent_service
-COPY --chown=appuser:appuser pyproject.toml README.md /app/
+COPY --chown=appuser:appuser agent-service/agent_service /app/agent_service
+COPY --chown=appuser:appuser agent-service/pyproject.toml agent-service/README.md /app/
 
 WORKDIR /app
 USER appuser

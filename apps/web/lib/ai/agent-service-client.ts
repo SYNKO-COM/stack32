@@ -33,16 +33,36 @@ export async function agentServiceFetch<T>(
   const { AGENT_SERVICE_URL } = getServerEnv();
   const url = `${AGENT_SERVICE_URL.replace(/\/$/, "")}${path}`;
 
-  const res = await fetch(url, {
-    method: options.method ?? "GET",
-    headers: {
-      Authorization: `Bearer ${options.accessToken}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: options.method ?? "GET",
+      headers: {
+        Authorization: `Bearer ${options.accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      cache: "no-store",
+    });
+  } catch (err) {
+    const cause =
+      err instanceof Error && "cause" in err
+        ? (err as Error & { cause?: { code?: string } }).cause
+        : undefined;
+    const code =
+      cause && typeof cause === "object" && "code" in cause
+        ? String((cause as { code?: string }).code || "")
+        : "";
+    if (code === "ECONNREFUSED" || (err instanceof Error && /fetch failed/i.test(err.message))) {
+      throw new AgentServiceError(
+        "AGENT_SERVICE_UNAVAILABLE",
+        "Agent service is not reachable. Start it with pnpm dev:agent (port 8000).",
+        503,
+      );
+    }
+    throw err;
+  }
 
   if (!res.ok) {
     let code = "AGENT_SERVICE_ERROR";

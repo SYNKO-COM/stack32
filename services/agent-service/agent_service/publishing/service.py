@@ -56,6 +56,45 @@ class PublishService:
         except Exception:  # noqa: BLE001
             return {"error": "DEPLOYMENT_VALIDATION_FAILED"}
 
+        # Readiness gate: refuse publish unless fully ready.
+        from agent_service.readiness import evaluate_agent_readiness
+
+        agent_status = str(agent.get("status") or "")
+        readiness = await evaluate_agent_readiness(
+            agent_id=agent_id,
+            user_id=user_id,
+            spec=spec,
+            db=self.db,
+            build_ok=agent_status not in {"needs_attention", "building", "draft"},
+        )
+        if readiness.status != "ready" or agent_status in {
+            "needs_setup",
+            "needs_attention",
+            "waiting_for_input",
+            "building",
+            "draft",
+        }:
+            await self.db.audit(
+                user_id=user_id,
+                agent_id=agent_id,
+                action="publish",
+                resource_type="agent",
+                resource_id=agent_id,
+                result="denied",
+                risk_level="medium",
+                metadata={"readiness": readiness.status, "agent_status": agent_status},
+            )
+            return {
+                "error": "DEPLOYMENT_VALIDATION_FAILED",
+                "code": "READINESS_FAILED",
+                "readiness": readiness.status,
+                "checks": [
+                    {"key": c.key, "ok": c.ok, "message": c.message, "severity": c.severity}
+                    for c in readiness.checks
+                ],
+                "missing_connections": readiness.missing_connections,
+            }
+
         version_id = agent.get("draft_version_id")
         if not version_id:
             return {"error": "DEPLOYMENT_VALIDATION_FAILED"}

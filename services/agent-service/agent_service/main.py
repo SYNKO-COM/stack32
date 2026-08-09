@@ -1,12 +1,13 @@
 """Application factory for the Stack32 Agent Service."""
 
+import logging
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from agent_service import __version__
 from agent_service.config import get_settings
 from agent_service.errors import register_exception_handlers
-from agent_service.gateway.model_gateway import provider_health
 from agent_service.logging_config import setup_logging
 from agent_service.middleware import RequestIDMiddleware
 from agent_service.routers import (
@@ -14,6 +15,7 @@ from agent_service.routers import (
     builder,
     connections,
     health,
+    integrations,
     knowledge,
     live,
     runs,
@@ -23,11 +25,41 @@ from agent_service.routers import (
     webhooks,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _check_production_runtime(settings) -> None:
+    """Warn or fail on unsafe production configuration."""
+    if not settings.is_production and (settings.ENVIRONMENT or "").lower() != "production":
+        return
+    errors: list[str] = []
+    warnings: list[str] = []
+    if settings.ALLOW_UNVERIFIED_JWT:
+        errors.append("ALLOW_UNVERIFIED_JWT must be false in production")
+    if settings.SANDBOX_PROVIDER == "local":
+        msg = "SANDBOX_PROVIDER=local is not allowed in production"
+        if settings.BUILDER_SANDBOX_ENABLED:
+            errors.append(msg)
+        else:
+            warnings.append(msg + " (sandbox disabled)")
+    if not (settings.SECRETS_ENCRYPTION_KEY or "").strip():
+        errors.append("SECRETS_ENCRYPTION_KEY is required in production")
+    if settings.AGENT_RUNTIME_VERSION == "langgraph" and not (settings.DATABASE_URL or "").strip():
+        errors.append(
+            "AGENT_RUNTIME_VERSION=langgraph requires DATABASE_URL in production "
+            "(MemorySaver is forbidden)"
+        )
+    for w in warnings:
+        logger.warning("production_config_warning: %s", w)
+    if errors:
+        raise RuntimeError("Production startup checks failed: " + "; ".join(errors))
+
 
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
     setup_logging(settings.LOG_LEVEL)
+    _check_production_runtime(settings)
 
     app = FastAPI(
         title="Stack32 Agent Service",
@@ -56,14 +88,11 @@ def create_app() -> FastAPI:
     v1.include_router(runs.router)
     v1.include_router(knowledge.router)
     v1.include_router(connections.router)
+    v1.include_router(integrations.router)
     v1.include_router(tasks.router)
     v1.include_router(webhooks.router)
     v1.include_router(transcribe.router)
     app.include_router(v1)
-
-    @app.get("/v1/providers/health")
-    async def providers_health() -> dict:
-        return {"providers": [p.model_dump() for p in provider_health()]}
 
     @app.on_event("startup")
     async def _maybe_start_queue_worker() -> None:

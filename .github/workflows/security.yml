@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install stack32-agent-runtime
+        run: pip install ../stack32-agent-runtime
       - run: pip install -e ".[dev]"
       - run: bandit -r agent_service -ll
       - run: pip-audit
@@ -38,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build agent-service image
-        run: docker build -t stack32-agent-service:ci services/agent-service
+        run: docker build -f services/agent-service/Dockerfile -t stack32-agent-service:ci services
       - uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: stack32-agent-service:ci

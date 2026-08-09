@@ -2,7 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { TypewriterText } from "@/components/builder/message-motion";
 import { SecretForm } from "@/components/builder/secret-form";
@@ -73,6 +73,8 @@ export function ReadyCard({
   identitySummary,
   actions,
   onFix,
+  problems,
+  fixResolved = false,
   animate = false,
   onDone,
 }: {
@@ -82,6 +84,8 @@ export function ReadyCard({
   suggestions?: BuilderSuggestion[];
   actions?: BuilderAction[];
   onFix: () => void;
+  problems?: string[];
+  fixResolved?: boolean;
   onSuggestion?: (prompt: string) => void;
   animate?: boolean;
   onDone?: () => void;
@@ -95,6 +99,34 @@ export function ReadyCard({
 
   const lead = name ? t("ready.titleNamed", { name }) : t("ready.title");
   const plainBody = `${lead}\n\n${content}`.replace(/\*\*/g, "");
+
+  // #region agent log
+  useEffect(() => {
+    fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "a17c1f",
+      },
+      body: JSON.stringify({
+        sessionId: "a17c1f",
+        runId: "pre-fix",
+        hypothesisId: "A,C",
+        location: "ready-card.tsx:mount",
+        message: "ReadyCard rendered",
+        data: {
+          agentId,
+          name: name ?? null,
+          animate,
+          typedDone,
+          contentPreview: content.slice(0, 120),
+          actions: actions ?? null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [agentId, name, animate, typedDone, content, actions]);
+  // #endregion
 
   const finish = () => {
     setTypedDone(true);
@@ -161,7 +193,9 @@ export function ReadyCard({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {(actions ?? ["test_agent"]).map((action) => {
+        {(actions ?? ["test_agent"])
+          .filter((a) => a !== "view_structure" && a !== "view_changes" && a !== "fix_automatically")
+          .map((action) => {
           if (action === "test_agent") {
             return (
               <Button
@@ -176,22 +210,38 @@ export function ReadyCard({
               </Button>
             );
           }
-          if (action === "view_structure" || action === "view_changes") {
-            return null;
-          }
-          return (
-            <Button
-              key={action}
-              size="sm"
-              variant="secondary"
-              className="rounded-full"
-              onClick={onFix}
-            >
-              {t("actions.fixAutomatically")}
-            </Button>
-          );
+          return null;
         })}
       </div>
+
+      {(actions ?? []).includes("fix_automatically") ? (
+        <div className="rounded-2xl border border-border/50 bg-foreground/[0.03] px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">
+            {t("actions.problemsDetectedTitle")}
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground/85">
+            {(problems && problems.length > 0
+              ? problems
+              : [t("actions.problemsDetectedFallback")]
+            ).map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+          <Button
+            size="sm"
+            className="mt-3 rounded-full bg-brand text-white hover:bg-brand/90 disabled:opacity-60"
+            onClick={onFix}
+            disabled={fixResolved}
+          >
+            {fixResolved ? t("actions.fixResolved") : t("actions.fixAutomatically")}
+          </Button>
+          {fixResolved ? null : (
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {t("actions.fixAutomaticallyHint")}
+            </p>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

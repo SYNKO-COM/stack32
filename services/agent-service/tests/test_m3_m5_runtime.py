@@ -8,10 +8,10 @@ import pytest
 
 from agent_service.builder.project_files import build_project_artifacts
 from agent_service.connections.manager import _pkce_pair, scopes_for_tools
+from agent_service.mock_data import make_sales_research_spec
 from agent_service.models.agent_spec import AgentSpec, migrate_v2_to_v3
 from agent_service.models.failure_report import failure_from_smoke
 from agent_service.models.graph_spec import default_linear_graph
-from agent_service.mock_data import make_sales_research_spec
 
 
 def test_project_artifacts_paths():

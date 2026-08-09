@@ -50,7 +50,20 @@
     "calculator": "Calculator",
     "current_datetime": "Date & time",
     "structured_output": "Structured output",
-    "http_request": "HTTP requests (advanced)"
+    "http_request": "HTTP requests (advanced)",
+    "gmail_list": "Read my emails",
+    "gmail_read": "Open an email",
+    "gmail_create_draft": "Draft an email",
+    "gmail_send_message": "Send an email",
+    "gmail_send": "Send an email",
+    "calendar_list": "View my calendar",
+    "calendar_create_event": "Create an event",
+    "google_docs_create": "Create a Google Doc",
+    "google_docs_append": "Update a Google Doc",
+    "google_docs": "Google Docs",
+    "google_drive": "Google Drive",
+    "pd:google_docs": "Google Docs",
+    "pd:google_drive": "Google Drive"
   },
   "empty": {
     "title": "No structure yet",
@@ -82,34 +95,59 @@
     "collapse": "Collapse structure",
     "expand": "Show structure",
     "resize": "Resize chat and structure panels",
+    "clickHint": "Click any card to open its settings",
     "kinds": {
       "trigger": "Message received",
-      "guard": "Guardrail",
+      "guard": "Safety check",
       "brain": "AI Agent",
-      "router": "Router",
-      "approval": "Approval",
+      "router": "Choice",
+      "approval": "Your approval",
       "output": "Reply sent",
       "model": "Model",
       "memory": "Memory",
-      "knowledge": "Knowledge",
+      "knowledge": "Documents",
       "tool": "Tool"
     },
     "help": {
-      "trigger": "Starting point: what the user writes to your agent.",
+      "trigger": "Starting point: what you write to your agent.",
       "guard": "Checks the message before processing and blocks risky input.",
       "brain": "The core of the agent: it understands the request and decides what to do.",
       "router": "Sends the flow one way or another based on the request.",
       "approval": "Asks for your approval before a sensitive action.",
-      "output": "Formats the final reply sent back to the user.",
-      "model": "The language model used to think and write.",
+      "output": "Formats the final reply sent back.",
+      "model": "The language brain that thinks and writes.",
+      "modelChange": "Want a faster or smarter model? Ask in Build — Stack32 will update it for you.",
       "memory": "What the agent remembers from one message to the next.",
       "knowledge": "The documents the agent can look into.",
-      "tool": "A concrete action the agent can trigger."
+      "tool": "A concrete action: email, Docs, search, and more."
+    },
+    "setupBanner": {
+      "title": "Connect your apps to finish setup",
+      "body": "Your agent is ready — link the accounts below so it can create Docs, send email, and more.",
+      "connectTitle": "Link your account"
+    },
+    "readiness": {
+      "needsSetup": "Needs connection",
+      "connected": "Connected",
+      "connection": "Connection",
+      "provider": "Service",
+      "worksWith": "Works with",
+      "builtIn": "Built-in — ready to use",
+      "builtInShort": "Built-in",
+      "notNeeded": "Not needed",
+      "nativeReady": "This capability is already included — nothing to connect.",
+      "tapToConnect": "Tap to connect",
+      "ready": "Ready",
+      "status": {
+        "ready": "Ready",
+        "needs_setup": "Setup needed",
+        "needs_attention": "Needs attention"
+      }
     }
   },
   "nodeStates": {
     "default": "No additional details for this step.",
-    "toolId": "Tool: {{id}}",
+    "toolId": "Action: {{id}}",
     "modelProfile": "Model profile: {{profile}}"
   },
   "prefill": {

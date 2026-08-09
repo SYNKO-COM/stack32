@@ -92,15 +92,41 @@ class CodingAgent:
     async def _decide(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
     ) -> ModelDecision:
-        result = await self.gateway.complete(
-            profile=ModelProfile.CODING,
-            messages=messages,
-            tools=tools,
-            max_tokens=2048,
-            temperature=0.1,
-        )
-        tool_calls = list(getattr(result, "tool_calls", []) or [])
-        return ModelDecision(content=str(getattr(result, "content", "") or ""), tool_calls=tool_calls)
+        from agent_service.security.llm_budget import LlmCallBudgetExceeded
+
+        try:
+            result = await self.gateway.complete(
+                profile=ModelProfile.CODING,
+                messages=messages,
+                tools=tools,
+                max_tokens=2048,
+                temperature=0.1,
+            )
+        except LlmCallBudgetExceeded:
+            raise
+        except Exception:
+            # Specialized coding models may be unavailable — degrade to balanced chat.
+            result = await self.gateway.complete(
+                profile=ModelProfile.BALANCED,
+                messages=messages,
+                tools=tools,
+                max_tokens=2048,
+                temperature=0.1,
+            )
+        content = getattr(result, "content", None) or ""
+        raw_calls = getattr(result, "tool_calls", None) or []
+        tool_calls: list[dict[str, Any]] = []
+        for call in raw_calls:
+            if not isinstance(call, dict):
+                continue
+            tool_calls.append(
+                {
+                    "tool_id": str(call.get("tool_id") or call.get("name") or ""),
+                    "call_id": str(call.get("call_id") or call.get("id") or ""),
+                    "arguments": call.get("arguments") or {},
+                }
+            )
+        return ModelDecision(content=str(content), tool_calls=tool_calls)
 
     async def run(
         self,
@@ -114,7 +140,21 @@ class CodingAgent:
         detector = LoopDetector()
         decide = model_fn or self._decide
 
+        # Plan & Execute skeleton — ReAct turns execute against this plan.
+        ledger.set_plan(
+            [
+                "Inspect failing tests and relevant files",
+                "Apply the smallest coherent fix",
+                "Re-run verification (pytest)",
+                "Self-check: stop only if tests pass",
+            ]
+        )
+
         await self.emit("builder.run.started", {"objective": objective[:200]})
+        await self.emit(
+            "builder.plan.created",
+            {"steps": [s.title for s in ledger.plan], "pattern": "react"},
+        )
         await self.emit("builder.context.indexing", {})
         await self.engine.build()
         retrieval = await self.engine.retrieve(objective)
@@ -141,11 +181,21 @@ class CodingAgent:
             try:
                 decision = await decide(messages, schemas)
             except Exception as exc:  # noqa: BLE001
+                from agent_service.security.llm_budget import LlmCallBudgetExceeded
+
                 logger.warning("coding model call failed: %s", exc)
+                stop = (
+                    "MODEL_BUDGET_EXCEEDED"
+                    if isinstance(exc, LlmCallBudgetExceeded) or "BUDGET" in str(exc)
+                    else "MODEL_PROVIDER_UNAVAILABLE"
+                )
                 return CodingResult(
-                    success=False, final_message="Model provider unavailable.",
-                    ledger=ledger, files_touched=sorted(ctx.files_touched),
-                    stop_reason="MODEL_PROVIDER_UNAVAILABLE", transcript=messages,
+                    success=False,
+                    final_message="Model provider unavailable." if stop != "MODEL_BUDGET_EXCEEDED" else "LLM call budget exceeded during repair.",
+                    ledger=ledger,
+                    files_touched=sorted(ctx.files_touched),
+                    stop_reason=stop,
+                    transcript=messages,
                 )
 
             if not decision.tool_calls:

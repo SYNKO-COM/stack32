@@ -17,14 +17,80 @@ from agent_service.tools.runtime import ToolError, execute_tool
 
 logger = logging.getLogger(__name__)
 
-# Process-local checkpointer (swap for PostgresSaver when DATABASE_URL is wired).
+# Process-local checkpointer — AsyncPostgresSaver when DATABASE_URL is set; MemorySaver in dev/tests.
 _checkpointers: dict[str, Any] = {}
+_pg_acm: Any | None = None
 
 
-def _get_checkpointer():
+async def _get_checkpointer():
+    """Return a LangGraph checkpointer suitable for async runs.
+
+    - DATABASE_URL set → AsyncPostgresSaver (preferred for ainvoke)
+    - ENVIRONMENT=production without DATABASE_URL → RuntimeError (MemorySaver forbidden)
+    - else MemorySaver for local/dev/tests
+    """
     from langgraph.checkpoint.memory import MemorySaver
 
-    key = "default"
+    settings = get_settings()
+    db_url = (settings.DATABASE_URL or "").strip()
+    env = (settings.ENVIRONMENT or "").lower()
+    production = env == "production" or settings.is_production
+
+    if db_url:
+        key = f"postgres:{hash(db_url)}"
+        if key not in _checkpointers:
+            global _pg_acm
+            try:
+                from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+                acm = AsyncPostgresSaver.from_conn_string(db_url)
+                saver = await acm.__aenter__()
+                _pg_acm = acm
+                if hasattr(saver, "setup"):
+                    await saver.setup()
+                _checkpointers[key] = saver
+            except ImportError:
+                # Sync fallback (won't support aget_* — only for rare installs).
+                try:
+                    from langgraph.checkpoint.postgres import PostgresSaver
+
+                    cm = PostgresSaver.from_conn_string(db_url)
+                    saver = cm.__enter__() if hasattr(cm, "__enter__") else cm
+                    if hasattr(saver, "setup"):
+                        saver.setup()
+                    _checkpointers[key] = saver
+                    logger.warning(
+                        "AsyncPostgresSaver unavailable; using sync PostgresSaver"
+                    )
+                except ImportError as exc:
+                    if production:
+                        raise RuntimeError(
+                            "langgraph-checkpoint-postgres is required when "
+                            "DATABASE_URL is set in production"
+                        ) from exc
+                    logger.warning(
+                        "langgraph-checkpoint-postgres unavailable; using MemorySaver"
+                    )
+                    _checkpointers[key] = MemorySaver()
+            except Exception as exc:  # noqa: BLE001
+                if production:
+                    raise RuntimeError(
+                        f"Failed to initialize Postgres checkpointer: {type(exc).__name__}"
+                    ) from exc
+                logger.warning(
+                    "postgres checkpointer init failed; using MemorySaver",
+                    exc_info=True,
+                )
+                _checkpointers[key] = MemorySaver()
+        return _checkpointers[key]
+
+    if production:
+        raise RuntimeError(
+            "DATABASE_URL is required for LangGraph checkpoints in production; "
+            "MemorySaver is forbidden."
+        )
+
+    key = "memory"
     if key not in _checkpointers:
         _checkpointers[key] = MemorySaver()
     return _checkpointers[key]
@@ -261,6 +327,30 @@ async def run_langgraph_agent(
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("tool failed tool=%s err=%s", call.tool_id, type(exc).__name__)
                     obs = {"error": "TOOL_FAILED", "message": type(exc).__name__}
+
+                # CONNECTION_REQUIRED is an interrupt, not a normal tool completion.
+                err_code = None
+                if isinstance(obs, dict):
+                    err_code = obs.get("error") or obs.get("code")
+                if err_code == "CONNECTION_REQUIRED":
+                    interrupt_reason = "CONNECTION_REQUIRED"
+                    obs = {
+                        **(obs if isinstance(obs, dict) else {"result": obs}),
+                        "interrupt": True,
+                        "connection_required": True,
+                        "provider": (obs.get("provider") if isinstance(obs, dict) else None)
+                        or "google",
+                        "tool_id": call.tool_id,
+                    }
+                    await db.emit_event(
+                        run_id,
+                        "runtime.connection.required",
+                        {
+                            "mapping_key": "live.status.connection",
+                            "tool_id": call.tool_id,
+                            "provider": obs.get("provider"),
+                        },
+                    )
             results.append({"tool_id": call.tool_id, "result": obs, "call_id": call.call_id})
             observations.append(
                 {
@@ -278,7 +368,10 @@ async def run_langgraph_agent(
             if interrupt_reason:
                 break
         out: dict[str, Any] = {"messages": observations, "tool_results": results}
-        if interrupt_reason:
+        if interrupt_reason == "CONNECTION_REQUIRED":
+            out["interrupt"] = interrupt_reason
+            out["answer"] = "A connection is required before this tool can run."
+        elif interrupt_reason:
             out["interrupt"] = interrupt_reason
             out["answer"] = "Waiting for your approval before continuing."
         return out
@@ -300,7 +393,8 @@ async def run_langgraph_agent(
     graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
     graph.add_edge("tools", "agent")
 
-    compiled = graph.compile(checkpointer=_get_checkpointer())
+    checkpointer = await _get_checkpointer()
+    compiled = graph.compile(checkpointer=checkpointer)
     config = {"configurable": {"thread_id": stable_live_thread_id(thread_id)}}
     final = await compiled.ainvoke(
         {

@@ -10,9 +10,11 @@ import { AgentIdentityForm } from "@/components/builder/agent-identity-form";
 import { BuildProgressPanel } from "@/components/builder/build-progress-panel";
 import { BuilderWorkingPanel } from "@/components/builder/builder-working-panel";
 import { DynamicQuestionsForm } from "@/components/builder/dynamic-questions-form";
+import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { MessageEntrance, TypewriterText } from "@/components/builder/message-motion";
 import { IdentityConfirmedMessage, ReadyCard } from "@/components/builder/ready-card";
 import { SecretForm } from "@/components/builder/secret-form";
+import { ToolSetupCard } from "@/components/builder/tool-setup-card";
 import { LogoMark } from "@/components/shared/logo";
 import { Markdown } from "@/components/shared/markdown";
 import { PromptComposer } from "@/components/shared/prompt-composer";
@@ -23,7 +25,6 @@ import { useCurrentUser } from "@/hooks/use-auth";
 import {
   useBuilderThread,
   useCancelBuilderRun,
-  useRepairAgent,
   useSendBuilderMessage,
 } from "@/hooks/use-builder";
 import { summarizeActivity, useRunActivity } from "@/hooks/use-run-activity";
@@ -38,44 +39,79 @@ function MessageActions({
   actions,
   agentId,
   onFix,
+  problems,
+  fixResolved = false,
 }: {
   actions: BuilderAction[];
   agentId: string;
   onFix: () => void;
+  problems?: string[];
+  fixResolved?: boolean;
 }) {
   const { t } = useTranslation("builder");
   const router = useRouter();
 
+  const primary = actions.filter((a) => a !== "view_structure" && a !== "view_changes");
+  const fixActions = primary.filter((a) => a === "fix_automatically");
+  const otherActions = primary.filter((a) => a !== "fix_automatically");
+
+  if (primary.length === 0) return null;
+
+  const problemList =
+    problems && problems.length > 0
+      ? problems
+      : [t("actions.problemsDetectedFallback")];
+
   return (
-    <div className="mt-4 flex flex-wrap gap-2">
-      {actions.map((action) => {
-        if (action === "test_agent") {
-          return (
-            <Button
-              key={action}
-              size="sm"
-              className="rounded-full"
-              onClick={() => router.push(`/agents/${agentId}/agent`)}
-            >
-              {t("actions.testAgent")}
-            </Button>
-          );
-        }
-        if (action === "view_structure" || action === "view_changes") {
-          return null;
-        }
-        return (
+    <div className="mt-4 space-y-3">
+      {otherActions.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {otherActions.map((action) => {
+            if (action === "test_agent") {
+              return (
+                <Button
+                  key={action}
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => router.push(`/agents/${agentId}/agent`)}
+                >
+                  {t("actions.testAgent")}
+                </Button>
+              );
+            }
+            return null;
+          })}
+        </div>
+      ) : null}
+
+      {fixActions.map((action) => (
+        <div
+          key={action}
+          className="rounded-2xl border border-border/50 bg-foreground/[0.03] px-4 py-3"
+        >
+          <p className="text-sm font-semibold text-foreground">
+            {t("actions.problemsDetectedTitle")}
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground/85">
+            {problemList.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
           <Button
-            key={action}
             size="sm"
-            variant="secondary"
-            className="rounded-full"
+            className="mt-3 rounded-full bg-brand text-white hover:bg-brand/90 disabled:opacity-60"
             onClick={onFix}
+            disabled={fixResolved}
           >
-            {t("actions.fixAutomatically")}
+            {fixResolved ? t("actions.fixResolved") : t("actions.fixAutomatically")}
           </Button>
-        );
-      })}
+          {fixResolved ? null : (
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {t("actions.fixAutomaticallyHint")}
+            </p>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -88,6 +124,7 @@ function BuilderBubble({
   onSuggestion,
   resolvedFormIds,
   formSuperseded,
+  fixResolved = false,
   isFresh,
   animateNow,
   onRevealDone,
@@ -101,6 +138,7 @@ function BuilderBubble({
   resolvedFormIds: Set<string>;
   /** True when a later message exists — the user already answered this form. */
   formSuperseded?: boolean;
+  fixResolved?: boolean;
   /** True only for messages that arrived after this page session started. */
   isFresh: boolean;
   /** Only the head of the reveal queue animates; others wait. */
@@ -246,7 +284,7 @@ function BuilderBubble({
               </p>
             ) : null}
             {message.tone === "warning" && !showReady && !isCancelNotice ? (
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-300">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="size-3.5" aria-hidden="true" />
                 {t("common:status.needsAttention")}
               </p>
@@ -272,6 +310,8 @@ function BuilderBubble({
                 identitySummary={message.identitySummary}
                 actions={message.actions}
                 onFix={onFix}
+                problems={message.detectedProblems}
+                fixResolved={fixResolved}
                 animate={animateWrite}
                 onDone={markTyped}
               />
@@ -291,7 +331,7 @@ function BuilderBubble({
                     {message.projectFiles.slice(0, 8).map((path) => (
                       <li
                         key={path}
-                        className="rounded-md bg-foreground/[0.05] px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
+                        className="rounded-md bg-foreground/[0.06] px-2 py-0.5 font-mono text-[11px] font-semibold text-foreground"
                       >
                         {path.split("/").pop() ?? path}
                       </li>
@@ -334,8 +374,47 @@ function BuilderBubble({
               />
             ) : null}
 
+            {showForms && message.uiComponent?.type === "connection_form" ? (
+              <div className="mt-3">
+                <IntegrationConnectionCard
+                  agentId={agentId}
+                  provider={
+                    message.uiComponent.fields.find((f) => f.key === "provider")?.suggested_value ||
+                    "google"
+                  }
+                  appId={
+                    message.uiComponent.fields.find((f) => f.key === "app_id" || f.key === "appId")
+                      ?.suggested_value
+                  }
+                  toolIds={message.uiComponent.fields
+                    .filter((f) => f.key === "tool_id" || f.key === "toolId" || f.key === "tool_ids")
+                    .map((f) => f.suggested_value)
+                    .filter((v): v is string => Boolean(v))}
+                  status="needs_setup"
+                  onConnected={() => onFormSubmitted?.(formRequestId ?? "")}
+                />
+              </div>
+            ) : null}
+
+            {showForms && message.uiComponent?.type === "approval_form" ? (
+              <div className="mt-3">
+                <ToolSetupCard
+                  agentId={agentId}
+                  uiComponent={message.uiComponent}
+                  connectionStatus="needs_setup"
+                  onConnected={() => onFormSubmitted?.(formRequestId ?? "")}
+                />
+              </div>
+            ) : null}
+
             {!showReady && message.actions && message.actions.length > 0 ? (
-              <MessageActions actions={message.actions} agentId={agentId} onFix={onFix} />
+              <MessageActions
+                actions={message.actions}
+                agentId={agentId}
+                onFix={onFix}
+                problems={message.detectedProblems}
+                fixResolved={fixResolved}
+              />
             ) : null}
           </div>
         </div>
@@ -350,12 +429,13 @@ export function BuildView({ agentId }: { agentId: string }) {
   const { data: agent } = useAgent(agentId);
   const busy = agent?.status === "building";
   const [awaitingReply, setAwaitingReply] = useState(false);
+  /** User hit Stop — free the composer even if the in-flight HTTP turn is still pending. */
+  const [userStopped, setUserStopped] = useState(false);
   const { data: thread } = useBuilderThread(agentId, {
     forcePoll: busy || awaitingReply,
   });
   const sendMessage = useSendBuilderMessage(agentId);
   const cancelRun = useCancelBuilderRun(agentId);
-  const repair = useRepairAgent(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
@@ -364,6 +444,8 @@ export function BuildView({ agentId }: { agentId: string }) {
   const [pendingToken, setPendingToken] = useState<number | null>(null);
   const [prefill, setPrefill] = useState("");
   const [resolvedFormIds, setResolvedFormIds] = useState<Set<string>>(() => new Set());
+  /** Message IDs where the user already clicked Fix it for me. */
+  const [fixedMessageIds, setFixedMessageIds] = useState<Set<string>>(() => new Set());
   /** Fresh assistant messages already finished typing (sequential chat reveal). */
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
   const revealPauseRef = useRef<number | null>(null);
@@ -409,14 +491,17 @@ export function BuildView({ agentId }: { agentId: string }) {
     .filter((m, i) => {
       const later = messages.slice(i + 1);
       if (m.card === "thinking") {
-        if (stoppedRunIdsRef.current.has(m.interruptRunId ?? "")) return false;
+        if (userStopped || stoppedRunIdsRef.current.has(m.interruptRunId ?? "")) return false;
         return !later.some((x) => x.role === "assistant");
       }
       if (m.card === "build_progress") {
-        if (isCanceledProgress(m)) return false;
-        // Hide as soon as any later assistant reply exists (result, cancel, form, …).
+        if (userStopped || isCanceledProgress(m)) return false;
+        // New user turn or a final assistant reply supersedes stale progress
+        // (otherwise "Updated structure" sticks while a new Fix is running).
         return !later.some(
-          (x) => x.role === "assistant" && x.card !== "thinking",
+          (x) =>
+            x.role === "user" ||
+            (x.role === "assistant" && x.card !== "thinking"),
         );
       }
       return true;
@@ -467,27 +552,31 @@ export function BuildView({ agentId }: { agentId: string }) {
     Boolean(activeRunId) &&
     (awaitingReply ||
       sendMessage.isPending ||
-      repair.isPending ||
       busy ||
       Boolean(liveProgress) ||
       turnMessages.some((m) => m.card === "thinking"));
   const { data: runEvents = [] } = useRunActivity(activeRunId, activityEnabled);
-  const activityLines = summarizeActivity(runEvents).lines.map((line) => {
-    const text = t(`builder:activity.${line.key}`, {
-      ...(line.params ?? {}),
-      defaultValue: line.key,
-    });
-    return {
-      id: line.id,
-      text: text.charAt(0).toUpperCase() + text.slice(1),
-      active: line.active,
-    };
-  });
+  // Never keep stale run activity under a finished Ready card (placeholderData
+  // would otherwise leave "Repairing / Thinking" visible after the turn ends).
+  const activityLines = activityEnabled
+    ? summarizeActivity(runEvents).lines.map((line) => {
+        const text = t(`builder:activity.${line.key}`, {
+          ...(line.params ?? {}),
+          defaultValue: line.key,
+        });
+        return {
+          id: line.id,
+          text: text.charAt(0).toUpperCase() + text.slice(1),
+          active: line.active,
+        };
+      })
+    : [];
 
 
   const lastMessage = visibleMessages.at(-1) ?? messages.at(-1);
   const lastIsUser = lastMessage?.role === "user";
   const lastIsThinking = lastMessage?.card === "thinking";
+  const lastIsReady = lastMessage?.card === "ready";
   const progressInFlight =
     lastMessage?.card === "build_progress" &&
     Boolean(
@@ -501,24 +590,96 @@ export function BuildView({ agentId }: { agentId: string }) {
       !(lastMessage.uiComponent.requestId && resolvedFormIds.has(lastMessage.uiComponent.requestId)),
   );
   const showLocalWorking =
+    !userStopped &&
     !waitingOnForm &&
     !lastIsThinking &&
+    !lastIsReady &&
     lastMessage?.card !== "build_progress" &&
     (awaitingReply ||
       pendingToken !== null ||
       sendMessage.isPending ||
-      repair.isPending ||
       (busy && lastIsUser));
   // Keep Stop available for the whole in-flight turn (not only while awaitingReply).
+  // Ready is terminal — never keep Stop / busy composer over a Ready card.
   const composerBusy =
+    !userStopped &&
     !waitingOnForm &&
+    !lastIsReady &&
     (awaitingReply ||
       pendingToken !== null ||
       sendMessage.isPending ||
-      repair.isPending ||
       cancelRun.isPending ||
       workInFlight ||
       (busy && !lastMessage?.uiComponent));
+
+  // #region agent log
+  useEffect(() => {
+    const lastCard = lastMessage?.card ?? null;
+    const readyVisible = visibleMessages.some((m) => m.card === "ready");
+    const progressVisible = visibleMessages.some((m) => m.card === "build_progress");
+    const conflict =
+      readyVisible &&
+      (showLocalWorking ||
+        composerBusy ||
+        busy ||
+        Boolean(liveProgress) ||
+        activityLines.some((l) => l.active));
+    if (!conflict && lastCard !== "ready") return;
+    fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "a17c1f",
+      },
+      body: JSON.stringify({
+        sessionId: "a17c1f",
+        runId: "post-fix",
+        hypothesisId: "A,C,D",
+        location: "build-view.tsx:ready-vs-busy",
+        message: "Ready vs in-flight UI state",
+        data: {
+          agentId,
+          agentStatus: agent?.status ?? null,
+          lastCard,
+          readyVisible,
+          progressVisible,
+          showLocalWorking,
+          composerBusy,
+          busy,
+          awaitingReply,
+          pendingToken: pendingToken !== null,
+          sendPending: sendMessage.isPending,
+          activeRunId,
+          activityEnabled,
+          liveProgressRunning: Boolean(liveProgress),
+          activityActive: activityLines.filter((l) => l.active).map((l) => l.text).slice(-5),
+          activityTail: activityLines.slice(-6).map((l) => l.text),
+          visibleCards: visibleMessages.map((m) => m.card ?? m.role).slice(-8),
+          conflict:
+            readyVisible &&
+            (showLocalWorking || composerBusy || activityLines.some((l) => l.active)),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [
+    agentId,
+    agent?.status,
+    lastMessage?.card,
+    lastMessage?.id,
+    visibleMessages,
+    showLocalWorking,
+    composerBusy,
+    busy,
+    awaitingReply,
+    pendingToken,
+    sendMessage.isPending,
+    activeRunId,
+    activityEnabled,
+    liveProgress,
+    activityLines,
+  ]);
+  // #endregion
 
   const pendingReveal = visibleMessages.filter(
     (m) =>
@@ -559,44 +720,79 @@ export function BuildView({ agentId }: { agentId: string }) {
       stoppedRunIdsRef.current.add(runToStop);
       bumpStopped((n) => n + 1);
     }
+    // Free UI immediately — with QUEUE_INLINE, sendMessage stays pending until the
+    // server finishes, which made Stop look broken.
+    setUserStopped(true);
     setPendingToken(null);
     setAwaitingReply(false);
-    void cancelRun.mutateAsync();
+    void cancelRun.mutateAsync().catch(() => {
+      /* local fallback already handled in cancelBuilderRun */
+    });
+  };
+
+  const handleSend = async (value: string) => {
+    const token = Date.now();
+    setUserStopped(false);
+    setPendingToken(token);
+    setAwaitingReply(true);
+    try {
+      await sendMessage.mutateAsync(value);
+    } catch {
+      setPendingToken(null);
+      setAwaitingReply(false);
+    }
   };
 
   const lastFocus = messages.at(-1)?.focus;
   const lastSteps = messages.at(-1)?.steps;
 
-  // Clear waiting only for a final reply after a user message from *this* send window.
+  // Clear waiting when the turn produces a terminal assistant reply.
+  // Critical: form continuations set awaitingReply without a new user message, so we
+  // must NOT require pendingToken — otherwise Ready stays under a stuck "working" UI.
   useEffect(() => {
-    if (pendingToken === null) return;
-    let anchorIdx = -1;
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const m = messages[i];
-      if (m?.role !== "user") continue;
-      if (m.id.startsWith("optimistic-")) {
-        anchorIdx = i;
-        break;
+    if (!awaitingReply && pendingToken === null) return;
+
+    const last = messages.at(-1);
+    const readyTerminal = last?.role === "assistant" && last.card === "ready";
+    const contentTerminal =
+      last?.role === "assistant" &&
+      last.card !== "thinking" &&
+      last.card !== "build_progress" &&
+      last.card !== "identity_confirmed" &&
+      !last.uiComponent &&
+      Boolean(last.content || (last.actions && last.actions.length > 0));
+
+    let hasFinalFromSend = false;
+    if (pendingToken !== null) {
+      let anchorIdx = -1;
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const m = messages[i];
+        if (m?.role !== "user") continue;
+        if (m.id.startsWith("optimistic-")) {
+          anchorIdx = i;
+          break;
+        }
+        const created = new Date(m.createdAt).getTime();
+        if (Number.isFinite(created) && created >= pendingToken - 5000) {
+          anchorIdx = i;
+          break;
+        }
       }
-      const created = new Date(m.createdAt).getTime();
-      if (Number.isFinite(created) && created >= pendingToken - 5000) {
-        anchorIdx = i;
-        break;
+      if (anchorIdx >= 0) {
+        hasFinalFromSend = messages.slice(anchorIdx + 1).some(
+          (m) =>
+            m.role === "assistant" &&
+            m.card !== "thinking" &&
+            m.card !== "build_progress" &&
+            Boolean(m.uiComponent || m.card || m.content),
+        );
       }
     }
-    // Stale refetch without our user row — keep waiting.
-    if (anchorIdx < 0) return;
-    const hasFinal = messages.slice(anchorIdx + 1).some(
-      (m) =>
-        m.role === "assistant" &&
-        m.card !== "thinking" &&
-        m.card !== "build_progress" &&
-        Boolean(m.uiComponent || m.card || m.content),
-    );
-    if (!hasFinal) return;
+
+    if (!readyTerminal && !contentTerminal && !hasFinalFromSend) return;
     setPendingToken(null);
     setAwaitingReply(false);
-  }, [messages, pendingToken]);
+  }, [messages, pendingToken, awaitingReply]);
 
 
   // Consume the landing-page pending prompt exactly once, on an empty thread.
@@ -681,6 +877,9 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (requestId) {
       setResolvedFormIds((prev) => new Set(prev).add(requestId));
     }
+    // Same contract as handleSend: pair awaitingReply with a token so the clear
+    // effect can distinguish this continuation from older thread messages.
+    setPendingToken(Date.now());
     setAwaitingReply(true);
     void queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
     void queryClient.invalidateQueries({ queryKey: ["agents"] });
@@ -689,18 +888,6 @@ export function BuildView({ agentId }: { agentId: string }) {
   const examples = [
     "Create an agent that researches a company, scores the lead and drafts a personalized email.",
   ];
-
-  const handleSend = async (value: string) => {
-    const token = Date.now();
-    setPendingToken(token);
-    setAwaitingReply(true);
-    try {
-      await sendMessage.mutateAsync(value);
-    } catch {
-      setPendingToken(null);
-      setAwaitingReply(false);
-    }
-  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -761,6 +948,7 @@ export function BuildView({ agentId }: { agentId: string }) {
                     agentId={agentId}
                     resolvedFormIds={resolvedFormIds}
                     formSuperseded={isFormSuperseded(message)}
+                    fixResolved={fixedMessageIds.has(message.id)}
                     isFresh={isFresh}
                     animateNow={
                       message.role === "assistant" && message.id === activeRevealId
@@ -777,8 +965,20 @@ export function BuildView({ agentId }: { agentId: string }) {
                         : undefined
                     }
                     onFix={() => {
-                      setAwaitingReply(true);
-                      void repair.mutateAsync();
+                      if (fixedMessageIds.has(message.id)) return;
+                      const problems = (message.detectedProblems ?? []).filter(Boolean);
+                      const prompt =
+                        problems.length > 0
+                          ? t("builder:actions.fixPrompt", {
+                              problems: problems.map((p) => `• ${p}`).join("\n"),
+                            })
+                          : t("builder:actions.fixPromptEmpty");
+                      setFixedMessageIds((prev) => {
+                        const next = new Set(prev);
+                        next.add(message.id);
+                        return next;
+                      });
+                      void handleSend(prompt);
                     }}
                     onFormSubmitted={(requestId) => {
                       refreshAfterForm(requestId);

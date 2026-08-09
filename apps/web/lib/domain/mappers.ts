@@ -2,7 +2,9 @@ import type {
   Agent,
   AgentIdentity,
   AgentSpec,
+  AgentStatus,
   AgentVersion,
+  ApprovalMode,
   BuildBoardNode,
   BuilderAction,
   BuilderMessage,
@@ -17,6 +19,8 @@ import type {
   Subscription,
   SubscriptionStatus,
   TestStatus,
+  ToolBinding,
+  ToolConfig,
   ToolId,
   User,
 } from "@/lib/domain/types";
@@ -69,20 +73,65 @@ export function mapProfile(row: ProfileRow, onboarding?: OnboardingRow | null): 
 /* AgentSpec: DB skeleton (snake_case) <-> domain (camelCase)               */
 /* ----------------------------------------------------------------------- */
 
-const KNOWN_TOOLS: ToolId[] = [
-  "web_search",
-  "fetch_url",
-  "knowledge_search",
-  "calculator",
-  "current_datetime",
-  "structured_output",
-  "http_request",
-];
-
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function asApprovalMode(value: unknown): ApprovalMode | undefined {
+  if (value === "never" || value === "always" || value === "conditional") return value;
+  return undefined;
+}
+
+/** Loosely map V4 tool bindings (snake_case or camelCase). */
+function mapToolBindings(rawTools: unknown): { tools: ToolConfig[]; toolBindings: ToolBinding[] } {
+  if (!Array.isArray(rawTools)) return { tools: [], toolBindings: [] };
+  const toolBindings: ToolBinding[] = [];
+  const tools: ToolConfig[] = [];
+  for (const item of rawTools) {
+    if (typeof item === "string") {
+      const toolId = item.trim();
+      if (!toolId) continue;
+      tools.push({ tool: toolId as ToolId, enabled: true });
+      toolBindings.push({ toolId, enabled: true, provider: "native" });
+      continue;
+    }
+    const rec = asRecord(item);
+    const toolIdRaw = rec.tool_id ?? rec.toolId ?? rec.tool ?? rec.id;
+    const toolId = typeof toolIdRaw === "string" ? toolIdRaw.trim() : "";
+    if (!toolId) continue;
+    const enabled = rec.enabled !== false;
+    const binding: ToolBinding = {
+      toolId,
+      enabled,
+      provider: typeof rec.provider === "string" ? rec.provider : undefined,
+      appId:
+        typeof rec.app_id === "string"
+          ? rec.app_id
+          : typeof rec.appId === "string"
+            ? rec.appId
+            : undefined,
+      externalActionId:
+        typeof rec.external_action_id === "string"
+          ? rec.external_action_id
+          : typeof rec.externalActionId === "string"
+            ? rec.externalActionId
+            : undefined,
+      version: typeof rec.version === "string" ? rec.version : undefined,
+      approvalMode: asApprovalMode(rec.approval_mode ?? rec.approvalMode),
+      config: asRecord(rec.config),
+      connectionRequirementId:
+        typeof rec.connection_requirement_id === "string"
+          ? rec.connection_requirement_id
+          : typeof rec.connectionRequirementId === "string"
+            ? rec.connectionRequirementId
+            : undefined,
+    };
+    toolBindings.push(binding);
+    tools.push({ tool: toolId as ToolId, enabled });
+  }
+  return { tools, toolBindings };
 }
 
 function mapIdentity(raw: unknown): AgentIdentity | undefined {
@@ -161,7 +210,9 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
     type !== "agent_identity_form" &&
     type !== "secret_form" &&
     type !== "agent_capabilities_form" &&
-    type !== "dynamic_questions_form"
+    type !== "dynamic_questions_form" &&
+    type !== "connection_form" &&
+    type !== "approval_form"
   ) {
     return undefined;
   }
@@ -217,8 +268,14 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
 export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSpec {
   const raw = asRecord(json);
 
-  // V2 spec stored in snake_case (agent-service output).
-  if (raw.schema_version === "2.0" || raw.schemaVersion === "2.0") {
+  // V2+ specs stored in snake_case (agent-service output). V3/V4 keep the same shape.
+  const schemaVersionRaw =
+    typeof raw.schema_version === "string"
+      ? raw.schema_version
+      : typeof raw.schemaVersion === "string"
+        ? raw.schemaVersion
+        : "";
+  if (schemaVersionRaw === "2.0" || schemaVersionRaw === "3.0" || schemaVersionRaw === "4.0") {
     const instructions = asRecord(raw.instructions);
     const modelPolicy = asRecord(raw.model_policy ?? raw.modelPolicy);
     const profileRaw = typeof modelPolicy.profile === "string" ? modelPolicy.profile : "balanced";
@@ -226,15 +283,7 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
       profileRaw === "fast" ? "fast" : profileRaw === "reasoning" || profileRaw === "heavy" ? "heavy" : "standard";
     const identity = mapIdentity(raw.identity);
     const name = identity?.name ?? fallbackName;
-    const tools = Array.isArray(raw.tools)
-      ? raw.tools
-          .map((t) => {
-            const rec = asRecord(t);
-            const tool = (rec.tool_id ?? rec.tool ?? rec.id) as ToolId;
-            return { tool, enabled: rec.enabled !== false };
-          })
-          .filter((t) => KNOWN_TOOLS.includes(t.tool))
-      : [];
+    const { tools, toolBindings } = mapToolBindings(raw.tools);
     const knowledge = asRecord(raw.knowledge);
     const memory = asRecord(raw.memory);
     const output = asRecord(raw.output);
@@ -246,7 +295,7 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
     const graph = mapGraphSpec(raw.graph ?? raw.graph_spec);
 
     return {
-      schemaVersion: "2.0",
+      schemaVersion: schemaVersionRaw,
       name,
       slug:
         name
@@ -262,6 +311,7 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
             : "",
       modelProfile: { profile, temperature: 0.4 },
       tools,
+      toolBindings: toolBindings.length > 0 ? toolBindings : undefined,
       knowledge: {
         enabled: knowledge.enabled === true || knowledge.retrieval_enabled === true,
         sourceIds: (() => {
@@ -338,18 +388,7 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
   const profile =
     modelProfileRaw === "fast" ? "fast" : modelProfileRaw === "heavy" ? "heavy" : "standard";
 
-  const tools = Array.isArray(raw.tools)
-    ? raw.tools
-        .map((t) => {
-          if (typeof t === "string") return { tool: t as ToolId, enabled: true };
-          const rec = asRecord(t);
-          return {
-            tool: (rec.tool ?? rec.id) as ToolId,
-            enabled: rec.enabled !== false,
-          };
-        })
-        .filter((t) => KNOWN_TOOLS.includes(t.tool))
-    : [];
+  const { tools, toolBindings } = mapToolBindings(raw.tools);
 
   return {
     schemaVersion: typeof raw.schema_version === "string" ? raw.schema_version : "1.0",
@@ -363,6 +402,7 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
     instructions: typeof instructions.system === "string" ? instructions.system : "",
     modelProfile: { profile, temperature: 0.4 },
     tools,
+    toolBindings: toolBindings.length > 0 ? toolBindings : undefined,
     knowledge: {
       enabled: knowledge.retrieval_enabled === true,
       sourceIds: Array.isArray(knowledge.source_ids)
@@ -441,13 +481,28 @@ export function specToDb(spec: AgentSpec): Json {
 /* Agents / versions                                                        */
 /* ----------------------------------------------------------------------- */
 
+const AGENT_STATUSES: ReadonlySet<AgentStatus> = new Set([
+  "draft",
+  "building",
+  "ready",
+  "needs_attention",
+  "published",
+  "waiting_for_input",
+  "needs_setup",
+  "archived",
+]);
+
+function mapAgentStatus(raw: string): AgentStatus {
+  if (AGENT_STATUSES.has(raw as AgentStatus)) return raw as AgentStatus;
+  return "draft";
+}
+
 export function mapAgent(row: AgentRow): Agent {
   return {
     id: row.id,
     name: row.name,
     icon: row.icon_key ?? "sparkles",
-    status:
-      row.status === "archived" ? "draft" : (row.status as Agent["status"]),
+    status: mapAgentStatus(row.status),
     draftVersionId: row.draft_version_id ?? undefined,
     publishedVersionId: row.published_version_id ?? undefined,
     createdAt: row.created_at,
@@ -602,6 +657,15 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
       : Array.isArray(meta.projectFiles)
         ? (meta.projectFiles as unknown[]).filter((p): p is string => typeof p === "string")
         : undefined,
+    detectedProblems: (() => {
+      const raw = meta.detected_problems ?? meta.detectedProblems;
+      if (!Array.isArray(raw)) return undefined;
+      const items = raw
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter((item) => item.length > 0)
+        .slice(0, 6);
+      return items.length > 0 ? items : undefined;
+    })(),
     createdAt: row.created_at,
   };
 }

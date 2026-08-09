@@ -132,7 +132,13 @@
   "actions": {
     "testAgent": "Try the agent",
     "viewStructure": "See the structure",
-    "fixAutomatically": "Fix it for me"
+    "fixAutomatically": "Fix it for me",
+    "fixAutomaticallyHint": "Click the button to automatically fix the errors Stack32 found.",
+    "fixResolved": "Resolved",
+    "fixPrompt": "Please fix these detected problems:\n{{problems}}",
+    "fixPromptEmpty": "Please fix the detected problems and make the agent ready.",
+    "problemsDetectedTitle": "Problems detected",
+    "problemsDetectedFallback": "Stack32 found an issue that needs a repair pass."
   },
   "mock": {
     "successResponse": "Your agent is ready to try. I set its goal, chose the right abilities, and ran a first test. Everything looks good. Open Live to talk to it, or Structure to see how it works.",
@@ -268,6 +274,47 @@
         "google": "Yes — Google (Gmail / Calendar)",
         "later": "Maybe later — remind me"
       }
+    }
+  },
+  "connections": {
+    "googleTitle": "Google",
+    "googleHint": "Connect Gmail and Calendar. One click — Stack32 handles the rest securely.",
+    "genericHint": "Connect an account so this agent can use this app.",
+    "connected": "Connected",
+    "needsSetup": "Needs connection",
+    "errorStatus": "Error",
+    "connect": "Connect {{provider}}",
+    "connectGoogle": "Connect my Google",
+    "disconnect": "Disconnect",
+    "change": "Change account",
+    "account": "Account",
+    "error": "Could not start the connection. Try again in a moment.",
+    "disconnectError": "Could not disconnect this account.",
+    "pipedreamError": "Could not open the app connection.",
+    "pipedreamFallback": "Finish connecting in the window that opens, then come back here.",
+    "continuePipedream": "Continue connecting",
+    "tokenLabel": "Connect token",
+    "scaffolded": "Microsoft, Slack, and Notion connectors are scaffolded (disabled).",
+    "toolSetupTitle": "Tool setup",
+    "approvalMode": "Ask for my approval",
+    "approvalHint": "Choose when the agent should ask before acting.",
+    "connectionStatus": "Connection",
+    "providers": {
+      "google": "Google",
+      "pipedream": "Connected apps",
+      "native": "Built-in",
+      "custom_api": "Custom API"
+    },
+    "hints": {
+      "google": "Connect your Google account for email, calendar, and Docs.",
+      "pipedream": "Connect any app (Notion, Slack, Stripe, Sheets… — 3000+ via Pipedream). Your credentials stay with the provider.",
+      "native": "Already included — no external account required.",
+      "custom_api": "Configure an API connection for this tool."
+    },
+    "approvalModes": {
+      "never": "Act directly",
+      "always": "Always ask me",
+      "conditional": "Ask when risky"
     }
   },
   "errors": {

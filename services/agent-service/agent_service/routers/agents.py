@@ -63,6 +63,41 @@ async def get_graph(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
     }
 
 
+@router.get("/{agent_id}/readiness")
+async def get_agent_readiness(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    """Evaluate whether the agent can go Live / be published."""
+    from agent_service.readiness import evaluate_agent_readiness
+
+    db = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise _not_found()
+    spec = await db.load_draft_spec(str(agent_id), user.user_id)
+    if not spec:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "AGENT_SPEC_INVALID", "message": "Draft spec missing."},
+        )
+    status = str(agent.get("status") or "")
+    result = await evaluate_agent_readiness(
+        agent_id=str(agent_id),
+        user_id=user.user_id,
+        spec=spec,
+        db=db,
+        build_ok=status not in {"needs_attention", "building", "draft"},
+    )
+    return {
+        "status": result.status,
+        "agent_status": status,
+        "checks": [
+            {"key": c.key, "ok": c.ok, "message": c.message, "severity": c.severity}
+            for c in result.checks
+        ],
+        "missing_connections": result.missing_connections,
+        "missing_config": result.missing_config,
+    }
+
+
 @router.get("/{agent_id}/versions/{version_id}/graph")
 async def get_version_graph(
     agent_id: UUID, version_id: UUID, user: CurrentUser

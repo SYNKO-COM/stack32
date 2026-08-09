@@ -246,16 +246,83 @@ export async function submitBuilderQuestions(input: {
 export async function cancelBuilderRun(input: {
   agentId: string;
 }): Promise<{ status: string; id?: string }> {
-  await requireOwnedAgent(input.agentId);
+  const { userId } = await requireOwnedAgent(input.agentId);
   if (currentAiExecutionMode() !== "agent-service") {
     return { status: "idle" };
   }
-  const accessToken = await requireAccessToken();
-  return agentServiceFetch<{ status: string; id?: string }>(
-    `/v1/agents/${input.agentId}/builder/cancel`,
-    {
-      method: "POST",
-      accessToken,
-    },
-  );
+
+  try {
+    const accessToken = await requireAccessToken();
+    return await agentServiceFetch<{ status: string; id?: string }>(
+      `/v1/agents/${input.agentId}/builder/cancel`,
+      {
+        method: "POST",
+        accessToken,
+      },
+    );
+  } catch {
+    // Agent service down / unreachable — still clear local run state so Stop resets the UI.
+    return localCancelBuilderRun({ agentId: input.agentId, userId });
+  }
+}
+
+/** Best-effort cancel when Agent Service is unreachable. */
+async function localCancelBuilderRun(input: {
+  agentId: string;
+  userId: string;
+}): Promise<{ status: string; id?: string }> {
+  const admin = requireSupabaseAdminClient();
+  const { data: active } = await admin
+    .from("runs")
+    .select("id,thread_id,status")
+    .eq("agent_id", input.agentId)
+    .eq("user_id", input.userId)
+    .eq("run_type", "build")
+    .in("status", ["queued", "running"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!active?.id) {
+    // Still clear agent building state + any leased queue leftovers.
+    await admin
+      .from("agents")
+      .update({ status: "needs_attention" })
+      .eq("id", input.agentId)
+      .eq("user_id", input.userId)
+      .eq("status", "building");
+    return { status: "idle" };
+  }
+
+  await admin
+    .from("runs")
+    .update({ status: "canceled", completed_at: new Date().toISOString() })
+    .eq("id", active.id)
+    .eq("user_id", input.userId);
+
+  await admin
+    .from("run_queue")
+    .update({ status: "dead", last_error: "canceled_by_user" })
+    .eq("run_id", active.id)
+    .in("status", ["pending", "leased"]);
+
+  await admin
+    .from("agents")
+    .update({ status: "needs_attention" })
+    .eq("id", input.agentId)
+    .eq("user_id", input.userId)
+    .eq("status", "building");
+
+  if (active.thread_id) {
+    await admin.from("builder_messages").insert({
+      thread_id: active.thread_id,
+      agent_id: input.agentId,
+      user_id: input.userId,
+      role: "assistant",
+      content: "builder:errors.canceledDetail",
+      metadata: { tone: "normal", interrupt_run_id: active.id } as unknown as Json,
+    });
+  }
+
+  return { status: "canceled", id: active.id };
 }

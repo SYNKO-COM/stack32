@@ -6,8 +6,8 @@ import pytest
 
 from agent_service.knowledge.extract import ExtractionError, extract_text
 from agent_service.memory.service import extract_memory_candidate
-from agent_service.models.graph_spec import default_linear_graph
 from agent_service.models.agent_spec import ToolBinding
+from agent_service.models.graph_spec import default_linear_graph
 
 
 def test_extract_memory_explicit_english():

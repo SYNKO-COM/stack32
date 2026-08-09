@@ -62,8 +62,8 @@ class Settings(BaseSettings):
     MODEL_BALANCED_FALLBACK: str = "xai/grok-3-mini"
     MODEL_REASONING_PRIMARY: str = "xai/grok-4.5"
     MODEL_REASONING_FALLBACK: str = "openai/gpt-4.1"
-    # Coding profiles — OpenAI Codex + xAI Grok Code
-    MODEL_CODING_PRIMARY: str = "openai/gpt-5.1-codex"
+    # Coding profiles — prefer stable chat models (gpt-5.1-codex returns BadRequest on many keys)
+    MODEL_CODING_PRIMARY: str = "openai/gpt-4.1"
     MODEL_CODING_FALLBACK: str = "xai/grok-code-fast-1"
     MODEL_VALIDATOR_PRIMARY: str = "openai/gpt-4.1-mini"
     MODEL_VALIDATOR_FALLBACK: str = "xai/grok-3-mini"
@@ -85,12 +85,25 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_BUILDER_RUNS: int = 2
     MAX_CONCURRENT_LIVE_RUNS: int = 3
     MAX_REPAIR_ATTEMPTS: int = 2
-    MAX_LLM_CALLS_PER_RUN: int = 6
+    # Outer Builder quality loops (plan → build → critique → repair). Keep ≤8.
+    MAX_QUALITY_LOOPS: int = 6
+    MAX_CRITIQUE_ROUNDS: int = 2
+    # Builder sandbox coding loops need headroom beyond a short chat turn.
+    MAX_LLM_CALLS_PER_RUN: int = 28
+    MAX_LLM_CALLS_PER_CODING_REPAIR: int = 16
     LLM_CALL_TIMEOUT_SECONDS: int = 45
     RATE_LIMIT_PER_USER_PER_MINUTE: int = 20
     RATE_LIMIT_PER_IP_PER_MINUTE: int = 60
     WEB_SEARCH_API_KEY: str = ""
     WEB_SEARCH_PROVIDER: str = "tavily"
+
+    # Pipedream Connect (optional — mock/degraded when unset)
+    PIPEDREAM_CLIENT_ID: str = ""
+    PIPEDREAM_CLIENT_SECRET: str = ""
+    PIPEDREAM_PROJECT_ID: str = ""
+    PIPEDREAM_ENVIRONMENT: Literal["development", "production"] = "development"
+    PIPEDREAM_ALLOWED_ORIGINS: list[str] = []
+
     # Fernet key or passphrase for BYOK secret encryption (required in production)
     SECRETS_ENCRYPTION_KEY: str = ""
     # Builder uses platform keys; Live requires user BYOK by default
@@ -158,6 +171,10 @@ class Settings(BaseSettings):
                 )
             if self.BUILDER_SANDBOX_ENABLED and self.SANDBOX_PROVIDER == "e2b" and not self.E2B_API_KEY:
                 missing.append("E2B_API_KEY")
+            if not self.SECRETS_ENCRYPTION_KEY:
+                missing.append("SECRETS_ENCRYPTION_KEY")
+            if self.AGENT_RUNTIME_VERSION == "langgraph" and not self.DATABASE_URL:
+                missing.append("DATABASE_URL (required for langgraph checkpoints)")
             if missing:
                 raise ValueError(
                     f"Missing required production environment variables: {', '.join(missing)}"

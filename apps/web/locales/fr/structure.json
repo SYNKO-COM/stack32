@@ -50,7 +50,20 @@
     "calculator": "Calculatrice",
     "current_datetime": "Date et heure",
     "structured_output": "Sortie structurée",
-    "http_request": "Requêtes HTTP (avancé)"
+    "http_request": "Requêtes HTTP (avancé)",
+    "gmail_list": "Lire mes e-mails",
+    "gmail_read": "Ouvrir un e-mail",
+    "gmail_create_draft": "Préparer un e-mail",
+    "gmail_send_message": "Envoyer un e-mail",
+    "gmail_send": "Envoyer un e-mail",
+    "calendar_list": "Voir mon agenda",
+    "calendar_create_event": "Créer un événement",
+    "google_docs_create": "Créer un Google Doc",
+    "google_docs_append": "Mettre à jour un Google Doc",
+    "google_docs": "Google Docs",
+    "google_drive": "Google Drive",
+    "pd:google_docs": "Google Docs",
+    "pd:google_drive": "Google Drive"
   },
   "empty": {
     "title": "Pas encore de structure",
@@ -82,34 +95,59 @@
     "collapse": "Réduire la structure",
     "expand": "Afficher la structure",
     "resize": "Ajuster la largeur du chat et de la structure",
+    "clickHint": "Cliquez sur une carte pour ouvrir ses réglages",
     "kinds": {
       "trigger": "Message reçu",
-      "guard": "Garde-fou",
+      "guard": "Sécurité",
       "brain": "Agent IA",
-      "router": "Aiguillage",
-      "approval": "Validation",
+      "router": "Choix",
+      "approval": "Votre accord",
       "output": "Réponse envoyée",
       "model": "Modèle",
       "memory": "Mémoire",
-      "knowledge": "Connaissances",
+      "knowledge": "Documents",
       "tool": "Outil"
     },
     "help": {
-      "trigger": "Point de départ : ce que l'utilisateur écrit à votre agent.",
+      "trigger": "Point de départ : ce que vous écrivez à votre agent.",
       "guard": "Vérifie le message avant traitement et bloque ce qui est risqué.",
       "brain": "Le cœur de l'agent : il comprend la demande et décide quoi faire.",
       "router": "Oriente la suite selon le contenu de la demande.",
       "approval": "Demande votre accord avant une action sensible.",
-      "output": "Met en forme la réponse finale envoyée à l'utilisateur.",
-      "model": "Le modèle de langage utilisé pour réfléchir et rédiger.",
+      "output": "Met en forme la réponse finale envoyée.",
+      "model": "Le cerveau linguistique qui réfléchit et rédige.",
+      "modelChange": "Envie d'un modèle plus rapide ou plus fort ? Demandez-le dans Build — Stack32 s'occupe du reste.",
       "memory": "Ce que l'agent retient d'un message à l'autre.",
       "knowledge": "Les documents que l'agent peut consulter.",
-      "tool": "Une action concrète que l'agent peut déclencher."
+      "tool": "Une action concrète : e-mail, Docs, recherche, etc."
+    },
+    "setupBanner": {
+      "title": "Connectez vos apps pour finir la configuration",
+      "body": "Votre agent est prêt — liez les comptes ci-dessous pour qu'il puisse créer des Docs, envoyer des e-mails, et plus encore.",
+      "connectTitle": "Liez votre compte"
+    },
+    "readiness": {
+      "needsSetup": "À connecter",
+      "connected": "Connecté",
+      "connection": "Connexion",
+      "provider": "Service",
+      "worksWith": "Fonctionne avec",
+      "builtIn": "Intégré — déjà prêt",
+      "builtInShort": "Intégré",
+      "notNeeded": "Pas nécessaire",
+      "nativeReady": "Cette capacité est déjà incluse — rien à connecter.",
+      "tapToConnect": "Appuyez pour connecter",
+      "ready": "Prêt",
+      "status": {
+        "ready": "Prêt",
+        "needs_setup": "À configurer",
+        "needs_attention": "À vérifier"
+      }
     }
   },
   "nodeStates": {
     "default": "Aucun détail supplémentaire pour cette étape.",
-    "toolId": "Outil : {{id}}",
+    "toolId": "Action : {{id}}",
     "modelProfile": "Profil de modèle : {{profile}}"
   },
   "prefill": {

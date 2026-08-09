@@ -8,6 +8,7 @@ import { currentAiExecutionMode } from "@/lib/ai/execution-adapter";
 
 export async function startGoogleConnection(
   agentId: string,
+  toolIds?: string[],
 ): Promise<{ authorizeUrl: string; state: string }> {
   if (currentAiExecutionMode() !== "agent-service") {
     throw new Error("connections_require_agent_service");
@@ -18,7 +19,13 @@ export async function startGoogleConnection(
     {
       method: "POST",
       accessToken,
-      body: { agent_id: agentId, tool_ids: ["gmail", "calendar"] },
+      body: {
+        agent_id: agentId,
+        tool_ids:
+          toolIds && toolIds.length > 0
+            ? toolIds
+            : ["gmail", "calendar", "google_docs_create", "google_docs_append"],
+      },
     },
   );
   return { authorizeUrl: result.authorize_url, state: result.state };
@@ -34,6 +41,17 @@ export async function listAgentConnections(agentId: string): Promise<{
   const accessToken = await requireAccessToken();
   return agentServiceFetch(`/v1/agents/${agentId}/connections`, {
     method: "GET",
+    accessToken,
+  });
+}
+
+export async function revokeConnection(connectionId: string): Promise<{ revoked: boolean }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("connections_require_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  return agentServiceFetch(`/v1/connections/${connectionId}/revoke`, {
+    method: "POST",
     accessToken,
   });
 }

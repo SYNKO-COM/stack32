@@ -284,6 +284,7 @@ class LiveRuntime:
                     memories=state.get("memories") or [],
                 )
                 answer = str(lg.get("answer") or "")
+                interrupt = lg.get("interrupt")
                 citations = _real_citations(
                     state.get("knowledge_chunks") or [],
                     require=bool(
@@ -291,17 +292,82 @@ class LiveRuntime:
                         or spec.knowledge.require_citations
                     ),
                 )
+                meta: dict[str, Any] = {
+                    "citations": citations,
+                    "run_id": run_id,
+                    "runtime": "langgraph",
+                    "tool_results": lg.get("tool_results") or [],
+                }
+                if interrupt:
+                    meta["interrupt"] = interrupt
+                    if interrupt == "CONNECTION_REQUIRED":
+                        provider = "google"
+                        tool_id = None
+                        for tr in lg.get("tool_results") or []:
+                            res = tr.get("result") if isinstance(tr, dict) else None
+                            if isinstance(res, dict) and res.get("error") == "CONNECTION_REQUIRED":
+                                provider = str(res.get("provider") or provider)
+                                tool_id = tr.get("tool_id")
+                                break
+                        meta["ui_component"] = {
+                            "type": "connection_form",
+                            "version": "1",
+                            "context": "live",
+                            "providers": [provider],
+                            "tool_ids": [tool_id] if tool_id else [],
+                        }
+                        await self.db.emit_event(
+                            run_id,
+                            "runtime.connection.required",
+                            {
+                                "mapping_key": "live.status.connection",
+                                "provider": provider,
+                                "tool_id": tool_id,
+                            },
+                        )
+                    elif interrupt == "APPROVAL_REQUIRED":
+                        approval_id = None
+                        for tr in lg.get("tool_results") or []:
+                            res = tr.get("result") if isinstance(tr, dict) else None
+                            if isinstance(res, dict) and res.get("approval_required"):
+                                approval_id = res.get("approval_id")
+                                break
+                        meta["ui_component"] = {
+                            "type": "approval_card",
+                            "version": "1",
+                            "context": "live",
+                            "approval_id": approval_id,
+                        }
+                        await self.db.emit_event(
+                            run_id,
+                            "runtime.approval.pending",
+                            {
+                                "mapping_key": "live.status.approval",
+                                "approval_id": approval_id,
+                            },
+                        )
+                    await self.db.insert_assistant_message(
+                        thread_id=thread_id,
+                        agent_id=agent_id,
+                        user_id=user_id,
+                        content=answer or "Action paused — input required.",
+                        metadata=meta,
+                        table="live_messages",
+                    )
+                    await self.db.update_run_status(run_id, "waiting_for_input")
+                    return {
+                        "status": "interrupted",
+                        "run_id": run_id,
+                        "answer": answer,
+                        "interrupt": interrupt,
+                    }
+
                 await self.db.insert_assistant_message(
                     thread_id=thread_id,
                     agent_id=agent_id,
                     user_id=user_id,
                     content=answer,
-                    metadata={
-                        "citations": citations,
-                        "run_id": run_id,
-                        "runtime": "langgraph",
-                        "tool_results": lg.get("tool_results") or [],
-                    },
+                    metadata=meta,
                     table="live_messages",
                 )
                 if spec.memory.conversation_enabled and answer:

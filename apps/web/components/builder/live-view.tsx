@@ -5,7 +5,9 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AgentIcon } from "@/components/builder/agent-icon";
+import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { SecretForm } from "@/components/builder/secret-form";
+import { ToolSetupCard } from "@/components/builder/tool-setup-card";
 import { Markdown } from "@/components/shared/markdown";
 import { PromptComposer } from "@/components/shared/prompt-composer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -91,6 +93,39 @@ function LiveBubble({
               agentId={agentId}
               onSubmitted={onSecretSubmitted}
             />
+          ) : null}
+
+          {message.uiComponent?.type === "connection_form" ? (
+            <div className="mt-3">
+              <IntegrationConnectionCard
+                agentId={agentId}
+                provider={
+                  message.uiComponent.fields.find((f) => f.key === "provider")?.suggested_value ||
+                  "google"
+                }
+                appId={
+                  message.uiComponent.fields.find((f) => f.key === "app_id" || f.key === "appId")
+                    ?.suggested_value
+                }
+                toolIds={message.uiComponent.fields
+                  .filter((f) => f.key === "tool_id" || f.key === "toolId" || f.key === "tool_ids")
+                  .map((f) => f.suggested_value)
+                  .filter((v): v is string => Boolean(v))}
+                status="needs_setup"
+                onConnected={onSecretSubmitted}
+              />
+            </div>
+          ) : null}
+
+          {message.uiComponent?.type === "approval_form" ? (
+            <div className="mt-3">
+              <ToolSetupCard
+                agentId={agentId}
+                uiComponent={message.uiComponent}
+                connectionStatus="needs_setup"
+                onConnected={onSecretSubmitted}
+              />
+            </div>
           ) : null}
 
           {message.artifacts && message.artifacts.length > 0 ? (

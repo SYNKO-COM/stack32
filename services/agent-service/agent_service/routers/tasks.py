@@ -27,8 +27,8 @@ async def handle_run_task(body: TaskPayload, _: InternalService) -> dict[str, An
 @router.post("/tasks/schedules/tick")
 async def tick_schedules(_: InternalService) -> dict[str, Any]:
     """Find due agent_schedules and enqueue live runs (audited)."""
-    from datetime import UTC, datetime
     import uuid
+    from datetime import UTC, datetime
 
     from agent_service.supabase_client import get_persistence, get_supabase_admin_client
 

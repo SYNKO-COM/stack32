@@ -1,11 +1,11 @@
-"""AgentSpec V2 — versioned declarative agent configuration."""
+"""AgentSpec V2–V4 — versioned declarative agent configuration."""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from agent_service.models.graph_spec import GraphSpec
 
@@ -18,7 +18,8 @@ TrustedToolId = Literal[
     "structured_output",
 ]
 
-TRUSTED_TOOL_IDS: frozenset[str] = frozenset(
+# Built-in native tool ids (migration helpers + compiler allowlist baseline).
+NATIVE_BUILTIN_TOOL_IDS: frozenset[str] = frozenset(
     {
         "web_search",
         "fetch_url",
@@ -26,8 +27,19 @@ TRUSTED_TOOL_IDS: frozenset[str] = frozenset(
         "calculator",
         "current_datetime",
         "structured_output",
+        "gmail_list",
+        "gmail_read",
+        "gmail_send",
+        "gmail_create_draft",
+        "gmail_send_message",
+        "calendar_list",
+        "calendar_create_event",
+        "http_request",
     }
 )
+
+# Backward-compatible alias.
+TRUSTED_TOOL_IDS: frozenset[str] = NATIVE_BUILTIN_TOOL_IDS
 
 ModelProfileName = Literal["fast", "balanced", "reasoning"]
 ApprovalMode = Literal["never", "always", "conditional"]
@@ -67,10 +79,17 @@ class InputConfig(BaseModel):
 
 
 class ToolBinding(BaseModel):
-    tool_id: TrustedToolId
+    """V4 tool binding — registry validates tool_id at readiness time."""
+
+    tool_id: str = Field(min_length=1, max_length=128)
+    provider: str = Field(default="native", min_length=1, max_length=64)
+    app_id: str | None = Field(default=None, max_length=128)
+    external_action_id: str | None = Field(default=None, max_length=256)
+    version: str | None = Field(default=None, max_length=64)
     enabled: bool = True
     approval_mode: ApprovalMode = "never"
     config: dict[str, Any] = Field(default_factory=dict)
+    connection_requirement_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("config")
     @classmethod
@@ -127,9 +146,21 @@ class AgentSecurityPolicy(BaseModel):
 
 
 class ConnectionRequirement(BaseModel):
-    provider: Literal["google", "microsoft", "slack", "notion"]
+    id: str | None = Field(default=None, max_length=64)
+    provider: str = Field(min_length=1, max_length=64)
+    app_id: str | None = Field(default=None, max_length=128)
+    auth_type: str = Field(default="oauth2", max_length=32)
     tool_ids: list[str] = Field(default_factory=list, max_length=20)
+    required_for: list[str] = Field(default_factory=list, max_length=20)
     required: bool = True
+
+    @model_validator(mode="after")
+    def _sync_tool_lists(self) -> ConnectionRequirement:
+        if not self.tool_ids and self.required_for:
+            self.tool_ids = list(self.required_for)
+        elif not self.required_for and self.tool_ids:
+            self.required_for = list(self.tool_ids)
+        return self
 
 
 class ConnectionBindingRef(BaseModel):
@@ -150,9 +181,9 @@ class TriggerConfig(BaseModel):
 
 
 class AgentSpec(BaseModel):
-    """Versioned, declarative specification of a Stack32 agent (V2/V3)."""
+    """Versioned, declarative specification of a Stack32 agent (V2/V3/V4)."""
 
-    schema_version: Literal["2.0", "3.0"] = "2.0"
+    schema_version: Literal["2.0", "3.0", "4.0"] = "2.0"
     identity: AgentIdentity
     goal: str = Field(min_length=1, max_length=4000)
     instructions: AgentInstructions
@@ -167,7 +198,7 @@ class AgentSpec(BaseModel):
     graph: GraphSpec
     runtime: RuntimeLimits = Field(default_factory=RuntimeLimits)
     security: AgentSecurityPolicy = Field(default_factory=AgentSecurityPolicy)
-    # V3 additive (ignored by V2 consumers)
+    # V3+ additive
     connection_requirements: list[ConnectionRequirement] = Field(default_factory=list, max_length=20)
     connection_bindings: list[ConnectionBindingRef] = Field(default_factory=list, max_length=20)
     approvals: ApprovalPolicy = Field(default_factory=ApprovalPolicy)
@@ -192,11 +223,62 @@ def migrate_v2_to_v3(spec: AgentSpec | dict[str, Any]) -> AgentSpec:
     data.setdefault("triggers", [])
     return AgentSpec.model_validate(data)
 
+
+def migrate_v3_to_v4(spec: AgentSpec | dict[str, Any]) -> AgentSpec:
+    """Upgrade tools to hybrid bindings (provider/app/external_action_id)."""
+    data = spec.model_dump() if isinstance(spec, AgentSpec) else dict(spec)
+    data["schema_version"] = "4.0"
+    tools_out: list[dict[str, Any]] = []
+    for item in data.get("tools") or []:
+        if not isinstance(item, dict):
+            continue
+        tool_id = str(item.get("tool_id") or "")
+        provider = str(item.get("provider") or "native")
+        if tool_id == "http_request":
+            provider = "custom_api"
+        elif tool_id.startswith("pd:") or tool_id.startswith("pipedream:"):
+            provider = "pipedream"
+        tools_out.append(
+            {
+                "tool_id": tool_id,
+                "provider": provider,
+                "app_id": item.get("app_id"),
+                "external_action_id": item.get("external_action_id") or item.get("provider_tool_id"),
+                "version": item.get("version"),
+                "enabled": bool(item.get("enabled", True)),
+                "approval_mode": item.get("approval_mode") or "never",
+                "config": item.get("config") or {},
+                "connection_requirement_id": item.get("connection_requirement_id"),
+            }
+        )
+    data["tools"] = tools_out
+
+    reqs_out: list[dict[str, Any]] = []
+    for idx, req in enumerate(data.get("connection_requirements") or []):
+        if not isinstance(req, dict):
+            continue
+        tool_ids = list(req.get("tool_ids") or req.get("required_for") or [])
+        reqs_out.append(
+            {
+                "id": req.get("id") or f"conn_req_{idx + 1}",
+                "provider": str(req.get("provider") or "google"),
+                "app_id": req.get("app_id") or req.get("provider"),
+                "auth_type": req.get("auth_type") or "oauth2",
+                "tool_ids": tool_ids,
+                "required_for": list(req.get("required_for") or tool_ids),
+                "required": bool(req.get("required", True)),
+            }
+        )
+    data["connection_requirements"] = reqs_out
+    return AgentSpec.model_validate(data)
+
+
 def migrate_v1_to_v2(raw: dict[str, Any]) -> AgentSpec:
     """Best-effort loader from Phase 2 skeleton / V1 AgentSpec."""
     from agent_service.models.graph_spec import default_linear_graph
 
-    if raw.get("schema_version") in ("2.0", "3.0") or raw.get("schemaVersion") in ("2.0", "3.0"):
+    version = raw.get("schema_version") or raw.get("schemaVersion")
+    if version in ("2.0", "3.0", "4.0"):
         return AgentSpec.model_validate(_camel_to_snake_spec(raw))
 
     name = str(raw.get("name") or "Untitled agent")
@@ -212,10 +294,10 @@ def migrate_v1_to_v2(raw: dict[str, Any]) -> AgentSpec:
     for item in tools_in:
         if isinstance(item, dict):
             tool_id = item.get("tool") or item.get("tool_id")
-            if tool_id in TRUSTED_TOOL_IDS:
+            if tool_id in NATIVE_BUILTIN_TOOL_IDS:
                 tools.append(
                     ToolBinding(
-                        tool_id=tool_id,  # type: ignore[arg-type]
+                        tool_id=str(tool_id),
                         enabled=bool(item.get("enabled", True)),
                     )
                 )
@@ -268,7 +350,10 @@ def migrate_v1_to_v2(raw: dict[str, Any]) -> AgentSpec:
         tools=tools,
         knowledge=KnowledgeConfig(
             enabled=bool(knowledge_raw.get("enabled", False)),
-            source_ids=[str(x) for x in knowledge_raw.get("source_ids") or knowledge_raw.get("sourceIds") or []],
+            source_ids=[
+                str(x)
+                for x in knowledge_raw.get("source_ids") or knowledge_raw.get("sourceIds") or []
+            ],
         ),
         memory=MemoryConfig(
             conversation_window=int(
@@ -285,7 +370,9 @@ def migrate_v1_to_v2(raw: dict[str, Any]) -> AgentSpec:
             if isinstance(raw.get("output"), dict)
             else "markdown"
         ),
-        starter_prompts=[str(x) for x in raw.get("starter_prompts") or raw.get("starterPrompts") or []],
+        starter_prompts=[
+            str(x) for x in raw.get("starter_prompts") or raw.get("starterPrompts") or []
+        ],
         graph=graph,
         runtime=RuntimeLimits(
             max_steps=int(runtime_raw.get("max_steps") or runtime_raw.get("maxSteps") or 8),
@@ -297,6 +384,34 @@ def migrate_v1_to_v2(raw: dict[str, Any]) -> AgentSpec:
             ),
         ),
     )
+
+
+def load_agent_spec(raw: AgentSpec | dict[str, Any]) -> AgentSpec:
+    """Load any supported AgentSpec version and migrate through to the newest shape."""
+    if isinstance(raw, AgentSpec):
+        data = raw.model_dump()
+    else:
+        data = _camel_to_snake_spec(dict(raw))
+
+    version = str(data.get("schema_version") or "1.0")
+    if version in {"1.0", "1"}:
+        spec = migrate_v1_to_v2(data)
+        data = spec.model_dump()
+        version = spec.schema_version
+
+    if version == "2.0":
+        spec = migrate_v2_to_v3(data)
+        data = spec.model_dump()
+        version = "3.0"
+
+    if version == "3.0":
+        return migrate_v3_to_v4(data)
+
+    if version == "4.0":
+        return AgentSpec.model_validate(data)
+
+    # Unknown → best-effort V1 path then full chain.
+    return migrate_v3_to_v4(migrate_v2_to_v3(migrate_v1_to_v2(data)))
 
 
 def _camel_to_snake_spec(raw: dict[str, Any]) -> dict[str, Any]:

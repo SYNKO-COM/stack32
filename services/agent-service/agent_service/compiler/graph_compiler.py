@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent_service.models.agent_spec import TRUSTED_TOOL_IDS, AgentSpec
+from agent_service.models.agent_spec import NATIVE_BUILTIN_TOOL_IDS, AgentSpec
 from agent_service.models.graph_spec import GraphSpec
 
 NodeHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -157,13 +157,16 @@ def compile_graph(spec: AgentSpec | GraphSpec, *, agent_spec: AgentSpec | None =
     for node in graph.nodes:
         if node.type == "tool":
             tool_id = node.config.get("tool_id")
-            if tool_id not in TRUSTED_TOOL_IDS:
+            if not tool_id or not isinstance(tool_id, str):
+                raise GraphCompileError("TOOL_NOT_ALLOWED", "Tool node missing tool_id")
+            if allowed_tools:
+                if tool_id not in allowed_tools:
+                    raise GraphCompileError(
+                        "TOOL_NOT_ALLOWED",
+                        f"Tool {tool_id} not bound on AgentSpec",
+                    )
+            elif tool_id not in NATIVE_BUILTIN_TOOL_IDS:
                 raise GraphCompileError("TOOL_NOT_ALLOWED", f"Unknown tool {tool_id}")
-            if allowed_tools and tool_id not in allowed_tools:
-                raise GraphCompileError(
-                    "TOOL_NOT_ALLOWED",
-                    f"Tool {tool_id} not bound on AgentSpec",
-                )
             handlers[node.id] = _make_tool_handler(str(tool_id))
         else:
             factory = HANDLER_FACTORIES.get(node.type)

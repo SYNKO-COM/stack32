@@ -114,21 +114,14 @@ class GraphSpec(BaseModel):
             if sa.config.get("allow_nested_sub_agents"):
                 raise ValueError("Recursive sub-agents are not allowed.")
 
-        # Tool nodes must reference allowlisted tool ids when present
+        # Tool nodes must reference a non-empty tool_id (registry validates at readiness).
         for n in self.nodes:
             if n.type == "tool":
                 tool_id = n.config.get("tool_id")
-                if tool_id is None:
+                if tool_id is None or not isinstance(tool_id, str) or not tool_id.strip():
                     raise ValueError(f"Tool node {n.id} missing tool_id.")
-                if tool_id not in {
-                    "web_search",
-                    "fetch_url",
-                    "knowledge_search",
-                    "calculator",
-                    "current_datetime",
-                    "structured_output",
-                }:
-                    raise ValueError(f"Unknown or disallowed tool: {tool_id}")
+                if len(tool_id) > 128:
+                    raise ValueError(f"Tool node {n.id} tool_id too long.")
 
         _check_branch_depth(adj, self.entry_node_id, MAX_BRANCH_DEPTH)
         return self

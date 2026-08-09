@@ -16,6 +16,16 @@ from agent_service.security.redaction import redact_obj
 logger = logging.getLogger(__name__)
 
 
+def derive_builder_interrupt_type(
+    identity_draft: dict[str, Any] | None,
+    interrupt_type: str | None = None,
+) -> str:
+    """Derive interrupt type from explicit arg, draft marker, or default identity."""
+    draft = identity_draft if isinstance(identity_draft, dict) else {}
+    derived = draft.get("_interrupt_type")
+    return str(interrupt_type or derived or "identity")
+
+
 def get_supabase_admin_client() -> httpx.AsyncClient:
     settings = get_settings()
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
@@ -90,13 +100,19 @@ class SupabaseRepository:
                 params={
                     "id": f"eq.{run_id}",
                     "user_id": f"eq.{user_id}",
-                    "status": "in.(queued,running)",
+                    "status": "in.(queued,running,waiting_for_input)",
                 },
                 headers={"Prefer": "return=representation"},
                 json={
                     "status": "canceled",
                     "completed_at": datetime.now(UTC).isoformat(),
                 },
+            )
+            # Drop any queue lease so a crashed/restarted worker cannot resume this turn.
+            await client.patch(
+                "/run_queue",
+                params={"run_id": f"eq.{run_id}", "status": "in.(pending,leased)"},
+                json={"status": "dead", "last_error": "canceled_by_user"},
             )
         if response.status_code >= 400:
             raise HTTPException(
@@ -384,7 +400,7 @@ class Persistence(SupabaseRepository):
                 "agent_id": f"eq.{agent_id}",
                 "user_id": f"eq.{user_id}",
                 "run_type": "eq.build",
-                "status": "in.(queued,running)",
+                "status": "in.(queued,running,waiting_for_input)",
                 "select": "*",
                 "order": "created_at.desc",
                 "limit": "1",
@@ -521,7 +537,10 @@ class Persistence(SupabaseRepository):
         thread_id: str,
         prompt: str,
         identity_draft: dict[str, Any],
+        interrupt_type: str | None = None,
     ) -> None:
+        draft = identity_draft or {}
+        itype = derive_builder_interrupt_type(draft, interrupt_type)
         async with get_supabase_admin_client() as client:
             await client.patch(
                 "/runs",
@@ -530,11 +549,11 @@ class Persistence(SupabaseRepository):
                     "error_code": "BUILDER_INTERRUPTED",
                     "input": {
                         "interrupt": {
-                            "type": "identity",
+                            "type": itype,
                             "agent_id": agent_id,
                             "thread_id": thread_id,
                             "prompt": prompt[:8000],
-                            "identity_draft": identity_draft,
+                            "identity_draft": draft,
                             "status": "open",
                         }
                     },
@@ -549,12 +568,15 @@ class Persistence(SupabaseRepository):
         interrupt = meta.get("interrupt") if isinstance(meta, dict) else None
         if not interrupt:
             return None
+        draft = interrupt.get("identity_draft") or {}
+        derived = draft.get("_interrupt_type") if isinstance(draft, dict) else None
         return {
             "agent_id": interrupt.get("agent_id") or run.get("agent_id"),
             "thread_id": interrupt.get("thread_id") or run.get("thread_id"),
             "prompt": interrupt.get("prompt") or "",
             "status": interrupt.get("status") or "open",
-            "identity_draft": interrupt.get("identity_draft") or {},
+            "identity_draft": draft,
+            "type": interrupt.get("type") or derived or "identity",
         }
 
     async def clear_builder_interrupt(self, run_id: str, user_id: str) -> None:

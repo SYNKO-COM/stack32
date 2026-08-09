@@ -59,9 +59,11 @@ def test_migrate_v1_to_v2():
     assert spec.tools[0].tool_id == "web_search"
 
 
-def test_agent_spec_rejects_invalid_tool_name():
+def test_agent_spec_rejects_empty_tool_id():
+    # V4+: arbitrary tool_ids are allowed (registry validates at readiness);
+    # empty ids remain invalid.
     data = valid_spec_data()
-    data["tools"] = [{"tool_id": "hack_the_planet"}]
+    data["tools"] = [{"tool_id": ""}]
     with pytest.raises(ValidationError):
         AgentSpec.model_validate(data)
 

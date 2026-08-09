@@ -143,6 +143,77 @@ describe("message mappers", () => {
     expect(mapped?.playReadySound).toBe(true);
   });
 
+  it("maps connection_form and approval_form ui components", () => {
+    const connection = mapBuilderMessage(
+      builderRow({
+        role: "assistant",
+        content: "Connect Google",
+        metadata: {
+          ui_component: {
+            type: "connection_form",
+            version: "1",
+            request_id: "run-conn",
+            fields: [
+              { key: "provider", type: "text", required: true, suggested_value: "google" },
+            ],
+          },
+        },
+      }),
+    );
+    expect(connection?.uiComponent?.type).toBe("connection_form");
+
+    const approval = mapBuilderMessage(
+      builderRow({
+        role: "assistant",
+        content: "Approve tool",
+        metadata: {
+          ui_component: {
+            type: "approval_form",
+            version: "1",
+            request_id: "run-appr",
+            fields: [
+              { key: "tool_id", type: "text", required: true, suggested_value: "gmail_send_message" },
+              { key: "approval_mode", type: "text", required: false, suggested_value: "always" },
+            ],
+          },
+        },
+      }),
+    );
+    expect(approval?.uiComponent?.type).toBe("approval_form");
+  });
+
+  it("maps V4 tool bindings loosely", () => {
+    const spec = specFromDb({
+      schema_version: "4.0",
+      identity: { name: "Hybrid", role: "Assistant" },
+      goal: "Connect apps",
+      instructions: { system: "Help." },
+      model_policy: { profile: "balanced" },
+      tools: [
+        {
+          tool_id: "gmail_list",
+          provider: "native",
+          enabled: true,
+          approval_mode: "always",
+        },
+        {
+          tool_id: "pd:slack-send-message",
+          provider: "pipedream",
+          app_id: "slack",
+          approval_mode: "conditional",
+        },
+      ],
+      knowledge: {},
+      memory: {},
+      output: {},
+      runtime: {},
+    });
+    expect(spec.tools.map((t) => t.tool)).toEqual(["gmail_list", "pd:slack-send-message"]);
+    expect(spec.toolBindings?.[0]?.approvalMode).toBe("always");
+    expect(spec.toolBindings?.[1]?.provider).toBe("pipedream");
+    expect(spec.toolBindings?.[1]?.appId).toBe("slack");
+  });
+
   it("filters out system/tool roles the UI does not render", () => {
     expect(mapBuilderMessage(builderRow({ role: "system" }))).toBeNull();
     expect(mapBuilderMessage(builderRow({ role: "tool" }))).toBeNull();

@@ -62,7 +62,10 @@
     "building": "En construction",
     "ready": "Prêt",
     "needsAttention": "Attention requise",
-    "published": "Publié"
+    "published": "Publié",
+    "waitingForInput": "En attente d'entrée",
+    "needsSetup": "Configuration requise",
+    "archived": "Archivé"
   },
   "plan": {
     "free": "Gratuit",

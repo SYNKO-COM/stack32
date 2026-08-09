@@ -3,6 +3,7 @@
 import {
   Background,
   Handle,
+  MarkerType,
   Position,
   ReactFlow,
   type Edge,
@@ -16,6 +17,7 @@ import {
   Cpu,
   GitBranch,
   Hammer,
+  Link2,
   Play,
   Send,
   Shield,
@@ -26,6 +28,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -36,15 +39,20 @@ import {
 } from "@/components/ui/sheet";
 import { useTranslation } from "@/hooks/use-translation";
 import type { AgentModule, AgentModuleMap, ModuleKind } from "@/lib/domain/agent-modules";
+import type { ApprovalMode } from "@/lib/domain/types";
 import { setPrefillDraft } from "@/lib/pending-prompt";
 import { cn } from "@/lib/utils";
 
-const CHAIN_STEP_X = 210;
-const CHAIN_Y = 40;
-const ATTACHMENT_Y = 210;
-const ATTACHMENT_STEP_X = 128;
-const CHAIN_WIDTH = 168;
-const ATTACHMENT_WIDTH = 108;
+const CHAIN_STEP_X = 230;
+const CHAIN_Y = 48;
+const ATTACHMENT_Y = 230;
+const ATTACHMENT_STEP_X = 148;
+const CHAIN_WIDTH = 188;
+const ATTACHMENT_WIDTH = 124;
+
+/** Invisible ports — edges still attach, users never click these. */
+const HIDDEN_HANDLE =
+  "!size-1.5 !min-h-0 !min-w-0 !border-0 !bg-transparent !opacity-0 pointer-events-none";
 
 const KIND_ICONS: Record<ModuleKind, React.ComponentType<{ className?: string }>> = {
   trigger: Play,
@@ -59,13 +67,58 @@ const KIND_ICONS: Record<ModuleKind, React.ComponentType<{ className?: string }>
   tool: Wrench,
 };
 
+const EDGE_STROKE = "hsl(var(--brand) / 0.55)";
+const EDGE_STROKE_SOFT = "hsl(var(--muted-foreground) / 0.55)";
+
+export interface AgentConnectionInfo {
+  id: string;
+  provider: string;
+  status: string;
+  account_email?: string;
+}
+
+export interface AgentBindingInfo {
+  connection_id: string;
+  tool_ids: string[];
+  enabled: boolean;
+}
+
 interface ModuleNodeData extends Record<string, unknown> {
   module: AgentModule;
   title: string;
   subtitle?: string;
   variant: "chain" | "attachment";
   isBrain: boolean;
+  selected: boolean;
   onSelect: () => void;
+}
+
+function readinessAccent(module: AgentModule): string {
+  if (module.kind !== "tool") return "";
+  if (module.setupStatus === "error" || module.connectionStatus === "error") {
+    return "border-destructive/50 ring-1 ring-destructive/20";
+  }
+  if (module.setupStatus === "needs_setup" || module.ready === false) {
+    return "border-amber-500/50 ring-1 ring-amber-500/15";
+  }
+  if (module.ready === true || module.setupStatus === "ready") {
+    return "border-emerald-500/40";
+  }
+  return "";
+}
+
+function readinessIconTone(module: AgentModule): string {
+  if (module.kind !== "tool") return "bg-brand/12 text-brand";
+  if (module.setupStatus === "error" || module.connectionStatus === "error") {
+    return "bg-destructive/10 text-destructive";
+  }
+  if (module.setupStatus === "needs_setup" || module.ready === false) {
+    return "bg-amber-500/12 text-amber-700 dark:text-amber-300";
+  }
+  if (module.ready === true || module.setupStatus === "ready") {
+    return "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300";
+  }
+  return "bg-brand/12 text-brand";
 }
 
 function ModuleNode({ data }: NodeProps<Node<ModuleNodeData>>) {
@@ -73,92 +126,198 @@ function ModuleNode({ data }: NodeProps<Node<ModuleNodeData>>) {
   const isChain = data.variant === "chain";
 
   return (
-    <button
-      type="button"
-      onClick={data.onSelect}
+    <div
       className={cn(
-        "glass flex flex-col items-center gap-1.5 rounded-2xl border border-border/60 text-center transition-colors",
-        "hover:border-brand/40 hover:bg-brand/5",
-        isChain ? "w-[168px] px-3 py-3" : "w-[108px] px-2 py-2.5",
+        "nopan nodrag",
+        isChain ? "w-[188px]" : "w-[124px]",
       )}
     >
-      {isChain ? (
-        <Handle
-          type="target"
-          position={Position.Left}
-          className="!size-2 !border-0 !bg-muted-foreground/40"
-        />
-      ) : (
-        <Handle
-          type="target"
-          position={Position.Top}
-          className="!size-2 !border-0 !bg-muted-foreground/40"
-        />
-      )}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          data.onSelect();
+        }}
+        onPointerDown={(event) => {
+          // Keep React Flow from treating the press as a canvas pan.
+          event.stopPropagation();
+        }}
+        aria-pressed={data.selected}
+        className={cn(
+          "group flex w-full flex-col items-center gap-1.5 rounded-2xl border bg-background text-center shadow-sm",
+          "cursor-pointer transition-all duration-200",
+          "hover:border-brand/45 hover:shadow-md hover:shadow-brand/5",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
+          readinessAccent(data.module),
+          data.selected
+            ? "border-brand/60 ring-2 ring-brand/25 shadow-md"
+            : "border-border/70",
+          isChain ? "px-3.5 py-3.5" : "px-2.5 py-3",
+        )}
+      >
+        {isChain ? (
+          <Handle type="target" position={Position.Left} className={HIDDEN_HANDLE} />
+        ) : (
+          <Handle type="target" position={Position.Top} className={HIDDEN_HANDLE} />
+        )}
 
-      <span
-        className={cn(
-          "flex items-center justify-center rounded-xl bg-brand/12 text-brand",
-          isChain ? "size-9" : "size-7",
-        )}
-      >
-        <Icon className={isChain ? "size-4.5" : "size-3.5"} aria-hidden="true" />
-      </span>
-      <span
-        className={cn(
-          "block max-w-full truncate font-medium",
-          isChain ? "text-xs" : "text-[11px]",
-        )}
-      >
-        {data.title}
-      </span>
-      {data.subtitle ? (
-        <span className="block max-w-full truncate text-[10px] text-muted-foreground">
-          {data.subtitle}
+        <span
+          className={cn(
+            "flex items-center justify-center rounded-xl transition-transform group-hover:scale-105",
+            readinessIconTone(data.module),
+            isChain ? "size-10" : "size-8",
+          )}
+        >
+          <Icon className={isChain ? "size-5" : "size-4"} aria-hidden="true" />
         </span>
-      ) : null}
+        <span
+          className={cn(
+            "block max-w-full truncate font-semibold tracking-tight text-foreground",
+            isChain ? "text-[13px]" : "text-[11px]",
+          )}
+        >
+          {data.title}
+        </span>
+        {data.subtitle ? (
+          <span className="block max-w-full truncate text-[10px] leading-snug text-muted-foreground">
+            {data.subtitle}
+          </span>
+        ) : null}
 
-      {isChain ? (
-        <Handle
-          type="source"
-          position={Position.Right}
-          className="!size-2 !border-0 !bg-muted-foreground/40"
-        />
-      ) : null}
-      {data.isBrain ? (
-        <Handle
-          id="capabilities"
-          type="source"
-          position={Position.Bottom}
-          className="!size-2 !border-0 !bg-muted-foreground/40"
-        />
-      ) : null}
-    </button>
+        {isChain ? (
+          <Handle type="source" position={Position.Right} className={HIDDEN_HANDLE} />
+        ) : null}
+        {data.isBrain ? (
+          <Handle
+            id="capabilities"
+            type="source"
+            position={Position.Bottom}
+            className={HIDDEN_HANDLE}
+          />
+        ) : null}
+      </button>
+    </div>
   );
 }
 
 const nodeTypes = { module: ModuleNode };
 
+function resolveConnectionForModule(
+  module: AgentModule,
+  connections: AgentConnectionInfo[],
+  bindings: AgentBindingInfo[],
+): { connection?: AgentConnectionInfo; toolIds: string[] } {
+  const binding = bindings.find(
+    (b) =>
+      b.enabled &&
+      module.toolId &&
+      b.tool_ids.some((id) => id === module.toolId || id === module.provider),
+  );
+  const byBinding = binding
+    ? connections.find((c) => c.id === binding.connection_id)
+    : undefined;
+  const byProvider = module.provider
+    ? connections.find((c) => c.provider === module.provider)
+    : undefined;
+  const connection = byBinding ?? byProvider;
+  const toolIds = binding?.tool_ids ?? (module.toolId ? [module.toolId] : []);
+  return { connection, toolIds };
+}
+
+function friendlyToolTitle(
+  module: AgentModule,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+): string {
+  if (module.label?.trim()) return module.label.trim();
+  if (module.toolId) {
+    return t(`tools.${module.toolId}`, {
+      defaultValue: humanizeToolId(module.toolId),
+    });
+  }
+  return t(`modules.kinds.${module.kind}`);
+}
+
+function humanizeToolId(toolId: string): string {
+  const cleaned = toolId
+    .replace(/^pd:/i, "")
+    .replace(/^pipedream:/i, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  if (!cleaned) return toolId;
+  return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function providerFriendly(
+  provider: string | undefined,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+): string {
+  if (!provider || provider === "native") {
+    return t("modules.readiness.builtIn", { defaultValue: "Built-in — ready to use" });
+  }
+  return t(`builder:connections.providers.${provider}`, {
+    defaultValue: provider.charAt(0).toUpperCase() + provider.slice(1),
+  });
+}
+
 export function AgentModuleGraph({
   agentId,
   modules,
+  connections = [],
+  bindings = [],
+  toolApprovals,
+  onConnectionsChanged,
 }: {
   agentId: string;
   modules: AgentModuleMap;
+  connections?: AgentConnectionInfo[];
+  bindings?: AgentBindingInfo[];
+  toolApprovals?: Record<string, ApprovalMode | string>;
+  onConnectionsChanged?: () => void;
 }) {
-  const { t } = useTranslation("structure");
+  const { t } = useTranslation(["structure", "builder"]);
   const router = useRouter();
   const [selected, setSelected] = useState<AgentModule | null>(null);
 
   const label = (module: AgentModule): string =>
-    module.label?.trim() || t(`modules.kinds.${module.kind}`);
+    module.kind === "tool"
+      ? friendlyToolTitle(module, t)
+      : module.label?.trim() || t(`modules.kinds.${module.kind}`);
 
   const subtitle = (module: AgentModule): string | undefined => {
-    if (module.kind === "tool" && module.toolId) {
-      return t(`tools.${module.toolId}`, { defaultValue: module.toolId });
+    if (module.kind === "tool") {
+      if (module.setupStatus === "needs_setup" || module.ready === false) {
+        return t("modules.readiness.tapToConnect", {
+          defaultValue: "Tap to connect",
+        });
+      }
+      if (
+        module.provider &&
+        module.provider !== "native" &&
+        (module.connectionStatus === "connected" || module.ready)
+      ) {
+        return t("modules.readiness.connected", { defaultValue: "Connected" });
+      }
+      if (module.connectionStatus === "not_required" || module.provider === "native") {
+        return t("modules.readiness.builtInShort", { defaultValue: "Built-in" });
+      }
+    }
+    if (module.kind === "model" && module.detail) {
+      return String(module.detail);
     }
     return module.detail;
   };
+
+  const needsSetup = useMemo(
+    () =>
+      modules.attachments.filter(
+        (m) =>
+          m.kind === "tool" &&
+          (m.setupStatus === "needs_setup" || m.ready === false) &&
+          m.provider &&
+          m.provider !== "native",
+      ),
+    [modules.attachments],
+  );
 
   const { nodes, edges } = useMemo(() => {
     const brainIndex = modules.chain.findIndex((m) => m.kind === "brain");
@@ -174,11 +333,11 @@ export function AgentModuleGraph({
         subtitle: subtitle(module),
         variant: "chain",
         isBrain: index === brainIndex,
+        selected: selected?.id === module.id,
         onSelect: () => setSelected(module),
       },
     }));
 
-    // Center the capability row under the brain node, n8n style.
     const rowWidth = Math.max(modules.attachments.length - 1, 0) * ATTACHMENT_STEP_X;
     const rowStart = brainX + CHAIN_WIDTH / 2 - ATTACHMENT_WIDTH / 2 - rowWidth / 2;
 
@@ -193,6 +352,7 @@ export function AgentModuleGraph({
           subtitle: subtitle(module),
           variant: "attachment",
           isBrain: false,
+          selected: selected?.id === module.id,
           onSelect: () => setSelected(module),
         },
       }),
@@ -202,7 +362,15 @@ export function AgentModuleGraph({
       id: `edge-${modules.chain[index].id}-${module.id}`,
       source: `chain-${modules.chain[index].id}`,
       target: `chain-${module.id}`,
-      style: { stroke: "hsl(var(--muted-foreground) / 0.35)" },
+      type: "smoothstep",
+      animated: false,
+      style: { stroke: EDGE_STROKE, strokeWidth: 2.25 },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: 16,
+        height: 16,
+        color: EDGE_STROKE,
+      },
     }));
 
     const brainId = brainIndex >= 0 ? modules.chain[brainIndex]?.id : undefined;
@@ -212,7 +380,24 @@ export function AgentModuleGraph({
           source: `chain-${brainId}`,
           sourceHandle: "capabilities",
           target: `attach-${module.id}`,
-          style: { stroke: "hsl(var(--muted-foreground) / 0.3)", strokeDasharray: "4 4" },
+          type: "smoothstep",
+          style: {
+            stroke: EDGE_STROKE_SOFT,
+            strokeWidth: 1.75,
+            strokeDasharray: "6 5",
+          },
+          label: t(`modules.kinds.${module.kind}`),
+          labelStyle: {
+            fill: "hsl(var(--muted-foreground))",
+            fontSize: 10,
+            fontWeight: 500,
+          },
+          labelBgStyle: {
+            fill: "hsl(var(--background))",
+            fillOpacity: 0.92,
+          },
+          labelBgPadding: [4, 6] as [number, number],
+          labelBgBorderRadius: 6,
         }))
       : [];
 
@@ -220,8 +405,8 @@ export function AgentModuleGraph({
       nodes: [...chainNodes, ...attachmentNodes],
       edges: [...chainEdges, ...attachmentEdges],
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- labels follow the i18n instance
-  }, [modules, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- labels follow i18n + selection highlight
+  }, [modules, t, selected?.id]);
 
   const goToBuild = () => {
     setPrefillDraft(t("prefill.graph"));
@@ -229,40 +414,198 @@ export function AgentModuleGraph({
     setSelected(null);
   };
 
+  const selectedConnection = selected
+    ? resolveConnectionForModule(selected, connections, bindings)
+    : null;
+  const approvalMode =
+    selected?.toolId && toolApprovals?.[selected.toolId]
+      ? toolApprovals[selected.toolId]
+      : undefined;
+
   return (
-    <>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.25 }}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        proOptions={{ hideAttribution: true }}
-        className="h-full w-full"
-      >
-        <Background gap={22} size={1} color="hsl(var(--muted-foreground) / 0.1)" />
-      </ReactFlow>
+    <div className="relative flex h-full min-h-0 flex-col">
+      {needsSetup.length > 0 ? (
+        <div className="shrink-0 border-b border-amber-500/20 bg-amber-500/[0.07] px-4 py-3">
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-200">
+              <Link2 className="size-3.5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="text-sm font-medium text-foreground">
+                {t("modules.setupBanner.title", {
+                  defaultValue: "Connect your apps to finish setup",
+                })}
+              </p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t("modules.setupBanner.body", {
+                  defaultValue:
+                    "Your agent is ready — link the accounts below so it can create Docs, send email, and more.",
+                })}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {needsSetup.map((module) => (
+                  <Button
+                    key={module.id}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 rounded-full border-amber-500/35 bg-background/80 text-xs"
+                    onClick={() => setSelected(module)}
+                  >
+                    {label(module)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="min-h-0 flex-1">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.28 }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          panOnDrag
+          panOnScroll={false}
+          zoomOnScroll
+          selectionOnDrag={false}
+          onNodeClick={(_, node) => {
+            const module = (node.data as ModuleNodeData | undefined)?.module;
+            if (module) setSelected(module);
+          }}
+          proOptions={{ hideAttribution: true }}
+          className="h-full w-full cursor-grab active:cursor-grabbing [&_.react-flow__node]:cursor-pointer"
+          defaultEdgeOptions={{
+            type: "smoothstep",
+          }}
+        >
+          <Background gap={20} size={1.25} color="hsl(var(--muted-foreground) / 0.14)" />
+        </ReactFlow>
+      </div>
+
+      <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-background/80 px-3 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur-sm">
+        {t("modules.clickHint", {
+          defaultValue: "Click any card to open its settings",
+        })}
+      </p>
 
       <Sheet open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
-        <SheetContent side="right" className="glass w-full sm:max-w-md">
+        <SheetContent side="right" className="w-full border-l bg-background sm:max-w-md">
           {selected ? (
             <>
-              <SheetHeader>
-                <SheetTitle>{label(selected)}</SheetTitle>
-                <SheetDescription>{t(`modules.kinds.${selected.kind}`)}</SheetDescription>
+              <SheetHeader className="space-y-1 text-left">
+                <SheetTitle className="text-lg tracking-tight">{label(selected)}</SheetTitle>
+                <SheetDescription className="text-sm">
+                  {t(`modules.kinds.${selected.kind}`)}
+                </SheetDescription>
               </SheetHeader>
-              <div className="mt-6 space-y-4 px-1">
-                <p className="text-sm leading-relaxed text-foreground/85">
+              <div className="mt-6 space-y-5 px-1">
+                <p className="text-sm leading-relaxed text-foreground/90">
                   {selected.detail || t(`modules.help.${selected.kind}`)}
                 </p>
-                {selected.toolId ? (
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {t("nodeStates.toolId", { id: selected.toolId })}
+
+                {selected.kind === "tool" ? (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-border/60 bg-foreground/[0.02] p-4">
+                      <dl className="space-y-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-muted-foreground">
+                            {t("modules.readiness.connection", {
+                              defaultValue: "Connection",
+                            })}
+                          </dt>
+                          <dd className="font-medium">
+                            {selected.connectionStatus === "connected" || selected.ready
+                              ? t("modules.readiness.connected", {
+                                  defaultValue: "Connected",
+                                })
+                              : selected.provider === "native" ||
+                                  selected.connectionStatus === "not_required"
+                                ? t("modules.readiness.notNeeded", {
+                                    defaultValue: "Not needed",
+                                  })
+                                : t("modules.readiness.needsSetup", {
+                                    defaultValue: "Needs setup",
+                                  })}
+                          </dd>
+                        </div>
+                        {approvalMode ? (
+                          <div className="flex items-center justify-between gap-3">
+                            <dt className="text-muted-foreground">
+                              {t("builder:connections.approvalMode", {
+                                defaultValue: "Approval",
+                              })}
+                            </dt>
+                            <dd className="text-right font-medium">
+                              {t(`builder:connections.approvalModes.${approvalMode}`, {
+                                defaultValue: String(approvalMode),
+                              })}
+                            </dd>
+                          </div>
+                        ) : null}
+                        <div className="flex items-center justify-between gap-3">
+                          <dt className="text-muted-foreground">
+                            {t("modules.readiness.worksWith", {
+                              defaultValue: "Works with",
+                            })}
+                          </dt>
+                          <dd className="text-right font-medium">
+                            {providerFriendly(selected.provider, t)}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    {selected.provider && selected.provider !== "native" ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">
+                          {t("modules.setupBanner.connectTitle", {
+                            defaultValue: "Link your account",
+                          })}
+                        </p>
+                        <IntegrationConnectionCard
+                          provider={selected.provider}
+                          appId={selected.appId}
+                          agentId={agentId}
+                          toolIds={selectedConnection?.toolIds}
+                          status={
+                            selected.connectionStatus === "connected" || selected.ready
+                              ? "connected"
+                              : selected.setupStatus === "error"
+                                ? "error"
+                                : "needs_setup"
+                          }
+                          accountEmail={selectedConnection?.connection?.account_email}
+                          connectionId={selectedConnection?.connection?.id}
+                          onConnected={onConnectionsChanged}
+                        />
+                      </div>
+                    ) : (
+                      <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-emerald-900 dark:text-emerald-200">
+                        {t("modules.readiness.nativeReady", {
+                          defaultValue:
+                            "This capability is already included — nothing to connect.",
+                        })}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
+                {selected.kind === "model" ? (
+                  <p className="rounded-2xl border border-border/60 bg-foreground/[0.02] px-4 py-3 text-sm text-muted-foreground">
+                    {t("modules.help.modelChange", {
+                      defaultValue:
+                        "Want a faster or smarter model? Ask in Build — Stack32 will update it for you.",
+                    })}
                   </p>
                 ) : null}
+
                 <Button
                   variant="ghost"
                   size="sm"
@@ -277,6 +620,6 @@ export function AgentModuleGraph({
           ) : null}
         </SheetContent>
       </Sheet>
-    </>
+    </div>
   );
 }

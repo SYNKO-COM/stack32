@@ -62,7 +62,10 @@
     "building": "Building",
     "ready": "Ready",
     "needsAttention": "Needs attention",
-    "published": "Published"
+    "published": "Published",
+    "waitingForInput": "Waiting for input",
+    "needsSetup": "Needs setup",
+    "archived": "Archived"
   },
   "plan": {
     "free": "Free",

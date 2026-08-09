@@ -64,6 +64,13 @@ class CircuitBreaker:
             self._open_until[key] = time.time() + self.cooldown_seconds
             logger.warning("Circuit open for provider/model key=%s", key)
 
+    def record_hard_failure(self, key: str, *, cooldown_seconds: int | None = None) -> None:
+        """Immediate open — e.g. BadRequest/NotFound for a dead model id."""
+        seconds = cooldown_seconds if cooldown_seconds is not None else self.cooldown_seconds * 30
+        self._failures[key] = self.failure_threshold
+        self._open_until[key] = time.time() + max(60, seconds)
+        logger.warning("Circuit hard-open for provider/model key=%s cooldown=%ss", key, seconds)
+
 
 _breaker = CircuitBreaker()
 
@@ -108,8 +115,14 @@ def resolve_models(profile: ModelProfile) -> list[str]:
     models: list[str] = []
     for env_name in names:
         value = getattr(settings, env_name, "") or ""
-        if value:
+        if value and value not in models:
             models.append(value)
+    # Coding repairs must degrade to working chat models when specialized IDs fail.
+    if profile == ModelProfile.CODING:
+        for env_name in PROFILE_ENV[ModelProfile.BALANCED]:
+            value = getattr(settings, env_name, "") or ""
+            if value and value not in models:
+                models.append(value)
     return models
 
 
@@ -261,9 +274,13 @@ class ModelGateway:
                 self._breaker.record_success(model)
                 return result
             except Exception as exc:  # noqa: BLE001 — normalized upstream
+                err_name = type(exc).__name__
                 self._breaker.record_failure(model)
+                # Invalid / unsupported model ids should not burn the whole coding loop.
+                if err_name in {"BadRequestError", "NotFoundError", "AuthenticationError"}:
+                    self._breaker.record_hard_failure(model)
                 last_error = exc
-                logger.warning("Model call failed model=%s err=%s", model, type(exc).__name__)
+                logger.warning("Model call failed model=%s err=%s", model, err_name)
 
         raise RuntimeError("MODEL_PROVIDER_UNAVAILABLE") from last_error
 
@@ -274,7 +291,7 @@ class ModelGateway:
             ("openai", ModelProfile.FAST): "openai/gpt-4.1-mini",
             ("openai", ModelProfile.BALANCED): "openai/gpt-4.1-mini",
             ("openai", ModelProfile.REASONING): "openai/gpt-4.1",
-            ("openai", ModelProfile.CODING): "openai/gpt-5.1-codex",
+            ("openai", ModelProfile.CODING): "openai/gpt-4.1",
             ("openai", ModelProfile.VALIDATOR): "openai/gpt-4.1-mini",
             ("xai", ModelProfile.FAST): "xai/grok-3-mini",
             ("xai", ModelProfile.BALANCED): "xai/grok-3-mini",
@@ -308,7 +325,7 @@ class ModelGateway:
             ("openrouter", ModelProfile.FAST): "openrouter/openai/gpt-4.1-mini",
             ("openrouter", ModelProfile.BALANCED): "openrouter/openai/gpt-4.1-mini",
             ("openrouter", ModelProfile.REASONING): "openrouter/xai/grok-4.5",
-            ("openrouter", ModelProfile.CODING): "openrouter/openai/gpt-5.1-codex",
+            ("openrouter", ModelProfile.CODING): "openrouter/openai/gpt-4.1",
         }
         return mapping.get((provider, profile)) or mapping.get((provider, ModelProfile.BALANCED))
 

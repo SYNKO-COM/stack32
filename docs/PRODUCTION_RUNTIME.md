@@ -1,17 +1,21 @@
 # Stack32 Production Runtime
 
-Status of the production completion plan (M0–M6) on branch `feat/production-runtime`.
+Status of the production completion plan (M0–M7) on `main`.
+See also [INTEGRATIONS_ARCHITECTURE.md](./INTEGRATIONS_ARCHITECTURE.md) and
+[INTEGRATIONS_SETUP.md](./INTEGRATIONS_SETUP.md).
 
 ## Feature flags
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `AGENT_RUNTIME_VERSION` | `legacy` | `langgraph` enables StateGraph tool loop |
+| `DATABASE_URL` | empty | Postgres URL for `AsyncPostgresSaver` (required in prod with langgraph) |
 | `QUEUE_INLINE` | `true` | Inline execute, skip enqueue. `false` = enqueue-only for workers |
 | `QUEUE_WORKER_ENABLED` | `false` | Poll `lease_run_queue_job` on startup when queue mode |
 | `LIVE_REQUIRE_USER_LLM_KEY` | `true` | Live requires validated BYOK |
 | `AI_EXECUTION_MODE` | `mock` | `live` / `mock` / `disabled` |
 | `GOOGLE_OAUTH_*` | empty | Required for Google Gmail/Calendar journeys |
+| `PIPEDREAM_*` | empty | Pipedream Connect marketplace (optional) |
 
 ## Architecture
 
@@ -34,7 +38,12 @@ Status of the production completion plan (M0–M6) on branch `feat/production-ru
 - `20260807000001_m3_agent_project_files.sql` — virtual project files
 - `20260808000001_m4_connections.sql` — user_connections, bindings, OAuth states, approvals
 - `20260809000001_m5_queue_harden.sql` — idempotency + heartbeat
+- `20260810000001_m6a_builder_workspaces.sql` — builder sandboxes
+- `20260810000002_m6f_agent_projects.sql` — projects + snapshots
+- `20260810000003_m6e_tool_catalog.sql` — versioned tool/connector catalog
+- `20260811000001_m7_hybrid_integrations.sql` — `needs_setup`, catalog cache, providers
 
 ## Capability labels
 
-See `docs/audit/M6_FINAL_REPORT.md`.
+See `docs/audit/M6_FINAL_REPORT.md` and hybrid readiness in
+`agent_service/readiness/evaluator.py`.

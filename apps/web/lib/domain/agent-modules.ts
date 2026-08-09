@@ -1,4 +1,4 @@
-import type { AgentSpec, GraphNodeType, GraphSpec } from "@/lib/domain/types";
+import type { AgentSpec, GraphNodeType, GraphSpec, ToolBinding } from "@/lib/domain/types";
 
 /**
  * Simplified module model for the "Agent IA" canvas.
@@ -29,6 +29,12 @@ export interface AgentModule {
   toolId?: string;
   /** False when the module still needs credentials or a connection. */
   ready?: boolean;
+  setupStatus?: string;
+  connectionStatus?: string;
+  risk?: string;
+  provider?: string;
+  /** Pipedream / OAuth app slug (e.g. notion, slack). */
+  appId?: string;
 }
 
 export interface AgentModuleMap {
@@ -36,6 +42,13 @@ export interface AgentModuleMap {
   chain: AgentModule[];
   /** Capabilities plugged into the brain, drawn underneath it. */
   attachments: AgentModule[];
+}
+
+export interface BuildAgentModulesOptions {
+  /** Tool ids that already have an enabled binding. */
+  boundToolIds?: Iterable<string>;
+  /** Providers that already have an active connection. */
+  boundProviders?: Iterable<string>;
 }
 
 const CHAIN_KINDS: Partial<Record<GraphNodeType, ModuleKind>> = {
@@ -56,7 +69,128 @@ const ATTACHMENT_KINDS: Partial<Record<GraphNodeType, ModuleKind>> = {
   memory_write: "memory",
 };
 
-function fromGraph(graph: GraphSpec): AgentModuleMap {
+function toolNeedsConnection(toolId: string | undefined, provider?: string, config?: Record<string, unknown>): boolean {
+  if (!toolId) return false;
+  if (config?.connection_required === true) return true;
+  if (provider && provider !== "native" && provider !== "custom_api") return true;
+  const id = toolId.toLowerCase();
+  if (id.startsWith("gmail_") || id.startsWith("calendar_") || id.startsWith("google_docs")) return true;
+  if (id === "gmail" || id === "calendar" || id === "email" || id === "mail") return true;
+  if (id.includes("google_docs") || id.includes("google-docs") || id.includes("docs.")) return true;
+  if (id.includes("google_drive") || id.includes("drive.")) return true;
+  if (id.startsWith("pd:") || id.startsWith("pipedream:")) return true;
+  return false;
+}
+
+function inferProvider(toolId: string | undefined, provider?: string): string | undefined {
+  if (!toolId) return provider;
+  const id = toolId.toLowerCase();
+  // Native Google tools still authenticate via the Google connection.
+  if (
+    id.startsWith("gmail_") ||
+    id.startsWith("calendar_") ||
+    id.startsWith("google_docs") ||
+    id === "gmail" ||
+    id === "calendar" ||
+    id === "email" ||
+    id === "mail"
+  ) {
+    return "google";
+  }
+  // Docs / Drive and marketplace apps go through Pipedream Connect.
+  if (
+    id.startsWith("pd:") ||
+    id.startsWith("pipedream:") ||
+    id.includes("pipedream") ||
+    id.includes("google_docs") ||
+    id.includes("google-docs") ||
+    id.includes("google_drive")
+  ) {
+    return provider && provider !== "native" ? provider : "pipedream";
+  }
+  if (provider) return provider;
+  return "native";
+}
+
+function bindingLookup(spec: AgentSpec | null | undefined): Map<string, ToolBinding> {
+  const map = new Map<string, ToolBinding>();
+  for (const b of spec?.toolBindings ?? []) {
+    map.set(b.toolId, b);
+  }
+  return map;
+}
+
+function enrichToolModule(
+  module: AgentModule,
+  bindings: Map<string, ToolBinding>,
+  boundToolIds: Set<string>,
+  boundProviders: Set<string>,
+  nodeConfig?: Record<string, unknown>,
+): AgentModule {
+  const binding = module.toolId ? bindings.get(module.toolId) : undefined;
+  const provider =
+    inferProvider(
+      module.toolId,
+      binding?.provider ?? (typeof nodeConfig?.provider === "string" ? nodeConfig.provider : undefined),
+    ) ?? undefined;
+  const appId =
+    (typeof binding?.appId === "string" ? binding.appId : undefined) ||
+    (typeof nodeConfig?.app_id === "string" ? nodeConfig.app_id : undefined) ||
+    (typeof nodeConfig?.appId === "string" ? nodeConfig.appId : undefined) ||
+    (provider === "pipedream" && module.toolId
+      ? module.toolId.replace(/^pd:/i, "").split("-")[0]
+      : undefined) ||
+    (provider && provider !== "native" && provider !== "pipedream" ? provider : undefined);
+  const needsConnection = toolNeedsConnection(module.toolId, provider, {
+    ...nodeConfig,
+    ...(binding?.config ?? {}),
+    connection_required:
+      nodeConfig?.connection_required ??
+      (binding?.connectionRequirementId ? true : undefined),
+  });
+  const approvalMode = binding?.approvalMode;
+  const risk =
+    typeof nodeConfig?.risk === "string"
+      ? nodeConfig.risk
+      : approvalMode === "always"
+        ? "high"
+        : approvalMode === "conditional"
+          ? "medium"
+          : undefined;
+
+  if (!needsConnection) {
+    return {
+      ...module,
+      provider,
+      appId,
+      ready: true,
+      setupStatus: "ready",
+      connectionStatus: "not_required",
+      risk,
+    };
+  }
+
+  const toolBound = module.toolId ? boundToolIds.has(module.toolId) : false;
+  const providerBound = provider ? boundProviders.has(provider) : false;
+  const connected = toolBound || providerBound;
+
+  return {
+    ...module,
+    provider,
+    appId,
+    ready: connected,
+    setupStatus: connected ? "ready" : "needs_setup",
+    connectionStatus: connected ? "connected" : "needs_setup",
+    risk,
+  };
+}
+
+function fromGraph(
+  graph: GraphSpec,
+  bindings: Map<string, ToolBinding>,
+  boundToolIds: Set<string>,
+  boundProviders: Set<string>,
+): AgentModuleMap {
   const chain: AgentModule[] = [];
   const attachments: AgentModule[] = [];
   const seenAttachments = new Set<string>();
@@ -69,45 +203,70 @@ function fromGraph(graph: GraphSpec): AgentModuleMap {
         kind: chainKind,
         label: node.name,
         detail: node.description,
+        ready: true,
+        setupStatus: "ready",
       });
       continue;
     }
     const attachmentKind = ATTACHMENT_KINDS[node.type];
     if (!attachmentKind) continue;
     const toolId =
-      typeof node.config?.tool_id === "string" ? node.config.tool_id : undefined;
+      typeof node.config?.tool_id === "string"
+        ? node.config.tool_id
+        : typeof node.config?.toolId === "string"
+          ? node.config.toolId
+          : undefined;
     // memory_read + memory_write collapse into a single "Memory" chip.
     const key = attachmentKind === "memory" ? "memory" : (toolId ?? node.id);
     if (seenAttachments.has(key)) continue;
     seenAttachments.add(key);
-    attachments.push({
+    const base: AgentModule = {
       id: key,
       kind: attachmentKind,
       label: attachmentKind === "memory" ? undefined : node.name,
       detail: node.description,
       toolId,
-    });
+      ready: true,
+      setupStatus: "ready",
+    };
+    attachments.push(
+      attachmentKind === "tool"
+        ? enrichToolModule(base, bindings, boundToolIds, boundProviders, node.config)
+        : base,
+    );
   }
 
   return { chain, attachments };
 }
 
-function fromSpec(spec: AgentSpec): AgentModuleMap {
+function fromSpec(
+  spec: AgentSpec,
+  bindings: Map<string, ToolBinding>,
+  boundToolIds: Set<string>,
+  boundProviders: Set<string>,
+): AgentModuleMap {
   const chain: AgentModule[] = [
-    { id: "input", kind: "trigger" },
-    { id: "brain", kind: "brain", detail: spec.modelProfile.profile },
-    { id: "output", kind: "output", detail: spec.output.format },
+    { id: "input", kind: "trigger", ready: true, setupStatus: "ready" },
+    { id: "brain", kind: "brain", detail: spec.modelProfile.profile, ready: true, setupStatus: "ready" },
+    { id: "output", kind: "output", detail: spec.output.format, ready: true, setupStatus: "ready" },
   ];
 
   const attachments: AgentModule[] = spec.tools
     .filter((tool) => tool.enabled)
-    .map((tool) => ({ id: tool.tool, kind: "tool" as const, toolId: tool.tool }));
+    .map((tool) =>
+      enrichToolModule(
+        { id: tool.tool, kind: "tool" as const, toolId: tool.tool },
+        bindings,
+        boundToolIds,
+        boundProviders,
+      ),
+    );
 
   if (spec.knowledge.enabled) {
-    attachments.push({ id: "knowledge", kind: "knowledge" });
+    attachments.push({ id: "knowledge", kind: "knowledge", ready: true, setupStatus: "ready" });
   }
   if (spec.memory.conversationEnabled ?? spec.memory.conversationWindow > 0) {
-    attachments.push({ id: "memory", kind: "memory" });
+    attachments.push({ id: "memory", kind: "memory", ready: true, setupStatus: "ready" });
   }
 
   return { chain, attachments };
@@ -120,9 +279,14 @@ function fromSpec(spec: AgentSpec): AgentModuleMap {
 export function buildAgentModules(
   graph: GraphSpec | null | undefined,
   spec: AgentSpec | null | undefined,
+  options?: BuildAgentModulesOptions,
 ): AgentModuleMap {
+  const boundToolIds = new Set(options?.boundToolIds ?? []);
+  const boundProviders = new Set(options?.boundProviders ?? []);
+  const bindings = bindingLookup(spec);
+
   if (graph && graph.nodes.length > 0) {
-    const fromCompiled = fromGraph(graph);
+    const fromCompiled = fromGraph(graph, bindings, boundToolIds, boundProviders);
     if (fromCompiled.chain.length > 0) {
       // The model node is always shown as a capability of the brain, like n8n.
       const profile = spec?.modelProfile.profile;
@@ -130,16 +294,20 @@ export function buildAgentModules(
         id: "model",
         kind: "model",
         detail: profile,
+        ready: true,
+        setupStatus: "ready",
       });
       return fromCompiled;
     }
   }
   if (spec) {
-    const derived = fromSpec(spec);
+    const derived = fromSpec(spec, bindings, boundToolIds, boundProviders);
     derived.attachments.unshift({
       id: "model",
       kind: "model",
       detail: spec.modelProfile.profile,
+      ready: true,
+      setupStatus: "ready",
     });
     return derived;
   }
