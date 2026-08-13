@@ -35,6 +35,35 @@ import { consumePendingPrompt, consumePrefillDraft } from "@/lib/pending-prompt"
 import { cn } from "@/lib/utils";
 import type { BuilderOperation } from "@/components/builder/builder-working-panel";
 
+function humanizeProblemText(raw: string): string {
+  const text = raw.trim();
+  const lower = text.toLowerCase();
+  if (
+    lower.includes("agent connection binding") ||
+    lower.includes("required agent connection")
+  ) {
+    return "Connect the required account so this agent can use its tools.";
+  }
+  if (lower.startsWith("missing connection:")) {
+    const label = text.split(":").slice(1).join(":").trim() || "an app";
+    return `Connect your ${label} account to continue.`;
+  }
+  if (lower.includes("unresolved tools")) {
+    return text.replace(/Unresolved tools:/i, "Some tools still need to be set up:");
+  }
+  if (lower.includes("agentspec")) {
+    return "The agent configuration needs a small fix.";
+  }
+  if (lower.includes("binding never") || lower.includes("approval policy")) {
+    return "Some tools can make changes without asking you first — review approvals.";
+  }
+  if (lower.includes("incomplete setup:")) {
+    const label = text.split(":").slice(1).join(":").trim() || "a tool";
+    return `Finish setup for ${label}.`;
+  }
+  return text;
+}
+
 function MessageActions({
   actions,
   agentId,
@@ -59,7 +88,7 @@ function MessageActions({
 
   const problemList =
     problems && problems.length > 0
-      ? problems
+      ? problems.map(humanizeProblemText)
       : [t("actions.problemsDetectedFallback")];
 
   return (
@@ -133,7 +162,10 @@ function BuilderBubble({
   message: BuilderMessage;
   agentId: string;
   onFix: () => void;
-  onFormSubmitted?: (requestId: string) => void;
+  onFormSubmitted?: (
+    requestId: string,
+    opts?: { kind?: "connection" | "form"; runId?: string },
+  ) => void;
   onSuggestion?: (prompt: string) => void;
   resolvedFormIds: Set<string>;
   /** True when a later message exists — the user already answered this form. */
@@ -178,7 +210,22 @@ function BuilderBubble({
   } else if (formLocked && contentKey === "builder:secrets.prompt") {
     content = t("builder:secrets.formClosed");
   } else if (contentKey) {
-    content = t(contentKey, { defaultValue: contentKey.replace(/^builder:/, "") });
+    // Never show raw keys like "connection.prompt" to users.
+    const friendlyFallback: Record<string, string> = {
+      "builder:connection.prompt":
+        "Connect the account(s) below so I can finish building your agent.",
+      "builder:connection.required":
+        "An account connection is still needed before we can continue.",
+      "builder:identity.prompt": "Before I build your agent, tell me how it should introduce itself.",
+      "builder:capabilities.prompt": "Almost there. Tell me how this agent should work.",
+      "builder:secrets.prompt": "Add an AI provider key so your agent can think.",
+      "builder:questions.prompt": "A few quick questions so I build the right agent.",
+    };
+    content = t(contentKey, {
+      defaultValue:
+        friendlyFallback[contentKey] ??
+        "Continuing with your agent…",
+    });
   } else {
     content = message.content;
   }
@@ -375,24 +422,45 @@ function BuilderBubble({
             ) : null}
 
             {showForms && message.uiComponent?.type === "connection_form" ? (
-              <div className="mt-3">
-                <IntegrationConnectionCard
-                  agentId={agentId}
-                  provider={
-                    message.uiComponent.fields.find((f) => f.key === "provider")?.suggested_value ||
-                    "google"
-                  }
-                  appId={
-                    message.uiComponent.fields.find((f) => f.key === "app_id" || f.key === "appId")
-                      ?.suggested_value
-                  }
-                  toolIds={message.uiComponent.fields
-                    .filter((f) => f.key === "tool_id" || f.key === "toolId" || f.key === "tool_ids")
-                    .map((f) => f.suggested_value)
-                    .filter((v): v is string => Boolean(v))}
-                  status="needs_setup"
-                  onConnected={() => onFormSubmitted?.(formRequestId ?? "")}
-                />
+              <div className="mt-3 space-y-3">
+                {(message.uiComponent.connectionRequirements &&
+                message.uiComponent.connectionRequirements.length > 0
+                  ? message.uiComponent.connectionRequirements
+                  : [
+                      {
+                        provider:
+                          message.uiComponent.fields.find((f) => f.key === "provider")
+                            ?.suggested_value || "google",
+                        appId: message.uiComponent.fields.find(
+                          (f) => f.key === "app_id" || f.key === "appId",
+                        )?.suggested_value,
+                        toolIds: message.uiComponent.fields
+                          .filter(
+                            (f) =>
+                              f.key === "tool_id" ||
+                              f.key === "toolId" ||
+                              f.key === "tool_ids",
+                          )
+                          .map((f) => f.suggested_value)
+                          .filter((v): v is string => Boolean(v)),
+                      },
+                    ]
+                ).map((req) => (
+                  <IntegrationConnectionCard
+                    key={`${req.provider}:${req.appId ?? ""}`}
+                    agentId={agentId}
+                    provider={req.provider || "google"}
+                    appId={req.appId}
+                    toolIds={req.toolIds}
+                    status="needs_setup"
+                    onConnected={() =>
+                      onFormSubmitted?.(formRequestId ?? "", {
+                        kind: "connection",
+                        runId: message.interruptRunId ?? undefined,
+                      })
+                    }
+                  />
+                ))}
               </div>
             ) : null}
 
@@ -402,7 +470,12 @@ function BuilderBubble({
                   agentId={agentId}
                   uiComponent={message.uiComponent}
                   connectionStatus="needs_setup"
-                  onConnected={() => onFormSubmitted?.(formRequestId ?? "")}
+                  onConnected={() =>
+                    onFormSubmitted?.(formRequestId ?? "", {
+                      kind: "connection",
+                      runId: message.interruptRunId ?? undefined,
+                    })
+                  }
                 />
               </div>
             ) : null}
@@ -612,75 +685,6 @@ export function BuildView({ agentId }: { agentId: string }) {
       workInFlight ||
       (busy && !lastMessage?.uiComponent));
 
-  // #region agent log
-  useEffect(() => {
-    const lastCard = lastMessage?.card ?? null;
-    const readyVisible = visibleMessages.some((m) => m.card === "ready");
-    const progressVisible = visibleMessages.some((m) => m.card === "build_progress");
-    const conflict =
-      readyVisible &&
-      (showLocalWorking ||
-        composerBusy ||
-        busy ||
-        Boolean(liveProgress) ||
-        activityLines.some((l) => l.active));
-    if (!conflict && lastCard !== "ready") return;
-    fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "a17c1f",
-      },
-      body: JSON.stringify({
-        sessionId: "a17c1f",
-        runId: "post-fix",
-        hypothesisId: "A,C,D",
-        location: "build-view.tsx:ready-vs-busy",
-        message: "Ready vs in-flight UI state",
-        data: {
-          agentId,
-          agentStatus: agent?.status ?? null,
-          lastCard,
-          readyVisible,
-          progressVisible,
-          showLocalWorking,
-          composerBusy,
-          busy,
-          awaitingReply,
-          pendingToken: pendingToken !== null,
-          sendPending: sendMessage.isPending,
-          activeRunId,
-          activityEnabled,
-          liveProgressRunning: Boolean(liveProgress),
-          activityActive: activityLines.filter((l) => l.active).map((l) => l.text).slice(-5),
-          activityTail: activityLines.slice(-6).map((l) => l.text),
-          visibleCards: visibleMessages.map((m) => m.card ?? m.role).slice(-8),
-          conflict:
-            readyVisible &&
-            (showLocalWorking || composerBusy || activityLines.some((l) => l.active)),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }, [
-    agentId,
-    agent?.status,
-    lastMessage?.card,
-    lastMessage?.id,
-    visibleMessages,
-    showLocalWorking,
-    composerBusy,
-    busy,
-    awaitingReply,
-    pendingToken,
-    sendMessage.isPending,
-    activeRunId,
-    activityEnabled,
-    liveProgress,
-    activityLines,
-  ]);
-  // #endregion
-
   const pendingReveal = visibleMessages.filter(
     (m) =>
       m.role === "assistant" &&
@@ -873,16 +877,35 @@ export function BuildView({ agentId }: { agentId: string }) {
     }
   }, [messages, baselineIds]);
 
-  const refreshAfterForm = (requestId: string) => {
+  const refreshAfterForm = (
+    requestId: string,
+    opts?: { kind?: "connection" | "form"; runId?: string },
+  ) => {
     if (requestId) {
       setResolvedFormIds((prev) => new Set(prev).add(requestId));
     }
+    setUserStopped(false);
     // Same contract as handleSend: pair awaitingReply with a token so the clear
     // effect can distinguish this continuation from older thread messages.
     setPendingToken(Date.now());
     setAwaitingReply(true);
     void queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
     void queryClient.invalidateQueries({ queryKey: ["agents"] });
+    if (opts?.kind === "connection") {
+      void import("@/lib/actions/builder").then(({ resumeBuilderConnection }) =>
+        resumeBuilderConnection({
+          agentId,
+          runId: opts.runId,
+        })
+          .then(() => {
+            void queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
+            void queryClient.invalidateQueries({ queryKey: ["agents"] });
+          })
+          .catch(() => {
+            /* keep polling; user can retry Connect */
+          }),
+      );
+    }
   };
 
   const examples = [
@@ -966,7 +989,9 @@ export function BuildView({ agentId }: { agentId: string }) {
                     }
                     onFix={() => {
                       if (fixedMessageIds.has(message.id)) return;
-                      const problems = (message.detectedProblems ?? []).filter(Boolean);
+                      const problems = (message.detectedProblems ?? [])
+                        .filter(Boolean)
+                        .map(humanizeProblemText);
                       const prompt =
                         problems.length > 0
                           ? t("builder:actions.fixPrompt", {
@@ -980,8 +1005,8 @@ export function BuildView({ agentId }: { agentId: string }) {
                       });
                       void handleSend(prompt);
                     }}
-                    onFormSubmitted={(requestId) => {
-                      refreshAfterForm(requestId);
+                    onFormSubmitted={(requestId, opts) => {
+                      refreshAfterForm(requestId, opts);
                     }}
                     onSuggestion={(prompt) => setPrefill(prompt)}
                   />

@@ -231,7 +231,17 @@ class ConnectionManager:
                     user_id=user_id,
                     agent_id=agent_id,
                     connection_id=connection["id"],
-                    tool_ids=["gmail_list", "gmail_read", "gmail_send", "calendar_list"],
+                    tool_ids=[
+                        "gmail_list",
+                        "gmail_read",
+                        "gmail_send",
+                        "gmail_create_draft",
+                        "gmail_send_message",
+                        "calendar_list",
+                        "calendar_create_event",
+                        "google_docs_create",
+                        "google_docs_append",
+                    ],
                 )
 
         return {
@@ -239,6 +249,7 @@ class ConnectionManager:
             "provider": "google",
             "account_email": email,
             "status": "active",
+            "agent_id": agent_id,
             # never include tokens
         }
 
@@ -333,7 +344,10 @@ class ConnectionManager:
                 "/user_connections",
                 params={
                     "user_id": f"eq.{user_id}",
-                    "select": "id,provider,status,account_email,account_label,scopes,token_expires_at,updated_at",
+                    "select": (
+                        "id,provider,status,account_email,account_label,scopes,"
+                        "token_expires_at,updated_at,external_account_id,provider_metadata"
+                    ),
                     "order": "updated_at.desc",
                 },
             )

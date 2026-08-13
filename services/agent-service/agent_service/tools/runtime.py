@@ -196,7 +196,7 @@ async def execute_tool(
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Resolve via ProviderRegistry when possible; fall back to native execution."""
-    context = context or {}
+    context = dict(context or {})
     try:
         from agent_service.integrations.registry import get_provider_registry
 
@@ -205,10 +205,52 @@ async def execute_tool(
         if ref is not None:
             provider = registry.get_provider(ref.provider)
             if provider is not None:
-                # Native provider calls back into execute_native_tool — avoid recursion
-                # by short-circuiting native here.
                 if ref.provider == "native":
                     return await execute_native_tool(tool_id, args, context=context)
+                if ref.provider == "pipedream":
+                    user_id = str(context.get("user_id") or "")
+                    agent_id = str(context.get("agent_id") or "")
+                    if user_id and agent_id and not context.get("auth_provision_id"):
+                        from agent_service.integrations.pipedream.accounts import (
+                            load_agent_tool_config,
+                            resolve_pipedream_auth_for_tool,
+                        )
+
+                        auth = await resolve_pipedream_auth_for_tool(
+                            user_id=user_id,
+                            agent_id=agent_id,
+                            tool_id=tool_id,
+                            app_id=ref.provider_app_id,
+                        )
+                        if auth:
+                            context["auth_provision_id"] = auth["auth_provision_id"]
+                            context["connection_id"] = auth.get("connection_id")
+                        if "tool_config" not in context:
+                            context["tool_config"] = await load_agent_tool_config(
+                                user_id=user_id, agent_id=agent_id, tool_id=tool_id
+                            )
+                    # Pipedream side-effects require approval unless already approved.
+                    if _requires_pipedream_approval(tool_id, ref) and not _is_approved(
+                        tool_id, context
+                    ):
+                        return {
+                            "error": "APPROVAL_REQUIRED",
+                            "approval_required": True,
+                            "tool_id": tool_id,
+                            "provider": "pipedream",
+                            "app_id": ref.provider_app_id,
+                            "message": "This action needs your approval before it runs.",
+                            "preview_args": {
+                                k: v
+                                for k, v in (args or {}).items()
+                                if k
+                                not in {
+                                    "auth_provision_id",
+                                    "authProvisionId",
+                                    "configured_props",
+                                }
+                            },
+                        }
                 return await provider.execute_tool(ref, args, context=context)
     except ToolError:
         raise
@@ -216,6 +258,30 @@ async def execute_tool(
         logger.debug("registry_execute_fallback tool_id=%s", tool_id, exc_info=True)
 
     return await execute_native_tool(tool_id, args, context=context)
+
+
+def _requires_pipedream_approval(tool_id: str, ref: Any) -> bool:
+    if tool_id in SIDE_EFFECT_TOOLS:
+        return True
+    # Default: Pipedream actions are side-effectful unless clearly read-only.
+    name = (getattr(ref, "provider_tool_id", None) or tool_id).lower()
+    read_hints = ("list", "get", "find", "search", "retrieve", "read", "fetch")
+    write_hints = (
+        "send",
+        "create",
+        "update",
+        "delete",
+        "post",
+        "write",
+        "insert",
+        "charge",
+        "refund",
+    )
+    if any(h in name for h in write_hints):
+        return True
+    if any(h in name for h in read_hints):
+        return False
+    return True
 
 
 async def _execute_google_tool(

@@ -7,7 +7,11 @@ import time
 from typing import Any
 
 from agent_service.integrations.normalize import CatalogTool, ToolRef
-from agent_service.integrations.pipedream.client import PipedreamClient
+from agent_service.integrations.pipedream.client import PipedreamClient, PipedreamError
+from agent_service.integrations.pipedream.schema import (
+    build_configured_props,
+    normalize_configurable_props,
+)
 from agent_service.integrations.risk import enrich_tool_risk_fields
 
 logger = logging.getLogger(__name__)
@@ -22,6 +26,8 @@ class PipedreamToolProvider:
         self._client = client or PipedreamClient()
         self._tool_cache: dict[str, tuple[float, CatalogTool]] = {}
         self._search_cache: dict[str, tuple[float, list[CatalogTool]]] = {}
+        self._schema_cache: dict[str, tuple[float, Any]] = {}
+        self._component_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
     def _cache_get(self, cache: dict[str, tuple[float, Any]], key: str) -> Any | None:
         hit = cache.get(key)
@@ -36,7 +42,9 @@ class PipedreamToolProvider:
     def _cache_set(self, cache: dict[str, tuple[float, Any]], key: str, value: Any) -> None:
         cache[key] = (time.time() + _CACHE_TTL_SECONDS, value)
 
-    def _action_to_catalog(self, action: dict[str, Any]) -> CatalogTool:
+    def _action_to_catalog(
+        self, action: dict[str, Any], *, input_schema: dict[str, Any] | None = None
+    ) -> CatalogTool:
         action_id = str(action.get("action_id") or action.get("id") or "")
         name = str(action.get("name") or action_id)
         summary = str(action.get("summary") or "")
@@ -59,10 +67,64 @@ class PipedreamToolProvider:
             approval_mode=str(risk_fields["approval_mode"]),
             keywords=[w for w in name.lower().split() if w],
             categories=["pipedream", str(app_id)] if app_id else ["pipedream"],
-            input_schema={"type": "object", "properties": {}, "additionalProperties": True},
+            input_schema=input_schema
+            or {"type": "object", "properties": {}, "additionalProperties": False},
             version=str(action.get("version")) if action.get("version") else None,
             metadata={"source": "pipedream"},
         )
+
+    @staticmethod
+    def _looks_like_component_key(action_id: str) -> bool:
+        """Pipedream component keys are typically `app-action` (contain a hyphen)."""
+        key = action_id.removeprefix("pd:").strip()
+        if not key or " " in key:
+            return False
+        return "-" in key
+
+    @staticmethod
+    def _valid_component(component: dict[str, Any], *, expected_key: str) -> bool:
+        key = str(component.get("key") or component.get("name") or "").strip()
+        if not key:
+            return False
+        expected = expected_key.removeprefix("pd:")
+        # Reject empty / unrelated payloads the API sometimes returns for unknown ids.
+        if key != expected and not key.endswith(expected) and expected not in key:
+            # Allow when API returns canonical key that differs only by prefix/version.
+            if str(component.get("name") or "") and (
+                component.get("configurable_props") is not None
+                or component.get("props") is not None
+            ):
+                return key.startswith(expected.split("-")[0])
+            return False
+        return True
+
+    async def _load_component(self, action_id: str) -> dict[str, Any] | None:
+        if not self._looks_like_component_key(action_id):
+            return None
+        cached = self._cache_get(self._component_cache, action_id)
+        if cached is not None:
+            return cached
+        try:
+            component = await self._client.get_component(action_id)
+        except Exception:  # noqa: BLE001
+            return None
+        if isinstance(component, dict) and self._valid_component(component, expected_key=action_id):
+            self._cache_set(self._component_cache, action_id, component)
+            return component
+        return None
+
+    async def get_normalized_schema(self, tool_id: str):
+        cached = self._cache_get(self._schema_cache, tool_id)
+        if cached is not None:
+            return cached
+        key = tool_id.removeprefix("pd:")
+        component = await self._load_component(key)
+        schema = normalize_configurable_props(
+            component, tool_id=tool_id if tool_id.startswith("pd:") else f"pd:{key}", action_id=key
+        )
+        self._cache_set(self._schema_cache, tool_id, schema)
+        self._cache_set(self._schema_cache, f"pd:{key}", schema)
+        return schema
 
     async def search_apps(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]:
         return await self._client.search_apps(query, limit=limit)
@@ -86,47 +148,51 @@ class PipedreamToolProvider:
         if cached is not None:
             return cached
         key = tool_id.removeprefix("pd:")
-        component = await self._client.get_component(key)
+        if not self._looks_like_component_key(key) and not tool_id.startswith("pd:"):
+            return None
+        component = await self._load_component(key)
         if not component:
-            # Last resort: search by id fragment.
+            if not self._looks_like_component_key(key):
+                return None
             matches = await self.search_tools(key, limit=5)
             for match in matches:
                 if match.tool_id == tool_id or match.provider_tool_id == key:
                     return match
             return None
+        schema = normalize_configurable_props(
+            component,
+            tool_id=tool_id if tool_id.startswith("pd:") else f"pd:{key}",
+            action_id=str(component.get("key") or key),
+        )
         action = {
             "action_id": component.get("key") or key,
             "name": component.get("name") or key,
             "summary": component.get("description") or "",
-            "app_id": (component.get("app") or {}).get("name_slug")
-            if isinstance(component.get("app"), dict)
-            else component.get("app"),
+            "app_id": schema.app_id,
             "version": component.get("version"),
         }
-        tool = self._action_to_catalog(action)
-        # Prefer caller tool_id if already namespaced.
+        tool = self._action_to_catalog(action, input_schema=schema.llm_json_schema())
         if tool_id.startswith("pd:"):
             tool.tool_id = tool_id
         self._cache_set(self._tool_cache, tool.tool_id, tool)
+        self._cache_set(self._schema_cache, tool.tool_id, schema)
         return tool
 
     async def get_tool_schema(self, tool_id: str) -> dict[str, Any] | None:
         tool = await self.get_tool(tool_id)
         if not tool:
             return None
-        key = (tool.provider_tool_id or tool_id).removeprefix("pd:")
-        component = await self._client.get_component(key)
-        props = {}
-        if isinstance(component, dict):
-            props = component.get("configurable_props") or component.get("props") or {}
+        schema = await self.get_normalized_schema(tool.tool_id)
         return {
             "tool_id": tool.tool_id,
-            "input_schema": {
-                "type": "object",
-                "properties": props if isinstance(props, dict) else {},
-                "additionalProperties": True,
-            },
-            "version": tool.version,
+            "provider": "pipedream",
+            "provider_tool_id": tool.provider_tool_id,
+            "provider_app_id": tool.provider_app_id or schema.app_id,
+            "auth_prop_name": schema.auth_prop_name,
+            "version": schema.version or tool.version,
+            "input_schema": schema.llm_json_schema(),
+            "static_schema": schema.static_config_schema(),
+            "param_kinds": {p.name: p.kind for p in schema.props},
         }
 
     async def get_auth_requirement(self, tool_id: str) -> dict[str, Any]:
@@ -141,13 +207,7 @@ class PipedreamToolProvider:
     async def list_user_connections(
         self, *, user_id: str, app_id: str | None = None
     ) -> list[dict[str, Any]]:
-        accounts = await self._client.list_accounts(external_user_id=user_id)
-        if app_id:
-            return [
-                a
-                for a in accounts
-                if str(a.get("app") or a.get("app_id") or "") == app_id
-            ]
+        accounts = await self._client.list_accounts(external_user_id=user_id, app=app_id)
         return accounts
 
     async def start_connection(
@@ -173,12 +233,47 @@ class PipedreamToolProvider:
     async def configure_tool(
         self, tool_ref: ToolRef, config: dict[str, Any]
     ) -> dict[str, Any]:
-        return {"tool_id": tool_ref.tool_id, "config": config, "ok": True}
+        schema = await self.get_normalized_schema(tool_ref.tool_id)
+        allowed = {p.name for p in schema.props if p.kind in {"static", "runtime"}}
+        cleaned = {k: v for k, v in config.items() if k in allowed}
+        return {"tool_id": tool_ref.tool_id, "config": cleaned, "ok": True}
 
     async def get_dynamic_options(
         self, tool_ref: ToolRef, field: str, *, context: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
-        return []
+        context = context or {}
+        user_id = str(context.get("user_id") or "")
+        auth_provision_id = context.get("auth_provision_id")
+        static_config = context.get("configured_props") or context.get("config") or {}
+        action_id = (tool_ref.provider_tool_id or tool_ref.tool_id).removeprefix("pd:")
+        schema = await self.get_normalized_schema(tool_ref.tool_id)
+        configured = build_configured_props(
+            schema,
+            auth_provision_id=str(auth_provision_id) if auth_provision_id else None,
+            static_config=dict(static_config) if isinstance(static_config, dict) else {},
+            runtime_args={},
+        )
+        try:
+            rows = await self._client.configure_prop(
+                action_id=action_id,
+                prop_name=field,
+                external_user_id=user_id,
+                configured_props=configured,
+            )
+        except PipedreamError as exc:
+            logger.warning("pipedream_configure_failed field=%s err=%s", field, exc)
+            return []
+        options: list[dict[str, Any]] = []
+        for row in rows:
+            if isinstance(row, dict):
+                value = row.get("value") if "value" in row else row.get("id")
+                label = row.get("label") or row.get("name") or value
+                if value is None:
+                    continue
+                options.append({"value": value, "label": label})
+            else:
+                options.append({"value": row, "label": str(row)})
+        return options
 
     async def execute_tool(
         self,
@@ -191,27 +286,51 @@ class PipedreamToolProvider:
         user_id = str(context.get("user_id") or "")
         if not user_id:
             return {"error": "TOOL_CONTEXT_MISSING", "message": "user_id required"}
+
         action_id = tool_ref.provider_tool_id or tool_ref.tool_id.removeprefix("pd:")
-        payload = dict(args)
-        auth_provision_id = None
-        if isinstance(payload.get("auth_provision_id"), str):
-            auth_provision_id = str(payload.pop("auth_provision_id"))
-        configured = payload
-        if isinstance(payload.get("configured_props"), dict):
-            configured = dict(payload["configured_props"])
-        return await self._client.run_action(
+        schema = await self.get_normalized_schema(tool_ref.tool_id)
+
+        # Server-resolved account — never trust model args for auth.
+        auth_provision_id = context.get("auth_provision_id") or context.get("external_account_id")
+        if not auth_provision_id:
+            return {
+                "error": "CONNECTION_REQUIRED",
+                "provider": "pipedream",
+                "app_id": schema.app_id or tool_ref.provider_app_id,
+                "tool_id": tool_ref.tool_id,
+                "message": "Connect this app before the agent can use it.",
+            }
+
+        static_config = context.get("tool_config") or context.get("static_config") or {}
+        runtime_args = dict(args or {})
+        if isinstance(runtime_args.get("configured_props"), dict):
+            # Flatten accidental nesting from older clients
+            nested = dict(runtime_args.pop("configured_props"))
+            runtime_args = {**nested, **runtime_args}
+
+        configured = build_configured_props(
+            schema,
+            auth_provision_id=str(auth_provision_id),
+            static_config=dict(static_config) if isinstance(static_config, dict) else {},
+            runtime_args=runtime_args,
+        )
+
+        result = await self._client.run_action(
             action_id=action_id,
             external_user_id=user_id,
             configured_props=configured,
-            auth_provision_id=auth_provision_id,
+            version=schema.version,
         )
+        if isinstance(result, dict) and result.get("error"):
+            return result
+        return {"ok": True, "provider": "pipedream", "tool_id": tool_ref.tool_id, "result": result}
 
     async def health_check(self) -> dict[str, Any]:
         configured = self._client.configured()
         if not configured:
             return {
                 "provider": self.name,
-                "ok": True,
+                "ok": False,
                 "degraded": True,
                 "message": "Pipedream credentials not configured.",
             }

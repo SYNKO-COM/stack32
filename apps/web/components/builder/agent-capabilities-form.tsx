@@ -52,6 +52,9 @@ export function AgentCapabilitiesForm({
     if (submitting || completed) return;
     setSubmitting(true);
     setErrorKey(null);
+    // Hide the form immediately and let BuildView show live activity + Stop.
+    setCompleted(true);
+    onSubmitted?.();
     try {
       await submitBuilderCapabilities({
         runId,
@@ -61,11 +64,9 @@ export function AgentCapabilitiesForm({
         scheduleHourly,
         contextNotes: contextNotes.trim(),
       });
-      setCompleted(true);
-      onSubmitted?.();
     } catch (err) {
+      setCompleted(false);
       setErrorKey(agentServiceErrorKey(err));
-    } finally {
       setSubmitting(false);
     }
   };

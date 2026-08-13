@@ -133,12 +133,12 @@
     "testAgent": "Essayer l'agent",
     "viewStructure": "Voir la structure",
     "fixAutomatically": "Corriger pour moi",
-    "fixAutomaticallyHint": "Cliquer sur le bouton pour pouvoir corriger automatiquement les erreurs que Stack32 a trouvé.",
+    "fixAutomaticallyHint": "Cliquez pour laisser Stack32 corriger ce qu'il a trouvé.",
     "fixResolved": "Résolu",
-    "fixPrompt": "Corrige ces problèmes détectés (fix) :\n{{problems}}",
-    "fixPromptEmpty": "Corrige les problèmes détectés (fix) et rends l'agent prêt.",
-    "problemsDetectedTitle": "Problèmes détectés",
-    "problemsDetectedFallback": "Stack32 a détecté un souci qui nécessite une correction."
+    "fixPrompt": "Merci de corriger ces points :\n{{problems}}",
+    "fixPromptEmpty": "Il reste un petit réglage avant que l'agent soit prêt.",
+    "problemsDetectedTitle": "Petit réglage nécessaire",
+    "problemsDetectedFallback": "Stack32 a trouvé quelque chose à ajuster avant que votre agent soit prêt."
   },
   "mock": {
     "successResponse": "Votre agent est prêt à essayer. J'ai défini son objectif, choisi les bonnes capacités et lancé un premier test. Tout a l'air bon. Ouvrez Live pour lui parler, ou Structure pour voir comment il fonctionne.",
@@ -284,6 +284,7 @@
     "needsSetup": "À connecter",
     "errorStatus": "Erreur",
     "connect": "Connecter {{provider}}",
+    "connectApp": "Connecter une app",
     "connectGoogle": "Connecter mon Google",
     "disconnect": "Déconnecter",
     "change": "Changer de compte",
@@ -301,13 +302,17 @@
     "connectionStatus": "Connexion",
     "providers": {
       "google": "Google",
-      "pipedream": "Apps connectées",
+      "pipedream": "Apps",
       "native": "Intégré",
-      "custom_api": "API personnalisée"
+      "custom_api": "API personnalisée",
+      "slack": "Slack",
+      "slack_v2": "Slack",
+      "notion": "Notion",
+      "stripe": "Stripe"
     },
     "hints": {
       "google": "Connectez votre compte Google pour les e-mails, l'agenda et Docs.",
-      "pipedream": "Connectez n'importe quelle app (Notion, Slack, Stripe, Sheets… — 3000+ via Pipedream). Vos identifiants restent chez le fournisseur.",
+      "pipedream": "Connectez n'importe quelle app (Notion, Slack, Stripe, Sheets…). Vos identifiants restent chez le fournisseur.",
       "native": "Déjà inclus — aucun compte externe requis.",
       "custom_api": "Configurez une connexion API pour cet outil."
     },
@@ -316,6 +321,11 @@
       "always": "Toujours me demander",
       "conditional": "Demander si c'est risqué"
     }
+  },
+  "connection": {
+    "prompt": "Pour terminer, connectez le(s) compte(s) ci-dessous. Une fois tout lié, je continue et je vous confirme quand votre agent est prêt.",
+    "required": "Il faut encore connecter un compte avant de pouvoir continuer.",
+    "formClosed": "Merci — connexion enregistrée. Je continue…"
   },
   "errors": {
     "buildFailed": "La construction s'est arrêtée.",

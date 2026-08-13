@@ -1,29 +1,55 @@
-"""Hybrid integrations API — connect tokens, provider health, tool search."""
+"""Hybrid integrations API — connect tokens, account sync, bindings, tool config."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from agent_service.auth import CurrentUser
+from agent_service.connections.manager import ConnectionManager
+from agent_service.integrations.pipedream.accounts import sync_pipedream_accounts
 from agent_service.integrations.pipedream.client import PipedreamClient
 from agent_service.integrations.registry import get_provider_registry
+from agent_service.supabase_client import get_supabase_admin_client
 
 router = APIRouter(tags=["integrations"])
 
 
 class ConnectTokenRequest(BaseModel):
-    external_user_id: str | None = Field(default=None, max_length=128)
+    """Create a Pipedream Connect token for the authenticated user only."""
+
     app_id: str | None = Field(default=None, max_length=128)
+
+
+class SyncAccountsRequest(BaseModel):
+    app_id: str | None = Field(default=None, max_length=128)
+    agent_id: str | None = Field(default=None)
+    tool_ids: list[str] = Field(default_factory=list)
+    connection_id: str | None = None
+
+
+class BindConnectionRequest(BaseModel):
+    agent_id: str
+    connection_id: str
+    tool_ids: list[str] = Field(default_factory=list)
+
+
+class ToolConfigRequest(BaseModel):
+    config: dict[str, Any] = Field(default_factory=dict)
+    connection_id: str | None = None
+    provider_action_id: str | None = None
+    schema_version: str | None = None
 
 
 @router.post("/integrations/connect-token")
 async def create_connect_token(
     body: ConnectTokenRequest, user: CurrentUser
 ) -> dict[str, Any]:
-    external_user_id = (body.external_user_id or user.user_id).strip() or user.user_id
+    # Never trust a client-supplied external_user_id — always the JWT subject.
+    external_user_id = user.user_id
     client = PipedreamClient()
     result = await client.create_connect_token(external_user_id, app_id=body.app_id)
     return {
@@ -31,6 +57,186 @@ async def create_connect_token(
         "app_id": body.app_id,
         "connect": result,
     }
+
+
+@router.post("/integrations/accounts/sync")
+async def sync_accounts(body: SyncAccountsRequest, user: CurrentUser) -> dict[str, Any]:
+    synced = await sync_pipedream_accounts(user_id=user.user_id, app_id=body.app_id)
+    binding = None
+    if body.agent_id and body.tool_ids:
+        conn_id = body.connection_id
+        if not conn_id and synced:
+            # Prefer matching app_id
+            match = next(
+                (s for s in synced if not body.app_id or s.get("app_id") == body.app_id),
+                synced[0],
+            )
+            conn_id = match.get("connection_id")
+        if conn_id:
+            mgr = ConnectionManager()
+            binding = await mgr.bind_connection(
+                user_id=user.user_id,
+                agent_id=body.agent_id,
+                connection_id=str(conn_id),
+                tool_ids=body.tool_ids,
+            )
+    return {"accounts": synced, "binding": binding}
+
+
+@router.post("/integrations/bindings")
+async def create_binding(body: BindConnectionRequest, user: CurrentUser) -> dict[str, Any]:
+    mgr = ConnectionManager()
+    binding = await mgr.bind_connection(
+        user_id=user.user_id,
+        agent_id=body.agent_id,
+        connection_id=body.connection_id,
+        tool_ids=body.tool_ids,
+    )
+    return {"binding": binding}
+
+
+@router.get("/integrations/accounts")
+async def list_integration_accounts(
+    user: CurrentUser,
+    app_id: str | None = Query(default=None, max_length=128),
+) -> dict[str, Any]:
+    mgr = ConnectionManager()
+    conns = await mgr.list_connections(user_id=user.user_id)
+    out = []
+    for c in conns:
+        if c.get("provider") not in {"pipedream", "google"}:
+            continue
+        meta = c.get("provider_metadata") or {}
+        c_app = meta.get("app_id") if isinstance(meta, dict) else None
+        if c.get("provider") == "google":
+            c_app = "google"
+        if app_id and c_app and c_app != app_id and c.get("provider") != app_id:
+            continue
+        out.append(
+            {
+                "connection_id": c.get("id"),
+                "provider": c.get("provider"),
+                "app_id": c_app,
+                "account_email": c.get("account_email") or c.get("account_label"),
+                "status": c.get("status"),
+                "external_account_id": c.get("external_account_id"),
+            }
+        )
+    return {"accounts": out}
+
+
+@router.get("/agents/{agent_id}/tools/{tool_id}/config")
+async def get_tool_config(agent_id: str, tool_id: str, user: CurrentUser) -> dict[str, Any]:
+    async with get_supabase_admin_client() as sb:
+        response = await sb.get(
+            "/agent_tool_configurations",
+            params={
+                "user_id": f"eq.{user.user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "tool_id": f"eq.{tool_id}",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+        rows = response.json() if response.status_code < 400 else []
+    row = rows[0] if rows else None
+    schema = None
+    try:
+        registry = get_provider_registry()
+        pd = registry.get_provider("pipedream")
+        if pd and tool_id.startswith("pd:"):
+            schema = await pd.get_tool_schema(tool_id)
+    except Exception:  # noqa: BLE001
+        schema = None
+    return {"config": row, "schema": schema}
+
+
+@router.put("/agents/{agent_id}/tools/{tool_id}/config")
+async def put_tool_config(
+    agent_id: str, tool_id: str, body: ToolConfigRequest, user: CurrentUser
+) -> dict[str, Any]:
+    now = datetime.now(UTC).isoformat()
+    cleaned = {
+        k: v
+        for k, v in (body.config or {}).items()
+        if k
+        not in {
+            "auth_provision_id",
+            "authProvisionId",
+            "access_token",
+            "refresh_token",
+            "api_key",
+        }
+    }
+    payload = {
+        "user_id": user.user_id,
+        "agent_id": agent_id,
+        "tool_id": tool_id,
+        "connection_id": body.connection_id,
+        "provider": "pipedream" if tool_id.startswith("pd:") else "native",
+        "provider_action_id": body.provider_action_id or tool_id.removeprefix("pd:"),
+        "config": cleaned,
+        "schema_version": body.schema_version,
+        "status": "active",
+        "last_validated_at": now,
+        "updated_at": now,
+    }
+    async with get_supabase_admin_client() as sb:
+        existing = await sb.get(
+            "/agent_tool_configurations",
+            params={
+                "user_id": f"eq.{user.user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "tool_id": f"eq.{tool_id}",
+                "select": "id",
+                "limit": "1",
+            },
+        )
+        rows = existing.json() if existing.status_code < 400 else []
+        if rows:
+            await sb.patch(
+                "/agent_tool_configurations",
+                params={"id": f"eq.{rows[0]['id']}", "user_id": f"eq.{user.user_id}"},
+                json=payload,
+            )
+        else:
+            await sb.post("/agent_tool_configurations", json=payload)
+    return {"ok": True, "config": cleaned}
+
+
+@router.get("/integrations/tools/{tool_id}/options")
+async def tool_dynamic_options(
+    tool_id: str,
+    user: CurrentUser,
+    prop: str = Query(..., max_length=128),
+    agent_id: str | None = Query(default=None),
+) -> dict[str, Any]:
+    registry = get_provider_registry()
+    pd = registry.get_provider("pipedream")
+    if pd is None:
+        return {"options": []}
+    from agent_service.integrations.normalize import ToolRef
+    from agent_service.integrations.pipedream.accounts import (
+        load_agent_tool_config,
+        resolve_pipedream_auth_for_tool,
+    )
+
+    context: dict[str, Any] = {"user_id": user.user_id}
+    if agent_id:
+        auth = await resolve_pipedream_auth_for_tool(
+            user_id=user.user_id, agent_id=agent_id, tool_id=tool_id
+        )
+        if auth:
+            context["auth_provision_id"] = auth["auth_provision_id"]
+        context["config"] = await load_agent_tool_config(
+            user_id=user.user_id, agent_id=agent_id, tool_id=tool_id
+        )
+    options = await pd.get_dynamic_options(
+        ToolRef(tool_id=tool_id, provider="pipedream", provider_tool_id=tool_id.removeprefix("pd:")),
+        prop,
+        context=context,
+    )
+    return {"options": options}
 
 
 @router.get("/integrations/apps/search")

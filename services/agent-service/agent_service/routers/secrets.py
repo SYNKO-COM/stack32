@@ -172,6 +172,44 @@ async def submit_builder_capabilities(
     return result
 
 
+@router.post("/builder/runs/{run_id}/connection")
+async def submit_builder_connection(run_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    """Resume build after the user connected required accounts."""
+    await _guards(user.user_id)
+    orch = BuilderOrchestrator()
+    result = await orch.resume_with_connection(run_id=str(run_id), user_id=user.user_id)
+    if result.get("error") == "BUILDER_INTERRUPTED":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "BUILDER_INTERRUPTED", "message": "Cannot resume this run."},
+        )
+    return result
+
+
+@router.post("/agents/{agent_id}/builder/resume-connection")
+async def resume_builder_connection_for_agent(
+    agent_id: UUID, user: CurrentUser
+) -> dict[str, Any]:
+    """Locate an open connection interrupt for this agent and resume it."""
+    await _guards(user.user_id)
+    db = get_persistence()
+    interrupt = await db.find_open_builder_interrupt(
+        user_id=user.user_id, agent_id=str(agent_id), interrupt_type="connection"
+    )
+    if not interrupt or not interrupt.get("run_id"):
+        return {"status": "noop", "reason": "no_open_connection_interrupt"}
+    orch = BuilderOrchestrator()
+    result = await orch.resume_with_connection(
+        run_id=str(interrupt["run_id"]), user_id=user.user_id
+    )
+    if result.get("error") == "BUILDER_INTERRUPTED":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "BUILDER_INTERRUPTED", "message": "Cannot resume this run."},
+        )
+    return result
+
+
 class BuilderQuestionsResumeRequest(BaseModel):
     answers: dict[str, Any] = Field(default_factory=dict)
 

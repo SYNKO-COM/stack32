@@ -11,7 +11,7 @@ from agent_service.config import get_settings
 from agent_service.gateway.model_gateway import ModelProfile, get_model_gateway
 from agent_service.models.agent_spec import AgentSpec
 from agent_service.runtime.context import load_live_history
-from agent_service.runtime.tool_schema import RuntimeToolCall, schemas_for_tools
+from agent_service.runtime.tool_schema import RuntimeToolCall, async_schemas_for_tools
 from agent_service.supabase_client import Persistence
 from agent_service.tools.runtime import ToolError, execute_tool
 
@@ -169,8 +169,25 @@ async def run_langgraph_agent(
     settings = get_settings()
     gateway = get_model_gateway()
     enabled_tools = [t.tool_id for t in spec.tools if t.enabled]
-    tool_schemas = schemas_for_tools(enabled_tools)
+    tool_configs: dict[str, dict] = {}
+    try:
+        from agent_service.integrations.pipedream.accounts import load_agent_tool_config
+
+        for tid in enabled_tools:
+            if tid.startswith("pd:"):
+                tool_configs[tid] = await load_agent_tool_config(
+                    user_id=user_id, agent_id=agent_id, tool_id=tid
+                )
+    except Exception:  # noqa: BLE001
+        tool_configs = {}
+    tool_schemas = await async_schemas_for_tools(enabled_tools, tool_configs=tool_configs)
     max_loops = min(settings.MAX_LLM_CALLS_PER_RUN, max(1, spec.runtime.max_tool_calls + 1))
+
+    await db.emit_event(
+        run_id,
+        "runtime.input.received",
+        {"mapping_key": "live.status.input", "chars": len(content or "")},
+    )
 
     history = await load_live_history(
         db=db,
@@ -216,6 +233,11 @@ async def run_langgraph_agent(
         # Our gateway returns a compact {call_id,tool_id,arguments} shape — normalize
         # the conversation before every model call.
         outbound = [_to_provider_message(m) for m in state["messages"]]
+        await db.emit_event(
+            run_id,
+            "runtime.model.started",
+            {"mapping_key": "live.status.model"},
+        )
         result = await gateway.complete(
             profile=profile,
             messages=outbound,
@@ -240,6 +262,11 @@ async def run_langgraph_agent(
         }
         if not tool_calls:
             out["answer"] = content_text or ""
+            await db.emit_event(
+                run_id,
+                "runtime.output.completed",
+                {"mapping_key": "live.status.output"},
+            )
         return out
 
     async def tools_node(state: AgentState) -> dict[str, Any]:
@@ -306,10 +333,26 @@ async def run_langgraph_agent(
                 )
             else:
                 try:
+                    provider_hint = (
+                        "pipedream"
+                        if call.tool_id.startswith("pd:")
+                        else "native"
+                    )
+                    app_hint = None
+                    for t in spec.tools:
+                        if t.tool_id == call.tool_id:
+                            app_hint = t.app_id
+                            provider_hint = t.provider or provider_hint
+                            break
                     await db.emit_event(
                         run_id,
                         "runtime.tool.started",
-                        {"mapping_key": "live.status.tool", "tool_id": call.tool_id},
+                        {
+                            "mapping_key": "live.status.tool",
+                            "tool_id": call.tool_id,
+                            "provider": provider_hint,
+                            "app_id": app_hint,
+                        },
                     )
                     obs = await execute_tool(
                         call.tool_id,
@@ -322,6 +365,55 @@ async def run_langgraph_agent(
                             "approved_tool_ids": approved_ids,
                         },
                     )
+                    if isinstance(obs, dict) and obs.get("error") == "CONNECTION_REQUIRED":
+                        interrupt_reason = "CONNECTION_REQUIRED"
+                        await db.emit_event(
+                            run_id,
+                            "runtime.connection.required",
+                            {
+                                "mapping_key": "live.status.connection",
+                                "tool_id": call.tool_id,
+                                "provider": obs.get("provider") or provider_hint,
+                                "app_id": obs.get("app_id") or app_hint,
+                            },
+                        )
+                    elif isinstance(obs, dict) and (
+                        obs.get("error") == "APPROVAL_REQUIRED" or obs.get("approval_required")
+                    ):
+                        interrupt_reason = "APPROVAL_REQUIRED"
+                        await db.emit_event(
+                            run_id,
+                            "runtime.approval.requested",
+                            {
+                                "mapping_key": "live.status.approval",
+                                "tool_id": call.tool_id,
+                                "provider": provider_hint,
+                                "app_id": app_hint,
+                            },
+                        )
+                    elif isinstance(obs, dict) and obs.get("error"):
+                        await db.emit_event(
+                            run_id,
+                            "runtime.tool.failed",
+                            {
+                                "mapping_key": "live.status.tool",
+                                "tool_id": call.tool_id,
+                                "provider": provider_hint,
+                                "app_id": app_hint,
+                                "error": obs.get("error"),
+                            },
+                        )
+                    else:
+                        await db.emit_event(
+                            run_id,
+                            "runtime.tool.completed",
+                            {
+                                "mapping_key": "live.status.tool",
+                                "tool_id": call.tool_id,
+                                "provider": provider_hint,
+                                "app_id": app_hint,
+                            },
+                        )
                 except ToolError as exc:
                     obs = {"error": exc.code, "message": str(exc)}
                 except Exception as exc:  # noqa: BLE001

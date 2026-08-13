@@ -560,6 +560,48 @@ class Persistence(SupabaseRepository):
                 },
             )
 
+    async def find_open_builder_interrupt(
+        self, *, user_id: str, agent_id: str, interrupt_type: str = "connection"
+    ) -> dict[str, Any] | None:
+        """Find the latest open builder interrupt for an agent (e.g. after OAuth return)."""
+        async with get_supabase_admin_client() as client:
+            response = await client.get(
+                "/runs",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "agent_id": f"eq.{agent_id}",
+                    "error_code": "eq.BUILDER_INTERRUPTED",
+                    "select": "id,input,agent_id,thread_id,status",
+                    "order": "created_at.desc",
+                    "limit": "5",
+                },
+            )
+            if response.status_code >= 400:
+                return None
+            rows = response.json() or []
+        for run in rows:
+            meta = run.get("input") or {}
+            interrupt = meta.get("interrupt") if isinstance(meta, dict) else None
+            if not isinstance(interrupt, dict):
+                continue
+            if interrupt.get("status") == "completed":
+                continue
+            draft = interrupt.get("identity_draft") or {}
+            derived = draft.get("_interrupt_type") if isinstance(draft, dict) else None
+            itype = interrupt.get("type") or derived or "identity"
+            if itype != interrupt_type:
+                continue
+            return {
+                "run_id": run.get("id"),
+                "agent_id": interrupt.get("agent_id") or run.get("agent_id"),
+                "thread_id": interrupt.get("thread_id") or run.get("thread_id"),
+                "prompt": interrupt.get("prompt") or "",
+                "status": interrupt.get("status") or "open",
+                "identity_draft": draft,
+                "type": itype,
+            }
+        return None
+
     async def get_builder_interrupt(self, run_id: str, user_id: str) -> dict[str, Any] | None:
         run = await self.get_owned_run(run_id, user_id)
         if not run:

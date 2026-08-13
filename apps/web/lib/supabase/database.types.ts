@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.15"
+  }
   public: {
     Tables: {
       agent_approval_requests: {
@@ -590,6 +595,69 @@ export type Database = {
           },
         ]
       }
+      agent_tool_configurations: {
+        Row: {
+          agent_id: string
+          config: Json
+          connection_id: string | null
+          created_at: string
+          id: string
+          last_validated_at: string | null
+          provider: string
+          provider_action_id: string | null
+          schema_version: string | null
+          status: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          config?: Json
+          connection_id?: string | null
+          created_at?: string
+          id?: string
+          last_validated_at?: string | null
+          provider?: string
+          provider_action_id?: string | null
+          schema_version?: string | null
+          status?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          config?: Json
+          connection_id?: string | null
+          created_at?: string
+          id?: string
+          last_validated_at?: string | null
+          provider?: string
+          provider_action_id?: string | null
+          schema_version?: string | null
+          status?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tool_configurations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tool_configurations_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "user_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_triggers: {
         Row: {
           agent_id: string
@@ -922,6 +990,51 @@ export type Database = {
           },
         ]
       }
+      builder_error_lessons: {
+        Row: {
+          context: Json
+          created_at: string
+          error_code: string | null
+          error_signature: string
+          id: string
+          last_seen_at: string
+          reason: string
+          resolution: Json
+          resolution_summary: string
+          times_helped: number
+          times_seen: number
+          updated_at: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          error_code?: string | null
+          error_signature: string
+          id?: string
+          last_seen_at?: string
+          reason?: string
+          resolution?: Json
+          resolution_summary?: string
+          times_helped?: number
+          times_seen?: number
+          updated_at?: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          error_code?: string | null
+          error_signature?: string
+          id?: string
+          last_seen_at?: string
+          reason?: string
+          resolution?: Json
+          resolution_summary?: string
+          times_helped?: number
+          times_seen?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       builder_messages: {
         Row: {
           agent_id: string
@@ -1067,6 +1180,111 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      checkpoint_blobs: {
+        Row: {
+          blob: string | null
+          channel: string
+          checkpoint_ns: string
+          thread_id: string
+          type: string
+          version: string
+        }
+        Insert: {
+          blob?: string | null
+          channel: string
+          checkpoint_ns?: string
+          thread_id: string
+          type: string
+          version: string
+        }
+        Update: {
+          blob?: string | null
+          channel?: string
+          checkpoint_ns?: string
+          thread_id?: string
+          type?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      checkpoint_migrations: {
+        Row: {
+          v: number
+        }
+        Insert: {
+          v: number
+        }
+        Update: {
+          v?: number
+        }
+        Relationships: []
+      }
+      checkpoint_writes: {
+        Row: {
+          blob: string
+          channel: string
+          checkpoint_id: string
+          checkpoint_ns: string
+          idx: number
+          task_id: string
+          task_path: string
+          thread_id: string
+          type: string | null
+        }
+        Insert: {
+          blob: string
+          channel: string
+          checkpoint_id: string
+          checkpoint_ns?: string
+          idx: number
+          task_id: string
+          task_path?: string
+          thread_id: string
+          type?: string | null
+        }
+        Update: {
+          blob?: string
+          channel?: string
+          checkpoint_id?: string
+          checkpoint_ns?: string
+          idx?: number
+          task_id?: string
+          task_path?: string
+          thread_id?: string
+          type?: string | null
+        }
+        Relationships: []
+      }
+      checkpoints: {
+        Row: {
+          checkpoint: Json
+          checkpoint_id: string
+          checkpoint_ns: string
+          metadata: Json
+          parent_checkpoint_id: string | null
+          thread_id: string
+          type: string | null
+        }
+        Insert: {
+          checkpoint: Json
+          checkpoint_id: string
+          checkpoint_ns?: string
+          metadata?: Json
+          parent_checkpoint_id?: string | null
+          thread_id: string
+          type?: string | null
+        }
+        Update: {
+          checkpoint?: Json
+          checkpoint_id?: string
+          checkpoint_ns?: string
+          metadata?: Json
+          parent_checkpoint_id?: string | null
+          thread_id?: string
+          type?: string | null
+        }
+        Relationships: []
       }
       connector_definitions: {
         Row: {
@@ -2477,4 +2695,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

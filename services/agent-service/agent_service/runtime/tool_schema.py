@@ -101,6 +101,29 @@ OPENAI_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         ["to", "subject", "body"],
     ),
+    "gmail_send": _fn(
+        "gmail_send",
+        "Send an email via Gmail.",
+        {
+            "to": {"type": "string"},
+            "subject": {"type": "string"},
+            "body": {"type": "string"},
+            "dry_run": {"type": "boolean"},
+        },
+        ["to", "subject", "body"],
+    ),
+    "google_docs_create": _fn(
+        "google_docs_create",
+        "Create a Google Doc.",
+        {"title": {"type": "string"}, "body": {"type": "string"}},
+        ["title"],
+    ),
+    "google_docs_append": _fn(
+        "google_docs_append",
+        "Append text to a Google Doc.",
+        {"document_id": {"type": "string"}, "text": {"type": "string"}},
+        ["document_id", "text"],
+    ),
     "calendar_list": _fn(
         "calendar_list",
         "List upcoming Google Calendar events.",
@@ -155,7 +178,7 @@ def schemas_for_tools(
     *,
     catalog_schemas: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return OpenAI tool schemas; unknown ids get a generic or catalog-backed schema."""
+    """Sync helper — prefer async_schemas_for_tools for external providers."""
     out: list[dict[str, Any]] = []
     catalog_schemas = catalog_schemas or {}
     for tid in tool_ids:
@@ -165,7 +188,6 @@ def schemas_for_tools(
         if tid in catalog_schemas:
             out.append(_generic_schema(tid, catalog_schemas[tid]))
             continue
-        # Best-effort: pull from provider registry catalog when available.
         try:
             from agent_service.integrations.native import NATIVE_TOOLS
 
@@ -175,5 +197,116 @@ def schemas_for_tools(
                 continue
         except Exception:  # noqa: BLE001
             pass
+        # External tools must not get an empty catch-all in production paths —
+        # callers should use async_schemas_for_tools. Keep a narrow stub for tests.
+        if tid.startswith("pd:"):
+            out.append(
+                _fn(
+                    tid,
+                    f"External Pipedream tool {tid} (schema pending load).",
+                    {},
+                    [],
+                )
+            )
+            continue
         out.append(_generic_schema(tid))
+    return out
+
+
+async def async_schemas_for_tools(
+    tool_ids: list[str],
+    *,
+    tool_configs: dict[str, dict[str, Any]] | None = None,
+    catalog_schemas: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Load OpenAI schemas; JIT-normalize Pipedream props and strip configured static fields."""
+    from agent_service.integrations.registry import get_provider_registry
+
+    tool_configs = tool_configs or {}
+    catalog_schemas = catalog_schemas or {}
+    registry = get_provider_registry()
+    out: list[dict[str, Any]] = []
+
+    for tid in tool_ids:
+        if tid in OPENAI_TOOL_SCHEMAS:
+            out.append(OPENAI_TOOL_SCHEMAS[tid])
+            continue
+        if tid in catalog_schemas:
+            out.append(_generic_schema(tid, catalog_schemas[tid]))
+            continue
+
+        provider = None
+        if tid.startswith("pd:"):
+            provider = registry.get_provider("pipedream")
+        if provider is None and tid.startswith("pd:"):
+            out.append(
+                _fn(tid, f"External tool {tid} (provider unavailable)", {}, [])
+            )
+            continue
+        if provider is None:
+            try:
+                from agent_service.integrations.native import NATIVE_TOOLS
+
+                native = next((t for t in NATIVE_TOOLS if t.tool_id == tid), None)
+                if native and native.input_schema:
+                    out.append(_generic_schema(tid, native.input_schema))
+                    continue
+            except Exception:  # noqa: BLE001
+                pass
+            out.append(_generic_schema(tid))
+            continue
+
+        schema_payload = await provider.get_tool_schema(tid)
+        if not schema_payload or not isinstance(schema_payload.get("input_schema"), dict):
+            out.append(
+                _fn(tid, f"External tool {tid}", {"_note": {"type": "string"}}, [])
+            )
+            continue
+
+        input_schema = dict(schema_payload["input_schema"])
+        configured = tool_configs.get(tid) or {}
+        props = dict(input_schema.get("properties") or {})
+        # If static fields are already configured on the agent, hide them from the LLM.
+        static_schema = schema_payload.get("static_schema") or {}
+        static_props = (static_schema.get("properties") or {}) if isinstance(static_schema, dict) else {}
+        for key in list(props.keys()):
+            if key in configured and key in static_props:
+                props.pop(key, None)
+        required = [
+            r
+            for r in (input_schema.get("required") or [])
+            if r in props
+        ]
+        # Also surface unconfigured required static props so the model can ask / fail clearly
+        for key, meta in static_props.items():
+            if key not in configured and key not in props:
+                props[key] = meta
+                if key in (static_schema.get("required") or []):
+                    required.append(key)
+
+        description = f"External tool {tid}"
+        try:
+            tool = await provider.get_tool(tid)
+            if tool and tool.summary:
+                description = tool.summary
+            elif tool and tool.name:
+                description = tool.name
+        except Exception:  # noqa: BLE001
+            pass
+
+        out.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": tid.replace(":", "_") if False else tid,  # keep tool_id as-is
+                    "description": description,
+                    "parameters": {
+                        "type": "object",
+                        "properties": props,
+                        "required": required,
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        )
     return out

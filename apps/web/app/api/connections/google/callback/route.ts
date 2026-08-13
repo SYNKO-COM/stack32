@@ -42,11 +42,35 @@ export async function GET(request: NextRequest) {
     const result = await agentServiceFetch<{
       connection_id?: string;
       account_email?: string;
+      agent_id?: string | null;
     }>("/v1/connections/google/callback", {
       method: "POST",
       accessToken,
       body: { code, state },
     });
+
+    const agentId =
+      typeof result.agent_id === "string" && result.agent_id.length > 0
+        ? result.agent_id
+        : null;
+
+    // Continue the paused builder run now that Google is bound to this agent.
+    if (agentId) {
+      try {
+        await agentServiceFetch(`/v1/agents/${agentId}/builder/resume-connection`, {
+          method: "POST",
+          accessToken,
+          body: {},
+        });
+      } catch {
+        // Resume is best-effort; user can reconnect from the builder card.
+      }
+      const email = result.account_email
+        ? `?connected=${encodeURIComponent(result.account_email)}`
+        : "?connected=google";
+      return NextResponse.redirect(`${origin}/agents/${agentId}${email}`);
+    }
+
     const email = result.account_email
       ? `?connected=${encodeURIComponent(result.account_email)}`
       : "?connected=google";

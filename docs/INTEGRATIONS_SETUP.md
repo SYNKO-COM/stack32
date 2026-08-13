@@ -27,7 +27,19 @@ Copy [`.env.example`](../.env.example) and set:
 - [ ] `PIPEDREAM_ENVIRONMENT=development|production`
 - [ ] `PIPEDREAM_ALLOWED_ORIGINS` (JSON list including app origin)
 
-### Search / LLM
+For a full production-like local profile see [LOCAL_PRODUCTION_TESTING.md](./LOCAL_PRODUCTION_TESTING.md)
+and [`.env.production-like.example`](../.env.production-like.example).
+
+After Connect OAuth for Pipedream apps, call sync + bind (UI does this after the popup):
+
+```bash
+# or via UI Structure sheet / Builder connection card
+curl -X POST "$AGENT_SERVICE_URL/v1/integrations/accounts/sync" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"app_id":"slack","agent_id":"<agent>","tool_ids":["pd:slack-send-message-to-channel"]}'
+```
+
+Apply migration `agent_tool_configurations` (M8) before relying on tool static config.
 
 - [ ] At least one LLM key (`OPENAI_API_KEY` / `XAI_API_KEY` / …)
 - [ ] `WEB_SEARCH_API_KEY` if web_search must be live

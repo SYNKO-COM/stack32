@@ -32,13 +32,10 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export async function getConnectToken(
-  externalUserId?: string,
-  appId?: string,
-): Promise<ConnectTokenResult> {
+export async function getConnectToken(appId?: string): Promise<ConnectTokenResult> {
   if (currentAiExecutionMode() !== "agent-service") {
     return {
-      externalUserId: externalUserId ?? "local",
+      externalUserId: "local",
       degraded: true,
       message: "integrations_require_agent_service",
     };
@@ -52,7 +49,6 @@ export async function getConnectToken(
     method: "POST",
     accessToken,
     body: {
-      ...(externalUserId ? { external_user_id: externalUserId } : {}),
       ...(appId ? { app_id: appId } : {}),
     },
   });
@@ -86,6 +82,131 @@ export async function getConnectToken(
     message: typeof connect.message === "string" ? connect.message : undefined,
     raw: connect,
   };
+}
+
+export async function syncIntegrationAccounts(input: {
+  appId?: string;
+  agentId?: string;
+  toolIds?: string[];
+  connectionId?: string;
+}): Promise<{ accounts: Array<Record<string, unknown>>; binding?: Record<string, unknown> }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { accounts: [] };
+  }
+  const accessToken = await requireAccessToken();
+  return agentServiceFetch("/v1/integrations/accounts/sync", {
+    method: "POST",
+    accessToken,
+    body: {
+      ...(input.appId ? { app_id: input.appId } : {}),
+      ...(input.agentId ? { agent_id: input.agentId } : {}),
+      ...(input.toolIds ? { tool_ids: input.toolIds } : {}),
+      ...(input.connectionId ? { connection_id: input.connectionId } : {}),
+    },
+  });
+}
+
+export async function listIntegrationAccounts(appId?: string): Promise<{
+  accounts: Array<{
+    connectionId: string;
+    provider?: string;
+    appId?: string;
+    accountEmail?: string | null;
+    status?: string;
+  }>;
+}> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { accounts: [] };
+  }
+  const accessToken = await requireAccessToken();
+  const params = new URLSearchParams();
+  if (appId) params.set("app_id", appId);
+  const q = params.toString();
+  const result = await agentServiceFetch<{
+    accounts: Array<Record<string, unknown>>;
+  }>(`/v1/integrations/accounts${q ? `?${q}` : ""}`, {
+    method: "GET",
+    accessToken,
+  });
+  return {
+    accounts: (result.accounts ?? []).map((row) => ({
+      connectionId: String(row.connection_id ?? ""),
+      provider: typeof row.provider === "string" ? row.provider : undefined,
+      appId: typeof row.app_id === "string" ? row.app_id : undefined,
+      accountEmail:
+        typeof row.account_email === "string" ? row.account_email : null,
+      status: typeof row.status === "string" ? row.status : undefined,
+    })),
+  };
+}
+
+export async function bindIntegrationConnection(input: {
+  agentId: string;
+  connectionId: string;
+  toolIds: string[];
+}): Promise<{ binding: Record<string, unknown> }> {
+  const accessToken = await requireAccessToken();
+  return agentServiceFetch("/v1/integrations/bindings", {
+    method: "POST",
+    accessToken,
+    body: {
+      agent_id: input.agentId,
+      connection_id: input.connectionId,
+      tool_ids: input.toolIds,
+    },
+  });
+}
+
+export async function getToolConfig(
+  agentId: string,
+  toolId: string,
+): Promise<{ config: Record<string, unknown> | null; schema: Record<string, unknown> | null }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { config: null, schema: null };
+  }
+  const accessToken = await requireAccessToken();
+  const result = await agentServiceFetch<{
+    config: Record<string, unknown> | null;
+    schema: Record<string, unknown> | null;
+  }>(`/v1/agents/${agentId}/tools/${encodeURIComponent(toolId)}/config`, {
+    method: "GET",
+    accessToken,
+  });
+  return { config: result.config, schema: result.schema };
+}
+
+export async function saveToolConfig(
+  agentId: string,
+  toolId: string,
+  config: Record<string, unknown>,
+  connectionId?: string,
+): Promise<{ ok: boolean }> {
+  const accessToken = await requireAccessToken();
+  return agentServiceFetch(`/v1/agents/${agentId}/tools/${encodeURIComponent(toolId)}/config`, {
+    method: "PUT",
+    accessToken,
+    body: {
+      config,
+      ...(connectionId ? { connection_id: connectionId } : {}),
+    },
+  });
+}
+
+export async function getToolDynamicOptions(input: {
+  toolId: string;
+  prop: string;
+  agentId?: string;
+}): Promise<{ options: Array<{ value: unknown; label?: string }> }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { options: [] };
+  }
+  const accessToken = await requireAccessToken();
+  const params = new URLSearchParams({ prop: input.prop });
+  if (input.agentId) params.set("agent_id", input.agentId);
+  return agentServiceFetch(
+    `/v1/integrations/tools/${encodeURIComponent(input.toolId)}/options?${params}`,
+    { method: "GET", accessToken },
+  );
 }
 
 export async function searchIntegrationTools(

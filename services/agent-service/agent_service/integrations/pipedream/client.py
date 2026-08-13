@@ -232,9 +232,27 @@ class PipedreamClient:
     async def get_component(self, component_key: str) -> dict[str, Any] | None:
         if not self.configured() or not component_key:
             return None
-        data = await self._request("GET", f"/components/{component_key}")
-        if isinstance(data, dict):
-            return data
+        # Prefer Connect project-scoped retrieve (includes configurable_props).
+        for path in (
+            f"/connect/{self._project_id()}/actions/{component_key}",
+            f"/connect/{self._project_id()}/components/{component_key}",
+            f"/components/{component_key}",
+        ):
+            try:
+                data = await self._request("GET", path)
+            except PipedreamError as exc:
+                if exc.status == 404:
+                    continue
+                raise
+            if not isinstance(data, dict):
+                continue
+            inner = data.get("data") if isinstance(data.get("data"), dict) else data
+            if isinstance(inner, dict) and (
+                inner.get("key")
+                or inner.get("configurable_props")
+                or inner.get("name")
+            ):
+                return inner
         return None
 
     async def run_action(
@@ -243,8 +261,9 @@ class PipedreamClient:
         action_id: str,
         external_user_id: str,
         configured_props: dict[str, Any] | None = None,
-        auth_provision_id: str | None = None,
+        version: str | None = "latest",
     ) -> dict[str, Any]:
+        """Run a Connect action. Auth must already be inside configured_props.<app>.authProvisionId."""
         if not self.configured():
             return {
                 "degraded": True,
@@ -256,8 +275,8 @@ class PipedreamClient:
             "external_user_id": external_user_id,
             "configured_props": configured_props or {},
         }
-        if auth_provision_id:
-            body["auth_provision_id"] = auth_provision_id
+        if version:
+            body["version"] = version
         try:
             data = await self._request(
                 "POST",
@@ -272,17 +291,81 @@ class PipedreamClient:
             return {"result": data}
         return data
 
-    async def list_accounts(self, *, external_user_id: str) -> list[dict[str, Any]]:
+    async def configure_prop(
+        self,
+        *,
+        action_id: str,
+        prop_name: str,
+        external_user_id: str,
+        configured_props: dict[str, Any] | None = None,
+        version: str | None = "latest",
+    ) -> list[Any]:
+        """Fetch dynamic options for a component prop via Connect configuration API."""
         if not self.configured():
             return []
+        body: dict[str, Any] = {
+            "id": action_id,
+            "external_user_id": external_user_id,
+            "prop_name": prop_name,
+            "configured_props": configured_props or {},
+        }
+        if version:
+            body["version"] = version
         data = await self._request(
-            "GET",
-            f"/connect/{self._project_id()}/accounts",
-            params={"external_user_id": external_user_id},
+            "POST",
+            f"/connect/{self._project_id()}/actions/configure",
+            json=body,
         )
         if not data:
             return []
         if isinstance(data, list):
-            return [r for r in data if isinstance(r, dict)]
-        rows = data.get("data") or data.get("accounts") or []
-        return [r for r in rows if isinstance(r, dict)]
+            return data
+        options = data.get("options") or data.get("data") or data.get("stringOptions") or []
+        return options if isinstance(options, list) else []
+
+    async def list_accounts(
+        self, *, external_user_id: str, app: str | None = None
+    ) -> list[dict[str, Any]]:
+        if not self.configured():
+            return []
+        params: dict[str, Any] = {"external_user_id": external_user_id}
+        if app:
+            params["app"] = app
+        data = await self._request(
+            "GET",
+            f"/connect/{self._project_id()}/accounts",
+            params=params,
+        )
+        if not data:
+            return []
+        if isinstance(data, list):
+            rows = [r for r in data if isinstance(r, dict)]
+        else:
+            rows = [
+                r
+                for r in (data.get("data") or data.get("accounts") or [])
+                if isinstance(r, dict)
+            ]
+        # Normalize safe fields for Stack32 sync
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            app_info = row.get("app") if isinstance(row.get("app"), dict) else {}
+            app_slug = (
+                app_info.get("name_slug")
+                or app_info.get("nameSlug")
+                or row.get("app")
+                or row.get("app_id")
+            )
+            out.append(
+                {
+                    "id": row.get("id") or row.get("account_id"),
+                    "app_id": app_slug,
+                    "name": row.get("name") or row.get("healthy") or app_slug,
+                    "email": (row.get("metadata") or {}).get("email")
+                    if isinstance(row.get("metadata"), dict)
+                    else None,
+                    "healthy": row.get("healthy"),
+                    "raw": row,
+                }
+            )
+        return out

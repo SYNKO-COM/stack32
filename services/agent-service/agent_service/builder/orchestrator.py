@@ -67,9 +67,9 @@ def summarize_detected_problems(
     if test_status and not test_status.startswith("passed"):
         reason = str(report.get("reason") or report.get("error_code") or "").strip()
         if reason:
-            problems.append(f"Smoke check failed: {reason[:160]}")
+            problems.append("The quick test didn't pass. I can fix it for you.")
         else:
-            problems.append("The agent smoke test failed.")
+            problems.append("The quick test didn't pass.")
 
     if readiness is not None:
         for check in getattr(readiness, "checks", []) or []:
@@ -88,26 +88,26 @@ def summarize_detected_problems(
         for miss in (getattr(readiness, "missing_connections", None) or [])[:3]:
             if isinstance(miss, dict):
                 label = (
-                    miss.get("provider")
-                    or miss.get("app_id")
+                    miss.get("app_id")
+                    or miss.get("provider")
                     or miss.get("tool_id")
-                    or "required service"
+                    or "an app"
                 )
-                problems.append(f"Missing connection: {label}")
+                problems.append(f"Connect your {label} account to continue.")
             elif miss:
-                problems.append(f"Missing connection: {miss}")
+                problems.append(f"Connect your {miss} account to continue.")
         for cfg in (getattr(readiness, "missing_config", None) or [])[:2]:
             if isinstance(cfg, dict):
-                label = cfg.get("key") or cfg.get("tool_id") or "config"
-                problems.append(f"Incomplete setup: {label}")
+                label = cfg.get("tool_id") or cfg.get("key") or "a tool"
+                problems.append(f"Finish setup for {label}.")
 
     if error_name:
-        problems.append(f"Build stopped unexpectedly ({error_name}).")
+        problems.append("The build stopped unexpectedly. You can ask me to try again.")
 
-    if status == "needs_setup" and not any("connection" in p.lower() for p in problems):
-        problems.append("A required connection or setup step is still missing.")
+    if status == "needs_setup" and not any("connect" in p.lower() for p in problems):
+        problems.append("Connect the required accounts to finish setup.")
     if status == "needs_attention" and not problems:
-        problems.append("Stack32 detected an issue that needs a repair pass.")
+        problems.append("Stack32 found something to adjust before your agent is ready.")
 
     out: list[str] = []
     seen: set[str] = set()
@@ -816,21 +816,94 @@ class BuilderOrchestrator:
         )
 
     async def _connection_providers_bound(self, *, user_id: str, agent_id: str) -> set[str]:
+        """Providers/apps bound to *this* agent (not merely any user connection)."""
         bound: set[str] = set()
         try:
             from agent_service.connections.manager import ConnectionManager
 
             mgr = ConnectionManager()
-            conns = await mgr.list_connections(user_id=user_id)
-            for c in conns or []:
-                if not isinstance(c, dict):
+            bindings = await mgr.list_bindings(user_id=user_id, agent_id=agent_id)
+            connections = await mgr.list_connections(user_id=user_id)
+            by_id = {str(c.get("id")): c for c in connections or []}
+            for row in bindings or []:
+                if not row.get("enabled", True):
                     continue
-                status = str(c.get("status") or "active").lower()
-                if status in {"active", "connected", "ok", ""} and c.get("provider"):
-                    bound.add(str(c["provider"]))
+                conn = by_id.get(str(row.get("connection_id")))
+                if not conn:
+                    continue
+                status = str(conn.get("status") or "active").lower()
+                if status not in {"active", "connected", "ok", ""}:
+                    continue
+                provider = str(conn.get("provider") or "").lower()
+                if provider:
+                    bound.add(provider)
+                meta = (
+                    conn.get("provider_metadata")
+                    if isinstance(conn.get("provider_metadata"), dict)
+                    else {}
+                )
+                app = str(meta.get("app_id") or "").lower()
+                if app:
+                    bound.add(app)
         except Exception:  # noqa: BLE001
             logger.debug("connection list failed", exc_info=True)
         return bound
+
+    def _missing_connection_reqs(self, spec: AgentSpec, bound: set[str]) -> list[Any]:
+        reqs = list(spec.connection_requirements or [])
+        # Fallback: tools that require a connection even if requirements list is empty.
+        if not reqs:
+            synthesized: list[Any] = []
+            for binding in spec.tools or []:
+                if not binding.enabled:
+                    continue
+                provider = (binding.provider or "native").lower()
+                if provider in {"native", ""} and str(binding.tool_id).startswith(
+                    ("gmail_", "calendar_", "google_docs")
+                ):
+                    provider = "google"
+                if provider in {"native", ""}:
+                    continue
+                synthesized.append(
+                    type(
+                        "Req",
+                        (),
+                        {
+                            "id": f"auto:{binding.tool_id}",
+                            "provider": provider,
+                            "app_id": binding.app_id,
+                            "tool_ids": [binding.tool_id],
+                            "required": True,
+                            "required_for": [binding.tool_id],
+                        },
+                    )()
+                )
+            reqs = synthesized
+
+        missing = []
+        for r in reqs:
+            if not getattr(r, "required", True):
+                continue
+            provider = str(getattr(r, "provider", "") or "").lower()
+            app_id = str(getattr(r, "app_id", "") or "").lower()
+            covered = False
+            if provider and provider in bound:
+                covered = True
+            if app_id and app_id in bound:
+                covered = True
+            if provider in {"google", "gmail"} and "google" in bound:
+                covered = True
+            if provider in {"slack", "slack_v2"} and (
+                "pipedream" in bound or "slack" in bound or "slack_v2" in bound
+            ):
+                covered = True
+            if provider == "pipedream" and (
+                "pipedream" in bound or (app_id and app_id in bound)
+            ):
+                covered = True
+            if not covered:
+                missing.append(r)
+        return missing
 
     async def _maybe_interrupt_for_connections(
         self,
@@ -845,15 +918,8 @@ class BuilderOrchestrator:
         capabilities: dict[str, Any] | None,
         progress_id: str | None,
     ) -> dict[str, Any] | None:
-        reqs = list(spec.connection_requirements or [])
-        if not reqs:
-            return None
         bound = await self._connection_providers_bound(user_id=user_id, agent_id=agent_id)
-        missing = [
-            r
-            for r in reqs
-            if r.required and r.provider not in bound
-        ]
+        missing = self._missing_connection_reqs(spec, bound)
         if not missing:
             return None
 
@@ -869,10 +935,12 @@ class BuilderOrchestrator:
         except Exception:  # noqa: BLE001
             logger.debug("persist draft before connection interrupt failed", exc_info=True)
 
-        providers = sorted({r.provider for r in missing})
+        providers = sorted(
+            {str(getattr(r, "provider", "") or "") for r in missing if getattr(r, "provider", None)}
+        )
         tool_ids: list[str] = []
         for r in missing:
-            tool_ids.extend(r.tool_ids or r.required_for or [])
+            tool_ids.extend(list(getattr(r, "tool_ids", None) or getattr(r, "required_for", None) or []))
         tool_ids = list(dict.fromkeys(tool_ids))
 
         await self.db.emit_event(
@@ -892,7 +960,7 @@ class BuilderOrchestrator:
                     "tone": "normal",
                     "card": "build_progress",
                     "focus": "Connect an account to continue",
-                    "completed": False,
+                    "completed": True,
                     "run_id": run_id,
                 },
             )
@@ -913,10 +981,12 @@ class BuilderOrchestrator:
                     "tool_ids": tool_ids,
                     "requirements": [
                         {
-                            "id": r.id,
-                            "provider": r.provider,
-                            "app_id": r.app_id,
-                            "tool_ids": list(r.tool_ids or []),
+                            "id": getattr(r, "id", None),
+                            "provider": getattr(r, "provider", None),
+                            "app_id": getattr(r, "app_id", None),
+                            "tool_ids": list(
+                                getattr(r, "tool_ids", None) or getattr(r, "required_for", None) or []
+                            ),
                         }
                         for r in missing
                     ],
@@ -941,6 +1011,73 @@ class BuilderOrchestrator:
         await self.db.update_run_status(run_id, "waiting_for_input")
         await self.db.update_agent_status(agent_id, user_id, "needs_setup")
         return {"status": "interrupted", "run_id": run_id, "reason": "connection"}
+
+    async def _reprompt_missing_connections(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        prompt: str,
+        identity: AgentIdentity,
+        capabilities: dict[str, Any],
+        still_missing: list[str],
+    ) -> dict[str, Any]:
+        """Ask again for remaining providers after a partial connect (no Problems card)."""
+        providers = sorted({p for p in still_missing if p})
+        await self.db.emit_event(
+            run_id,
+            "builder.connection.still_required",
+            {
+                "mapping_key": "builder.progress.connection",
+                "providers": providers,
+            },
+        )
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content="builder:connection.prompt",
+            metadata={
+                "tone": "normal",
+                "interrupt_run_id": run_id,
+                "ui_component": {
+                    "type": "connection_form",
+                    "version": "1",
+                    "request_id": str(uuid.uuid4()),
+                    "context": "builder",
+                    "providers": providers,
+                    "tool_ids": [],
+                    "requirements": [
+                        {"provider": p, "app_id": p, "tool_ids": []} for p in providers
+                    ],
+                },
+            },
+        )
+        await self.db.save_builder_interrupt(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity_draft={
+                **identity.model_dump(),
+                "_interrupt_type": "connection",
+                "_identity_locked": True,
+                "_capabilities": capabilities or {},
+                "_missing_providers": providers,
+            },
+            interrupt_type="connection",
+        )
+        await self.db.update_run_status(run_id, "waiting_for_input")
+        await self.db.update_agent_status(agent_id, user_id, "needs_setup")
+        return {
+            "status": "interrupted",
+            "run_id": run_id,
+            "reason": "connection",
+            "missing_providers": providers,
+        }
 
     async def resume_with_connection(
         self,
@@ -967,6 +1104,43 @@ class BuilderOrchestrator:
             description=str(draft.get("description") or "")[:2000],
         )
         caps = draft.get("_capabilities") if isinstance(draft.get("_capabilities"), dict) else {}
+        missing_providers = [
+            str(p).lower()
+            for p in (draft.get("_missing_providers") or [])
+            if p
+        ]
+
+        # Verify a real agent binding exists before resume; otherwise stay needs_setup.
+        if missing_providers:
+            bound = await self._connection_providers_bound(user_id=user_id, agent_id=agent_id)
+            still_missing = [
+                p
+                for p in missing_providers
+                if not (
+                    p in bound
+                    or (
+                        p in {"google", "gmail", "google_calendar", "google_docs"}
+                        and "google" in bound
+                    )
+                    or (
+                        p in {"slack", "slack_v2"}
+                        and ("slack" in bound or "slack_v2" in bound or "pipedream" in bound)
+                    )
+                    or (p == "pipedream" and "pipedream" in bound)
+                )
+            ]
+            if still_missing:
+                return await self._reprompt_missing_connections(
+                    run_id=run_id,
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    thread_id=thread_id,
+                    prompt=prompt,
+                    identity=identity,
+                    capabilities=caps if isinstance(caps, dict) else {},
+                    still_missing=still_missing,
+                )
+
         await self.db.resolve_builder_form(thread_id=thread_id, request_id=run_id)
         await self.db.clear_builder_interrupt(run_id, user_id)
         await self.db.update_run_status(run_id, "running")
@@ -1570,6 +1744,22 @@ class BuilderOrchestrator:
             db=self.db,
             build_ok=build_ok,
         )
+        # Never finish with "Problems detected" for missing connections — interrupt instead.
+        if readiness.status == "needs_setup" and getattr(readiness, "missing_connections", None):
+            conn_interrupt = await self._maybe_interrupt_for_connections(
+                run_id=run_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                thread_id=thread_id,
+                prompt=content,
+                identity=identity,
+                spec=spec,
+                capabilities=capabilities,
+                progress_id=progress_id,
+            )
+            if conn_interrupt is not None:
+                return conn_interrupt
+
         if build_ok is False:
             status = "needs_attention"
         elif readiness.status == "needs_setup":
@@ -1584,38 +1774,6 @@ class BuilderOrchestrator:
             play_ready_sound = await self.db.claim_first_ready_celebration(
                 agent_id=agent_id, user_id=user_id
             )
-
-        # region agent log
-        try:
-            import json
-            import time
-            from pathlib import Path
-
-            _dbg = {
-                "sessionId": "a17c1f",
-                "runId": "pre-fix",
-                "hypothesisId": "B,E",
-                "location": "orchestrator.py:pre-ready-finalize",
-                "message": "About to finalize build status",
-                "data": {
-                    "agent_id": agent_id,
-                    "run_id": run_id,
-                    "status": status,
-                    "tests_passed": tests_passed,
-                    "build_ok": build_ok,
-                    "readiness": getattr(readiness, "status", None),
-                    "test_status": str(test_report.get("status") or ""),
-                    "play_ready_sound": play_ready_sound,
-                    "run_row_status": (current or {}).get("status") if current else None,
-                },
-                "timestamp": int(time.time() * 1000),
-            }
-            Path("/Users/3van/Documents/Stack32/.cursor/debug-a17c1f.log").open("a").write(
-                json.dumps(_dbg) + "\n"
-            )
-        except Exception:  # noqa: BLE001
-            pass
-        # endregion
 
         final_steps = [
             {"labelKey": "understanding", "state": "done"},
@@ -1704,6 +1862,52 @@ class BuilderOrchestrator:
                 "identity_summary": identity.model_dump(),
                 "project_files": file_paths,
             }
+        elif status == "needs_setup":
+            missing = list(getattr(readiness, "missing_connections", None) or [])
+            providers = sorted(
+                {
+                    str(m.get("provider") or m.get("app_id") or "")
+                    for m in missing
+                    if isinstance(m, dict) and (m.get("provider") or m.get("app_id"))
+                }
+            )
+            tool_ids = sorted(
+                {
+                    tid
+                    for m in missing
+                    if isinstance(m, dict)
+                    for tid in (m.get("tool_ids") or [])
+                    if tid
+                }
+            )
+            # Soft setup prompt only — never "Problems detected" / Fix it for connections.
+            meta = {
+                "tone": "normal",
+                "actions": [],
+                "version_id": version.get("id"),
+                "test_report": test_report,
+                "playReadySound": False,
+                "identity_summary": identity.model_dump(),
+                "project_files": file_paths,
+                "interrupt_run_id": run_id,
+                "ui_component": {
+                    "type": "connection_form",
+                    "version": "1",
+                    "request_id": str(uuid.uuid4()),
+                    "context": "builder",
+                    "providers": providers,
+                    "tool_ids": tool_ids,
+                    "requirements": [
+                        {
+                            "provider": m.get("provider"),
+                            "app_id": m.get("app_id"),
+                            "tool_ids": list(m.get("tool_ids") or []),
+                        }
+                        for m in missing
+                        if isinstance(m, dict)
+                    ],
+                },
+            }
         else:
             meta = {
                 "tone": "warning",
@@ -1722,37 +1926,6 @@ class BuilderOrchestrator:
             content=narrative,
             metadata=meta,
         )
-        # region agent log
-        try:
-            import json
-            import time
-            from pathlib import Path
-
-            _run_after = await self.db.get_owned_run(run_id, user_id)
-            _dbg2 = {
-                "sessionId": "a17c1f",
-                "runId": "pre-fix",
-                "hypothesisId": "B,E",
-                "location": "orchestrator.py:ready-message-inserted",
-                "message": "Assistant ready/final message inserted",
-                "data": {
-                    "agent_id": agent_id,
-                    "run_id": run_id,
-                    "status": status,
-                    "first_ready": first_ready,
-                    "card": meta.get("card"),
-                    "tone": meta.get("tone"),
-                    "run_status_before_complete": (_run_after or {}).get("status"),
-                    "narrative_preview": (narrative or "")[:160],
-                },
-                "timestamp": int(time.time() * 1000),
-            }
-            Path("/Users/3van/Documents/Stack32/.cursor/debug-a17c1f.log").open("a").write(
-                json.dumps(_dbg2) + "\n"
-            )
-        except Exception:  # noqa: BLE001
-            pass
-        # endregion
         await self.db.emit_event(
             run_id,
             "run.completed",
@@ -2303,13 +2476,16 @@ class BuilderOrchestrator:
         llm_hints: list[str] | None = None,
     ) -> tuple[list[ToolBinding], list[ConnectionRequirement], list[dict[str, Any]]]:
         from agent_service.builder.capabilities import (
-            extract_capabilities,
+            build_capability_plan,
             resolve_tools_for_capabilities,
         )
 
-        caps = extract_capabilities(content, llm_hints=llm_hints)
+        plan = build_capability_plan(content, llm_hints=llm_hints)
         return await resolve_tools_for_capabilities(
-            caps, prompt=content, llm_hints=llm_hints
+            plan.to_capabilities(),
+            prompt=content,
+            llm_hints=llm_hints,
+            plan=plan,
         )
 
     def _build_graph(

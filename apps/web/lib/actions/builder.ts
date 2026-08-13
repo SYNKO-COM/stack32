@@ -221,6 +221,29 @@ export async function submitBuilderCapabilities(input: {
   });
 }
 
+/** Resume builder after required app connections are linked. */
+export async function resumeBuilderConnection(input: {
+  runId?: string;
+  agentId: string;
+}): Promise<{ status?: string }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { status: "noop" };
+  }
+  const accessToken = await requireAccessToken();
+  if (input.runId) {
+    return agentServiceFetch(`/v1/builder/runs/${input.runId}/connection`, {
+      method: "POST",
+      accessToken,
+      body: {},
+    });
+  }
+  return agentServiceFetch(`/v1/agents/${input.agentId}/builder/resume-connection`, {
+    method: "POST",
+    accessToken,
+    body: {},
+  });
+}
+
 /** Resume builder after dynamic clarifying questions. */
 export async function submitBuilderQuestions(input: {
   runId: string;

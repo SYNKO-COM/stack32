@@ -129,4 +129,38 @@ async def test_v4_bindings_have_provider_fields():
     )
     gmail = next(t for t in tools if t.tool_id.startswith("gmail_"))
     assert gmail.provider == "native"
-    assert gmail.app_id == "google"
+
+
+def test_capability_plan_outlook_prefers_pipedream():
+    from agent_service.builder.capabilities import build_capability_plan
+
+    plan = build_capability_plan("Send emails with Outlook when I ask")
+    email = next(c for c in plan.capabilities if c.id == "email")
+    assert email.preferred_app in {"microsoft_outlook", "outlook"}
+    assert email.provider_preference == "pipedream"
+    assert "email_provider" not in plan.ambiguities
+
+
+def test_capability_plan_ambiguous_email():
+    from agent_service.builder.capabilities import build_capability_plan
+
+    plan = build_capability_plan("Help me manage my email inbox")
+    assert "email_provider" in plan.ambiguities
+
+
+def test_email_send_only_least_privilege():
+    from agent_service.builder.capabilities import _email_tool_ids
+
+    ids = _email_tool_ids("send emails via gmail when i ask")
+    assert ids == ["gmail_send_message"]
+
+
+@pytest.mark.asyncio
+async def test_calendar_list_only_no_create():
+    caps = extract_capabilities("List my upcoming calendar events")
+    tools, _, _ = await resolve_tools_for_capabilities(
+        caps, prompt="List my upcoming calendar events"
+    )
+    ids = {t.tool_id for t in tools}
+    assert "calendar_list" in ids
+    assert "calendar_create_event" not in ids

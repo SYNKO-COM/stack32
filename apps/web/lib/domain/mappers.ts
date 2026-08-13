@@ -226,7 +226,7 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
   const contextRaw = rec.context;
   const context =
     contextRaw === "live" || contextRaw === "builder" ? contextRaw : undefined;
-  const fields = Array.isArray(rec.fields)
+  let fields = Array.isArray(rec.fields)
     ? rec.fields
         .map((f) => {
           const field = asRecord(f);
@@ -251,12 +251,93 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
         })
         .filter((f): f is NonNullable<typeof f> => f !== null)
     : [];
+
+  // connection_form often carries providers/tool_ids/requirements instead of fields.
+  let connectionRequirements:
+    | Array<{ provider: string; appId?: string; toolIds?: string[] }>
+    | undefined;
+  if (type === "connection_form") {
+    const providers = Array.isArray(rec.providers)
+      ? rec.providers.filter((p): p is string => typeof p === "string")
+      : [];
+    const toolIds = Array.isArray(rec.tool_ids)
+      ? rec.tool_ids.filter((t): t is string => typeof t === "string")
+      : Array.isArray(rec.toolIds)
+        ? rec.toolIds.filter((t): t is string => typeof t === "string")
+        : [];
+    const requirements = Array.isArray(rec.requirements) ? rec.requirements : [];
+    connectionRequirements = [];
+    if (requirements.length > 0) {
+      for (const raw of requirements) {
+        const req = asRecord(raw);
+        const provider =
+          (typeof req.provider === "string" ? req.provider : "") || "pipedream";
+        const appId =
+          (typeof req.app_id === "string" ? req.app_id : undefined) ||
+          (typeof req.appId === "string" ? req.appId : undefined);
+        const reqTools = Array.isArray(req.tool_ids)
+          ? req.tool_ids.filter((t): t is string => typeof t === "string")
+          : Array.isArray(req.toolIds)
+            ? req.toolIds.filter((t): t is string => typeof t === "string")
+            : [];
+        connectionRequirements.push({
+          provider,
+          appId,
+          toolIds: reqTools.length > 0 ? reqTools : toolIds,
+        });
+      }
+    } else if (providers.length > 0) {
+      for (const provider of providers) {
+        connectionRequirements.push({
+          provider,
+          toolIds,
+        });
+      }
+    }
+    if (fields.length === 0 && connectionRequirements.length > 0) {
+      const first = connectionRequirements[0];
+      fields = [
+        {
+          key: "provider",
+          type: "text",
+          required: true,
+          suggested_value: first.provider,
+          options: undefined,
+          label: undefined,
+        },
+        ...(first.appId
+          ? [
+              {
+                key: "app_id",
+                type: "text",
+                required: false,
+                suggested_value: first.appId,
+                options: undefined,
+                label: undefined,
+              },
+            ]
+          : []),
+        ...(first.toolIds ?? []).map((tid) => ({
+          key: "tool_id",
+          type: "text",
+          required: false,
+          suggested_value: tid,
+          options: undefined,
+          label: undefined,
+        })),
+      ];
+    }
+  }
+
   return {
     type,
     version: "1",
     requestId,
     context,
     fields,
+    ...(connectionRequirements && connectionRequirements.length > 0
+      ? { connectionRequirements }
+      : {}),
   };
 }
 

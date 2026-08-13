@@ -8,6 +8,8 @@ import { AgentModuleGraph } from "@/components/builder/agent-module-graph";
 import { LiveView } from "@/components/builder/live-view";
 import { Button } from "@/components/ui/button";
 import { useAgentGraph, useAgentSpec } from "@/hooks/use-agents";
+import { useLiveExecutionState } from "@/hooks/use-live-execution";
+import { useLiveThread } from "@/hooks/use-live";
 import { useTranslation } from "@/hooks/use-translation";
 import { listAgentConnections } from "@/lib/actions/connections";
 import { getAgentReadiness } from "@/lib/actions/integrations";
@@ -31,6 +33,21 @@ export function AgentIaView({ agentId }: { agentId: string }) {
   const [chatPct, setChatPct] = useState(DEFAULT_CHAT_PCT);
   const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const { data: liveThread } = useLiveThread(agentId);
+  const liveRunId = useMemo(() => {
+    const messages = liveThread?.messages ?? [];
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i] as { interruptRunId?: string; runId?: string };
+      if (m?.interruptRunId) return m.interruptRunId;
+      if (m?.runId) return m.runId;
+    }
+    return null;
+  }, [liveThread?.messages]);
+  const { data: executionStates } = useLiveExecutionState(
+    liveRunId,
+    Boolean(liveRunId),
+  );
 
   const connectionsQuery = useQuery({
     queryKey: ["agent-connections", agentId],
@@ -222,6 +239,7 @@ export function AgentIaView({ agentId }: { agentId: string }) {
                 bindings={connectionsQuery.data?.bindings ?? []}
                 toolApprovals={toolApprovals}
                 onConnectionsChanged={() => void connectionsQuery.refetch()}
+                executionStates={executionStates}
               />
             ) : (
               <p className="px-6 py-10 text-center text-sm text-muted-foreground">

@@ -2,7 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { TypewriterText } from "@/components/builder/message-motion";
 import { SecretForm } from "@/components/builder/secret-form";
@@ -99,34 +99,6 @@ export function ReadyCard({
 
   const lead = name ? t("ready.titleNamed", { name }) : t("ready.title");
   const plainBody = `${lead}\n\n${content}`.replace(/\*\*/g, "");
-
-  // #region agent log
-  useEffect(() => {
-    fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "a17c1f",
-      },
-      body: JSON.stringify({
-        sessionId: "a17c1f",
-        runId: "pre-fix",
-        hypothesisId: "A,C",
-        location: "ready-card.tsx:mount",
-        message: "ReadyCard rendered",
-        data: {
-          agentId,
-          name: name ?? null,
-          animate,
-          typedDone,
-          contentPreview: content.slice(0, 120),
-          actions: actions ?? null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }, [agentId, name, animate, typedDone, content, actions]);
-  // #endregion
 
   const finish = () => {
     setTypedDone(true);

@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
+import { ToolConfigForm } from "@/components/builder/tool-config-form";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -91,6 +92,24 @@ interface ModuleNodeData extends Record<string, unknown> {
   isBrain: boolean;
   selected: boolean;
   onSelect: () => void;
+  execState?: string;
+}
+
+function execAccent(execState?: string): string {
+  switch (execState) {
+    case "running":
+    case "queued":
+      return "border-brand/70 ring-2 ring-brand/30 shadow-brand/10 animate-pulse";
+    case "success":
+      return "border-emerald-500/60 ring-1 ring-emerald-500/25";
+    case "error":
+      return "border-destructive/60 ring-1 ring-destructive/30";
+    case "waiting_for_approval":
+    case "waiting_for_connection":
+      return "border-amber-500/60 ring-1 ring-amber-500/25";
+    default:
+      return "";
+  }
 }
 
 function readinessAccent(module: AgentModule): string {
@@ -149,6 +168,7 @@ function ModuleNode({ data }: NodeProps<Node<ModuleNodeData>>) {
           "hover:border-brand/45 hover:shadow-md hover:shadow-brand/5",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
           readinessAccent(data.module),
+          execAccent(data.execState),
           data.selected
             ? "border-brand/60 ring-2 ring-brand/25 shadow-md"
             : "border-border/70",
@@ -254,8 +274,14 @@ function providerFriendly(
   if (!provider || provider === "native") {
     return t("modules.readiness.builtIn", { defaultValue: "Built-in — ready to use" });
   }
+  const known: Record<string, string> = {
+    google: "Google",
+    pipedream: "Apps",
+    slack: "Slack",
+    slack_v2: "Slack",
+  };
   return t(`builder:connections.providers.${provider}`, {
-    defaultValue: provider.charAt(0).toUpperCase() + provider.slice(1),
+    defaultValue: known[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1),
   });
 }
 
@@ -266,6 +292,7 @@ export function AgentModuleGraph({
   bindings = [],
   toolApprovals,
   onConnectionsChanged,
+  executionStates,
 }: {
   agentId: string;
   modules: AgentModuleMap;
@@ -273,6 +300,7 @@ export function AgentModuleGraph({
   bindings?: AgentBindingInfo[];
   toolApprovals?: Record<string, ApprovalMode | string>;
   onConnectionsChanged?: () => void;
+  executionStates?: Record<string, string>;
 }) {
   const { t } = useTranslation(["structure", "builder"]);
   const router = useRouter();
@@ -335,6 +363,9 @@ export function AgentModuleGraph({
         isBrain: index === brainIndex,
         selected: selected?.id === module.id,
         onSelect: () => setSelected(module),
+        execState:
+          executionStates?.[module.id] ||
+          executionStates?.[module.kind === "brain" ? "brain" : module.kind === "trigger" ? "input" : module.kind === "output" ? "output" : module.id],
       },
     }));
 
@@ -354,24 +385,41 @@ export function AgentModuleGraph({
           isBrain: false,
           selected: selected?.id === module.id,
           onSelect: () => setSelected(module),
+          execState:
+            executionStates?.[module.toolId ?? ""] ||
+            executionStates?.[module.id],
         },
       }),
     );
 
-    const chainEdges: Edge[] = modules.chain.slice(1).map((module, index) => ({
-      id: `edge-${modules.chain[index].id}-${module.id}`,
-      source: `chain-${modules.chain[index].id}`,
-      target: `chain-${module.id}`,
-      type: "smoothstep",
-      animated: false,
-      style: { stroke: EDGE_STROKE, strokeWidth: 2.25 },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 16,
-        height: 16,
-        color: EDGE_STROKE,
-      },
-    }));
+    const chainEdges: Edge[] = modules.chain.slice(1).map((module, index) => {
+      const src = modules.chain[index];
+      const srcState =
+        executionStates?.[src.id] ||
+        (src.kind === "brain"
+          ? executionStates?.brain
+          : src.kind === "trigger"
+            ? executionStates?.input
+            : undefined);
+      const animated = srcState === "running" || srcState === "queued";
+      return {
+        id: `edge-${src.id}-${module.id}`,
+        source: `chain-${src.id}`,
+        target: `chain-${module.id}`,
+        type: "smoothstep",
+        animated,
+        style: {
+          stroke: animated ? "var(--brand, #e85d04)" : EDGE_STROKE,
+          strokeWidth: animated ? 2.75 : 2.25,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 16,
+          height: 16,
+          color: animated ? "var(--brand, #e85d04)" : EDGE_STROKE,
+        },
+      };
+    });
 
     const brainId = brainIndex >= 0 ? modules.chain[brainIndex]?.id : undefined;
     const attachmentEdges: Edge[] = brainId
@@ -406,7 +454,7 @@ export function AgentModuleGraph({
       edges: [...chainEdges, ...attachmentEdges],
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- labels follow i18n + selection highlight
-  }, [modules, t, selected?.id]);
+  }, [modules, t, selected?.id, executionStates]);
 
   const goToBuild = () => {
     setPrefillDraft(t("prefill.graph"));
@@ -585,6 +633,21 @@ export function AgentModuleGraph({
                           connectionId={selectedConnection?.connection?.id}
                           onConnected={onConnectionsChanged}
                         />
+                        {selected.toolId ? (
+                          <div className="rounded-2xl border border-border/50 p-3">
+                            <p className="mb-2 text-sm font-medium">
+                              {t("modules.toolConfig", {
+                                defaultValue: "Tool settings",
+                              })}
+                            </p>
+                            <ToolConfigForm
+                              agentId={agentId}
+                              toolId={selected.toolId}
+                              appId={selected.appId}
+                              onSaved={onConnectionsChanged}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-emerald-900 dark:text-emerald-200">

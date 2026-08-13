@@ -138,6 +138,12 @@ class Settings(BaseSettings):
         return self.ENVIRONMENT == "production"
 
     @property
+    def is_production_like(self) -> bool:
+        """Production or local production-like profile (strict runtime invariants)."""
+        env = (self.ENVIRONMENT or "").strip().lower()
+        return env in {"production", "production-like"}
+
+    @property
     def has_any_llm_provider(self) -> bool:
         return bool(
             self.OPENAI_API_KEY
@@ -151,7 +157,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_production(self) -> "Settings":
-        if self.is_production:
+        if self.is_production or self.is_production_like:
             missing = [
                 name
                 for name in (
@@ -165,12 +171,25 @@ class Settings(BaseSettings):
                 missing.append("SUPABASE_JWKS_URL (or SUPABASE_JWT_SECRET)")
             if self.ALLOW_UNVERIFIED_JWT:
                 raise ValueError("ALLOW_UNVERIFIED_JWT must be false in production")
-            if self.BUILDER_SANDBOX_ENABLED and self.SANDBOX_PROVIDER == "local":
+            if self.AI_EXECUTION_MODE == "mock":
                 raise ValueError(
-                    "SANDBOX_PROVIDER=local is forbidden in production; use e2b."
+                    "AI_EXECUTION_MODE=mock is forbidden in production / production-like"
+                )
+            if self.AGENT_RUNTIME_VERSION == "legacy":
+                raise ValueError(
+                    "AGENT_RUNTIME_VERSION=legacy is forbidden in production / production-like; "
+                    "use langgraph"
+                )
+            if self.SANDBOX_PROVIDER == "local":
+                raise ValueError(
+                    "SANDBOX_PROVIDER=local is forbidden in production / production-like; use e2b."
                 )
             if self.BUILDER_SANDBOX_ENABLED and self.SANDBOX_PROVIDER == "e2b" and not self.E2B_API_KEY:
                 missing.append("E2B_API_KEY")
+            if not self.BUILDER_SANDBOX_ENABLED and self.is_production:
+                raise ValueError(
+                    "BUILDER_SANDBOX_ENABLED must be true in production (E2B isolation required)"
+                )
             if not self.SECRETS_ENCRYPTION_KEY:
                 missing.append("SECRETS_ENCRYPTION_KEY")
             if self.AGENT_RUNTIME_VERSION == "langgraph" and not self.DATABASE_URL:

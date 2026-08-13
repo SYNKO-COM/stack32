@@ -69,6 +69,20 @@ const ATTACHMENT_KINDS: Partial<Record<GraphNodeType, ModuleKind>> = {
   memory_write: "memory",
 };
 
+/** Internal helpers — keep in runtime, hide from product Structure canvas. */
+const HIDDEN_STRUCTURE_TOOL_IDS = new Set([
+  "current_datetime",
+  "structured_output",
+  "calculator",
+  "fetch_url",
+]);
+
+function isProductFacingTool(toolId: string | undefined): boolean {
+  if (!toolId) return true;
+  if (HIDDEN_STRUCTURE_TOOL_IDS.has(toolId)) return false;
+  return true;
+}
+
 function toolNeedsConnection(toolId: string | undefined, provider?: string, config?: Record<string, unknown>): boolean {
   if (!toolId) return false;
   if (config?.connection_required === true) return true;
@@ -216,6 +230,7 @@ function fromGraph(
         : typeof node.config?.toolId === "string"
           ? node.config.toolId
           : undefined;
+    if (attachmentKind === "tool" && !isProductFacingTool(toolId)) continue;
     // memory_read + memory_write collapse into a single "Memory" chip.
     const key = attachmentKind === "memory" ? "memory" : (toolId ?? node.id);
     if (seenAttachments.has(key)) continue;
@@ -252,7 +267,7 @@ function fromSpec(
   ];
 
   const attachments: AgentModule[] = spec.tools
-    .filter((tool) => tool.enabled)
+    .filter((tool) => tool.enabled && isProductFacingTool(tool.tool))
     .map((tool) =>
       enrichToolModule(
         { id: tool.tool, kind: "tool" as const, toolId: tool.tool },

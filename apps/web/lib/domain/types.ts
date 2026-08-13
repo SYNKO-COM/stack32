@@ -232,6 +232,12 @@ export interface BuilderUiComponent {
   requestId: string;
   context?: "builder" | "live";
   fields: BuilderUiComponentField[];
+  /** connection_form: all apps the user must connect before build continues */
+  connectionRequirements?: Array<{
+    provider: string;
+    appId?: string;
+    toolIds?: string[];
+  }>;
 }
 
 export interface BuildBoardNode {

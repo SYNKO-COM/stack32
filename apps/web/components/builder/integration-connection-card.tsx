@@ -6,7 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import { startGoogleConnection, revokeConnection } from "@/lib/actions/connections";
-import { getConnectToken } from "@/lib/actions/integrations";
+import { getConnectToken, syncIntegrationAccounts } from "@/lib/actions/integrations";
 import { cn } from "@/lib/utils";
 
 export type IntegrationConnectionStatus =
@@ -28,12 +28,36 @@ export interface IntegrationConnectionCardProps {
   className?: string;
 }
 
+function humanizeAppSlug(raw: string): string {
+  const slug = raw.trim().toLowerCase();
+  const known: Record<string, string> = {
+    google: "Google",
+    slack: "Slack",
+    slack_v2: "Slack",
+    slack_bot: "Slack",
+    notion: "Notion",
+    stripe: "Stripe",
+    pipedream: "Apps",
+    gmail: "Gmail",
+    google_calendar: "Google Calendar",
+    google_docs: "Google Docs",
+    microsoft_outlook: "Outlook",
+  };
+  if (known[slug]) return known[slug];
+  return slug
+    .replace(/_v\d+$/i, "")
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function providerLabel(
   provider: string,
   t: (key: string, opts?: { defaultValue?: string }) => string,
 ): string {
   const key = `connections.providers.${provider}`;
-  return t(key, { defaultValue: provider.charAt(0).toUpperCase() + provider.slice(1) });
+  return t(key, { defaultValue: humanizeAppSlug(provider) });
 }
 
 export function IntegrationConnectionCard({
@@ -61,8 +85,27 @@ export function IntegrationConnectionCard({
     status === "connected" || Boolean(accountEmail && status !== "error" && status !== "disconnected");
 
   const title = useMemo(() => {
-    if (appId) return appId;
+    if (appId) return humanizeAppSlug(appId);
     return providerLabel(normalized, t);
+  }, [appId, normalized, t]);
+
+  const connectLabel = useMemo(() => {
+    if (normalized === "google") {
+      return t("connections.connectGoogle", { defaultValue: "Connect my Google" });
+    }
+    if (appId) {
+      return t("connections.connect", {
+        defaultValue: `Connect ${humanizeAppSlug(appId)}`,
+        provider: humanizeAppSlug(appId),
+      });
+    }
+    if (normalized === "pipedream") {
+      return t("connections.connectApp", { defaultValue: "Connect an app" });
+    }
+    return t("connections.connect", {
+      defaultValue: `Connect ${providerLabel(normalized, t)}`,
+      provider: providerLabel(normalized, t),
+    });
   }, [appId, normalized, t]);
 
   const connectGoogle = () => {
@@ -86,10 +129,17 @@ export function IntegrationConnectionCard({
     setPipedreamFallback(null);
     startTransition(async () => {
       try {
-        const result = await getConnectToken(undefined, appId || undefined);
+        const result = await getConnectToken(appId || undefined);
         if (result.connectLinkUrl && !result.degraded) {
-          onConnected?.();
           window.open(result.connectLinkUrl, "_blank", "noopener,noreferrer");
+          // After the popup, sync accounts and bind to this agent when possible.
+          window.setTimeout(() => {
+            void syncIntegrationAccounts({
+              appId: appId || undefined,
+              agentId,
+              toolIds: toolIds && toolIds.length > 0 ? toolIds : undefined,
+            }).then(() => onConnected?.());
+          }, 2500);
           return;
         }
         setPipedreamFallback({
@@ -197,12 +247,7 @@ export function IntegrationConnectionCard({
             onClick={handleConnect}
           >
             {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
-            {normalized === "google"
-              ? t("connections.connectGoogle", { defaultValue: "Connect Google" })
-              : t("connections.connect", {
-                  defaultValue: `Connect ${providerLabel(normalized, t)}`,
-                  provider: providerLabel(normalized, t),
-                })}
+            {connectLabel}
           </Button>
         )}
       </div>

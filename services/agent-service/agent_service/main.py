@@ -29,28 +29,25 @@ logger = logging.getLogger(__name__)
 
 
 def _check_production_runtime(settings) -> None:
-    """Warn or fail on unsafe production configuration."""
-    if not settings.is_production and (settings.ENVIRONMENT or "").lower() != "production":
+    """Fail hard on unsafe production / production-like configuration."""
+    if not getattr(settings, "is_production_like", False) and not settings.is_production:
         return
     errors: list[str] = []
-    warnings: list[str] = []
     if settings.ALLOW_UNVERIFIED_JWT:
         errors.append("ALLOW_UNVERIFIED_JWT must be false in production")
+    if settings.AI_EXECUTION_MODE == "mock":
+        errors.append("AI_EXECUTION_MODE=mock is forbidden in production / production-like")
+    if settings.AGENT_RUNTIME_VERSION == "legacy":
+        errors.append("AGENT_RUNTIME_VERSION=legacy is forbidden; use langgraph")
     if settings.SANDBOX_PROVIDER == "local":
-        msg = "SANDBOX_PROVIDER=local is not allowed in production"
-        if settings.BUILDER_SANDBOX_ENABLED:
-            errors.append(msg)
-        else:
-            warnings.append(msg + " (sandbox disabled)")
+        errors.append("SANDBOX_PROVIDER=local is not allowed in production / production-like")
     if not (settings.SECRETS_ENCRYPTION_KEY or "").strip():
         errors.append("SECRETS_ENCRYPTION_KEY is required in production")
     if settings.AGENT_RUNTIME_VERSION == "langgraph" and not (settings.DATABASE_URL or "").strip():
         errors.append(
-            "AGENT_RUNTIME_VERSION=langgraph requires DATABASE_URL in production "
+            "AGENT_RUNTIME_VERSION=langgraph requires DATABASE_URL "
             "(MemorySaver is forbidden)"
         )
-    for w in warnings:
-        logger.warning("production_config_warning: %s", w)
     if errors:
         raise RuntimeError("Production startup checks failed: " + "; ".join(errors))
 

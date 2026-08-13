@@ -19,7 +19,9 @@ _BUILTIN_TOOL_IDS = ("current_datetime", "structured_output")
 # unknown names still go through JIT Pipedream search via LLM tool_hints.
 _PIPEDREAM_APP_ALIASES: dict[str, str] = {
     "notion": "notion",
-    "slack": "slack",
+    "slack": "slack_v2",
+    "slack_v2": "slack_v2",
+    "slack bot": "slack_bot",
     "stripe": "stripe",
     "airtable": "airtable",
     "hubspot": "hubspot",
@@ -218,6 +220,167 @@ class Capability(BaseModel):
     keywords: list[str] = Field(default_factory=list, max_length=32)
 
 
+class PlannedCapability(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    preferred_app: str | None = None
+    intent: str | None = None  # send|read|draft|create|list|write
+    provider_preference: str = "any"  # native|pipedream|any
+
+
+class CapabilityPlan(BaseModel):
+    """Structured capability plan — LLM hints preferred; aliases are fallback."""
+
+    capabilities: list[PlannedCapability] = Field(default_factory=list)
+    ambiguities: list[str] = Field(default_factory=list)
+
+    def capability_ids(self) -> set[str]:
+        return {c.id for c in self.capabilities}
+
+    def to_capabilities(self) -> list[Capability]:
+        out: list[Capability] = []
+        for planned in self.capabilities:
+            meta = _CAPABILITY_CATALOG.get(planned.id)
+            if meta:
+                out.append(
+                    Capability(
+                        id=planned.id,
+                        name=str(meta["name"]),
+                        description=str(meta["description"]),
+                        keywords=list(meta["keywords"]),
+                    )
+                )
+            else:
+                out.append(
+                    Capability(
+                        id=planned.id,
+                        name=planned.id.replace("_", " ").title(),
+                        description="",
+                        keywords=[planned.preferred_app] if planned.preferred_app else [],
+                    )
+                )
+        return out
+
+
+def build_capability_plan(
+    prompt: str,
+    *,
+    llm_hints: list[str] | None = None,
+    preferred_apps: list[str] | None = None,
+) -> CapabilityPlan:
+    """Build a CapabilityPlan from heuristics + optional structured LLM hints.
+
+    `llm_hints` may be short keywords (`slack`, `gmail`) or `app:intent` pairs
+    (`slack:send`, `outlook:email`). Preferred apps override Google when the user
+    asked for Outlook / non-Google email.
+    """
+    caps = extract_capabilities(prompt, llm_hints=llm_hints)
+    apps = list(preferred_apps or []) or extract_external_app_queries(
+        prompt, llm_hints=llm_hints
+    )
+    lower = (prompt or "").lower()
+    ambiguities: list[str] = []
+
+    # Ambiguous email without provider → ask business question later.
+    mentions_email = bool(re.search(r"\b(email|mail|e-mail|courriel)\b", lower))
+    mentions_gmail = "gmail" in lower or "google mail" in lower
+    mentions_outlook = "outlook" in lower or "microsoft mail" in lower
+    if mentions_email and not mentions_gmail and not mentions_outlook:
+        if not any(a in {"gmail", "microsoft_outlook", "outlook"} for a in apps):
+            ambiguities.append("email_provider")
+
+    # Prefer Outlook over Google when explicitly asked.
+    force_outlook = mentions_outlook or any(
+        a in {"outlook", "microsoft_outlook"} for a in apps
+    )
+    planned: list[PlannedCapability] = []
+    for cap in caps:
+        preferred: str | None = None
+        intent: str | None = None
+        provider_pref = "any"
+        if cap.id == "email":
+            if force_outlook:
+                preferred = "microsoft_outlook"
+                provider_pref = "pipedream"
+            elif mentions_gmail:
+                preferred = "gmail"
+                provider_pref = "native"
+            if re.search(r"\b(send|envoie|envoyer)\b", lower) and not re.search(
+                r"\b(draft|brouillon)\b", lower
+            ):
+                intent = "send"
+            elif re.search(r"\b(draft|brouillon)\b", lower):
+                intent = "draft"
+            elif re.search(r"\b(read|inbox|list|triage)\b", lower):
+                intent = "read"
+        elif cap.id == "slack":
+            preferred = "slack_v2"
+            provider_pref = "pipedream"
+            intent = "send" if re.search(r"\b(send|post|message)\b", lower) else "write"
+        elif cap.id == "calendar":
+            preferred = "google_calendar"
+            provider_pref = "native"
+            intent = (
+                "create"
+                if re.search(r"\b(create|book|schedule|ajouter|créer|creer)\b", lower)
+                else "list"
+            )
+        elif cap.id == "google_docs":
+            preferred = "google_docs"
+            provider_pref = "native"
+            intent = "write"
+        planned.append(
+            PlannedCapability(
+                id=cap.id,
+                preferred_app=preferred,
+                intent=intent,
+                provider_preference=provider_pref,
+            )
+        )
+
+    # Attach long-tail apps not covered by catalog caps.
+    known = {p.id for p in planned}
+    for app in apps:
+        if app in {"gmail", "google_calendar", "google_docs"} and not force_outlook:
+            continue
+        if app in {"outlook", "microsoft_outlook"} and "email" in known:
+            continue
+        syn_id = f"ext:{app}"
+        if syn_id in known or app in known:
+            continue
+        planned.append(
+            PlannedCapability(
+                id=syn_id,
+                preferred_app=app,
+                provider_preference="pipedream",
+            )
+        )
+
+    # Merge structured llm hint pairs app:intent
+    for hint in llm_hints or []:
+        h = str(hint).strip().lower()
+        if ":" not in h:
+            continue
+        app, intent = h.split(":", 1)
+        app, intent = app.strip(), intent.strip()
+        if not app:
+            continue
+        matched = next((p for p in planned if p.preferred_app == app or p.id == app), None)
+        if matched:
+            matched.intent = intent or matched.intent
+            matched.preferred_app = matched.preferred_app or app
+        else:
+            planned.append(
+                PlannedCapability(
+                    id=f"ext:{app}",
+                    preferred_app=app,
+                    intent=intent or None,
+                    provider_preference="pipedream",
+                )
+            )
+
+    return CapabilityPlan(capabilities=planned, ambiguities=ambiguities)
+
+
 def extract_capabilities(
     prompt: str, *, llm_hints: list[str] | None = None
 ) -> list[Capability]:
@@ -258,6 +421,8 @@ def extract_capabilities(
         h = str(hint).strip().lower()
         if not h:
             continue
+        if ":" in h:
+            h = h.split(":", 1)[0].strip()
         if h in _CAPABILITY_CATALOG:
             _add(h)
         elif any(x in h for x in ("email", "gmail", "mail")):
@@ -298,31 +463,35 @@ def extract_capabilities(
 
 
 def _email_tool_ids(prompt_lower: str) -> list[str]:
-    """Prefer draft vs send and include list/read as appropriate."""
+    """Least privilege: send-only ≠ read/list; draft vs send from intent."""
     wants_send = bool(
         re.search(r"\b(send|envoie|envoyer|dispatch)\b", prompt_lower)
         and not re.search(r"\b(draft|brouillon)\b", prompt_lower)
     )
     wants_draft = bool(
         re.search(r"\b(draft|brouillon|compose|rédige|redige)\b", prompt_lower)
-    ) or not wants_send
+    )
     wants_read = bool(
         re.search(
             r"\b(read|inbox|list|triage|summarize|lire|boîte|boite)\b",
             prompt_lower,
         )
-    ) or True  # email agents almost always need list/read
+    )
+    # Default: draft (+ list) when unspecified; send-only stays send-only.
+    if not wants_send and not wants_draft and not wants_read:
+        wants_draft = True
+        wants_read = True
 
     tools: list[str] = []
-    if wants_read:
+    if wants_read or wants_draft:
         tools.extend(["gmail_list", "gmail_read"])
     if wants_send and not wants_draft:
         tools.append("gmail_send_message")
     else:
-        tools.append("gmail_create_draft")
+        if wants_draft or not wants_send:
+            tools.append("gmail_create_draft")
         if wants_send:
             tools.append("gmail_send_message")
-    # Dedupe preserve order
     seen: set[str] = set()
     out: list[str] = []
     for t in tools:
@@ -451,14 +620,31 @@ async def resolve_pipedream_app(
     if apps:
         # Prefer exact slug / name match.
         q = app_query.lower().replace(" ", "_")
+        aliases = {
+            "slack": {"slack_v2", "slack"},
+            "slack_v2": {"slack_v2"},
+        }
+        preferred = aliases.get(q, {q})
         for row in apps:
             slug = str(row.get("app_id") or "").lower()
             name = str(row.get("name") or "").lower()
-            if slug == q or slug == app_query.lower() or name == app_query.lower():
+            if slug in preferred or slug == q or slug == app_query.lower() or name == app_query.lower():
+                # Prefer non-bot Slack workspace app when several match.
+                if "slack" in preferred and slug == "slack_bot" and any(
+                    str(r.get("app_id") or "").lower() == "slack_v2" for r in apps
+                ):
+                    continue
                 app_id = str(row.get("app_id") or slug)
                 break
         if not app_id:
-            app_id = str(apps[0].get("app_id") or apps[0].get("name") or "") or None
+            # Prefer slack_v2 over slack_bot for generic slack queries.
+            if q in {"slack", "slack_v2"}:
+                for row in apps:
+                    if str(row.get("app_id") or "").lower() == "slack_v2":
+                        app_id = "slack_v2"
+                        break
+            if not app_id:
+                app_id = str(apps[0].get("app_id") or apps[0].get("name") or "") or None
 
     if not app_id:
         # Fall back to action search with the raw query.
@@ -543,6 +729,7 @@ async def resolve_tools_for_capabilities(
     registry: Any | None = None,
     prompt: str = "",
     llm_hints: list[str] | None = None,
+    plan: CapabilityPlan | None = None,
 ) -> tuple[list[ToolBinding], list[ConnectionRequirement], list[dict[str, Any]]]:
     """Resolve capabilities → ToolBindings + ConnectionRequirements + ambiguous choices.
 
@@ -555,10 +742,26 @@ async def resolve_tools_for_capabilities(
     # Prefer registry.search if present (alias), else search_tools.
     search = getattr(reg, "search", None) or reg.search_tools
 
+    active_plan = plan or build_capability_plan(prompt, llm_hints=llm_hints)
+    if not capabilities:
+        capabilities = active_plan.to_capabilities()
+
     lower = (prompt or "").lower()
     selected: list[ToolBinding] = []
     seen_ids: set[str] = set()
     ambiguous: list[dict[str, Any]] = []
+    for item in active_plan.ambiguities:
+        if item == "email_provider":
+            ambiguous.append(
+                {
+                    "capability": "email",
+                    "reason": "ambiguous_provider",
+                    "choices": [
+                        {"tool_id": "gmail", "name": "Gmail (Google)"},
+                        {"tool_id": "microsoft_outlook", "name": "Outlook"},
+                    ],
+                }
+            )
 
     def _add_binding(binding: ToolBinding) -> None:
         if binding.tool_id in seen_ids:
@@ -576,6 +779,15 @@ async def resolve_tools_for_capabilities(
 
     cap_ids = {c.id for c in capabilities}
     external_apps = extract_external_app_queries(prompt, llm_hints=llm_hints)
+    for planned in active_plan.capabilities:
+        if planned.preferred_app and planned.preferred_app not in external_apps:
+            if planned.provider_preference == "pipedream" or planned.id.startswith("ext:"):
+                external_apps.append(planned.preferred_app)
+
+    prefer_outlook = any(
+        p.preferred_app in {"outlook", "microsoft_outlook"}
+        for p in active_plan.capabilities
+    )
 
     # Writing-only → builtins only (no integrations + no external apps).
     integration_ids = {
@@ -614,16 +826,15 @@ async def resolve_tools_for_capabilities(
                     }
                 )
 
-    if "email" in cap_ids:
+    if "email" in cap_ids and not prefer_outlook:
         await _resolve_preferred(_email_tool_ids(lower))
 
     if "calendar" in cap_ids:
         cal_ids = ["calendar_list"]
-        if re.search(r"\b(create|book|schedule|ajouter|créer|creer)\b", lower):
-            cal_ids.append("calendar_create_event")
-        elif "meeting" in lower or "rdv" in lower or "appointment" in lower:
-            cal_ids.append("calendar_create_event")
-        else:
+        if re.search(
+            r"\b(create|book|schedule|ajouter|créer|creer|meeting|rdv|appointment)\b",
+            lower,
+        ):
             cal_ids.append("calendar_create_event")
         await _resolve_preferred(cal_ids)
 
@@ -642,7 +853,7 @@ async def resolve_tools_for_capabilities(
     # Long-tail: any SaaS via Pipedream (Slack, Notion, Stripe, Sheets, … + 3000 apps).
     # Prefer first-party Google Gmail/Calendar/Docs when those caps already resolved.
     skip_pd = set()
-    if "email" in cap_ids:
+    if "email" in cap_ids and not prefer_outlook:
         skip_pd.update({"gmail", "email", "mail"})
     if "calendar" in cap_ids:
         skip_pd.update({"google_calendar", "calendar"})
@@ -650,6 +861,8 @@ async def resolve_tools_for_capabilities(
         skip_pd.update({"google_docs", "docs"})
     if "slack" in cap_ids and "slack" not in external_apps:
         external_apps = ["slack", *external_apps]
+    if prefer_outlook and "microsoft_outlook" not in external_apps:
+        external_apps = ["microsoft_outlook", *external_apps]
 
     for app_query in external_apps:
         if app_query in skip_pd:

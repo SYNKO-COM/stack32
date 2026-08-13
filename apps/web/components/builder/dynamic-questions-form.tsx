@@ -59,8 +59,8 @@ export function DynamicQuestionsForm({
     }
     startTransition(async () => {
       try {
-        await submitBuilderQuestions({ runId, answers: values });
         onSubmitted?.();
+        await submitBuilderQuestions({ runId, answers: values });
       } catch {
         setError(t("questions.error"));
       }

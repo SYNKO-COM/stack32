@@ -49,6 +49,8 @@ export function AgentIdentityForm({ uiComponent, runId, onSubmitted }: AgentIden
     }
     setSubmitting(true);
     setErrorKey(null);
+    setCompleted(true);
+    onSubmitted?.();
     try {
       await submitBuilderIdentity({
         runId,
@@ -58,11 +60,9 @@ export function AgentIdentityForm({ uiComponent, runId, onSubmitted }: AgentIden
         description: description.trim(),
         requestId: uiComponent.requestId,
       });
-      setCompleted(true);
-      onSubmitted?.();
     } catch (err) {
+      setCompleted(false);
       setErrorKey(agentServiceErrorKey(err));
-    } finally {
       setSubmitting(false);
     }
   };

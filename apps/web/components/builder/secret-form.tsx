@@ -56,6 +56,8 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
     }
     setSubmitting(true);
     setErrorKey(null);
+    setCompleted(true);
+    onSubmitted?.();
     try {
       if (uiComponent.context === "live" || !runId) {
         await submitLiveLlmSecret({
@@ -71,11 +73,9 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
         });
       }
       setApiKey("");
-      setCompleted(true);
-      onSubmitted?.();
     } catch (err) {
+      setCompleted(false);
       setErrorKey(agentServiceErrorKey(err));
-    } finally {
       setSubmitting(false);
     }
   };
