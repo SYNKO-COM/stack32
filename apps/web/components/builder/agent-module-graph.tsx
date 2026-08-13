@@ -632,6 +632,7 @@ export function AgentModuleGraph({
                           accountEmail={selectedConnection?.connection?.account_email}
                           connectionId={selectedConnection?.connection?.id}
                           onConnected={onConnectionsChanged}
+                          onChanged={onConnectionsChanged}
                         />
                         {selected.toolId ? (
                           <div className="rounded-2xl border border-border/50 p-3">

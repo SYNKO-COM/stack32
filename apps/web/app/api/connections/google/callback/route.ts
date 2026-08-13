@@ -68,7 +68,8 @@ export async function GET(request: NextRequest) {
       const email = result.account_email
         ? `?connected=${encodeURIComponent(result.account_email)}`
         : "?connected=google";
-      return NextResponse.redirect(`${origin}/agents/${agentId}${email}`);
+      // Land back on Build in standby-complete: resume already ran above.
+      return NextResponse.redirect(`${origin}/agents/${agentId}/build${email}`);
     }
 
     const email = result.account_email

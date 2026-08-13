@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, Loader2 } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
@@ -21,7 +21,10 @@ export interface IntegrationConnectionCardProps {
   appId?: string;
   agentId: string;
   toolIds?: string[];
+  /** Fired only after a real account is linked (never on Connect click alone). */
   onConnected?: () => void;
+  /** Fired on disconnect / local refresh — must NOT resume the builder. */
+  onChanged?: () => void;
   status?: IntegrationConnectionStatus;
   accountEmail?: string;
   connectionId?: string;
@@ -66,6 +69,7 @@ export function IntegrationConnectionCard({
   agentId,
   toolIds,
   onConnected,
+  onChanged,
   status,
   accountEmail,
   connectionId,
@@ -74,15 +78,19 @@ export function IntegrationConnectionCard({
   const { t } = useTranslation("builder");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [waitingForOauth, setWaitingForOauth] = useState(false);
   const [pipedreamFallback, setPipedreamFallback] = useState<{
     token?: string | null;
     connectLinkUrl?: string | null;
     message?: string;
   } | null>(null);
+  const accountsBeforeRef = useRef(0);
+  const finishedRef = useRef(false);
 
   const normalized = (provider || "native").toLowerCase();
   const connected =
-    status === "connected" || Boolean(accountEmail && status !== "error" && status !== "disconnected");
+    status === "connected" ||
+    Boolean(accountEmail && status !== "error" && status !== "disconnected");
 
   const title = useMemo(() => {
     if (appId) return humanizeAppSlug(appId);
@@ -108,6 +116,56 @@ export function IntegrationConnectionCard({
     });
   }, [appId, normalized, t]);
 
+  /** Detect a newly linked account. Existing-account bind only via explicit confirm. */
+  const finishIfLinked = async (opts?: { allowExistingBind?: boolean }): Promise<boolean> => {
+    if (finishedRef.current) return true;
+    const synced = await syncIntegrationAccounts({
+      appId: appId || undefined,
+      agentId,
+      toolIds: toolIds && toolIds.length > 0 ? toolIds : undefined,
+    });
+    const count = synced.accounts?.length ?? 0;
+    const newlyAppeared = count > accountsBeforeRef.current;
+    const existingBound =
+      Boolean(opts?.allowExistingBind) && Boolean(synced.binding) && count > 0;
+    if (!newlyAppeared && !existingBound) {
+      return false;
+    }
+    finishedRef.current = true;
+    setWaitingForOauth(false);
+    setError(null);
+    onConnected?.();
+    onChanged?.();
+    return true;
+  };
+
+  useEffect(() => {
+    if (!waitingForOauth) return;
+
+    const onFocus = () => {
+      void finishIfLinked().then((ok) => {
+        if (!ok) {
+          setError(
+            t("connections.waitingHint", {
+              defaultValue:
+                "Still waiting for the account… Finish connecting in the other window, then click “I’ve connected”.",
+            }),
+          );
+        }
+      });
+    };
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(() => {
+      void finishIfLinked();
+    }, 4000);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only while waiting
+  }, [waitingForOauth, agentId, appId]);
+
   const connectGoogle = () => {
     setError(null);
     startTransition(async () => {
@@ -116,7 +174,9 @@ export function IntegrationConnectionCard({
           agentId,
           toolIds && toolIds.length > 0 ? toolIds : undefined,
         );
-        onConnected?.();
+        // Standby: do NOT call onConnected. Google OAuth callback resumes
+        // the builder only after the account is actually linked.
+        setWaitingForOauth(true);
         window.location.href = authorizeUrl;
       } catch {
         setError(t("connections.error", { defaultValue: "Could not start the connection." }));
@@ -129,17 +189,18 @@ export function IntegrationConnectionCard({
     setPipedreamFallback(null);
     startTransition(async () => {
       try {
+        // Baseline *without* toolIds so we don't auto-bind / resume on click.
+        const before = await syncIntegrationAccounts({
+          appId: appId || undefined,
+          agentId,
+        });
+        accountsBeforeRef.current = before.accounts?.length ?? 0;
+        finishedRef.current = false;
+
         const result = await getConnectToken(appId || undefined);
         if (result.connectLinkUrl && !result.degraded) {
           window.open(result.connectLinkUrl, "_blank", "noopener,noreferrer");
-          // After the popup, sync accounts and bind to this agent when possible.
-          window.setTimeout(() => {
-            void syncIntegrationAccounts({
-              appId: appId || undefined,
-              agentId,
-              toolIds: toolIds && toolIds.length > 0 ? toolIds : undefined,
-            }).then(() => onConnected?.());
-          }, 2500);
+          setWaitingForOauth(true);
           return;
         }
         setPipedreamFallback({
@@ -147,28 +208,11 @@ export function IntegrationConnectionCard({
           connectLinkUrl: result.connectLinkUrl,
           message: result.message,
         });
-        if (!result.degraded) onConnected?.();
+        setWaitingForOauth(Boolean(result.connectLinkUrl));
       } catch {
         setError(
           t("connections.pipedreamError", {
             defaultValue: "Could not start Pipedream Connect.",
-          }),
-        );
-      }
-    });
-  };
-
-  const disconnect = () => {
-    if (!connectionId) return;
-    setError(null);
-    startTransition(async () => {
-      try {
-        await revokeConnection(connectionId);
-        onConnected?.();
-      } catch {
-        setError(
-          t("connections.disconnectError", {
-            defaultValue: "Could not disconnect this account.",
           }),
         );
       }
@@ -180,12 +224,24 @@ export function IntegrationConnectionCard({
       connectGoogle();
       return;
     }
-    if (normalized === "pipedream") {
-      connectPipedream();
-      return;
-    }
-    // Generic providers currently route through Pipedream connect tokens.
     connectPipedream();
+  };
+
+  const disconnect = () => {
+    if (!connectionId) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await revokeConnection(connectionId);
+        onChanged?.();
+      } catch {
+        setError(
+          t("connections.disconnectError", {
+            defaultValue: "Could not disconnect this account.",
+          }),
+        );
+      }
+    });
   };
 
   return (
@@ -213,9 +269,11 @@ export function IntegrationConnectionCard({
         >
           {connected
             ? t("connections.connected", { defaultValue: "Connected" })
-            : status === "error"
-              ? t("connections.errorStatus", { defaultValue: "Error" })
-              : t("connections.needsSetup", { defaultValue: "Needs setup" })}
+            : waitingForOauth
+              ? t("connections.waiting", { defaultValue: "Waiting…" })
+              : status === "error"
+                ? t("connections.errorStatus", { defaultValue: "Error" })
+                : t("connections.needsSetup", { defaultValue: "Needs setup" })}
         </span>
       </div>
 
@@ -223,6 +281,39 @@ export function IntegrationConnectionCard({
         <p className="text-xs text-muted-foreground truncate">
           {t("connections.account", { defaultValue: "Account" })}: {accountEmail}
         </p>
+      ) : null}
+
+      {waitingForOauth && !connected ? (
+        <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs text-amber-950 dark:text-amber-100">
+          <p>
+            {t("connections.waitingBody", {
+              defaultValue:
+                "Finish connecting in the other window. Stack32 will continue automatically once the account is linked.",
+            })}
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={() => {
+              startTransition(async () => {
+                const ok = await finishIfLinked({ allowExistingBind: true });
+                if (!ok) {
+                  setError(
+                    t("connections.notYetLinked", {
+                      defaultValue:
+                        "No new account detected yet. Complete the connection, then try again.",
+                    }),
+                  );
+                }
+              });
+            }}
+          >
+            {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
+            {t("connections.iveConnected", { defaultValue: "I’ve connected" })}
+          </Button>
+        </div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
@@ -243,7 +334,7 @@ export function IntegrationConnectionCard({
             type="button"
             size="sm"
             className="rounded-full bg-brand text-white hover:bg-brand/90"
-            disabled={pending}
+            disabled={pending || waitingForOauth}
             onClick={handleConnect}
           >
             {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
@@ -258,7 +349,7 @@ export function IntegrationConnectionCard({
             {pipedreamFallback.message ||
               t("connections.pipedreamFallback", {
                 defaultValue:
-                  "Continue in Pipedream to finish connecting. Open the link below, then return here.",
+                  "Continue in the connect window to finish. Open the link below, then return here.",
               })}
           </p>
           {pipedreamFallback.connectLinkUrl ? (
@@ -267,15 +358,16 @@ export function IntegrationConnectionCard({
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-brand hover:underline"
+              onClick={() => setWaitingForOauth(true)}
             >
               <ExternalLink className="size-3" aria-hidden="true" />
-              {t("connections.continuePipedream", { defaultValue: "Continue in Pipedream" })}
+              {t("connections.continuePipedream", { defaultValue: "Continue connecting" })}
             </a>
           ) : null}
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }

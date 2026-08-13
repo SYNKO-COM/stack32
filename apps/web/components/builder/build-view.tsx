@@ -529,9 +529,6 @@ export function BuildView({ agentId }: { agentId: string }) {
   const [baselineIds, setBaselineIds] = useState<Set<string> | null>(null);
 
   const messages = useMemo(() => thread?.messages ?? [], [thread?.messages]);
-  if (thread && baselineIds === null) {
-    setBaselineIds(new Set(thread.messages.map((m) => m.id)));
-  }
 
   const messageIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -693,6 +690,11 @@ export function BuildView({ agentId }: { agentId: string }) {
       !revealedIds.has(m.id),
   );
   const activeRevealId = pendingReveal[0]?.id ?? null;
+
+  useEffect(() => {
+    if (!thread || baselineIds !== null) return;
+    setBaselineIds(new Set(thread.messages.map((m) => m.id)));
+  }, [thread, baselineIds]);
 
   useEffect(() => {
     return () => {
