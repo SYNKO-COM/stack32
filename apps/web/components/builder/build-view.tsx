@@ -150,7 +150,6 @@ function BuilderBubble({
   agentId,
   onFix,
   onFormSubmitted,
-  onSuggestion,
   resolvedFormIds,
   formSuperseded,
   fixResolved = false,
@@ -166,7 +165,6 @@ function BuilderBubble({
     requestId: string,
     opts?: { kind?: "connection" | "form"; runId?: string },
   ) => void;
-  onSuggestion?: (prompt: string) => void;
   resolvedFormIds: Set<string>;
   /** True when a later message exists — the user already answered this form. */
   formSuperseded?: boolean;
@@ -522,9 +520,9 @@ export function BuildView({ agentId }: { agentId: string }) {
   /** Fresh assistant messages already finished typing (sequential chat reveal). */
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
   const revealPauseRef = useRef<number | null>(null);
-  /** Run ids the user stopped this session — hide their progress immediately. */
-  const stoppedRunIdsRef = useRef<Set<string>>(new Set());
-  const [, bumpStopped] = useState(0);
+  /** Run ids the user stopped this session — hide their progress immediately.
+   *  Held in state (not a ref) because it drives message filtering during render. */
+  const [stoppedRunIds, setStoppedRunIds] = useState<Set<string>>(() => new Set());
   /** Message IDs present on first thread snapshot — no typewriter on refresh. */
   const [baselineIds, setBaselineIds] = useState<Set<string> | null>(null);
 
@@ -542,26 +540,19 @@ export function BuildView({ agentId }: { agentId: string }) {
     // Any later message means this step already continued — lock the form.
     return messages.slice(idx + 1).length > 0;
   };
-  const hasLiveForm = messages.some(
-    (m) =>
-      Boolean(m.uiComponent) &&
-      !m.formResolved &&
-      !isFormSuperseded(m) &&
-      !(m.uiComponent?.requestId && resolvedFormIds.has(m.uiComponent.requestId)),
-  );
   // Hide ephemeral thinking / progress only when a *later* turn superseded them —
   // never hide all future progress just because a Ready card exists in history.
   const isCanceledProgress = (m: (typeof messages)[number]) =>
     m.card === "build_progress" &&
     (Boolean(m.content?.includes("canceled")) ||
       m.focus === "Stopped by user" ||
-      stoppedRunIdsRef.current.has(m.interruptRunId ?? ""));
+      stoppedRunIds.has(m.interruptRunId ?? ""));
 
   const visibleMessages = messages
     .filter((m, i) => {
       const later = messages.slice(i + 1);
       if (m.card === "thinking") {
-        if (userStopped || stoppedRunIdsRef.current.has(m.interruptRunId ?? "")) return false;
+        if (userStopped || stoppedRunIds.has(m.interruptRunId ?? "")) return false;
         return !later.some((x) => x.role === "assistant");
       }
       if (m.card === "build_progress") {
@@ -612,7 +603,7 @@ export function BuildView({ agentId }: { agentId: string }) {
       .find(
         (m) =>
           Boolean(m.interruptRunId) &&
-          !stoppedRunIdsRef.current.has(m.interruptRunId ?? "") &&
+          !stoppedRunIds.has(m.interruptRunId ?? "") &&
           (m.card === "thinking" ||
             (m.card === "build_progress" &&
               !isCanceledProgress(m) &&
@@ -693,6 +684,7 @@ export function BuildView({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     if (!thread || baselineIds !== null) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time baseline snapshot from the first server thread load
     setBaselineIds(new Set(thread.messages.map((m) => m.id)));
   }, [thread, baselineIds]);
 
@@ -723,8 +715,11 @@ export function BuildView({ agentId }: { agentId: string }) {
   const handleStop = () => {
     const runToStop = activeRunId;
     if (runToStop) {
-      stoppedRunIdsRef.current.add(runToStop);
-      bumpStopped((n) => n + 1);
+      setStoppedRunIds((prev) => {
+        const next = new Set(prev);
+        next.add(runToStop);
+        return next;
+      });
     }
     // Free UI immediately — with QUEUE_INLINE, sendMessage stays pending until the
     // server finishes, which made Stop look broken.
@@ -737,6 +732,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   };
 
   const handleSend = async (value: string) => {
+    // eslint-disable-next-line react-hooks/purity -- event handler; epoch token pairs the in-flight turn with its clear effect
     const token = Date.now();
     setUserStopped(false);
     setPendingToken(token);
@@ -796,9 +792,16 @@ export function BuildView({ agentId }: { agentId: string }) {
     }
 
     if (!readyTerminal && !contentTerminal && !hasFinalFromSend) return;
+    // Silence-after-submit guard: while a build is still running (e.g. right after a
+    // form/secret/connection continuation inserts a "saved" acknowledgement), an
+    // intermediate content message must NOT be treated as terminal — only a Ready
+    // card ends the turn. Otherwise the working panel disappears before progress
+    // events arrive and the UI goes silent.
+    if (!readyTerminal && busy) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- derive turn-completion from server messages; guarded by terminal checks above
     setPendingToken(null);
     setAwaitingReply(false);
-  }, [messages, pendingToken, awaitingReply]);
+  }, [messages, pendingToken, awaitingReply, busy]);
 
 
   // Consume the landing-page pending prompt exactly once, on an empty thread.
@@ -829,7 +832,6 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (!el || !anchor) return;
     // Keep the live conversation above the composer (safety scroll).
     const pin = () => {
-      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
       el.scrollTop = el.scrollHeight;
     };
     pin();
@@ -864,7 +866,6 @@ export function BuildView({ agentId }: { agentId: string }) {
   useEffect(() => {
     // Wait until baseline is known so refresh never re-chimes historical Ready cards.
     if (baselineIds === null) return;
-    const soundMsgs = messages.filter((m) => m.playReadySound);
     for (const message of messages) {
       if (!message.playReadySound) continue;
       if (celebratedIdsRef.current.has(message.id)) continue;
@@ -1010,7 +1011,6 @@ export function BuildView({ agentId }: { agentId: string }) {
                     onFormSubmitted={(requestId, opts) => {
                       refreshAfterForm(requestId, opts);
                     }}
-                    onSuggestion={(prompt) => setPrefill(prompt)}
                   />
                 );
               })}
@@ -1032,11 +1032,15 @@ export function BuildView({ agentId }: { agentId: string }) {
         <PromptComposer
           key={prefill}
           className="mx-auto max-w-3xl"
-          placeholder={t("builder:composer.placeholder")}
+          placeholder={
+            waitingOnForm
+              ? t("builder:composer.formLockedPlaceholder")
+              : t("builder:composer.placeholder")
+          }
           onSubmit={(value) => void handleSend(value)}
           onStop={handleStop}
           busy={composerBusy}
-          busyLabel={t("common:composer.working")}
+          disabled={waitingOnForm}
           autoFocus={messages.length === 0}
           initialValue={prefill}
         />

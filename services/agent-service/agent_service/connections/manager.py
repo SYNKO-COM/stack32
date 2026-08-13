@@ -395,13 +395,47 @@ class ConnectionManager:
             raise ConnectionError("OAUTH_TOKEN_REFRESH_FAILED")
         return response.json()
 
+    @staticmethod
+    def _select_scoped_connection(
+        rows: list[dict[str, Any]], *, provider: str, tool_id: str | None
+    ) -> dict[str, Any]:
+        """Pick the connection best satisfying a tool's required scopes.
+
+        Falls back to the first (most recently validated) row when scoping does
+        not apply or no connection fully covers the required scopes.
+        """
+        if provider != "google" or not tool_id:
+            return rows[0]
+        required = set(scopes_for_tools([tool_id]))
+        if not required:
+            return rows[0]
+        best_partial: dict[str, Any] | None = None
+        best_overlap = -1
+        for row in rows:
+            granted = set(row.get("scopes") or [])
+            if required <= granted:
+                return row
+            overlap = len(required & granted)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_partial = row
+        return best_partial or rows[0]
+
     async def resolve_access_token(
-        self, *, user_id: str, agent_id: str, provider: str = "google"
+        self,
+        *,
+        user_id: str,
+        agent_id: str,
+        provider: str = "google",
+        tool_id: str | None = None,
     ) -> str | None:
         """Resolve bearer token for runtime tools only — never log or return to LLM.
 
-        Automatically refreshes an expired/near-expiry Google token when a
-        refresh token is stored, persisting the new access token + expiry.
+        When ``tool_id`` is provided for Google, prefer the connection whose stored
+        scopes cover the least-privilege scopes required by that tool (so a
+        read-only Gmail connection is never used to satisfy a send tool, and the
+        correct account is chosen when several are bound). Automatically refreshes
+        an expired/near-expiry Google token, persisting the new token + expiry.
         """
         bindings = await self.list_bindings(user_id=user_id, agent_id=agent_id)
         if not bindings:
@@ -417,14 +451,15 @@ class ConnectionManager:
                     "provider": f"eq.{provider}",
                     "status": "eq.active",
                     "id": f"in.({','.join(connection_ids)})",
-                    "select": "id,secret_ref,refresh_secret_ref,token_expires_at",
-                    "limit": "1",
+                    "select": "id,secret_ref,refresh_secret_ref,token_expires_at,scopes",
+                    "order": "last_validated_at.desc.nullslast",
+                    "limit": "20",
                 },
             )
             rows = response.json() if response.status_code < 400 else []
             if not rows:
                 return None
-            row = rows[0]
+            row = self._select_scoped_connection(rows, provider=provider, tool_id=tool_id)
 
             if provider == "google" and self._needs_refresh(row.get("token_expires_at")) and row.get("refresh_secret_ref"):
                 try:

@@ -7,7 +7,6 @@ from agent_service.integrations.pipedream.schema import (
     normalize_configurable_props,
 )
 
-
 SLACK_COMPONENT = {
     "key": "slack-send-message-to-channel",
     "name": "Send Message to Channel",

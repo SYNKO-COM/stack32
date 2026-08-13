@@ -288,6 +288,23 @@ def build_capability_plan(
         if not any(a in {"gmail", "microsoft_outlook", "outlook"} for a in apps):
             ambiguities.append("email_provider")
 
+    # Ambiguous CRM without a named provider → ask which CRM later.
+    mentions_crm = bool(re.search(r"\bcrm\b", lower))
+    _named_crms = {
+        "hubspot",
+        "salesforce",
+        "pipedrive",
+        "zoho",
+        "zoho_crm",
+        "close",
+        "copper",
+    }
+    mentions_named_crm = any(k in lower for k in _named_crms) or any(
+        a in _named_crms for a in apps
+    )
+    if mentions_crm and not mentions_named_crm:
+        ambiguities.append("crm_provider")
+
     # Prefer Outlook over Google when explicitly asked.
     force_outlook = mentions_outlook or any(
         a in {"outlook", "microsoft_outlook"} for a in apps
@@ -756,9 +773,24 @@ async def resolve_tools_for_capabilities(
                 {
                     "capability": "email",
                     "reason": "ambiguous_provider",
+                    "group": "email",
                     "choices": [
                         {"tool_id": "gmail", "name": "Gmail (Google)"},
                         {"tool_id": "microsoft_outlook", "name": "Outlook"},
+                    ],
+                }
+            )
+        elif item == "crm_provider":
+            ambiguous.append(
+                {
+                    "capability": "crm",
+                    "reason": "ambiguous_provider",
+                    "group": "crm",
+                    "choices": [
+                        {"tool_id": "hubspot", "name": "HubSpot"},
+                        {"tool_id": "salesforce", "name": "Salesforce"},
+                        {"tool_id": "pipedrive", "name": "Pipedrive"},
+                        {"tool_id": "zoho_crm", "name": "Zoho CRM"},
                     ],
                 }
             )

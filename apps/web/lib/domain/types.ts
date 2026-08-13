@@ -120,6 +120,17 @@ export interface AgentSpec {
   identity?: AgentIdentity;
   /** V2 execution graph (optional — absent on V1 skeleton specs). */
   graph?: GraphSpec;
+  /** Exact BYOK model (schema 5.0). Structure shows this instead of the profile. */
+  model?: { provider: string; modelId: string } | null;
+  /** Chat/Schedule triggers (schema 5.0). Drives the Structure trigger node. */
+  triggers?: AgentTrigger[];
+}
+
+export type TriggerKind = "chat" | "schedule" | "manual" | "webhook";
+
+export interface AgentTrigger {
+  kind: TriggerKind;
+  enabled: boolean;
 }
 
 export interface AgentIdentity {

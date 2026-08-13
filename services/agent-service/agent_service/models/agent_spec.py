@@ -72,6 +72,40 @@ class ModelPolicy(BaseModel):
     max_output_tokens: int = Field(default=4096, ge=256, le=32000)
 
 
+# M1/M4: exact generated-agent model (BYOK). Distinct from the Builder's own LLM.
+LLMProviderName = Literal[
+    "openai",
+    "anthropic",
+    "google",
+    "xai",
+    "mistral",
+    "groq",
+    "openrouter",
+]
+
+
+class ModelConfig(BaseModel):
+    """Exact model the *generated* agent runs on, with agent-scoped BYOK credentials.
+
+    Legacy specs carry no ModelConfig; we never fabricate one — the agent is
+    flagged ``needs_setup`` until the user selects a concrete provider/model.
+    """
+
+    provider: LLMProviderName | None = Field(default=None)
+    model_id: str | None = Field(default=None, max_length=200)
+    display_name: str | None = Field(default=None, max_length=200)
+    # Generated agents MUST use their own key; platform fallback is never allowed.
+    credential_scope: Literal["agent"] = "agent"
+    fallback_enabled: Literal[False] = False
+    # Optional dedicated embeddings model for Stack32 semantic memory (BYOK).
+    embedding_provider: LLMProviderName | None = Field(default=None)
+    embedding_model_id: str | None = Field(default=None, max_length=200)
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.provider and self.model_id)
+
+
 class InputConfig(BaseModel):
     accept_files: bool = False
     accept_urls: bool = True
@@ -108,7 +142,13 @@ class KnowledgeConfig(BaseModel):
     min_similarity: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
+MemoryProviderName = Literal["stack32", "external_postgres"]
+
+
 class MemoryConfig(BaseModel):
+    # M3: memory provider selection. Default = Stack32 zero-config memory.
+    provider: MemoryProviderName = "stack32"
+    external_config_id: str | None = Field(default=None, max_length=64)
     conversation_enabled: bool = True
     semantic_enabled: bool = False
     retention_days: int = Field(default=90, ge=1, le=3650)
@@ -174,20 +214,28 @@ class ApprovalPolicy(BaseModel):
     require_for_email_send: bool = True
 
 
+# MVP surface = Chat + Schedule. Legacy "manual"/"webhook" remain loadable but are
+# normalized on migration (manual -> chat, webhook -> dropped from the MVP surface).
+TriggerKind = Literal["chat", "schedule", "manual", "webhook"]
+
+
 class TriggerConfig(BaseModel):
-    kind: Literal["manual", "schedule", "webhook"] = "manual"
-    enabled: bool = False
+    kind: TriggerKind = "chat"
+    enabled: bool = True
     cron: str | None = Field(default=None, max_length=120)
+    timezone: str | None = Field(default=None, max_length=64)
 
 
 class AgentSpec(BaseModel):
     """Versioned, declarative specification of a Stack32 agent (V2/V3/V4)."""
 
-    schema_version: Literal["2.0", "3.0", "4.0"] = "2.0"
+    schema_version: Literal["2.0", "3.0", "4.0", "5.0"] = "2.0"
     identity: AgentIdentity
     goal: str = Field(min_length=1, max_length=4000)
     instructions: AgentInstructions
     model_policy: ModelPolicy = Field(default_factory=ModelPolicy)
+    # V5+ additive: exact generated-agent model (BYOK). None until the user selects one.
+    model: ModelConfig | None = None
     input_config: InputConfig = Field(default_factory=InputConfig)
     tools: list[ToolBinding] = Field(default_factory=list, max_length=20)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
@@ -270,6 +318,53 @@ def migrate_v3_to_v4(spec: AgentSpec | dict[str, Any]) -> AgentSpec:
             }
         )
     data["connection_requirements"] = reqs_out
+    return AgentSpec.model_validate(data)
+
+
+def normalize_triggers(raw_triggers: Any) -> list[dict[str, Any]]:
+    """Normalize legacy triggers to the MVP surface (Chat/Schedule).
+
+    manual -> chat, webhook -> dropped, unknown -> dropped. When nothing usable
+    remains, default to a single enabled Chat trigger.
+    """
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw_triggers or []:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip().lower()
+        if kind == "manual":
+            kind = "chat"
+        if kind not in ("chat", "schedule"):
+            # webhook and unknown kinds are dropped from the MVP surface.
+            continue
+        if kind in seen:
+            continue
+        seen.add(kind)
+        out.append(
+            {
+                "kind": kind,
+                "enabled": bool(item.get("enabled", True)),
+                "cron": item.get("cron"),
+                "timezone": item.get("timezone"),
+            }
+        )
+    if not out:
+        out.append({"kind": "chat", "enabled": True, "cron": None, "timezone": None})
+    return out
+
+
+def migrate_v4_to_v5(spec: AgentSpec | dict[str, Any]) -> AgentSpec:
+    """Additive V5 upgrade: normalize triggers to Chat/Schedule; carry ModelConfig.
+
+    Never fabricates a concrete model for legacy agents — ``model`` stays ``None``
+    so readiness reports ``needs_setup`` until the user picks a provider/model.
+    """
+    data = spec.model_dump() if isinstance(spec, AgentSpec) else dict(spec)
+    data["schema_version"] = "5.0"
+    data["triggers"] = normalize_triggers(data.get("triggers"))
+    if data.get("model") is None:
+        data["model"] = None
     return AgentSpec.model_validate(data)
 
 
@@ -405,13 +500,18 @@ def load_agent_spec(raw: AgentSpec | dict[str, Any]) -> AgentSpec:
         version = "3.0"
 
     if version == "3.0":
-        return migrate_v3_to_v4(data)
+        spec = migrate_v3_to_v4(data)
+        data = spec.model_dump()
+        version = "4.0"
 
     if version == "4.0":
+        return migrate_v4_to_v5(data)
+
+    if version == "5.0":
         return AgentSpec.model_validate(data)
 
     # Unknown → best-effort V1 path then full chain.
-    return migrate_v3_to_v4(migrate_v2_to_v3(migrate_v1_to_v2(data)))
+    return migrate_v4_to_v5(migrate_v3_to_v4(migrate_v2_to_v3(migrate_v1_to_v2(data))))
 
 
 def _camel_to_snake_spec(raw: dict[str, Any]) -> dict[str, Any]:

@@ -7,10 +7,13 @@ from pydantic import ValidationError
 
 from agent_service.models.agent_spec import (
     AgentSpec,
+    ModelConfig,
     ToolBinding,
     load_agent_spec,
     migrate_v2_to_v3,
     migrate_v3_to_v4,
+    migrate_v4_to_v5,
+    normalize_triggers,
 )
 from agent_service.models.graph_spec import default_linear_graph
 
@@ -63,10 +66,14 @@ def test_migrate_v3_to_v4_sets_providers():
     assert v4.connection_requirements[0].required_for == ["gmail_list"]
 
 
-def test_load_agent_spec_migrates_v2_to_v4():
+def test_load_agent_spec_migrates_v2_to_v5():
     spec = load_agent_spec(_base_v2())
-    assert spec.schema_version == "4.0"
+    assert spec.schema_version == "5.0"
     assert all(t.provider == "native" for t in spec.tools)
+    # Legacy specs carry no exact model; never fabricated.
+    assert spec.model is None
+    # A default Chat trigger is present after normalization.
+    assert any(t.kind == "chat" for t in spec.triggers)
 
 
 def test_tool_id_empty_rejected():
@@ -75,6 +82,57 @@ def test_tool_id_empty_rejected():
     data["tools"] = [{"tool_id": ""}]
     with pytest.raises(ValidationError):
         AgentSpec.model_validate(data)
+
+
+def test_normalize_triggers_maps_manual_and_drops_webhook():
+    result = normalize_triggers(
+        [
+            {"kind": "manual", "enabled": True},
+            {"kind": "webhook", "enabled": True},
+            {"kind": "schedule", "enabled": True, "cron": "0 9 * * *"},
+        ]
+    )
+    kinds = [t["kind"] for t in result]
+    assert "chat" in kinds  # manual -> chat
+    assert "schedule" in kinds
+    assert "webhook" not in kinds
+
+
+def test_normalize_triggers_defaults_to_chat():
+    assert normalize_triggers([]) == [
+        {"kind": "chat", "enabled": True, "cron": None, "timezone": None}
+    ]
+
+
+def test_migrate_v4_to_v5_never_fabricates_model():
+    data = _base_v2()
+    data["schema_version"] = "4.0"
+    data["triggers"] = [{"kind": "manual", "enabled": True}]
+    v5 = migrate_v4_to_v5(data)
+    assert v5.schema_version == "5.0"
+    assert v5.model is None
+    assert [t.kind for t in v5.triggers] == ["chat"]
+
+
+def test_model_config_agent_scoped_only():
+    mc = ModelConfig(provider="openai", model_id="gpt-4o-mini")
+    assert mc.credential_scope == "agent"
+    assert mc.fallback_enabled is False
+    assert mc.is_configured is True
+    assert ModelConfig().is_configured is False
+
+
+def test_spec_round_trips_model_config():
+    data = _base_v2()
+    data["schema_version"] = "5.0"
+    data["model"] = {"provider": "anthropic", "model_id": "claude-3-5-sonnet-latest"}
+    data["triggers"] = [{"kind": "chat", "enabled": True}]
+    spec = AgentSpec.model_validate(data)
+    assert spec.model is not None
+    assert spec.model.provider == "anthropic"
+    reloaded = load_agent_spec(spec.model_dump())
+    assert reloaded.model is not None
+    assert reloaded.model.model_id == "claude-3-5-sonnet-latest"
 
 
 def test_connection_requirement_required_for_alias():

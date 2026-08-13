@@ -30,7 +30,6 @@ interface PromptComposerProps {
   animatedPlaceholders?: string[];
   disabled?: boolean;
   busy?: boolean;
-  busyLabel?: string;
   autoFocus?: boolean;
   size?: "hero" | "compact";
   className?: string;
@@ -157,7 +156,6 @@ export function PromptComposer({
   animatedPlaceholders,
   disabled = false,
   busy = false,
-  busyLabel,
   autoFocus = false,
   size = "compact",
   className,

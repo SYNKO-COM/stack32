@@ -54,7 +54,12 @@ export function TypewriterText({
   const [shown, setShown] = useState(() => (active ? "" : plain));
   const doneRef = useRef(false);
   const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
+
+  // Keep the latest onDone without re-running the typing effect (ref synced in effect,
+  // not during render, per the react-hooks purity rule).
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
 
   useEffect(() => {
     doneRef.current = false;
@@ -64,6 +69,7 @@ export function TypewriterText({
       onDoneRef.current?.();
     };
     if (!active) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reveal full text immediately on reload/history
       setShown(plain);
       notify();
       return;

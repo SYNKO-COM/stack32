@@ -41,6 +41,7 @@ export function ViewChangesDrawer({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- enter loading state when the drawer opens
     setLoading(true);
     setSelected(null);
     void (async () => {

@@ -149,7 +149,8 @@
     "executionDisabled": "Building is temporarily unavailable. Your message was saved. We'll continue as soon as the service is back."
   },
   "composer": {
-    "placeholder": "Describe what to build or change…"
+    "placeholder": "Describe what to build or change…",
+    "formLockedPlaceholder": "Finish the step above to continue…"
   },
   "builderName": "Stack32",
   "you": "You",

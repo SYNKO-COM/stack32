@@ -41,7 +41,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build agent-service image
         run: docker build -f services/agent-service/Dockerfile -t stack32-agent-service:ci services
-      - uses: aquasecurity/trivy-action@0.28.0
+      # Pinned to the commit SHA of v0.35.0 — the only trivy-action tag confirmed
+      # uncompromised in the March 2026 supply-chain incident (all non-v tags, incl.
+      # the previous 0.28.0, were removed). SHA pinning per GitHub Actions best practice.
+      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           image-ref: stack32-agent-service:ci
           severity: CRITICAL,HIGH

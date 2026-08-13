@@ -86,6 +86,9 @@ async def evaluate_agent_readiness(
     spec: AgentSpec | dict[str, Any],
     db: Any | None = None,
     build_ok: bool | None = None,
+    require_brain: bool = False,
+    llm_status: str | None = None,
+    verification_passed: bool | None = None,
 ) -> ReadinessResult:
     checks: list[ReadinessCheck] = []
     missing_connections: list[dict[str, Any]] = []
@@ -355,6 +358,72 @@ async def evaluate_agent_readiness(
             )
         )
 
+    # Brain (LLM) P0 — the generated agent must run on an exact, agent-scoped BYOK
+    # model. Enforced hard only for the publish gate (require_brain); informational
+    # otherwise so the general readiness card doesn't block earlier build steps.
+    brain_severity = "error" if require_brain else "info"
+    model_cfg = parsed.model
+    if model_cfg is None or not (model_cfg.provider and model_cfg.model_id):
+        brain_ok = False
+        brain_msg = "Choose the exact model your agent runs on."
+    elif llm_status is not None and llm_status != "valid":
+        brain_ok = False
+        brain_msg = "Re-validate your model API key — the last check did not pass."
+    else:
+        brain_ok = True
+        brain_msg = "Agent brain (model + key) is configured."
+    checks.append(
+        ReadinessCheck(
+            key="brain",
+            ok=brain_ok,
+            message=brain_msg,
+            severity="info" if brain_ok else brain_severity,
+        )
+    )
+    if not brain_ok and require_brain:
+        missing_config.append({"type": "brain", "message": brain_msg})
+
+    # Trigger P0 — at least one enabled Chat or Schedule trigger.
+    active_triggers = [
+        t for t in parsed.triggers if t.enabled and t.kind in ("chat", "schedule")
+    ]
+    trigger_ok = bool(active_triggers)
+    checks.append(
+        ReadinessCheck(
+            key="trigger",
+            ok=trigger_ok,
+            message=(
+                "At least one Chat or Schedule trigger is enabled."
+                if trigger_ok
+                else "Enable a Chat or Schedule trigger."
+            ),
+            severity="info" if trigger_ok else ("error" if require_brain else "warn"),
+        )
+    )
+
+    # Verification P0 — the last verify→repair pipeline must have passed for the
+    # current version. Enforced hard only for the publish gate (require_brain).
+    if verification_passed is not None:
+        verification_ok = bool(verification_passed)
+        checks.append(
+            ReadinessCheck(
+                key="verification",
+                ok=verification_ok,
+                message=(
+                    "Verification passed for the current version."
+                    if verification_ok
+                    else "Run verification again — the last pipeline did not pass."
+                ),
+                severity="info"
+                if verification_ok
+                else ("error" if require_brain else "warn"),
+            )
+        )
+        if not verification_ok and require_brain:
+            missing_config.append(
+                {"type": "verification", "message": "Verification has not passed."}
+            )
+
     if build_ok is False:
         checks.append(
             ReadinessCheck(
@@ -405,12 +474,26 @@ async def evaluate_agent_readiness(
     errors = [c for c in checks if not c.ok and c.severity == "error"]
     warns = [c for c in checks if not c.ok and c.severity == "warn"]
 
+    # Setup-type gaps (user picks a model / enables a trigger / connects an app) are
+    # needs_setup, distinct from a broken build/tools which is needs_attention.
+    setup_errors = {"brain", "trigger", "connections", "tool_config"}
+    setup_error_present = any(
+        not c.ok and c.severity == "error" and c.key in setup_errors for c in checks
+    )
+    hard_errors = [
+        c for c in checks if not c.ok and c.severity == "error" and c.key not in setup_errors
+    ]
+
     # Unresolved tools / hard errors outrank missing connections (needs_attention).
     unresolved_present = any(m.get("type") == "unresolved_tool" for m in missing_config)
     tools_check_failed = any(c.key == "tools_resolve" and not c.ok for c in checks)
-    if unresolved_present or tools_check_failed or (errors and not missing_connections):
+    if unresolved_present or tools_check_failed or hard_errors:
         status = "needs_attention"
-    elif missing_connections or any(m.get("type") == "tool_config" for m in missing_config):
+    elif (
+        missing_connections
+        or any(m.get("type") == "tool_config" for m in missing_config)
+        or setup_error_present
+    ):
         status = "needs_setup"
     elif errors or warns:
         status = "needs_attention"

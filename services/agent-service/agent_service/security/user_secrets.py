@@ -153,6 +153,86 @@ async def upsert_llm_secret(
     }
 
 
+async def record_llm_validation(
+    *,
+    user_id: str,
+    agent_id: str | None,
+    provider: str,
+    model_id: str,
+    status: str,
+    error_code: str | None = None,
+    detail: str | None = None,
+) -> None:
+    """Persist the latest exact-model validation outcome for freshness checks."""
+    payload = {
+        "user_id": user_id,
+        "agent_id": agent_id,
+        "provider": provider.lower().strip(),
+        "model_id": model_id.strip(),
+        "status": status,
+        "error_code": error_code,
+        "detail": (detail or "")[:500] or None,
+    }
+    async with get_supabase_admin_client() as client:
+        if agent_id:
+            await client.delete(
+                "/llm_validations",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "agent_id": f"eq.{agent_id}",
+                    "provider": f"eq.{payload['provider']}",
+                    "model_id": f"eq.{payload['model_id']}",
+                },
+            )
+        response = await client.post("/llm_validations", json=payload)
+    if response.status_code >= 400:
+        logger.info("llm_validation record failed status=%s", response.status_code)
+
+
+async def latest_llm_validation(
+    *, user_id: str, agent_id: str, provider: str, model_id: str
+) -> str | None:
+    """Return the last recorded validation status for this exact model, if any."""
+    async with get_supabase_admin_client() as client:
+        response = await client.get(
+            "/llm_validations",
+            params={
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "provider": f"eq.{provider.lower().strip()}",
+                "model_id": f"eq.{model_id.strip()}",
+                "select": "status,checked_at",
+                "order": "checked_at.desc",
+                "limit": "1",
+            },
+        )
+    if response.status_code >= 400:
+        return None
+    rows = response.json()
+    if isinstance(rows, list) and rows:
+        return str(rows[0].get("status") or "") or None
+    return None
+
+
+async def validate_agent_model(
+    *, user_id: str, agent_id: str | None, provider: str, model_id: str, api_key: str
+) -> Any:
+    """Validate an exact provider/model with the given key and record the outcome."""
+    from agent_service.gateway.llm_validation import validate_model
+
+    result = await validate_model(provider=provider, model_id=model_id, api_key=api_key)
+    await record_llm_validation(
+        user_id=user_id,
+        agent_id=agent_id,
+        provider=provider,
+        model_id=model_id,
+        status=result.status,
+        error_code=result.error_code,
+        detail=result.detail,
+    )
+    return result
+
+
 async def resolve_llm_credentials(
     *, user_id: str, agent_id: str
 ) -> tuple[str, str] | None:

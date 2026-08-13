@@ -57,8 +57,9 @@ async def process_run_by_id(run_id: str) -> dict[str, Any]:
         if not spec:
             await db.fail_run(run_id, "AGENT_SPEC_INVALID")
             return {"error": "AGENT_SPEC_INVALID"}
-        content = (run.get("input") or {}).get("prompt") or ""
-        return await runtime.execute_live_run(
+        payload = run.get("input") or {}
+        content = payload.get("prompt") or ""
+        result = await runtime.execute_live_run(
             run_id=run_id,
             user_id=user_id,
             agent_id=agent_id,
@@ -66,6 +67,20 @@ async def process_run_by_id(run_id: str) -> dict[str, Any]:
             content=content,
             spec=spec,
         )
+        # Scheduled runs may request a terminal email. Delivery is best-effort:
+        # a failure is recorded but must never change the run outcome.
+        notify_email = payload.get("notify_email")
+        if notify_email:
+            await _notify_scheduled_run(
+                db=db,
+                user_id=user_id,
+                agent_id=agent_id,
+                run_id=run_id,
+                spec=spec,
+                notify_email=str(notify_email),
+                result=result,
+            )
+        return result
 
     if run_type == "ingestion":
         from agent_service.knowledge.ingest import (
@@ -103,6 +118,61 @@ async def process_run_by_id(run_id: str) -> dict[str, Any]:
         return {"status": "completed", "run_id": run_id}
 
     return {"status": "ignored", "run_id": run_id}
+
+
+def _agent_name(spec: Any) -> str:
+    try:
+        if isinstance(spec, dict):
+            ident = spec.get("identity") or {}
+            return str(ident.get("name") or "Your agent")
+        return str(getattr(getattr(spec, "identity", None), "name", None) or "Your agent")
+    except Exception:  # noqa: BLE001
+        return "Your agent"
+
+
+async def _notify_scheduled_run(
+    *,
+    db: Persistence,
+    user_id: str,
+    agent_id: str,
+    run_id: str,
+    spec: Any,
+    notify_email: str,
+    result: dict[str, Any],
+) -> None:
+    """Send the terminal scheduled-run email and audit the delivery. Never raises."""
+    from agent_service.notifications.mailer import get_email_service
+
+    status = "failed" if (result or {}).get("error") else "succeeded"
+    summary = str((result or {}).get("answer") or (result or {}).get("error") or "")
+    try:
+        outcome = await get_email_service().send_scheduled_run_notification(
+            to_email=notify_email,
+            agent_name=_agent_name(spec),
+            run_id=run_id,
+            status=status,
+            summary=summary or None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("scheduled email raised err=%s", type(exc).__name__)
+        outcome = None
+
+    try:
+        async with get_supabase_admin_client() as client:
+            await client.post(
+                "/email_deliveries",
+                json={
+                    "user_id": user_id,
+                    "agent_id": agent_id,
+                    "run_id": run_id,
+                    "to_email": notify_email,
+                    "subject": f"[Stack32] scheduled run {status}",
+                    "status": getattr(outcome, "status", "failed"),
+                    "detail": getattr(outcome, "detail", "notification error"),
+                },
+            )
+    except Exception:  # noqa: BLE001
+        logger.debug("email_deliveries audit failed", exc_info=True)
 
 
 async def poll_and_process_once(owner: str | None = None) -> dict[str, Any] | None:

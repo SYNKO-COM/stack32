@@ -55,6 +55,7 @@ class BuildReport:
     snapshot: dict[str, Any] | None = None
     repaired: bool = False
     stop_reason: str = "COMPLETED"
+    failure_category: str | None = None
     events: list[str] = field(default_factory=list)
 
 
@@ -271,6 +272,16 @@ class CodeBuildPipeline:
         success = test_status == "passed"
         structure = sorted(f["path"] for f in files)
 
+        # Classify a terminal failure so callers/readiness can react (repairable vs
+        # provider-temporary vs user-action) instead of showing a generic error.
+        failure_category: str | None = None
+        if not success:
+            from agent_service.verifier import classify_failure
+
+            failure_category = classify_failure(
+                stop_reason if stop_reason != "COMPLETED" else "SANDBOX_TESTS_FAILED"
+            )
+
         # 6. Immutable snapshot.
         snapshot = None
         sandbox_snap = None
@@ -304,7 +315,8 @@ class CodeBuildPipeline:
             success=success, handle=handle, files=files, structure=structure,
             test_status=test_status, lint_status=lint_status,
             test_output=str(test_result.get("stdout", ""))[:4000],
-            snapshot=snapshot, repaired=repaired, stop_reason=stop_reason, events=events,
+            snapshot=snapshot, repaired=repaired, stop_reason=stop_reason,
+            failure_category=failure_category, events=events,
         )
 
     @staticmethod

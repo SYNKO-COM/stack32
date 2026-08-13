@@ -27,6 +27,47 @@ def test_scopes_for_tools_dedup_and_openid():
     assert len(scopes) == len(set(scopes))
 
 
+def test_select_scoped_connection_prefers_covering_scopes():
+    send_scopes = scopes_for_tools(["gmail_send_message"])
+    read_only = {"id": "read", "scopes": scopes_for_tools(["gmail_list"])}
+    sender = {"id": "send", "scopes": send_scopes}
+    rows = [read_only, sender]
+    chosen = ConnectionManager._select_scoped_connection(
+        rows, provider="google", tool_id="gmail_send_message"
+    )
+    assert chosen["id"] == "send"
+
+
+def test_select_scoped_connection_falls_back_to_first():
+    rows = [{"id": "a", "scopes": []}, {"id": "b", "scopes": []}]
+    # Non-google provider ignores scoping entirely.
+    assert (
+        ConnectionManager._select_scoped_connection(
+            rows, provider="slack", tool_id="anything"
+        )["id"]
+        == "a"
+    )
+    # No tool_id → first row.
+    assert (
+        ConnectionManager._select_scoped_connection(
+            rows, provider="google", tool_id=None
+        )["id"]
+        == "a"
+    )
+
+
+def test_select_scoped_connection_partial_overlap_best_effort():
+    rows = [
+        {"id": "none", "scopes": ["openid"]},
+        {"id": "partial", "scopes": scopes_for_tools(["gmail_list"])},
+    ]
+    # No connection fully covers send; pick the one with most overlap.
+    chosen = ConnectionManager._select_scoped_connection(
+        rows, provider="google", tool_id="gmail_send_message"
+    )
+    assert chosen["id"] == "partial"
+
+
 class _FakeResponse:
     def __init__(self, status_code, payload):
         self.status_code = status_code

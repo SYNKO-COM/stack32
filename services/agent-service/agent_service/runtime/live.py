@@ -238,6 +238,8 @@ class LiveRuntime:
                 "memory_write_policy": spec.memory.write_policy,
                 "memory_candidate": memory_candidate or "",
                 "conversation_summary": summary or "",
+                "memory_retention_days": spec.memory.retention_days,
+                "memory_max_items": spec.memory.max_memory_items,
             }
             if spec.knowledge.enabled:
                 await self.db.emit_event(
@@ -282,6 +284,7 @@ class LiveRuntime:
                     user_creds=user_creds,
                     knowledge_chunks=state.get("knowledge_chunks") or [],
                     memories=state.get("memories") or [],
+                    conversation_summary=state.get("conversation_summary") or "",
                 )
                 answer = str(lg.get("answer") or "")
                 interrupt = lg.get("interrupt")

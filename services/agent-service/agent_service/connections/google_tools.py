@@ -14,9 +14,9 @@ from agent_service.connections.manager import ConnectionManager
 logger = logging.getLogger(__name__)
 
 
-async def _token(user_id: str, agent_id: str) -> str | None:
+async def _token(user_id: str, agent_id: str, tool_id: str | None = None) -> str | None:
     return await ConnectionManager().resolve_access_token(
-        user_id=user_id, agent_id=agent_id, provider="google"
+        user_id=user_id, agent_id=agent_id, provider="google", tool_id=tool_id
     )
 
 
@@ -32,7 +32,7 @@ async def gmail_list(
 ) -> dict[str, Any]:
     if dry_run:
         return {"dry_run": True, "tool": "gmail_list", "query": query}
-    token = await _token(user_id, agent_id)
+    token = await _token(user_id, agent_id, "gmail_list")
     if not token:
         return {"error": "CONNECTION_REQUIRED", "provider": "google", "tool": "gmail_list"}
     params: dict[str, Any] = {"maxResults": min(max_results, 25)}
@@ -61,7 +61,7 @@ async def gmail_read(
 ) -> dict[str, Any]:
     if dry_run:
         return {"dry_run": True, "tool": "gmail_read", "message_id": message_id}
-    token = await _token(user_id, agent_id)
+    token = await _token(user_id, agent_id, "gmail_read")
     if not token:
         return {"error": "CONNECTION_REQUIRED", "provider": "google", "tool": "gmail_read"}
     async with httpx.AsyncClient(timeout=20.0) as client:
@@ -108,7 +108,7 @@ async def gmail_send_draft(
             "subject": subject[:200],
             "body_preview": body[:200],
         }
-    token = await _token(user_id, agent_id)
+    token = await _token(user_id, agent_id, "gmail_create_draft")
     if not token:
         return {"error": "CONNECTION_REQUIRED", "provider": "google", "tool": "gmail_create_draft"}
     raw = _mime_raw(to, subject, body)
@@ -146,7 +146,7 @@ async def gmail_send_message(
             "subject": subject[:200],
             "body_preview": body[:200],
         }
-    token = await _token(user_id, agent_id)
+    token = await _token(user_id, agent_id, "gmail_send_message")
     if not token:
         return {"error": "CONNECTION_REQUIRED", "provider": "google", "tool": "gmail_send_message"}
     raw = _mime_raw(to, subject, body)
@@ -177,7 +177,7 @@ async def calendar_list(
 ) -> dict[str, Any]:
     if dry_run:
         return {"dry_run": True, "tool": "calendar_list"}
-    token = await _token(user_id, agent_id)
+    token = await _token(user_id, agent_id, "calendar_list")
     if not token:
         return {"error": "CONNECTION_REQUIRED", "provider": "google", "tool": "calendar_list"}
     async with httpx.AsyncClient(timeout=20.0) as client:
@@ -224,7 +224,7 @@ async def calendar_create_event(
             "start": start,
             "end": end,
         }
-    token = await _token(user_id, agent_id)
+    token = await _token(user_id, agent_id, "calendar_create_event")
     if not token:
         return {
             "error": "CONNECTION_REQUIRED",
@@ -270,7 +270,7 @@ async def google_docs_create(
             "title": title[:200],
             "body_chars": len(body or ""),
         }
-    token = await _token(user_id, agent_id)
+    token = await _token(user_id, agent_id, "google_docs_create")
     if not token:
         return {"error": "CONNECTION_REQUIRED", "provider": "google", "tool": "google_docs_create"}
     headers = {"Authorization": f"Bearer {token}"}
@@ -327,7 +327,7 @@ async def google_docs_append(
             "document_id": document_id[:128],
             "text_chars": len(text or ""),
         }
-    token = await _token(user_id, agent_id)
+    token = await _token(user_id, agent_id, "google_docs_append")
     if not token:
         return {"error": "CONNECTION_REQUIRED", "provider": "google", "tool": "google_docs_append"}
     doc_id = document_id.strip()[:128]

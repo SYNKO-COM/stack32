@@ -4,12 +4,24 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from agent_service.gateway.model_gateway import get_model_gateway
 from agent_service.supabase_client import get_supabase_admin_client
 
 logger = logging.getLogger(__name__)
+
+
+def compute_expires_at(retention_days: int | None, *, now: datetime | None = None) -> str | None:
+    """Return an ISO-8601 UTC expiry for a memory row, or None for no expiry.
+
+    Pure helper (unit-testable). ``retention_days`` <= 0 or None means keep forever.
+    """
+    if not retention_days or retention_days <= 0:
+        return None
+    base = now or datetime.now(UTC)
+    return (base + timedelta(days=int(retention_days))).isoformat()
 
 _SECRETISH = re.compile(
     r"(?i)(password|api[_-]?key|secret|token|bearer\s+\S+|sk-\S+|credit\s*card)"
@@ -153,6 +165,8 @@ async def maybe_write_memory(state: dict[str, Any]) -> None:
         memory_type=str(state.get("memory_type") or "fact"),
         content=content,
         thread_id=state.get("thread_id"),
+        retention_days=state.get("memory_retention_days"),
+        max_memory_items=state.get("memory_max_items"),
     )
 
 
@@ -163,6 +177,8 @@ async def write_memory(
     memory_type: str,
     content: str,
     thread_id: str | None = None,
+    retention_days: int | None = None,
+    max_memory_items: int | None = None,
 ) -> dict[str, Any] | None:
     gateway = get_model_gateway()
     embedding = None
@@ -180,6 +196,11 @@ async def write_memory(
         "embedding_model": "configured",
         "embedding_dimension": 1536,
     }
+    # Retention enforcement: stamp an expiry so match_agent_memories filters it out
+    # and cleanup can hard-delete it later.
+    expires_at = compute_expires_at(retention_days)
+    if expires_at is not None:
+        payload["expires_at"] = expires_at
     if embedding is not None:
         payload["embedding"] = embedding
 
@@ -193,7 +214,67 @@ async def write_memory(
         logger.warning("memory write failed status=%s", response.status_code)
         return None
     rows = response.json()
-    return rows[0] if rows else None
+    row = rows[0] if rows else None
+    if max_memory_items and max_memory_items > 0:
+        await prune_memories(
+            user_id=user_id, agent_id=agent_id, max_memory_items=max_memory_items
+        )
+    return row
+
+
+async def prune_memories(*, user_id: str, agent_id: str, max_memory_items: int) -> int:
+    """Delete the oldest memories beyond ``max_memory_items`` for an agent."""
+    if max_memory_items <= 0:
+        return 0
+    async with get_supabase_admin_client() as client:
+        response = await client.get(
+            "/agent_memories",
+            params={
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "select": "id",
+                "order": "created_at.desc",
+                "offset": str(max_memory_items),
+                "limit": "1000",
+            },
+        )
+        if response.status_code >= 400:
+            return 0
+        rows = response.json()
+        ids = [str(r.get("id")) for r in rows if isinstance(r, dict) and r.get("id")]
+        if not ids:
+            return 0
+        in_list = "(" + ",".join(ids) + ")"
+        deleted = await client.delete(
+            "/agent_memories",
+            params={"id": f"in.{in_list}", "user_id": f"eq.{user_id}"},
+            headers={"Prefer": "return=representation"},
+        )
+    if deleted.status_code >= 400:
+        return 0
+    body = deleted.json()
+    return len(body) if isinstance(body, list) else 0
+
+
+async def cleanup_expired_memories(*, agent_id: str | None = None) -> int:
+    """Hard-delete memories whose ``expires_at`` is in the past (retention cleanup)."""
+    now_iso = datetime.now(UTC).isoformat()
+    params: dict[str, str] = {
+        "expires_at": f"lt.{now_iso}",
+        "select": "id",
+    }
+    if agent_id:
+        params["agent_id"] = f"eq.{agent_id}"
+    async with get_supabase_admin_client() as client:
+        response = await client.delete(
+            "/agent_memories",
+            params=params,
+            headers={"Prefer": "return=representation"},
+        )
+    if response.status_code >= 400:
+        return 0
+    rows = response.json()
+    return len(rows) if isinstance(rows, list) else 0
 
 
 async def clear_memories(*, user_id: str, agent_id: str) -> int:

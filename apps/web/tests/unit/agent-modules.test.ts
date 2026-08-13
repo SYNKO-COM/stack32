@@ -77,6 +77,51 @@ describe("buildAgentModules readiness", () => {
     expect(gmail?.setupStatus).toBe("needs_setup");
   });
 
+  it("hides internal chain kinds (guardrail/router/approval/transform)", () => {
+    const graph: GraphSpec = {
+      version: "1.0",
+      entryNodeId: "in",
+      nodes: [
+        { id: "in", type: "input", name: "Trigger" },
+        { id: "guard", type: "guardrail", name: "Guardrail" },
+        { id: "route", type: "router", name: "Router" },
+        { id: "llm", type: "llm", name: "AI Agent" },
+        { id: "appr", type: "approval", name: "Approval" },
+        { id: "xform", type: "transform", name: "Transform" },
+        { id: "out", type: "output", name: "Output" },
+      ],
+      edges: [],
+    };
+    const modules = buildAgentModules(graph, baseSpec);
+    const kinds = modules.chain.map((m) => m.kind);
+    expect(kinds).toEqual(["trigger", "brain", "output"]);
+  });
+
+  it("shows the exact BYOK model instead of the profile", () => {
+    const spec = {
+      ...baseSpec,
+      model: { provider: "openai", modelId: "gpt-4o-mini" },
+    } satisfies AgentSpec;
+    const modules = buildAgentModules(null, spec);
+    const model = modules.attachments.find((m) => m.kind === "model");
+    expect(model?.detail).toBe("openai/gpt-4o-mini");
+    const brain = modules.chain.find((m) => m.kind === "brain");
+    expect(brain?.detail).toBe("openai/gpt-4o-mini");
+  });
+
+  it("reflects a schedule trigger on the trigger node", () => {
+    const spec = {
+      ...baseSpec,
+      triggers: [
+        { kind: "schedule" as const, enabled: true },
+        { kind: "chat" as const, enabled: false },
+      ],
+    } satisfies AgentSpec;
+    const modules = buildAgentModules(null, spec);
+    const trigger = modules.chain.find((m) => m.kind === "trigger");
+    expect(trigger?.detail).toBe("schedule");
+  });
+
   it("marks Google Docs style tools as Pipedream setup", () => {
     const spec = {
       ...baseSpec,

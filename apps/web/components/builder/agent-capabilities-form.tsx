@@ -34,9 +34,8 @@ export function AgentCapabilitiesForm({
   const [memorySemantic, setMemorySemantic] = useState(
     () => fieldDefault(uiComponent.fields, "memory_semantic") === "true",
   );
-  const [knowledgeEnabled, setKnowledgeEnabled] = useState(
-    () => fieldDefault(uiComponent.fields, "knowledge_enabled") === "true",
-  );
+  // Knowledge/RAG is a conditional capability — the server enables it only when the
+  // agent actually needs retrieval, so we no longer surface a universal toggle here.
   const [scheduleHourly, setScheduleHourly] = useState(
     () => fieldDefault(uiComponent.fields, "schedule_hourly") === "true",
   );
@@ -60,7 +59,7 @@ export function AgentCapabilitiesForm({
         runId,
         memoryConversation,
         memorySemantic,
-        knowledgeEnabled,
+        knowledgeEnabled: false,
         scheduleHourly,
         contextNotes: contextNotes.trim(),
       });
@@ -95,14 +94,6 @@ export function AgentCapabilitiesForm({
         checked={memorySemantic}
         disabled={submitting}
         onChange={setMemorySemantic}
-      />
-      <ToggleRow
-        id="cap-knowledge"
-        label={t("builder:capabilities.knowledge")}
-        hint={t("builder:capabilities.knowledgeHint")}
-        checked={knowledgeEnabled}
-        disabled={submitting}
-        onChange={setKnowledgeEnabled}
       />
       <ToggleRow
         id="cap-schedule"

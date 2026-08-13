@@ -51,14 +51,13 @@ export interface BuildAgentModulesOptions {
   boundProviders?: Iterable<string>;
 }
 
+// MVP Structure is a straight line: Trigger → AI Agent (brain) → Output. Internal
+// kinds (guardrail, router, approval, transform) run at runtime but are hidden
+// here so the canvas reads like n8n, not a compiler graph.
 const CHAIN_KINDS: Partial<Record<GraphNodeType, ModuleKind>> = {
   input: "trigger",
-  guardrail: "guard",
   llm: "brain",
-  router: "router",
-  approval: "approval",
   output: "output",
-  transform: "router",
   sub_agent: "brain",
 };
 
@@ -124,6 +123,23 @@ function inferProvider(toolId: string | undefined, provider?: string): string | 
   }
   if (provider) return provider;
   return "native";
+}
+
+/** Exact `provider/model_id` when the spec carries a schema-5 model; else the profile. */
+function exactModelLabel(spec: AgentSpec | null | undefined): string | undefined {
+  if (spec?.model?.provider && spec.model.modelId) {
+    return `${spec.model.provider}/${spec.model.modelId}`;
+  }
+  return spec?.modelProfile?.profile;
+}
+
+/** First enabled Chat/Schedule trigger kind, defaulting to chat. */
+function primaryTriggerKind(spec: AgentSpec | null | undefined): "chat" | "schedule" {
+  const enabled = (spec?.triggers ?? []).filter((t) => t.enabled);
+  if (enabled.some((t) => t.kind === "schedule") && !enabled.some((t) => t.kind === "chat")) {
+    return "schedule";
+  }
+  return "chat";
 }
 
 function bindingLookup(spec: AgentSpec | null | undefined): Map<string, ToolBinding> {
@@ -204,10 +220,12 @@ function fromGraph(
   bindings: Map<string, ToolBinding>,
   boundToolIds: Set<string>,
   boundProviders: Set<string>,
+  spec: AgentSpec | null | undefined,
 ): AgentModuleMap {
   const chain: AgentModule[] = [];
   const attachments: AgentModule[] = [];
   const seenAttachments = new Set<string>();
+  const triggerKind = primaryTriggerKind(spec);
 
   for (const node of graph.nodes) {
     const chainKind = CHAIN_KINDS[node.type];
@@ -216,7 +234,7 @@ function fromGraph(
         id: node.id,
         kind: chainKind,
         label: node.name,
-        detail: node.description,
+        detail: chainKind === "trigger" ? triggerKind : node.description,
         ready: true,
         setupStatus: "ready",
       });
@@ -261,8 +279,8 @@ function fromSpec(
   boundProviders: Set<string>,
 ): AgentModuleMap {
   const chain: AgentModule[] = [
-    { id: "input", kind: "trigger", ready: true, setupStatus: "ready" },
-    { id: "brain", kind: "brain", detail: spec.modelProfile.profile, ready: true, setupStatus: "ready" },
+    { id: "input", kind: "trigger", detail: primaryTriggerKind(spec), ready: true, setupStatus: "ready" },
+    { id: "brain", kind: "brain", detail: exactModelLabel(spec), ready: true, setupStatus: "ready" },
     { id: "output", kind: "output", detail: spec.output.format, ready: true, setupStatus: "ready" },
   ];
 
@@ -301,14 +319,13 @@ export function buildAgentModules(
   const bindings = bindingLookup(spec);
 
   if (graph && graph.nodes.length > 0) {
-    const fromCompiled = fromGraph(graph, bindings, boundToolIds, boundProviders);
+    const fromCompiled = fromGraph(graph, bindings, boundToolIds, boundProviders, spec);
     if (fromCompiled.chain.length > 0) {
       // The model node is always shown as a capability of the brain, like n8n.
-      const profile = spec?.modelProfile.profile;
       fromCompiled.attachments.unshift({
         id: "model",
         kind: "model",
-        detail: profile,
+        detail: exactModelLabel(spec),
         ready: true,
         setupStatus: "ready",
       });
@@ -320,7 +337,7 @@ export function buildAgentModules(
     derived.attachments.unshift({
       id: "model",
       kind: "model",
-      detail: spec.modelProfile.profile,
+      detail: exactModelLabel(spec),
       ready: true,
       setupStatus: "ready",
     });

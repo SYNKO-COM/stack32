@@ -3,6 +3,7 @@ import type {
   AgentIdentity,
   AgentSpec,
   AgentStatus,
+  AgentTrigger,
   AgentVersion,
   ApprovalMode,
   BuildBoardNode,
@@ -22,6 +23,7 @@ import type {
   ToolBinding,
   ToolConfig,
   ToolId,
+  TriggerKind,
   User,
 } from "@/lib/domain/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -356,12 +358,43 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
       : typeof raw.schemaVersion === "string"
         ? raw.schemaVersion
         : "";
-  if (schemaVersionRaw === "2.0" || schemaVersionRaw === "3.0" || schemaVersionRaw === "4.0") {
+  if (
+    schemaVersionRaw === "2.0" ||
+    schemaVersionRaw === "3.0" ||
+    schemaVersionRaw === "4.0" ||
+    schemaVersionRaw === "5.0"
+  ) {
     const instructions = asRecord(raw.instructions);
     const modelPolicy = asRecord(raw.model_policy ?? raw.modelPolicy);
     const profileRaw = typeof modelPolicy.profile === "string" ? modelPolicy.profile : "balanced";
     const profile =
       profileRaw === "fast" ? "fast" : profileRaw === "reasoning" || profileRaw === "heavy" ? "heavy" : "standard";
+    // Schema 5.0 exact BYOK model (provider/model_id) + Chat/Schedule triggers.
+    const modelRaw = asRecord(raw.model);
+    const modelProvider =
+      typeof modelRaw.provider === "string" ? modelRaw.provider : undefined;
+    const modelId =
+      typeof modelRaw.model_id === "string"
+        ? modelRaw.model_id
+        : typeof modelRaw.modelId === "string"
+          ? modelRaw.modelId
+          : undefined;
+    const exactModel =
+      modelProvider && modelId ? { provider: modelProvider, modelId } : null;
+    const triggers: AgentTrigger[] = (Array.isArray(raw.triggers) ? raw.triggers : []).map(
+      (t) => {
+        const rec = asRecord(t);
+        const kind: TriggerKind =
+          rec.kind === "schedule"
+            ? "schedule"
+            : rec.kind === "manual"
+              ? "manual"
+              : rec.kind === "webhook"
+                ? "webhook"
+                : "chat";
+        return { kind, enabled: rec.enabled !== false };
+      },
+    );
     const identity = mapIdentity(raw.identity);
     const name = identity?.name ?? fallbackName;
     const { tools, toolBindings } = mapToolBindings(raw.tools);
@@ -443,6 +476,8 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
       },
       identity,
       graph,
+      model: exactModel,
+      triggers: triggers.length > 0 ? triggers : undefined,
     };
   }
 

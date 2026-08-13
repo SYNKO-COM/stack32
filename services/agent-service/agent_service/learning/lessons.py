@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from datetime import UTC
 from typing import Any
 
 from agent_service.supabase_client import get_supabase_admin_client
@@ -47,7 +48,7 @@ async def record_error_observation(
             rows = existing.json() if existing.status_code < 400 else []
             if isinstance(rows, list) and rows:
                 row = rows[0]
-                from datetime import datetime, timezone
+                from datetime import datetime
 
                 await client.patch(
                     "/builder_error_lessons",
@@ -57,7 +58,7 @@ async def record_error_observation(
                         "context": context or {},
                         "reason": (reason or "")[:2000],
                         "error_code": error_code,
-                        "last_seen_at": datetime.now(timezone.utc).isoformat(),
+                        "last_seen_at": datetime.now(UTC).isoformat(),
                     },
                     headers={"Prefer": "return=minimal"},
                 )

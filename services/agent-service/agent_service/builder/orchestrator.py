@@ -615,12 +615,6 @@ class BuilderOrchestrator:
                             "suggested_value": "false",
                         },
                         {
-                            "key": "knowledge_enabled",
-                            "type": "toggle",
-                            "required": False,
-                            "suggested_value": "false",
-                        },
-                        {
                             "key": "schedule_hourly",
                             "type": "toggle",
                             "required": False,
@@ -669,30 +663,10 @@ class BuilderOrchestrator:
                     "suggested_value": "",
                 }
             )
-        needs_docs = any(k in lower for k in ("document", "pdf", "knowledge", "rag", "fichier"))
-        needs_mail = any(k in lower for k in ("email", "gmail", "mail", "inbox"))
-        needs_cal = any(k in lower for k in ("calendar", "agenda", "meeting", "rdv"))
-        if needs_docs:
-            fields.append(
-                {
-                    "key": "knowledge_scope",
-                    "type": "textarea",
-                    "required": False,
-                    "label": "knowledge_scope",
-                    "suggested_value": "",
-                }
-            )
-        if needs_mail or needs_cal:
-            fields.append(
-                {
-                    "key": "connection_intent",
-                    "type": "select",
-                    "required": False,
-                    "label": "connection_intent",
-                    "suggested_value": "google" if (needs_mail or needs_cal) else "none",
-                    "options": ["none", "google", "later"],
-                }
-            )
+        # MVP: never ask an early Google/connection question, and never surface a
+        # universal "documents" (knowledge) question here. Connections are resolved
+        # after Build via the clarify-providers flow; knowledge is requested only
+        # when the agent actually needs retrieval.
         if "audience" not in lower and "pour" not in lower and identity.role == "Assist the user":
             fields.append(
                 {
@@ -1610,7 +1584,7 @@ class BuilderOrchestrator:
         build_failure_reason: str | None = None
         if self.settings.BUILDER_SANDBOX_ENABLED and test_report["status"].startswith("passed"):
             try:
-                from agent_service.builder.build_pipeline import CodeBuildPipeline, RUNTIME_VERSION
+                from agent_service.builder.build_pipeline import RUNTIME_VERSION, CodeBuildPipeline
                 from agent_service.builder.templates.blueprint import (
                     BUILTIN_TOOLS,
                     default_blueprint,

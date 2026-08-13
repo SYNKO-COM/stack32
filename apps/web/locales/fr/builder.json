@@ -149,7 +149,8 @@
     "executionDisabled": "La construction est temporairement indisponible. Votre message a été enregistré. On reprendra dès que le service revient."
   },
   "composer": {
-    "placeholder": "Décrivez quoi construire ou modifier…"
+    "placeholder": "Décrivez quoi construire ou modifier…",
+    "formLockedPlaceholder": "Terminez l’étape ci-dessus pour continuer…"
   },
   "builderName": "Stack32",
   "you": "Vous",

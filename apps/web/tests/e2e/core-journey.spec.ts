@@ -1,14 +1,17 @@
 import { expect, test } from "@playwright/test";
 
+import { waitForSignupOtp } from "./helpers/inbucket";
+
 /**
  * Core Phase 2 journey against the LOCAL Supabase stack:
- * signup → onboarding → agent creation → builder message persisted →
- * logout → login → data still there.
+ * signup → verify email (OTP via Inbucket) → onboarding → agent creation →
+ * builder message persisted → logout → login → data still there.
  */
 
-const password = "e2e-password-123";
+// Satisfies local Supabase policy: lower_upper_letters_digits_symbols, min 10.
+const password = "E2e-Password-123!";
 
-test("signup, onboarding, build, logout and login again", async ({ page }) => {
+test("signup, verify email, onboarding, build, logout and login again", async ({ page }) => {
   const email = `e2e-${Date.now()}@stack32.test`;
 
   // --- Signup ---------------------------------------------------------------
@@ -16,6 +19,15 @@ test("signup, onboarding, build, logout and login again", async ({ page }) => {
   await page.getByLabel(/email/i).fill(email);
   await page.locator("#auth-password").fill(password);
   await page.getByRole("button", { name: /create account|créer mon compte/i }).click();
+
+  // --- Verify email (enable_confirmations = true) -----------------------------
+  // Signup returns no session, so the app routes to /verify-email; confirm with
+  // the 6-digit OTP delivered to Inbucket.
+  await page.waitForURL("**/verify-email**", { timeout: 20_000 });
+  const otp = await waitForSignupOtp(email);
+  const firstDigit = page.getByLabel(/digit 1/i);
+  await firstDigit.click();
+  await page.keyboard.type(otp);
 
   // --- Onboarding (3 steps) ---------------------------------------------------
   await page.waitForURL("**/onboarding", { timeout: 20_000 });

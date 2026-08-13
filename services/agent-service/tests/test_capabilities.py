@@ -148,6 +148,33 @@ def test_capability_plan_ambiguous_email():
     assert "email_provider" in plan.ambiguities
 
 
+def test_capability_plan_ambiguous_crm():
+    from agent_service.builder.capabilities import build_capability_plan
+
+    plan = build_capability_plan("Log every new lead into my CRM")
+    assert "crm_provider" in plan.ambiguities
+
+
+def test_capability_plan_named_crm_not_ambiguous():
+    from agent_service.builder.capabilities import build_capability_plan
+
+    plan = build_capability_plan("Log every new lead into HubSpot CRM")
+    assert "crm_provider" not in plan.ambiguities
+
+
+@pytest.mark.asyncio
+async def test_resolve_surfaces_crm_provider_group():
+    from agent_service.builder.capabilities import resolve_tools_for_capabilities
+
+    _tools, _reqs, ambiguous = await resolve_tools_for_capabilities(
+        [], prompt="Update contacts in my CRM"
+    )
+    crm = next((a for a in ambiguous if a.get("group") == "crm"), None)
+    assert crm is not None
+    tool_ids = {c["tool_id"] for c in crm["choices"]}
+    assert {"hubspot", "salesforce", "pipedrive", "zoho_crm"} <= tool_ids
+
+
 def test_email_send_only_least_privilege():
     from agent_service.builder.capabilities import _email_tool_ids
 

@@ -126,6 +126,19 @@ class Settings(BaseSettings):
     SANDBOX_MAX_FILE_BYTES: int = 2_000_000
     SANDBOX_ALLOW_NETWORK: bool = False
 
+    # --- Email notifications (M5) -------------------------------------------
+    # SMTP transport for terminal scheduled-run notifications. The auth user and
+    # the From header are intentionally distinct (auth=hello@, From=no_reply@).
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 465
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True  # True = implicit TLS (465); False = STARTTLS (587)
+    EMAIL_FROM_ADDRESS: str = "no_reply@stack32.com"
+    EMAIL_FROM_NAME: str = "Stack32"
+    # When false (default in dev/test), emails are logged, not sent.
+    EMAIL_ENABLED: bool = False
+
     # Queue
     QUEUE_BACKEND: Literal["postgres", "cloud_tasks"] = "postgres"
     CLOUD_TASKS_QUEUE: str = ""
@@ -194,6 +207,17 @@ class Settings(BaseSettings):
                 missing.append("SECRETS_ENCRYPTION_KEY")
             if self.AGENT_RUNTIME_VERSION == "langgraph" and not self.DATABASE_URL:
                 missing.append("DATABASE_URL (required for langgraph checkpoints)")
+            pipedream_configured = bool(
+                self.PIPEDREAM_CLIENT_ID
+                and self.PIPEDREAM_CLIENT_SECRET
+                and self.PIPEDREAM_PROJECT_ID
+            )
+            if pipedream_configured and self.PIPEDREAM_ENVIRONMENT != "production":
+                raise ValueError(
+                    "PIPEDREAM_ENVIRONMENT must be 'production' in production / "
+                    "production-like when Pipedream Connect is configured; "
+                    "development mode caps Connect at test accounts."
+                )
             if missing:
                 raise ValueError(
                     f"Missing required production environment variables: {', '.join(missing)}"

@@ -524,8 +524,8 @@ export function AgentModuleGraph({
           zoomOnScroll
           selectionOnDrag={false}
           onNodeClick={(_, node) => {
-            const module = (node.data as ModuleNodeData | undefined)?.module;
-            if (module) setSelected(module);
+            const moduleData = (node.data as ModuleNodeData | undefined)?.module;
+            if (moduleData) setSelected(moduleData);
           }}
           proOptions={{ hideAttribution: true }}
           className="h-full w-full cursor-grab active:cursor-grabbing [&_.react-flow__node]:cursor-pointer"
