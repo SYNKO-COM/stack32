@@ -81,7 +81,9 @@
   },
   "plan": {
     "free": "Gratuit",
-    "pro": "Pro"
+    "starter": "Starter",
+    "pro": "Pro",
+    "scale": "Scale"
   },
   "autosave": {
     "saved": "Enregistré",

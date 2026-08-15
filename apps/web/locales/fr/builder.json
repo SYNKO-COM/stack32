@@ -419,7 +419,8 @@
     "managePlan": "Gérer l'abonnement",
     "credits": "Crédits",
     "creditsValue": "{{used}} / {{limit}}",
-    "creditsHint": "Usage approximatif — le suivi réel arrivera avec le paiement.",
+    "creditsHint": "Crédits déduits selon l’usage réel Builder (tokens).",
+    "creditsHintAnnual": "Pool annuel — les crédits affichés couvrent toute la période.",
     "changePassword": "Changer le mot de passe"
   }
 }

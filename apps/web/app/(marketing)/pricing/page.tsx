@@ -1,33 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 
+import { CreditSelect } from "@/components/billing/credit-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useActivatePlan, useCreateCheckout } from "@/hooks/use-billing";
+import { useCurrentUser } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
+import {
+  creditOptionsForPlan,
+  PLAN_KEYS,
+  PLANS,
+  pricePlanSelection,
+  type BillingInterval,
+  type PlanKey,
+} from "@/lib/billing/plans";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
-
-const PLAN_IDS = ["free", "starter", "pro", "scale"] as const;
-type PlanId = (typeof PLAN_IDS)[number];
-type BillingInterval = "monthly" | "annual";
-
-/** Listed monthly price (billed monthly). */
-const PLAN_MONTHLY_USD: Record<PlanId, number> = {
-  free: 0,
-  starter: 24,
-  pro: 49,
-  scale: 99,
-};
-
-/** Effective monthly price when billed annually (Starter 20 / Pro 40 / Scale 80). */
-const PLAN_ANNUAL_MONTHLY_USD: Record<PlanId, number> = {
-  free: 0,
-  starter: 20,
-  pro: 40,
-  scale: 80,
-};
 
 function formatUsd(amount: number, locale: string): string {
   const rounded = Math.round(amount * 100) / 100;
@@ -39,40 +31,94 @@ function formatUsd(amount: number, locale: string): string {
   return locale.startsWith("fr") ? `${formatted} $` : `$${formatted}`;
 }
 
+function formatCredits(n: number, locale: string): string {
+  return new Intl.NumberFormat(locale.startsWith("fr") ? "fr-FR" : "en-US").format(n);
+}
+
 export default function PricingPage() {
   const { t, i18n } = useTranslation("marketing");
   const openDialog = useUiStore((s) => s.openDialog);
+  const router = useRouter();
+  const { data: user } = useCurrentUser();
+  const checkout = useCreateCheckout();
+  const activate = useActivatePlan();
   const [interval, setInterval] = useState<BillingInterval>("monthly");
+  const [creditByPlan, setCreditByPlan] = useState<Record<PlanKey, number>>({
+    free: PLANS.free.baseCredits,
+    starter: PLANS.starter.baseCredits,
+    pro: PLANS.pro.baseCredits,
+    scale: PLANS.scale.baseCredits,
+  });
   const locale = i18n.language || "en";
 
-  const plans = PLAN_IDS.map((id) => {
-    const monthly = PLAN_MONTHLY_USD[id];
-    const annualMonthly = PLAN_ANNUAL_MONTHLY_USD[id];
-    const showAnnual = interval === "annual" && monthly > 0;
-    return {
-      id,
-      name: t(`pricing.${id}.name`),
-      description: t(`pricing.${id}.description`),
-      features: t(`pricing.${id}.features`, { returnObjects: true }) as string[],
-      cta: t(`pricing.${id}.cta`),
-      badge: id === "pro" ? t("pricing.pro.badge") : null,
-      popular: id === "pro",
-      displayPrice: formatUsd(showAnnual ? annualMonthly : monthly, locale),
-      strikethroughPrice: showAnnual ? formatUsd(monthly, locale) : null,
-      billedAnnuallyHint:
-        showAnnual
-          ? t("pricing.billedAnnually", {
-              amount: formatUsd(annualMonthly * 12, locale),
-            })
-          : null,
-    };
-  });
+  const plans = useMemo(
+    () =>
+      PLAN_KEYS.map((id) => {
+        const credits = creditByPlan[id];
+        const priced = pricePlanSelection(id, interval, credits);
+        const showAnnual = interval === "annual" && PLANS[id].monthlyPriceUsd > 0;
+        const featureItems = [
+          ...(t(`pricing.${id}.features`, { returnObjects: true }) as string[]),
+          t(`pricing.${id}.${PLANS[id].integrationsLabelKey}`),
+        ];
+        return {
+          id,
+          name: t(`pricing.${id}.name`),
+          description: t(`pricing.${id}.description`),
+          features: featureItems,
+          cta: t(`pricing.${id}.cta`),
+          badge: id === "pro" ? t("pricing.pro.badge") : null,
+          popular: id === "pro",
+          creditsMonthly: priced.creditsMonthly,
+          creditOptions: creditOptionsForPlan(id),
+          displayPrice: formatUsd(priced.displayMonthlyUsd, locale),
+          strikethroughPrice: showAnnual ? formatUsd(priced.listMonthlyUsd, locale) : null,
+          billedAnnuallyHint: showAnnual
+            ? t("pricing.billedAnnually", {
+                amount: formatUsd(priced.chargeUsd, locale),
+              })
+            : null,
+          creditsLabel: t("pricing.creditsPerMonth", {
+            count: formatCredits(priced.creditsMonthly, locale),
+          }),
+        };
+      }),
+    [creditByPlan, interval, locale, t],
+  );
 
   const included = t("pricing.included.items", { returnObjects: true }) as string[];
   const billingFaq = t("pricing.faq.items", { returnObjects: true }) as {
     question: string;
     answer: string;
   }[];
+
+  const handleCta = async (planKey: PlanKey) => {
+    if (planKey === "free") {
+      if (!user) {
+        openDialog("auth", { authMode: "signup" });
+        return;
+      }
+      await activate.mutateAsync({
+        planKey: "free",
+        interval: "monthly",
+        creditsMonthly: PLANS.free.baseCredits,
+      });
+      router.push("/agents");
+      return;
+    }
+
+    if (!user) {
+      openDialog("auth", { authMode: "signup" });
+      return;
+    }
+
+    const { url } = await checkout.mutateAsync({
+      planId: planKey,
+      interval,
+      creditsMonthly: creditByPlan[planKey],
+    });
+    router.push(url);
+  };
 
   return (
     <div className="mx-auto max-w-6xl px-6 pt-36 pb-24">
@@ -159,6 +205,30 @@ export default function PricingPage() {
                 </p>
               )}
             </div>
+
+            {plan.id !== "free" ? (
+              <div className="mt-4 space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t("pricing.creditsLabel")}
+                </p>
+                <CreditSelect
+                  value={plan.creditsMonthly}
+                  options={plan.creditOptions}
+                  onChange={(credits) =>
+                    setCreditByPlan((prev) => ({ ...prev, [plan.id]: credits }))
+                  }
+                  formatLabel={(n) =>
+                    t("pricing.creditOption", { count: formatCredits(n, locale) })
+                  }
+                  needMoreLabel={t("pricing.needMoreCredits")}
+                  onNeedMore={() => openDialog("auth", { authMode: "signup" })}
+                />
+                <p className="text-[11px] text-muted-foreground/80">{plan.creditsLabel}</p>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">{plan.creditsLabel}</p>
+            )}
+
             <ul className="mt-6 flex-1 space-y-2.5">
               {plan.features.map((feature) => (
                 <li key={feature} className="flex items-start gap-2 text-sm">
@@ -170,7 +240,8 @@ export default function PricingPage() {
             <Button
               className="mt-8 w-full rounded-full"
               variant={plan.popular ? "default" : "outline"}
-              onClick={() => openDialog("auth", { authMode: "signup" })}
+              disabled={checkout.isPending || activate.isPending}
+              onClick={() => void handleCta(plan.id)}
             >
               {plan.cta}
             </Button>

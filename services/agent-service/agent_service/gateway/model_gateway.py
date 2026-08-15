@@ -455,6 +455,10 @@ class ModelGateway:
         input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
         cost = float(getattr(response, "_hidden_params", {}).get("response_cost", 0) or 0)
+        if cost <= 0 and (input_tokens > 0 or output_tokens > 0):
+            from agent_service.billing.plans import estimate_cost_usd_from_tokens
+
+            cost = estimate_cost_usd_from_tokens(model, input_tokens, output_tokens)
 
         result = ModelCallResult(
             content=content,

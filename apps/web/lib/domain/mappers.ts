@@ -876,13 +876,25 @@ export function mapKnowledgeSource(row: KnowledgeSourceRow): KnowledgeSource {
 }
 
 export function mapSubscription(row: SubscriptionRow): Subscription {
+  const planKey =
+    row.plan_key === "starter" ||
+    row.plan_key === "pro" ||
+    row.plan_key === "scale" ||
+    row.plan_key === "free"
+      ? row.plan_key
+      : "free";
+  const name =
+    planKey === "free" ? "Free" : planKey.charAt(0).toUpperCase() + planKey.slice(1);
   return {
     id: row.id,
     userId: row.user_id,
     provider: "whop",
-    planId: row.provider_plan_id ?? "",
-    planName: row.provider_plan_id ?? "—",
+    planId: planKey,
+    planName: name,
     status: row.status as SubscriptionStatus,
     currentPeriodEnd: row.current_period_end ?? undefined,
+    planKey,
+    billingInterval: row.billing_interval === "annual" ? "annual" : "monthly",
+    creditsMonthly: row.credits_monthly ?? undefined,
   };
 }

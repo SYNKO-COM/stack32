@@ -69,6 +69,9 @@ export interface Subscription {
   planName: string;
   status: SubscriptionStatus;
   currentPeriodEnd?: string;
+  planKey?: import("@/lib/billing/plans").PlanKey;
+  billingInterval?: import("@/lib/billing/plans").BillingInterval;
+  creditsMonthly?: number;
 }
 
 /** Product workspace — a container for agents. */
@@ -80,10 +83,19 @@ export interface Workspace {
   updatedAt: string;
 }
 
-/** Mock credit usage shown in the profile menu until billing is wired. */
+/** Credit usage for the current billing period (Builder metering). */
 export interface CreditUsage {
   used: number;
   limit: number;
+  remaining?: number;
+  planKey?: import("@/lib/billing/plans").PlanKey;
+  billingInterval?: import("@/lib/billing/plans").BillingInterval;
+  creditsMonthly?: number;
+  usedUsd?: number;
+  budgetUsd?: number;
+  exhausted?: boolean;
+  periodStart?: string;
+  periodEnd?: string;
 }
 
 /**

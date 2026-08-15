@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { useCreateCheckout } from "@/hooks/use-billing";
 import { useTranslation } from "@/hooks/use-translation";
-import { WHOP_PLAN_ID } from "@/lib/billing/whop";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
 
@@ -76,7 +75,11 @@ export function UpgradeDialog() {
   const handleUpgrade = async () => {
     if (!canCheckout) return;
     // Mock mode returns an internal success URL; real Whop checkout in phase 7.
-    const { url } = await checkout.mutateAsync(WHOP_PLAN_ID);
+    const { url } = await checkout.mutateAsync({
+      planId: "pro",
+      interval: "monthly",
+      creditsMonthly: 200,
+    });
     setAcceptedTerms(false);
     setAcceptedImmediate(false);
     closeDialog();

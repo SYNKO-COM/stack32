@@ -1,0 +1,216 @@
+/**
+ * Stack32 plan catalog — source of truth for pricing UI, entitlements, and
+ * credit math. Whop product IDs will map onto these keys later.
+ */
+
+export const PLAN_KEYS = ["free", "starter", "pro", "scale"] as const;
+export type PlanKey = (typeof PLAN_KEYS)[number];
+export type BillingInterval = "monthly" | "annual";
+
+/** Credit tiers selectable on paid plans (Lovable-style ladder). */
+export const CREDIT_TIER_OPTIONS = [
+  100, 200, 400, 800, 1200, 2000, 3000, 4000, 5000, 7500, 10_000,
+] as const;
+
+export const MAX_CREDITS = 10_000;
+
+export interface PlanDefinition {
+  key: PlanKey;
+  /** Base monthly list price (USD). */
+  monthlyPriceUsd: number;
+  /** Effective monthly price when billed annually (USD). */
+  annualMonthlyPriceUsd: number;
+  /** Included Builder credits per month at the base tier. */
+  baseCredits: number;
+  /** Max platform LLM spend (USD) per month at the base credit tier. */
+  baseBudgetUsd: number;
+  /** Max product workspaces (null = unlimited). */
+  maxWorkspaces: number | null;
+  /** Max agents (null = unlimited). */
+  maxAgents: number | null;
+  canPublish: boolean;
+  canMonetize: boolean;
+  betaAccess: boolean;
+  integrationsLabelKey: "integrationsLite" | "integrationsPro";
+}
+
+export const PLANS: Record<PlanKey, PlanDefinition> = {
+  free: {
+    key: "free",
+    monthlyPriceUsd: 0,
+    annualMonthlyPriceUsd: 0,
+    baseCredits: 25,
+    baseBudgetUsd: 1,
+    maxWorkspaces: 1,
+    maxAgents: 1,
+    canPublish: false,
+    canMonetize: false,
+    betaAccess: false,
+    integrationsLabelKey: "integrationsLite",
+  },
+  starter: {
+    key: "starter",
+    monthlyPriceUsd: 24,
+    annualMonthlyPriceUsd: 20,
+    baseCredits: 100,
+    baseBudgetUsd: 6,
+    maxWorkspaces: 1,
+    maxAgents: 5,
+    canPublish: true,
+    canMonetize: false,
+    betaAccess: false,
+    integrationsLabelKey: "integrationsLite",
+  },
+  pro: {
+    key: "pro",
+    monthlyPriceUsd: 49,
+    annualMonthlyPriceUsd: 40,
+    // ~49/24 × 100, aligned to credit ladder
+    baseCredits: 200,
+    baseBudgetUsd: 11,
+    maxWorkspaces: null,
+    maxAgents: 30,
+    canPublish: true,
+    canMonetize: true,
+    betaAccess: true,
+    integrationsLabelKey: "integrationsPro",
+  },
+  scale: {
+    key: "scale",
+    monthlyPriceUsd: 99,
+    annualMonthlyPriceUsd: 80,
+    // ~99/24 × 100, aligned to credit ladder
+    baseCredits: 400,
+    baseBudgetUsd: 21,
+    maxWorkspaces: null,
+    maxAgents: null,
+    canPublish: true,
+    canMonetize: true,
+    betaAccess: true,
+    integrationsLabelKey: "integrationsPro",
+  },
+};
+
+export function isPlanKey(value: string | null | undefined): value is PlanKey {
+  return !!value && (PLAN_KEYS as readonly string[]).includes(value);
+}
+
+export function getPlan(key: PlanKey): PlanDefinition {
+  return PLANS[key];
+}
+
+/** Credit options for a paid plan: from its base tier up to MAX_CREDITS. */
+export function creditOptionsForPlan(planKey: PlanKey): number[] {
+  const base = PLANS[planKey].baseCredits;
+  if (planKey === "free") return [base];
+  return CREDIT_TIER_OPTIONS.filter((n) => n >= base);
+}
+
+export function clampCreditsForPlan(planKey: PlanKey, credits: number): number {
+  const plan = PLANS[planKey];
+  if (planKey === "free") return plan.baseCredits;
+  const allowed = creditOptionsForPlan(planKey);
+  if (allowed.includes(credits)) return credits;
+  const next = allowed.find((n) => n >= credits);
+  return next ?? allowed[allowed.length - 1]!;
+}
+
+/** Scale budget with selected monthly credits. */
+export function budgetUsdForCredits(planKey: PlanKey, creditsMonthly: number): number {
+  const plan = PLANS[planKey];
+  if (plan.baseCredits <= 0) return plan.baseBudgetUsd;
+  return (plan.baseBudgetUsd * creditsMonthly) / plan.baseCredits;
+}
+
+/** USD of platform cost represented by one credit at this tier. */
+export function usdPerCredit(planKey: PlanKey, creditsMonthly: number): number {
+  const budget = budgetUsdForCredits(planKey, creditsMonthly);
+  return creditsMonthly > 0 ? budget / creditsMonthly : 0;
+}
+
+export function creditsFromCostUsd(
+  costUsd: number,
+  planKey: PlanKey,
+  creditsMonthly: number,
+): number {
+  const rate = usdPerCredit(planKey, creditsMonthly);
+  if (rate <= 0 || costUsd <= 0) return 0;
+  return costUsd / rate;
+}
+
+export function costUsdFromCredits(
+  credits: number,
+  planKey: PlanKey,
+  creditsMonthly: number,
+): number {
+  return credits * usdPerCredit(planKey, creditsMonthly);
+}
+
+export interface PricedPlanSelection {
+  planKey: PlanKey;
+  interval: BillingInterval;
+  creditsMonthly: number;
+  /** Effective monthly price shown on the card (annual = discounted monthly equiv). */
+  displayMonthlyUsd: number;
+  /** List monthly price before annual discount (for strikethrough). */
+  listMonthlyUsd: number;
+  /** Amount charged now: monthly price, or 12 × annual monthly. */
+  chargeUsd: number;
+  /** Platform budget for the billing period. */
+  periodBudgetUsd: number;
+  /** Credits available in the billing period (monthly × 1 or × 12). */
+  periodCredits: number;
+}
+
+export function pricePlanSelection(
+  planKey: PlanKey,
+  interval: BillingInterval,
+  creditsMonthlyInput: number,
+): PricedPlanSelection {
+  const plan = PLANS[planKey];
+  const creditsMonthly = clampCreditsForPlan(planKey, creditsMonthlyInput);
+  const scale = plan.baseCredits > 0 ? creditsMonthly / plan.baseCredits : 1;
+  const listMonthlyUsd = plan.monthlyPriceUsd * scale;
+  const annualMonthlyUsd = plan.annualMonthlyPriceUsd * scale;
+  const displayMonthlyUsd = interval === "annual" ? annualMonthlyUsd : listMonthlyUsd;
+  const months = interval === "annual" ? 12 : 1;
+  return {
+    planKey,
+    interval,
+    creditsMonthly,
+    displayMonthlyUsd,
+    listMonthlyUsd,
+    chargeUsd: displayMonthlyUsd * months,
+    periodBudgetUsd: budgetUsdForCredits(planKey, creditsMonthly) * months,
+    periodCredits: creditsMonthly * months,
+  };
+}
+
+/** Fallback token rates (USD / 1M tokens) when the gateway has no response_cost. */
+export const MODEL_TOKEN_RATES_USD_PER_M: Record<
+  string,
+  { input: number; output: number }
+> = {
+  "gpt-4o-mini": { input: 0.15, output: 0.6 },
+  "gpt-4o": { input: 2.5, output: 10 },
+  "text-embedding-3-small": { input: 0.02, output: 0 },
+  "grok-4": { input: 3, output: 15 },
+  "grok-4.5": { input: 3, output: 15 },
+  "grok-3": { input: 3, output: 15 },
+  "grok-3-mini": { input: 0.3, output: 0.5 },
+  whisper: { input: 0, output: 0 },
+};
+
+export function estimateCostUsdFromTokens(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const key = Object.keys(MODEL_TOKEN_RATES_USD_PER_M).find((k) =>
+    model.toLowerCase().includes(k.toLowerCase()),
+  );
+  const rates = key
+    ? MODEL_TOKEN_RATES_USD_PER_M[key]!
+    : { input: 1, output: 3 }; // conservative unknown-model fallback
+  return (inputTokens * rates.input + outputTokens * rates.output) / 1_000_000;
+}

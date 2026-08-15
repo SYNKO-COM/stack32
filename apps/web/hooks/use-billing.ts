@@ -1,7 +1,14 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import {
+  activatePlanAction,
+  createCheckoutAction,
+  getCreditUsageAction,
+  type ActivatePlanInput,
+} from "@/lib/actions/billing";
+import type { BillingInterval } from "@/lib/billing/plans";
 import { getBillingRepository } from "@/lib/repositories/factory";
 
 export function useSubscription() {
@@ -11,8 +18,38 @@ export function useSubscription() {
   });
 }
 
+export function useCreditUsage() {
+  return useQuery({
+    queryKey: ["billing", "credits"],
+    queryFn: () => getCreditUsageAction(),
+    refetchInterval: 30_000,
+  });
+}
+
 export function useCreateCheckout() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (planId: string) => getBillingRepository().createCheckout(planId),
+    mutationFn: (input: {
+      planId: string;
+      interval?: BillingInterval;
+      creditsMonthly?: number;
+    }) =>
+      createCheckoutAction(input.planId, {
+        interval: input.interval,
+        creditsMonthly: input.creditsMonthly,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["billing"] });
+    },
+  });
+}
+
+export function useActivatePlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ActivatePlanInput) => activatePlanAction(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["billing"] });
+    },
   });
 }

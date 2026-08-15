@@ -219,29 +219,39 @@
     "annual": "Annuel",
     "annualSave": "−20 %",
     "billedAnnually": "Soit {{amount}} facturés par an",
+    "creditsLabel": "Crédits Builder / mois",
+    "creditsPerMonth": "{{count}} crédits / mois",
+    "creditOption": "{{count}} crédits",
+    "needMoreCredits": "Besoin de plus de crédits ?",
     "free": {
       "name": "Gratuit",
       "description": "Découvrez Stack32 et construisez un premier agent pour tester le produit.",
       "features": [
+        "1 workspace",
         "1 agent (non publiable)",
+        "25 crédits Builder / mois",
         "Vues Build, Live et Structure",
-        "Création conversationnelle limitée",
         "Live avec votre propre clé LLM (BYOK)",
         "Support communautaire"
       ],
+      "integrationsLite": "+1 000 intégrations · 500 API",
+      "integrationsPro": "+10 000 apps · +15 000 intégrations · +12 000 API",
       "cta": "Commencer gratuitement"
     },
     "starter": {
       "name": "Starter",
       "description": "Pour lancer et publier vos premiers agents utiles au quotidien.",
       "features": [
+        "1 workspace",
         "Jusqu’à 5 agents",
-        "Publication d’agents",
-        "Crédits Builder généreux pour itérer",
+        "Publication publique (sans monétisation)",
+        "Crédits Builder (100 inclus, extensibles)",
         "Tests automatiques et réparation guidée",
         "Live avec votre clé LLM (BYOK)",
         "Support par e-mail"
       ],
+      "integrationsLite": "+1 000 intégrations · 500 API",
+      "integrationsPro": "+10 000 apps · +15 000 intégrations · +12 000 API",
       "cta": "Choisir Starter"
     },
     "pro": {
@@ -249,27 +259,36 @@
       "description": "Pour celles et ceux qui s’appuient sur une flotte d’agents chaque semaine.",
       "badge": "Le plus populaire",
       "features": [
+        "Workspaces illimités",
         "Jusqu’à 30 agents",
-        "Publication et partage",
-        "Plus de crédits Builder pour itérer vite",
+        "Publication + monétisation des agents",
+        "Crédits Builder (200 inclus, extensibles)",
+        "Accès bêta anticipé",
         "Sources de connaissances avec citations",
         "Historique des versions",
         "Live avec votre clé LLM (BYOK)",
         "Support prioritaire"
       ],
+      "integrationsLite": "+1 000 intégrations · 500 API",
+      "integrationsPro": "+10 000 apps · +15 000 intégrations · +12 000 API",
       "cta": "Choisir Pro"
     },
     "scale": {
       "name": "Scale",
       "description": "Pour les équipes et power users qui enchaînent agents, builds et usage intensif.",
       "features": [
+        "Workspaces illimités",
         "Agents illimités",
-        "Gros pool de crédits Builder + top-ups",
+        "Publication + monétisation des agents",
+        "Crédits Builder (400 inclus, extensibles)",
+        "Accès bêta anticipé",
         "Knowledge et stockage étendus",
         "Tout inclus dans Pro",
         "Live avec votre clé LLM (BYOK)",
         "Support prioritaire dédié"
       ],
+      "integrationsLite": "+1 000 intégrations · 500 API",
+      "integrationsPro": "+10 000 apps · +15 000 intégrations · +12 000 API",
       "cta": "Choisir Scale"
     },
     "included": {
@@ -285,8 +304,12 @@
       "title": "Questions facturation",
       "items": [
         {
+          "question": "Comment fonctionnent les crédits ?",
+          "answer": "Les crédits Builder mesurent l’usage de nos modèles quand vous créez ou itérez un agent. Ils sont déduits selon le coût réel des tokens (entrée + sortie). Sur un abonnement mensuel le pool se renouvelle chaque mois ; en annuel vous disposez du pool sur 12 mois (ex. Starter 100 crédits/mois affichés = 1 200 crédits/an)."
+        },
+        {
           "question": "Quelle est la différence entre mensuel et annuel ?",
-          "answer": "Le mensuel se renouvelle chaque mois (Starter 24 $, Pro 49 $, Scale 99 $). L’annuel facture 12 mois d’un coup au tarif réduit (−20 %) : Starter 20 $, Pro 40 $, Scale 80 $ par mois équivalent."
+          "answer": "Le mensuel se renouvelle chaque mois (Starter 24 $, Pro 49 $, Scale 99 $ à la base). L’annuel facture 12 mois d’un coup au tarif réduit (−20 %) : Starter 20 $, Pro 40 $, Scale 80 $ par mois équivalent. Les crédits affichés restent mensuels ; le plafond d’usage est annualisé."
         },
         {
           "question": "Puis-je annuler à tout moment ?",
@@ -306,7 +329,7 @@
         }
       ]
     },
-    "note": "Prix affichés à titre indicatif pendant la bêta. Paiement Whop à venir — aucun checkout réel pour l’instant."
+    "note": "Prix affichés à titre indicatif pendant la bêta. Paiement Whop à venir — le choix de plan active déjà les crédits en mode prévisualisation."
   },
   "faq": {
     "title": "Questions fréquentes",

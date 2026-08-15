@@ -111,6 +111,7 @@ async def llm_run_budget(
                         "input_tokens": budget.input_tokens,
                         "output_tokens": budget.output_tokens,
                         "models": budget.models,
+                        "cost_usd": budget.cost_usd,
                     },
                 )
             except Exception:  # noqa: BLE001

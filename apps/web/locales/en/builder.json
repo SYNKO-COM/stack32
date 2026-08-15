@@ -419,7 +419,8 @@
     "managePlan": "Manage plan",
     "credits": "Credits",
     "creditsValue": "{{used}} / {{limit}}",
-    "creditsHint": "Usage is approximate until billing is connected.",
+    "creditsHint": "Credits deducted from real Builder usage (tokens).",
+    "creditsHintAnnual": "Annual pool — credits shown cover the full period.",
     "changePassword": "Change password"
   }
 }

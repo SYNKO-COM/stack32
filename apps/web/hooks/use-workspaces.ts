@@ -71,10 +71,6 @@ export function useCreateWorkspace() {
   });
 }
 
-/** Mock credit usage until billing / metering is wired. */
-export function useCreditUsage() {
-  return {
-    used: 320,
-    limit: 1000,
-  };
-}
+/** @deprecated Prefer useCreditUsage from use-billing — kept for accidental imports. */
+export { useCreditUsage } from "@/hooks/use-billing";
+

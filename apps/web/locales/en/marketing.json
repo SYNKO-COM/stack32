@@ -219,29 +219,39 @@
     "annual": "Annual",
     "annualSave": "−20%",
     "billedAnnually": "{{amount}} billed yearly",
+    "creditsLabel": "Builder credits / month",
+    "creditsPerMonth": "{{count}} credits / month",
+    "creditOption": "{{count}} credits",
+    "needMoreCredits": "Need more credits?",
     "free": {
       "name": "Free",
       "description": "Explore Stack32 and build one agent to see how the product feels.",
       "features": [
+        "1 workspace",
         "1 agent (not publishable)",
+        "25 Builder credits / month",
         "Build, Live and Structure views",
-        "Limited conversational creation",
         "Live with your own LLM key (BYOK)",
         "Community support"
       ],
+      "integrationsLite": "1,000+ integrations · 500 APIs",
+      "integrationsPro": "10,000+ apps · 15,000+ integrations · 12,000+ APIs",
       "cta": "Start for free"
     },
     "starter": {
       "name": "Starter",
       "description": "Ship and publish your first agents that actually help day to day.",
       "features": [
+        "1 workspace",
         "Up to 5 agents",
-        "Agent publishing",
-        "Generous Builder credits to iterate",
+        "Public publishing (no monetization)",
+        "Builder credits (100 included, expandable)",
         "Automatic testing and guided repair",
         "Live with your LLM key (BYOK)",
         "Email support"
       ],
+      "integrationsLite": "1,000+ integrations · 500 APIs",
+      "integrationsPro": "10,000+ apps · 15,000+ integrations · 12,000+ APIs",
       "cta": "Choose Starter"
     },
     "pro": {
@@ -249,27 +259,36 @@
       "description": "For people who rely on a fleet of agents every week.",
       "badge": "Most popular",
       "features": [
+        "Unlimited workspaces",
         "Up to 30 agents",
-        "Publish and share",
-        "More Builder credits to move fast",
+        "Publish + monetize agents",
+        "Builder credits (200 included, expandable)",
+        "Early beta access",
         "Knowledge sources with citations",
         "Version history",
         "Live with your LLM key (BYOK)",
         "Priority support"
       ],
+      "integrationsLite": "1,000+ integrations · 500 APIs",
+      "integrationsPro": "10,000+ apps · 15,000+ integrations · 12,000+ APIs",
       "cta": "Choose Pro"
     },
     "scale": {
       "name": "Scale",
       "description": "For teams and power users shipping many agents with heavy build usage.",
       "features": [
+        "Unlimited workspaces",
         "Unlimited agents",
-        "Large Builder credit pool + top-ups",
+        "Publish + monetize agents",
+        "Builder credits (400 included, expandable)",
+        "Early beta access",
         "Extended knowledge and storage",
         "Everything in Pro",
         "Live with your LLM key (BYOK)",
         "Dedicated priority support"
       ],
+      "integrationsLite": "1,000+ integrations · 500 APIs",
+      "integrationsPro": "10,000+ apps · 15,000+ integrations · 12,000+ APIs",
       "cta": "Choose Scale"
     },
     "included": {
@@ -285,8 +304,12 @@
       "title": "Billing questions",
       "items": [
         {
+          "question": "How do credits work?",
+          "answer": "Builder credits meter platform model usage when you create or iterate on an agent. They are deducted from real token cost (input + output). On monthly billing the pool resets each month; on annual you get a 12-month pool (e.g. Starter shows 100 credits/month = 1,200 credits/year)."
+        },
+        {
           "question": "What’s the difference between monthly and annual?",
-          "answer": "Monthly renews each month (Starter $24, Pro $49, Scale $99). Annual charges 12 months upfront at the reduced rate (20% off): Starter $20, Pro $40, Scale $80 per month equivalent."
+          "answer": "Monthly renews each month (Starter $24, Pro $49, Scale $99 at base). Annual charges 12 months upfront at the reduced rate (20% off): Starter $20, Pro $40, Scale $80 per month equivalent. Credits are always shown as monthly; the usage cap is annualized."
         },
         {
           "question": "Can I cancel anytime?",
@@ -306,7 +329,7 @@
         }
       ]
     },
-    "note": "Prices shown for illustration during the beta. Whop checkout coming soon — no real payment yet."
+    "note": "Prices shown for illustration during the beta. Whop checkout coming soon — plan selection already activates credits in preview mode."
   },
   "faq": {
     "title": "Frequently asked questions",

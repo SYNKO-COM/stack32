@@ -2340,12 +2340,15 @@ export type Database = {
       }
       subscriptions: {
         Row: {
+          billing_interval: string
           cancel_at_period_end: boolean
           canceled_at: string | null
           created_at: string
+          credits_monthly: number
           current_period_end: string | null
           current_period_start: string | null
           id: string
+          plan_key: string
           provider: string
           provider_customer_id: string | null
           provider_membership_id: string | null
@@ -2358,12 +2361,15 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          billing_interval?: string
           cancel_at_period_end?: boolean
           canceled_at?: string | null
           created_at?: string
+          credits_monthly?: number
           current_period_end?: string | null
           current_period_start?: string | null
           id?: string
+          plan_key?: string
           provider?: string
           provider_customer_id?: string | null
           provider_membership_id?: string | null
@@ -2376,12 +2382,15 @@ export type Database = {
           user_id: string
         }
         Update: {
+          billing_interval?: string
           cancel_at_period_end?: boolean
           canceled_at?: string | null
           created_at?: string
+          credits_monthly?: number
           current_period_end?: string | null
           current_period_start?: string | null
           id?: string
+          plan_key?: string
           provider?: string
           provider_customer_id?: string | null
           provider_membership_id?: string | null
@@ -3037,6 +3046,21 @@ export type Database = {
       }
       soft_delete_agent: { Args: { p_agent_id: string }; Returns: undefined }
       user_monthly_usage_usd: { Args: { p_user_id: string }; Returns: number }
+      user_period_usage_usd: { Args: { p_user_id: string }; Returns: number }
+      user_period_budget_status: { Args: { p_user_id: string }; Returns: Json }
+      get_my_credit_usage: { Args: Record<string, never>; Returns: Json }
+      resolve_user_entitlements: {
+        Args: { p_user_id: string }
+        Returns: {
+          plan_key: string
+          billing_interval: string
+          credits_monthly: number
+          period_start: string
+          period_end: string
+          budget_usd: number
+          period_credits: number
+        }[]
+      }
       validate_username: { Args: { p_username: string }; Returns: boolean }
     }
     Enums: {

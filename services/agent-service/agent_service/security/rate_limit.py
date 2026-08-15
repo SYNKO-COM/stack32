@@ -72,6 +72,7 @@ async def check_ip_rate_limit(ip_hash: str | None) -> None:
 
 
 async def check_monthly_budget(user_id: str) -> None:
+    """Enforce plan period budget (monthly or annual pool) from entitlements."""
     settings = get_settings()
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         return
@@ -80,14 +81,25 @@ async def check_monthly_budget(user_id: str) -> None:
 
         async with get_supabase_admin_client() as client:
             response = await client.post(
+                "/rpc/user_period_budget_status",
+                json={"p_user_id": user_id},
+            )
+            if response.status_code < 400:
+                payload = response.json() or {}
+                if isinstance(payload, dict) and payload.get("exceeded"):
+                    raise BudgetExceeded()
+                return
+
+            # Fallback to legacy monthly RPC + env ceiling.
+            legacy = await client.post(
                 "/rpc/user_monthly_usage_usd",
                 json={"p_user_id": user_id},
             )
-        if response.status_code >= 400:
-            return
-        used_f = float(response.json() or 0)
-        if used_f >= settings.MONTHLY_USER_BUDGET_USD:
-            raise BudgetExceeded()
+            if legacy.status_code >= 400:
+                return
+            used_f = float(legacy.json() or 0)
+            if used_f >= settings.MONTHLY_USER_BUDGET_USD:
+                raise BudgetExceeded()
     except BudgetExceeded:
         raise
     except Exception:  # noqa: BLE001

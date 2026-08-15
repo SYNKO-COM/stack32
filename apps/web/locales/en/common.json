@@ -81,7 +81,9 @@
   },
   "plan": {
     "free": "Free",
-    "pro": "Pro"
+    "starter": "Starter",
+    "pro": "Pro",
+    "scale": "Scale"
   },
   "autosave": {
     "saved": "Saved",

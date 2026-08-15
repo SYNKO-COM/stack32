@@ -26,8 +26,7 @@ import {
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { useAgent, usePublishAgent } from "@/hooks/use-agents";
 import { useCurrentUser, useSignOut } from "@/hooks/use-auth";
-import { useSubscription } from "@/hooks/use-billing";
-import { useCreditUsage } from "@/hooks/use-workspaces";
+import { useSubscription, useCreditUsage } from "@/hooks/use-billing";
 import { useTranslation } from "@/hooks/use-translation";
 import { AgentServiceError, agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import { SITE_URL } from "@/lib/site";
@@ -109,7 +108,11 @@ export function Topbar({ agentId }: { agentId: string }) {
   const { data: agent } = useAgent(agentId);
   const { data: user } = useCurrentUser();
   const { data: subscription } = useSubscription();
-  const credits = useCreditUsage();
+  const { data: creditUsage } = useCreditUsage();
+  const credits = {
+    used: creditUsage?.used ?? 0,
+    limit: Math.max(1, creditUsage?.limit ?? 25),
+  };
   const publishAgent = usePublishAgent();
   const signOut = useSignOut();
   const openDialog = useUiStore((s) => s.openDialog);
@@ -242,7 +245,9 @@ export function Topbar({ agentId }: { agentId: string }) {
                   />
                 </div>
                 <p className="mt-1.5 text-[11px] text-muted-foreground/70">
-                  {t("builder:profile.creditsHint")}
+                  {creditUsage?.billingInterval === "annual"
+                    ? t("builder:profile.creditsHintAnnual")
+                    : t("builder:profile.creditsHint")}
                 </p>
               </div>
             </div>
