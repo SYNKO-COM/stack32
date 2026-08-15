@@ -17,7 +17,7 @@ port = 54323
 
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
+site_url = "https://stack32.com"
 additional_redirect_urls = [
   "http://localhost:3000/auth/callback",
   "http://localhost:3000/auth/confirm",
@@ -29,6 +29,16 @@ additional_redirect_urls = [
   "https://stack32.com/auth/confirmed",
   "https://stack32.com/verify-email",
   "https://stack32.com/reset-password",
+  "https://www.stack32.com/auth/callback",
+  "https://www.stack32.com/auth/confirm",
+  "https://www.stack32.com/auth/confirmed",
+  "https://www.stack32.com/verify-email",
+  "https://www.stack32.com/reset-password",
+  "https://stack32.vercel.app/auth/callback",
+  "https://stack32.vercel.app/auth/confirm",
+  "https://stack32.vercel.app/auth/confirmed",
+  "https://stack32.vercel.app/verify-email",
+  "https://stack32.vercel.app/reset-password",
 ]
 # Match dashboard policy: min 10 + lower/upper/digits/symbols.
 minimum_password_length = 10
