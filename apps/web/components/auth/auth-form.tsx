@@ -108,7 +108,12 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
 
       const result = await signUp.mutateAsync({ email, password });
       if (result.requiresEmailConfirmation) {
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        const next =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("next")
+            : null;
+        const nextQs = next ? `&next=${encodeURIComponent(next)}` : "";
+        router.push(`/verify-email?email=${encodeURIComponent(email)}${nextQs}`);
         return;
       }
       await finish();

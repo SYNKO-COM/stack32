@@ -66,6 +66,8 @@ export interface ProductAgentGraphProps {
   executionVisual?: ExecutionVisualState;
   onConnectionsChanged?: () => void;
   onConfigChanged?: () => void;
+  /** Consumer / public view: structure is inspectable but not editable. */
+  readOnly?: boolean;
 }
 
 export function ProductAgentGraph(props: ProductAgentGraphProps) {
@@ -101,24 +103,37 @@ function ProductAgentGraphCanvas({
   executionVisual,
   onConnectionsChanged,
   onConfigChanged,
+  readOnly = false,
 }: ProductAgentGraphProps) {
   const { t } = useTranslation("structure");
   const [selected, setSelected] = useState<ProductNode | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
-  /** After a successful run, fade greens back to idle (orange) after a few seconds. Errors stay. */
-  const [fadeSuccess, setFadeSuccess] = useState(false);
+  /** After a successful run, fade greens back to idle after a few seconds. Errors stay. */
+  const successKey =
+    executionVisual?.runStatus === "success"
+      ? Object.entries(executionVisual.legacy)
+          .map(([k, v]) => `${k}:${v}`)
+          .sort()
+          .join("|") || "success"
+      : null;
+  const [fadedKeys, setFadedKeys] = useState(() => new Set<string>());
 
   useEffect(() => {
-    if (executionVisual?.runStatus === "success") {
-      setFadeSuccess(false);
-      const timer = window.setTimeout(() => setFadeSuccess(true), 8_000);
-      return () => window.clearTimeout(timer);
-    }
-    setFadeSuccess(false);
-    return undefined;
-  }, [executionVisual?.runStatus]);
+    if (!successKey) return;
+    const timer = window.setTimeout(() => {
+      setFadedKeys((prev) => {
+        if (prev.has(successKey)) return prev;
+        const next = new Set(prev);
+        next.add(successKey);
+        return next;
+      });
+    }, 8_000);
+    return () => window.clearTimeout(timer);
+  }, [successKey]);
+
+  const fadeSuccess = successKey !== null && fadedKeys.has(successKey);
 
   const mapExecStatus = useCallback(
     (status?: string) => {
@@ -285,7 +300,7 @@ function ProductAgentGraphCanvas({
       </p>
 
       <IntegrationDrawer
-        open={selected?.kind === "integration"}
+        open={!readOnly && selected?.kind === "integration"}
         onOpenChange={(open) => !open && setSelected(null)}
         node={selected}
         agentId={agentId}
@@ -308,6 +323,7 @@ function ProductAgentGraphCanvas({
       />
       <GenericDrawer
         open={
+          !readOnly &&
           selected !== null &&
           selected.kind !== "integration" &&
           selected.kind !== "agent" &&

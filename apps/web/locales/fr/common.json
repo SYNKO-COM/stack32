@@ -28,7 +28,11 @@
     "duplicate": "Dupliquer",
     "retry": "Réessayer",
     "settings": "Paramètres",
+    "myAgents": "Mes agents",
     "newAgent": "Nouvel agent",
+    "copyLink": "Copier le lien",
+    "openAgent": "Ouvrir l'agent",
+    "copied": "Copié",
     "publish": "Publier",
     "upgrade": "Passer au niveau supérieur",
     "openApp": "Ouvrir l'application",
@@ -112,5 +116,18 @@
     "switchToLight": "Passer en mode clair"
   },
   "loading": "Chargement…",
-  "comingSoon": "Bientôt disponible"
+  "comingSoon": "Bientôt disponible",
+  "myAgents": {
+    "title": "Mes agents",
+    "subtitle": "Agents que vous avez créés, utilisés ou mis en favoris.",
+    "empty": "Rien ici pour le moment.",
+    "favorite": "Favori",
+    "unfavorite": "Retirer des favoris",
+    "openBuilder": "Ouvrir le builder",
+    "tabs": {
+      "created": "Créés",
+      "using": "Utilisés",
+      "favorites": "Favoris"
+    }
+  }
 }

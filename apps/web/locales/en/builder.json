@@ -112,10 +112,15 @@
   },
   "publishDialog": {
     "title": "Publish this agent?",
-    "body": "Publishing makes this version the one used in Live.",
+    "body": "Publishing makes this version available at your public Stack32 link.",
     "confirm": "Publish now",
     "successTitle": "Agent published",
-    "successBody": "Your agent is live. You can keep improving drafts without breaking the published version."
+    "successBody": "Your agent is live. Share the link below — you can keep improving drafts without breaking the published version.",
+    "publicUrl": "Public link",
+    "usernameRequiredTitle": "Username required",
+    "usernameRequiredBody": "Choose a Stack32 username before publishing. Public links use @username/agent-name.",
+    "goToSettings": "Choose username",
+    "errorTitle": "Publish failed"
   },
   "empty": {
     "title": "Describe the agent you need",

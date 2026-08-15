@@ -1,18 +1,50 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeNextPath } from "@/lib/auth/post-auth";
 import { isSupabaseConfigured, SUPABASE_KEY, SUPABASE_URL } from "@/lib/env";
 
 /** Route prefixes that require an authenticated user. */
-const PROTECTED_PREFIXES = ["/onboarding", "/agents", "/settings", "/billing"];
+const PROTECTED_PREFIXES = [
+  "/onboarding",
+  "/agents",
+  "/settings",
+  "/billing",
+  "/my-agents",
+  "/p",
+];
 
 /** Auth screens an already-authenticated user should not see again. */
 const AUTH_SCREENS = ["/login", "/signup"];
+
+const USERNAME_RE = /^[a-z][a-z0-9_]{2,29}$/;
+/** URL-safe agent slug (lowercase letters, digits, hyphens). */
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+}
+
+function parsePrettyAgentPath(
+  pathname: string,
+): { username: string; slug: string } | null {
+  const match = pathname.match(/^\/@([^/]+)\/([^/]+)\/?$/);
+  if (!match) return null;
+  const username = match[1].toLowerCase();
+  const slug = match[2].toLowerCase();
+  if (!USERNAME_RE.test(username) || !SLUG_RE.test(slug)) return null;
+  return { username, slug };
+}
+
+function loginRedirect(request: NextRequest, nextPath: string): NextResponse {
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "";
+  const safe = safeNextPath(nextPath);
+  if (safe) url.searchParams.set("next", safe);
+  return NextResponse.redirect(url);
 }
 
 /**
@@ -25,7 +57,15 @@ function isProtectedPath(pathname: string): boolean {
 export async function updateSupabaseSession(request: NextRequest): Promise<NextResponse> {
   const response = NextResponse.next({ request });
   // Mock mode: no Supabase — client-side mock guards handle the demo flow.
-  if (!isSupabaseConfigured) return response;
+  if (!isSupabaseConfigured) {
+    const pretty = parsePrettyAgentPath(request.nextUrl.pathname);
+    if (pretty) {
+      const rewriteUrl = request.nextUrl.clone();
+      rewriteUrl.pathname = `/p/${pretty.username}/${pretty.slug}`;
+      return NextResponse.rewrite(rewriteUrl);
+    }
+    return response;
+  }
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_KEY, {
     cookies: {
@@ -48,19 +88,46 @@ export async function updateSupabaseSession(request: NextRequest): Promise<NextR
 
   const { pathname } = request.nextUrl;
 
+  const pretty = parsePrettyAgentPath(pathname);
+  if (pretty) {
+    const prettyPath = `/@${pretty.username}/${pretty.slug}`;
+    if (!user) {
+      return loginRedirect(request, prettyPath);
+    }
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = `/p/${pretty.username}/${pretty.slug}`;
+    const rewriteResponse = NextResponse.rewrite(rewriteUrl);
+    // Preserve refreshed auth cookies on the rewrite response.
+    for (const cookie of response.cookies.getAll()) {
+      rewriteResponse.cookies.set(cookie);
+    }
+    return rewriteResponse;
+  }
+
   if (!user && isProtectedPath(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = "";
-    // Preserve the intended destination across login.
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    let nextPath = pathname;
+    if (pathname.startsWith("/p/")) {
+      const parts = pathname.split("/").filter(Boolean);
+      if (parts.length >= 3 && parts[0] === "p") {
+        nextPath = `/@${parts[1]}/${parts[2]}`;
+      }
+    }
+    return loginRedirect(request, nextPath);
   }
 
   if (user && AUTH_SCREENS.includes(pathname)) {
+    const preferred = safeNextPath(request.nextUrl.searchParams.get("next"));
     const url = request.nextUrl.clone();
-    url.pathname = "/agents";
-    url.search = "";
+    if (preferred) {
+      const parsed = new URL(preferred, "https://stack32.invalid");
+      url.pathname = parsed.pathname;
+      url.search = parsed.search;
+      url.hash = parsed.hash;
+    } else {
+      url.pathname = "/agents";
+      url.search = "";
+      url.hash = "";
+    }
     return NextResponse.redirect(url);
   }
 

@@ -29,15 +29,67 @@ export async function fetchProfileWithRetry(
   return profile;
 }
 
+/**
+ * Open-redirect hardening: only same-origin relative paths starting with `/`.
+ * Rejects protocol-relative URLs, schemes, backslashes, and common encodings.
+ */
+export function safeNextPath(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 512) return null;
+
+  const lowerRaw = trimmed.toLowerCase();
+  if (
+    lowerRaw.includes("%2f%2f") ||
+    lowerRaw.includes("%5c") ||
+    lowerRaw.includes("%00") ||
+    lowerRaw.includes("\\")
+  ) {
+    return null;
+  }
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(trimmed)) return null;
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(trimmed);
+  } catch {
+    return null;
+  }
+
+  const normalized = decoded.trim();
+  if (!normalized.startsWith("/") || normalized.startsWith("//")) return null;
+  if (normalized.includes("\\")) return null;
+  if (/javascript\s*:/i.test(normalized) || /data\s*:/i.test(normalized)) return null;
+  if (/^\/(?:[a-z][a-z0-9+.-]*:)/i.test(normalized)) return null;
+  if (/\/\/+/.test(normalized.slice(1))) return null;
+
+  // Path + optional query/hash only (no open redirect via host).
+  try {
+    const asUrl = new URL(normalized, "https://stack32.invalid");
+    if (asUrl.origin !== "https://stack32.invalid") return null;
+    if (asUrl.username || asUrl.password) return null;
+    return `${asUrl.pathname}${asUrl.search}${asUrl.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Destination after a successful auth (client-side). */
 export async function resolvePostAuthPath(
   preferredNext?: string | null,
 ): Promise<string> {
-  if (preferredNext?.startsWith("/") && !preferredNext.startsWith("//")) {
-    // Still honour next for password-reset etc., but never trap completed
-    // users on /onboarding when they already finished it.
-    if (preferredNext !== "/onboarding") return preferredNext;
-  }
+  const next = safeNextPath(preferredNext);
   const profile = await fetchProfileWithRetry();
-  return profile?.onboardingCompleted ? "/agents" : "/onboarding";
+
+  if (!profile?.onboardingCompleted) {
+    if (next && next !== "/onboarding" && !next.startsWith("/onboarding?")) {
+      return `/onboarding?next=${encodeURIComponent(next)}`;
+    }
+    return "/onboarding";
+  }
+
+  if (next && next !== "/onboarding" && !next.startsWith("/onboarding?")) {
+    return next;
+  }
+  return "/agents";
 }

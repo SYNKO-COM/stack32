@@ -12,7 +12,7 @@ import {
   Megaphone,
   Rocket,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ComponentType } from "react";
 
 import {
@@ -33,11 +33,13 @@ import { useCreateAgent } from "@/hooks/use-agents";
 import { useCompleteOnboarding, useCurrentUser } from "@/hooks/use-auth";
 import { useCreateWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
+import { safeNextPath } from "@/lib/auth/post-auth";
 import {
   clearOnboardingDraft,
   readOnboardingDraft,
   writeOnboardingDraft,
 } from "@/lib/onboarding-draft";
+import { getAuthRepository } from "@/lib/repositories/factory";
 import { writeActiveWorkspaceId } from "@/lib/workspace-preference";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +72,8 @@ const ROLE_OPTIONS: readonly { id: string; icon: OptionIcon }[] = [
 ];
 
 const COUNTRY_CODES = ["+33", "+1", "+44", "+49", "+34", "+32", "+41", "+352"] as const;
+
+const USERNAME_FORMAT = /^[a-z][a-z0-9_]{2,29}$/;
 
 function OptionGrid({
   options,
@@ -123,6 +127,7 @@ function OptionGrid({
 export function OnboardingFlow() {
   const { t } = useTranslation(["onboarding", "common"]);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const reducedMotion = useReducedMotion();
   const { data: user } = useCurrentUser();
   const userId = user?.id ?? "";
@@ -139,10 +144,27 @@ export function OnboardingFlow() {
   const [discoverySource, setDiscoverySource] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [firstName, setFirstName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameRemote, setUsernameRemote] = useState<{
+    forValue: string;
+    status: "available" | "taken" | "reserved" | "invalid" | "idle";
+  } | null>(null);
   const [countryCode, setCountryCode] = useState<string>(COUNTRY_CODES[0]);
   const [phone, setPhone] = useState("");
   const [useCase, setUseCase] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
+
+  const normalizedUsername = username.trim().toLowerCase();
+  const usernameLocalStatus: "idle" | "invalid" | null = !normalizedUsername
+    ? "idle"
+    : !USERNAME_FORMAT.test(normalizedUsername)
+      ? "invalid"
+      : null;
+  const usernameStatus =
+    usernameLocalStatus ??
+    (usernameRemote?.forValue === normalizedUsername
+      ? usernameRemote.status
+      : "checking");
 
   if (userId && hydratedFor !== userId) {
     const draft = readOnboardingDraft(userId);
@@ -152,6 +174,7 @@ export function OnboardingFlow() {
     setDiscoverySource(draft.discoverySource);
     setRole(draft.role);
     setFirstName(draft.firstName);
+    setUsername(draft.username);
     setCountryCode(
       COUNTRY_CODES.includes(draft.countryCode as (typeof COUNTRY_CODES)[number])
         ? draft.countryCode
@@ -171,6 +194,7 @@ export function OnboardingFlow() {
       discoverySource,
       role,
       firstName,
+      username,
       countryCode,
       phone,
       useCase,
@@ -184,6 +208,7 @@ export function OnboardingFlow() {
     discoverySource,
     role,
     firstName,
+    username,
     countryCode,
     phone,
     useCase,
@@ -196,10 +221,37 @@ export function OnboardingFlow() {
     return () => clearTimeout(timeout);
   }, [ready, showIntro, reducedMotion]);
 
+  useEffect(() => {
+    if (usernameLocalStatus !== null) return;
+    const normalized = normalizedUsername;
+    const handle = window.setTimeout(() => {
+      void getAuthRepository()
+        .checkUsernameAvailability(normalized)
+        .then((result) => {
+          if (!result.valid) {
+            setUsernameRemote({
+              forValue: normalized,
+              status: result.reason === "reserved" ? "reserved" : "invalid",
+            });
+            return;
+          }
+          setUsernameRemote({
+            forValue: normalized,
+            status: result.available ? "available" : "taken",
+          });
+        })
+        .catch(() => {
+          setUsernameRemote({ forValue: normalized, status: "idle" });
+        });
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [normalizedUsername, usernameLocalStatus]);
+
+  const usernameOk = usernameStatus === "available";
   const canContinue =
     (step === 1 && discoverySource !== null) ||
     (step === 2 && role !== null) ||
-    (step === 3 && firstName.trim().length > 0) ||
+    (step === 3 && firstName.trim().length > 0 && usernameOk) ||
     (step === 4 && workspaceName.trim().length > 0);
 
   const handleFinish = async () => {
@@ -211,11 +263,17 @@ export function OnboardingFlow() {
         firstName: firstName.trim(),
         phone: phone.trim() ? `${countryCode} ${phone.trim()}` : undefined,
         primaryUseCase: useCase.trim() || undefined,
+        username: username.trim().toLowerCase(),
       });
       const workspace = await createWorkspace.mutateAsync(workspaceName.trim());
       if (userId) {
         writeActiveWorkspaceId(userId, workspace.id);
         clearOnboardingDraft(userId);
+      }
+      const preferred = safeNextPath(searchParams.get("next"));
+      if (preferred) {
+        router.push(preferred);
+        return;
       }
       const agent = await createAgent.mutateAsync({ workspaceId: workspace.id });
       router.push(`/agents/${agent.id}/build`);
@@ -312,6 +370,43 @@ export function OnboardingFlow() {
                     placeholder={t("step3.firstNamePlaceholder")}
                     autoComplete="given-name"
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="onboarding-username">{t("step3.username")}</Label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">
+                      @
+                    </span>
+                    <Input
+                      id="onboarding-username"
+                      value={username}
+                      onChange={(e) =>
+                        setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+                      }
+                      placeholder={t("step3.usernamePlaceholder")}
+                      className="pl-7"
+                      autoComplete="username"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground/70">{t("step3.usernameHint")}</p>
+                  {usernameStatus === "checking" ? (
+                    <p className="text-xs text-muted-foreground">{t("step3.usernameChecking")}</p>
+                  ) : null}
+                  {usernameStatus === "available" ? (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                      {t("step3.usernameAvailable")}
+                    </p>
+                  ) : null}
+                  {usernameStatus === "taken" ? (
+                    <p className="text-xs text-destructive">{t("step3.usernameTaken")}</p>
+                  ) : null}
+                  {usernameStatus === "reserved" ? (
+                    <p className="text-xs text-destructive">{t("step3.usernameReserved")}</p>
+                  ) : null}
+                  {usernameStatus === "invalid" ? (
+                    <p className="text-xs text-destructive">{t("step3.usernameInvalid")}</p>
+                  ) : null}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="onboarding-phone">{t("step3.phone")}</Label>

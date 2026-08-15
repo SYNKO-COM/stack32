@@ -107,3 +107,11 @@ export function useCompleteOnboarding() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
   });
 }
+
+export function useSetUsername() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (username: string) => getAuthRepository().setUsername(username),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
+  });
+}

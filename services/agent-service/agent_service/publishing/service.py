@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,6 +18,16 @@ class PublishService:
     def __init__(self, persistence: Persistence | None = None) -> None:
         self.db = persistence or Persistence()
 
+    async def _require_username(self, user_id: str) -> str | None:
+        rows = await self.db._select(
+            "profiles",
+            {"id": f"eq.{user_id}", "select": "username", "limit": "1"},
+        )
+        username = (rows[0].get("username") if rows else None) or None
+        if isinstance(username, str) and username.strip():
+            return username.strip().lower()
+        return None
+
     async def publish(self, *, user_id: str, agent_id: str) -> dict[str, Any]:
         agent = await self.db.get_owned_agent(agent_id, user_id)
         if not agent:
@@ -32,6 +41,10 @@ class PublishService:
                 risk_level="high",
             )
             return {"error": "forbidden"}
+
+        username = await self._require_username(user_id)
+        if not username:
+            return {"error": "USERNAME_REQUIRED", "code": "USERNAME_REQUIRED"}
 
         spec = await self.db.load_draft_spec(agent_id, user_id)
         if not spec:
@@ -144,47 +157,98 @@ class PublishService:
         if test_status not in ("passed", "passed_with_warnings"):
             return {"error": "DEPLOYMENT_VALIDATION_FAILED", "code": "TEST_FAILED"}
 
-        deployment_id = str(uuid.uuid4())
-        async with get_supabase_admin_client() as client:
-            # Disable previous active
-            await client.patch(
-                "/agent_deployments",
-                params={
-                    "agent_id": f"eq.{agent_id}",
-                    "environment": "eq.production",
-                    "status": "eq.active",
-                },
-                json={
-                    "status": "disabled",
-                    "unpublished_at": datetime.now(UTC).isoformat(),
-                },
-            )
-            response = await client.post(
-                "/agent_deployments",
-                json={
-                    "id": deployment_id,
-                    "user_id": user_id,
-                    "agent_id": agent_id,
-                    "agent_version_id": version_id,
-                    "environment": "production",
-                    "status": "active",
-                    "published_at": datetime.now(UTC).isoformat(),
-                    "runtime_config": {"hosted": True, "queue": "run_queue"},
-                },
-                headers={"Prefer": "return=representation"},
-            )
-            if response.status_code >= 400:
-                logger.warning("deployment insert failed: %s", response.text[:200])
-                return {"error": "DEPLOYMENT_FAILED"}
-            await client.patch(
-                "/agents",
-                params={"id": f"eq.{agent_id}", "user_id": f"eq.{user_id}"},
-                json={
-                    "status": "published",
-                    "published_version_id": version_id,
-                },
-            )
+        # Fail-closed deploy pipeline: scan → staging smoke → atomic activate.
+        from agent_service.config import get_settings
+        from agent_service.deploy.pipeline import DeployPipeline, make_sandbox_smoke_runner
 
+        settings = get_settings()
+        is_prod = settings.ENVIRONMENT.lower() in {"production", "staging", "prod"}
+
+        files: list[dict[str, Any]] = []
+        snapshot: dict[str, Any] = {
+            "id": str(version_id),
+            "test_status": test_status,
+            "manifest": {"runtime_version": "shared"},
+        }
+        try:
+            from agent_service.builder.project_files import list_project_files
+            from agent_service.builder.projects import get_snapshot_files, list_snapshots
+
+            snaps = await list_snapshots(user_id=user_id, agent_id=agent_id)
+            if snaps:
+                latest = snaps[0]
+                snapshot = {
+                    "id": str(latest.get("id") or version_id),
+                    "test_status": test_status,
+                    "manifest": latest.get("manifest") or {"runtime_version": "shared"},
+                }
+                files = await get_snapshot_files(
+                    user_id=user_id, snapshot_id=str(latest["id"])
+                )
+            if not files:
+                files = await list_project_files(user_id=user_id, agent_id=agent_id)
+        except Exception:  # noqa: BLE001
+            logger.debug("publish: could not load project files for smoke", exc_info=True)
+
+        if not files:
+            # Minimal portable artifact so scan/smoke have something to gate on.
+            files = [
+                {
+                    "path": "agent.yaml",
+                    "content": f"name: {agent.get('name') or 'agent'}\nslug: {agent.get('slug') or 'agent'}\n",
+                }
+            ]
+
+        smoke_runner = None
+        if is_prod:
+            try:
+                from agent_service.sandbox.manager import build_provider
+
+                smoke_runner = make_sandbox_smoke_runner(build_provider(settings))
+            except Exception:  # noqa: BLE001
+                logger.exception("publish: sandbox smoke runner unavailable")
+                return {"error": "DEPLOYMENT_FAILED", "code": "SMOKE_RUNNER_UNAVAILABLE"}
+        else:
+            async def _dev_smoke(_files: list[dict[str, Any]]) -> dict[str, Any]:
+                return {"ok": True, "mode": "dev_noop"}
+
+            smoke_runner = _dev_smoke
+
+        pipeline = DeployPipeline(
+            smoke_runner=smoke_runner,
+            require_smoke=True,
+            require_persistence=True,
+        )
+        report = await pipeline.deploy_snapshot(
+            user_id=user_id,
+            agent_id=agent_id,
+            snapshot=snapshot,
+            files=files,
+            version_id=str(version_id),
+            idempotency_key=f"{agent_id}:{version_id}:{snapshot.get('id')}",
+        )
+        if not report.success:
+            failed = next((s for s in report.stages if s.status == "failed"), None)
+            await self.db.audit(
+                user_id=user_id,
+                agent_id=agent_id,
+                action="publish",
+                resource_type="deployment",
+                resource_id=agent_id,
+                result="failure",
+                risk_level="high",
+                metadata={"stage": failed.name if failed else None, "detail": failed.detail if failed else None},
+            )
+            code = "DEPLOYMENT_FAILED"
+            if failed and failed.name == "staging_smoke":
+                code = "SMOKE_FAILED"
+            elif failed and failed.name == "security_scan":
+                code = "SECURITY_SCAN_FAILED"
+            elif failed and failed.name == "activate":
+                code = "ACTIVATION_FAILED"
+            return {"error": code, "stages": report.to_dict()}
+
+        deployment_id = report.deployment_id
         await self.db.audit(
             user_id=user_id,
             agent_id=agent_id,
@@ -198,6 +262,8 @@ class PublishService:
             "status": "active",
             "deployment_id": deployment_id,
             "agent_version_id": version_id,
+            "publicPath": f"/@{username}/{agent.get('slug')}",
+            "stages": report.to_dict(),
         }
 
     async def unpublish(self, *, user_id: str, agent_id: str) -> dict[str, Any]:

@@ -36,14 +36,29 @@
   },
   "step3": {
     "title": "Tell us a bit about you",
-    "subtitle": "Your first name, and optionally how you plan to use Stack32.",
+    "subtitle": "Your first name, a public username, and optionally how you plan to use Stack32.",
     "firstName": "First name",
     "firstNamePlaceholder": "Ada",
+    "username": "Username",
+    "usernamePlaceholder": "ada_lovelace",
+    "usernameHint": "Public agent links look like stack32.com/@username/agent-name. Choose carefully — this is how people find your agents.",
+    "usernameChecking": "Checking availability…",
+    "usernameAvailable": "Username is available",
+    "usernameTaken": "That username is taken",
+    "usernameReserved": "That username is reserved",
+    "usernameInvalid": "Use 3–30 characters: start with a letter, then letters, numbers, or underscores.",
     "phone": "Phone number",
     "phonePlaceholder": "6 12 34 56 78",
     "phoneHint": "Optional — choose your country code, then enter your number without the leading 0.",
     "useCase": "What will your first agent do? (optional)",
     "useCasePlaceholder": "e.g. Research prospects for my agency"
+  },
+  "username": {
+    "invalid": "That username is not valid.",
+    "settingsTitle": "Choose a username",
+    "settingsBody": "A username is required to publish agents and share public links.",
+    "save": "Save username",
+    "saved": "Username saved"
   },
   "step4": {
     "title": "Create your first workspace",

@@ -12,3 +12,6 @@
 Unpublish disables deployment and clears `published_version_id`.
 
 Published agents run through the hosted Agent API / queue — creator laptop not required.
+
+See [PUBLISHING_AND_RUNTIME.md](./PUBLISHING_AND_RUNTIME.md) for Definition / Version /
+Deployment / Installation / Run and creator vs consumer behavior.

@@ -53,6 +53,7 @@ export interface Profile {
   userId: string;
   firstName?: string;
   phone?: string;
+  username?: string;
   locale: string;
   onboardingCompleted: boolean;
   discoverySource?: string;
@@ -427,6 +428,26 @@ export interface OnboardingAnswers {
   firstName?: string;
   phone?: string;
   primaryUseCase?: string;
+  username?: string;
+}
+
+/** Safe public metadata for a published agent (no secrets). */
+export interface PublicAgentDto {
+  agentId: string;
+  name: string;
+  slug: string;
+  description?: string;
+  iconKey?: string;
+  creatorUsername: string;
+  creatorUserId: string;
+  deploymentId: string;
+  versionId?: string;
+  publishedAt?: string;
+}
+
+export interface PublishResult {
+  agent: Agent;
+  publicPath?: string;
 }
 
 /* ----------------------------------------------------------------------- */

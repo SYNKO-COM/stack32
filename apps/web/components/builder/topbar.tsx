@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Check, Hammer, Menu, Rocket, Sparkles } from "lucide-react";
+import { Check, Copy, ExternalLink, Hammer, Menu, Rocket, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -29,6 +29,8 @@ import { useCurrentUser, useSignOut } from "@/hooks/use-auth";
 import { useSubscription } from "@/hooks/use-billing";
 import { useCreditUsage } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
+import { AgentServiceError, agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
+import { SITE_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
 
@@ -89,8 +91,20 @@ function ViewTabs({ agentId }: { agentId: string }) {
   );
 }
 
+function publishErrorKey(error: unknown): string {
+  if (error instanceof AgentServiceError) return agentServiceErrorKey(error);
+  if (error && typeof error === "object" && "code" in error) {
+    const code = String((error as { code?: string }).code ?? "");
+    if (code === "USERNAME_REQUIRED") return "errors:publish.usernameRequired";
+  }
+  if (error instanceof Error && /USERNAME_REQUIRED/i.test(error.message)) {
+    return "errors:publish.usernameRequired";
+  }
+  return agentServiceErrorKey(error);
+}
+
 export function Topbar({ agentId }: { agentId: string }) {
-  const { t } = useTranslation(["builder", "common"]);
+  const { t } = useTranslation(["builder", "common", "errors"]);
   const router = useRouter();
   const { data: agent } = useAgent(agentId);
   const { data: user } = useCurrentUser();
@@ -103,11 +117,39 @@ export function Topbar({ agentId }: { agentId: string }) {
 
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishedOpen, setPublishedOpen] = useState(false);
+  const [usernameRequiredOpen, setUsernameRequiredOpen] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handlePublish = async () => {
     setPublishOpen(false);
-    await publishAgent.mutateAsync(agentId);
-    setPublishedOpen(true);
+    setPublishError(null);
+    try {
+      const result = await publishAgent.mutateAsync(agentId);
+      const path = result.publicPath ?? "";
+      const origin = SITE_URL.replace(/\/$/, "");
+      setPublicUrl(path ? `${origin}${path}` : null);
+      setPublishedOpen(true);
+    } catch (error) {
+      const key = publishErrorKey(error);
+      if (key === "errors:publish.usernameRequired") {
+        setUsernameRequiredOpen(true);
+        return;
+      }
+      setPublishError(t(key));
+    }
+  };
+
+  const copyLink = async () => {
+    if (!publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore
+    }
   };
 
   return (
@@ -205,6 +247,9 @@ export function Topbar({ agentId }: { agentId: string }) {
               </div>
             </div>
             <div className="p-1">
+              <DropdownMenuItem asChild>
+                <Link href="/my-agents">{t("common:actions.myAgents")}</Link>
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => openDialog("settings")}>
                 {t("common:actions.settings")}
               </DropdownMenuItem>
@@ -242,7 +287,7 @@ export function Topbar({ agentId }: { agentId: string }) {
       </Dialog>
 
       <Dialog open={publishedOpen} onOpenChange={setPublishedOpen}>
-        <DialogContent className="glass-strong border-border sm:max-w-sm">
+        <DialogContent className="glass-strong border-border sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Check className="size-5 text-emerald-400" aria-hidden="true" />
@@ -250,8 +295,68 @@ export function Topbar({ agentId }: { agentId: string }) {
             </DialogTitle>
             <DialogDescription>{t("builder:publishDialog.successBody")}</DialogDescription>
           </DialogHeader>
+          {publicUrl ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">{t("builder:publishDialog.publicUrl")}</p>
+              <p className="break-all rounded-xl bg-foreground/[0.04] px-3 py-2 font-mono text-xs">
+                {publicUrl}
+              </p>
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {publicUrl ? (
+                <>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void copyLink()}>
+                    <Copy className="size-3.5" aria-hidden="true" />
+                    {copied ? t("common:actions.copied") : t("common:actions.copyLink")}
+                  </Button>
+                  <Button asChild size="sm" className="gap-1.5">
+                    <Link href={publicUrl.replace(/^https?:\/\/[^/]+/i, "") || "/"}>
+                      <ExternalLink className="size-3.5" aria-hidden="true" />
+                      {t("common:actions.openAgent")}
+                    </Link>
+                  </Button>
+                </>
+              ) : null}
+            </div>
+            <Button variant="ghost" onClick={() => setPublishedOpen(false)}>
+              {t("common:actions.gotIt")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={usernameRequiredOpen} onOpenChange={setUsernameRequiredOpen}>
+        <DialogContent className="glass-strong border-border sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("builder:publishDialog.usernameRequiredTitle")}</DialogTitle>
+            <DialogDescription>{t("builder:publishDialog.usernameRequiredBody")}</DialogDescription>
+          </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => setPublishedOpen(false)}>{t("common:actions.gotIt")}</Button>
+            <Button variant="ghost" onClick={() => setUsernameRequiredOpen(false)}>
+              {t("common:actions.cancel")}
+            </Button>
+            <Button
+              onClick={() => {
+                setUsernameRequiredOpen(false);
+                openDialog("settings");
+              }}
+            >
+              {t("builder:publishDialog.goToSettings")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(publishError)} onOpenChange={(open) => !open && setPublishError(null)}>
+        <DialogContent className="glass-strong border-border sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("builder:publishDialog.errorTitle")}</DialogTitle>
+            <DialogDescription>{publishError}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setPublishError(null)}>{t("common:actions.gotIt")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

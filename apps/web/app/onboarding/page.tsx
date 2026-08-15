@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { AnimatedBackground } from "@/components/shared/animated-background";
@@ -11,7 +11,7 @@ import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { useCurrentUser, useProfile } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
-import { fetchProfileWithRetry } from "@/lib/auth/post-auth";
+import { fetchProfileWithRetry, safeNextPath } from "@/lib/auth/post-auth";
 
 function OnboardingShell({ children }: { children: React.ReactNode }) {
   return (
@@ -31,9 +31,10 @@ function OnboardingShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function OnboardingPage() {
+function OnboardingPageInner() {
   const { t } = useTranslation("common");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     data: user,
     isLoading: userLoading,
@@ -49,10 +50,15 @@ export default function OnboardingPage() {
     refetch: refetchProfile,
   } = useProfile();
 
-  const [readyForFlow, setReadyForFlow] = useState(false);
+  /** Only set after async profile retry when the query returned null. */
+  const [retryReady, setRetryReady] = useState(false);
   const resolvingRef = useRef(false);
 
   const settling = userLoading || profileLoading || userFetching || profileFetching;
+  const profileReadyForFlow = Boolean(profile && !profile.onboardingCompleted);
+  const needsProfileRetry = Boolean(
+    user && !userError && !profile && !profileLoading && !userLoading && !userFetching,
+  );
 
   useEffect(() => {
     if (userLoading || userFetching) return;
@@ -63,16 +69,11 @@ export default function OnboardingPage() {
     }
 
     if (profile?.onboardingCompleted) {
-      router.replace("/agents");
+      router.replace(safeNextPath(searchParams.get("next")) ?? "/agents");
       return;
     }
 
-    if (profile && !profile.onboardingCompleted) {
-      setReadyForFlow(true);
-      return;
-    }
-
-    // Null profile: retry — do not flash the onboarding form for completed users.
+    if (profileReadyForFlow || !needsProfileRetry) return;
     if (resolvingRef.current) return;
     resolvingRef.current = true;
 
@@ -81,11 +82,10 @@ export default function OnboardingPage() {
         const fresh = await fetchProfileWithRetry();
         await refetchProfile();
         if (fresh?.onboardingCompleted) {
-          router.replace("/agents");
+          router.replace(safeNextPath(searchParams.get("next")) ?? "/agents");
           return;
         }
-        // New user (or still no row after retries): show the flow.
-        setReadyForFlow(true);
+        setRetryReady(true);
       } finally {
         resolvingRef.current = false;
       }
@@ -93,12 +93,17 @@ export default function OnboardingPage() {
   }, [
     user,
     profile,
+    profileReadyForFlow,
+    needsProfileRetry,
     userLoading,
     userFetching,
     userError,
     router,
     refetchProfile,
+    searchParams,
   ]);
+
+  const readyForFlow = profileReadyForFlow || retryReady;
 
   if (settling || !readyForFlow || profile?.onboardingCompleted) {
     return (
@@ -132,5 +137,20 @@ export default function OnboardingPage() {
     <OnboardingShell>
       <OnboardingFlow />
     </OnboardingShell>
+  );
+}
+
+export default function OnboardingPage() {
+  const { t } = useTranslation("common");
+  return (
+    <Suspense
+      fallback={
+        <OnboardingShell>
+          <BrandLoader label={t("loading")} size="lg" />
+        </OnboardingShell>
+      }
+    >
+      <OnboardingPageInner />
+    </Suspense>
   );
 }

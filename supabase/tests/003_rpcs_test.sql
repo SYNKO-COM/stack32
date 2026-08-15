@@ -36,7 +36,7 @@ select throws_ok(
 );
 
 select lives_ok(
-  $$select public.complete_onboarding('googleSearch', 'founder', 'Eva', '+33 600000000', 'Support agent')$$,
+  $$select public.complete_onboarding('googleSearch', 'founder', 'Eva', '+33 600000000', 'Support agent', null, null, null, null, null, null, 'eva_rpc')$$,
   'complete_onboarding succeeds with valid values'
 );
 select is(
@@ -57,7 +57,7 @@ select is(
 
 -- Duplicate submission upserts instead of failing.
 select lives_ok(
-  $$select public.complete_onboarding('youtube', 'developer')$$,
+  $$select public.complete_onboarding('youtube', 'developer', 'Eva', null, null, null, null, null, null, null, null, 'eva_rpc')$$,
   'duplicate onboarding submission is an upsert'
 );
 select is(

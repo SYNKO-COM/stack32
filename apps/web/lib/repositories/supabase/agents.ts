@@ -1,4 +1,4 @@
-import type { Agent, AgentSpec, AgentVersion } from "@/lib/domain/types";
+import type { Agent, AgentSpec, AgentVersion, PublishResult } from "@/lib/domain/types";
 import { duplicateAgentAction } from "@/lib/actions/agents";
 import { mapAgent, mapAgentVersion } from "@/lib/domain/mappers";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -63,7 +63,7 @@ export class SupabaseAgentRepository implements AgentRepository {
     if (error) throw error;
   }
 
-  async publishAgent(agentId: string): Promise<Agent> {
+  async publishAgent(agentId: string): Promise<PublishResult> {
     const { publishAgentAction } = await import("@/lib/actions/agents");
     return publishAgentAction(agentId);
   }
@@ -72,16 +72,22 @@ export class SupabaseAgentRepository implements AgentRepository {
     const supabase = requireSupabaseBrowserClient();
     const { data: agent } = await supabase
       .from("agents")
-      .select("name, draft_version_id")
+      .select("name, draft_version_id, published_version_id, status")
       .eq("id", agentId)
       .maybeSingle();
     if (!agent) return null;
 
-    if (agent.draft_version_id) {
+    // Prefer published snapshot for published agents (works for consumers via RLS).
+    const preferredId =
+      agent.status === "published" && agent.published_version_id
+        ? agent.published_version_id
+        : agent.draft_version_id ?? agent.published_version_id;
+
+    if (preferredId) {
       const { data } = await supabase
         .from("agent_versions")
         .select("*")
-        .eq("id", agent.draft_version_id)
+        .eq("id", preferredId)
         .maybeSingle();
       if (data) return mapAgentVersion(data, agent.name);
     }

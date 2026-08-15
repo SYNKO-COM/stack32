@@ -326,11 +326,18 @@ class PipedreamToolProvider:
         return {"ok": True, "provider": "pipedream", "tool_id": tool_ref.tool_id, "result": result}
 
     async def health_check(self) -> dict[str, Any]:
+        """Health semantics for an optional integration.
+
+        - ``ok``: provider module is healthy (does not crash the agent service)
+        - ``configured``: credentials are present
+        - ``degraded``: configured but unreachable, OR intentionally unconfigured
+        """
         configured = self._client.configured()
         if not configured:
             return {
                 "provider": self.name,
-                "ok": False,
+                "ok": True,
+                "configured": False,
                 "degraded": True,
                 "message": "Pipedream credentials not configured.",
             }
@@ -338,6 +345,7 @@ class PipedreamToolProvider:
         return {
             "provider": self.name,
             "ok": bool(token),
+            "configured": True,
             "degraded": not bool(token),
             "message": None if token else "Unable to obtain Pipedream access token.",
         }

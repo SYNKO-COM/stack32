@@ -12,7 +12,9 @@
   "publish": {
     "specInvalid": "Your agent doesn't have a valid configuration yet. Finish building before publishing.",
     "validationFailed": "Publishing failed validation. Review Structure and run a test first.",
-    "testFailed": "The latest test didn't pass. Fix issues in Build before publishing."
+    "testFailed": "The latest test didn't pass. Fix issues in Build before publishing.",
+    "usernameRequired": "Choose a username in Settings before publishing a public agent.",
+    "failed": "Publishing failed. Please try again."
   },
   "notFound": {
     "title": "Page not found",

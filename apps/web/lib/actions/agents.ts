@@ -6,7 +6,7 @@ import {
 } from "@/lib/ai/agent-service-client";
 import { currentAiExecutionMode } from "@/lib/ai/execution-adapter";
 import { mapAgent, mapGraphSpecFromApi, mapIdentityFromApi } from "@/lib/domain/mappers";
-import type { Agent, AgentGraphResponse } from "@/lib/domain/types";
+import type { AgentGraphResponse, PublishResult } from "@/lib/domain/types";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -96,7 +96,7 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
  * - `agent-service` mode: calls Agent API publish gates (spec/graph/compile/smoke).
  * - `mock` / `disabled`: direct Supabase flip (dev only — no validation gates).
  */
-export async function publishAgentAction(agentId: string): Promise<Agent> {
+export async function publishAgentAction(agentId: string): Promise<PublishResult> {
   const supabase = await requireSupabaseServerClient();
   const {
     data: { user },
@@ -105,25 +105,45 @@ export async function publishAgentAction(agentId: string): Promise<Agent> {
 
   const { data: owned } = await supabase
     .from("agents")
-    .select("id, draft_version_id")
+    .select("id, draft_version_id, slug")
     .eq("id", agentId)
     .maybeSingle();
   if (!owned) throw new Error("agent_not_found");
 
+  let publicPath: string | undefined;
+
   if (currentAiExecutionMode() === "agent-service") {
     const accessToken = await requireAccessToken();
-    await agentServiceFetch(`/v1/agents/${agentId}/publish`, {
+    const result = await agentServiceFetch<{
+      publicPath?: string;
+      status?: string;
+      error?: string;
+    }>(`/v1/agents/${agentId}/publish`, {
       method: "POST",
       accessToken,
       body: {},
     });
+    if (typeof result.publicPath === "string") publicPath = result.publicPath;
   } else {
     if (!owned.draft_version_id) throw new Error("no_draft_version");
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+    const username =
+      profile && "username" in profile && typeof profile.username === "string"
+        ? profile.username
+        : null;
+    if (!username) {
+      throw Object.assign(new Error("USERNAME_REQUIRED"), { code: "USERNAME_REQUIRED" });
+    }
     const { error } = await supabase
       .from("agents")
       .update({ status: "published", published_version_id: owned.draft_version_id })
       .eq("id", agentId);
     if (error) throw error;
+    publicPath = `/@${username}/${owned.slug}`;
   }
 
   const { data: agent, error: readError } = await supabase
@@ -132,7 +152,7 @@ export async function publishAgentAction(agentId: string): Promise<Agent> {
     .eq("id", agentId)
     .single();
   if (readError || !agent) throw readError ?? new Error("agent_not_found");
-  return mapAgent(agent);
+  return { agent: mapAgent(agent), publicPath };
 }
 
 /** Fetches the execution graph for Structure view. */
@@ -143,14 +163,16 @@ export async function getAgentGraphAction(agentId: string): Promise<AgentGraphRe
   } = await supabase.auth.getUser();
   if (!user) throw new Error("not_authenticated");
 
-  const { data: owned } = await supabase
+  const { data: agent } = await supabase
     .from("agents")
-    .select("id, draft_version_id")
+    .select("id, user_id, draft_version_id, published_version_id, status")
     .eq("id", agentId)
     .maybeSingle();
-  if (!owned) throw new Error("agent_not_found");
+  if (!agent) throw new Error("agent_not_found");
 
-  if (currentAiExecutionMode() === "agent-service") {
+  const isOwner = agent.user_id === user.id;
+
+  if (isOwner && currentAiExecutionMode() === "agent-service") {
     const accessToken = await requireAccessToken();
     const result = await agentServiceFetch<{
       graph: unknown;
@@ -166,18 +188,22 @@ export async function getAgentGraphAction(agentId: string): Promise<AgentGraphRe
     };
   }
 
-  if (!owned.draft_version_id) return null;
+  const versionId =
+    !isOwner || agent.status === "published"
+      ? agent.published_version_id ?? agent.draft_version_id
+      : agent.draft_version_id ?? agent.published_version_id;
+  if (!versionId) return null;
 
   const { data: version } = await supabase
     .from("agent_versions")
-    .select("spec")
-    .eq("id", owned.draft_version_id)
+    .select("spec, graph_spec")
+    .eq("id", versionId)
     .maybeSingle();
 
   if (!version) return null;
 
   const specRaw = version.spec as Record<string, unknown>;
-  const graphRaw = specRaw.graph ?? specRaw.graph_spec;
+  const graphRaw = version.graph_spec ?? specRaw.graph ?? specRaw.graph_spec;
   return {
     graph: graphRaw ? mapGraphSpecFromApi(graphRaw) : null,
     schemaVersion:
@@ -186,6 +212,7 @@ export async function getAgentGraphAction(agentId: string): Promise<AgentGraphRe
         : typeof specRaw.schemaVersion === "string"
           ? specRaw.schemaVersion
           : null,
+    identity: mapIdentityFromApi(specRaw.identity) ?? null,
   };
 }
 

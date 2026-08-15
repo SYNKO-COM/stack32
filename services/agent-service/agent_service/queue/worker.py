@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 async def process_run_by_id(run_id: str) -> dict[str, Any]:
     """Load run context from DB and execute. Payload must only carry run_id."""
+    from agent_service.logging_config import bind_log_context, reset_log_context
+
     db = Persistence()
     rows = await db._select(
         "runs",
@@ -23,6 +25,27 @@ async def process_run_by_id(run_id: str) -> dict[str, Any]:
     run = rows[0]
     user_id = run["user_id"]
     agent_id = run["agent_id"]
+    tokens = bind_log_context(run_id=run_id, user_id=user_id, agent_id=agent_id)
+    try:
+        return await _process_run_by_id_inner(
+            db=db,
+            run=run,
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+        )
+    finally:
+        reset_log_context(tokens)
+
+
+async def _process_run_by_id_inner(
+    *,
+    db: Persistence,
+    run: dict[str, Any],
+    run_id: str,
+    user_id: str,
+    agent_id: str,
+) -> dict[str, Any]:
     thread_id = run.get("thread_id")
     run_type = run.get("run_type")
     status = run.get("status")

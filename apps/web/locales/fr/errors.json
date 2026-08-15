@@ -12,7 +12,9 @@
   "publish": {
     "specInvalid": "Votre agent n'a pas encore de configuration valide. Terminez la construction avant de publier.",
     "validationFailed": "La publication a échoué à la validation. Consultez Structure et lancez un test d'abord.",
-    "testFailed": "Le dernier test n'a pas réussi. Corrigez les problèmes dans Build avant de publier."
+    "testFailed": "Le dernier test n'a pas réussi. Corrigez les problèmes dans Build avant de publier.",
+    "usernameRequired": "Choisissez un nom d'utilisateur dans Paramètres avant de publier un agent public.",
+    "failed": "La publication a échoué. Veuillez réessayer."
   },
   "notFound": {
     "title": "Page introuvable",

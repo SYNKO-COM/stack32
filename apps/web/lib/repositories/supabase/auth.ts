@@ -89,10 +89,17 @@ export class SupabaseAuthRepository implements AuthRepository {
     provider: "google" | "github",
   ): Promise<User | null> {
     const supabase = requireSupabaseBrowserClient();
+    const next =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("next")
+        : null;
+    const nextParam = next
+      ? `?next=${encodeURIComponent(next)}`
+      : "?next=/agents";
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${appOrigin()}/auth/callback?next=/agents`,
+        redirectTo: `${appOrigin()}/auth/callback${nextParam}`,
       },
     });
     if (error) throw error;
@@ -143,6 +150,7 @@ export class SupabaseAuthRepository implements AuthRepository {
       p_first_name: answers.firstName,
       p_phone: answers.phone,
       p_primary_goal: answers.primaryUseCase,
+      p_username: answers.username,
     });
     if (error) throw error;
     const { data: onboarding } = await supabase
@@ -151,5 +159,43 @@ export class SupabaseAuthRepository implements AuthRepository {
       .eq("user_id", data.id)
       .maybeSingle();
     return mapProfile(data, onboarding);
+  }
+
+  async setUsername(username: string): Promise<Profile> {
+    const supabase = requireSupabaseBrowserClient();
+    // Types lag migration until codegen; cast RPC name.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pending supabase codegen
+    const { data, error } = await (supabase as any).rpc("set_username", {
+      p_username: username,
+    });
+    if (error) throw error;
+    const { data: onboarding } = await supabase
+      .from("onboarding_responses")
+      .select("*")
+      .eq("user_id", data.id)
+      .maybeSingle();
+    return mapProfile(data, onboarding);
+  }
+
+  async checkUsernameAvailability(username: string): Promise<{
+    normalizedUsername: string | null;
+    available: boolean;
+    valid: boolean;
+    reason: string | null;
+  }> {
+    const supabase = requireSupabaseBrowserClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pending supabase codegen
+    const { data, error } = await (supabase as any).rpc("check_username_availability", {
+      p_username: username,
+    });
+    if (error) throw error;
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      normalizedUsername:
+        typeof row.normalizedUsername === "string" ? row.normalizedUsername : null,
+      available: row.available === true,
+      valid: row.valid === true,
+      reason: typeof row.reason === "string" ? row.reason : null,
+    };
   }
 }

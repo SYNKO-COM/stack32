@@ -112,10 +112,15 @@
   },
   "publishDialog": {
     "title": "Publier cet agent ?",
-    "body": "La publication fait de cette version celle utilisée dans Live.",
+    "body": "La publication rend cette version disponible via votre lien public Stack32.",
     "confirm": "Publier maintenant",
     "successTitle": "Agent publié",
-    "successBody": "Votre agent est en ligne. Vous pouvez continuer à améliorer des brouillons sans casser la version publiée."
+    "successBody": "Votre agent est en ligne. Partagez le lien ci-dessous — vous pouvez continuer à améliorer des brouillons sans casser la version publiée.",
+    "publicUrl": "Lien public",
+    "usernameRequiredTitle": "Nom d'utilisateur requis",
+    "usernameRequiredBody": "Choisissez un nom d'utilisateur Stack32 avant de publier. Les liens publics utilisent @username/nom-agent.",
+    "goToSettings": "Choisir un nom d'utilisateur",
+    "errorTitle": "Échec de la publication"
   },
   "empty": {
     "title": "Décrivez l'agent dont vous avez besoin",

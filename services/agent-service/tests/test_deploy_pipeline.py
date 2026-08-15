@@ -67,8 +67,11 @@ async def test_pipeline_blocks_on_security_finding():
     async def _activator(req: ActivationRequest):  # pragma: no cover - must not run
         raise AssertionError("activation must not happen on failed scan")
 
+    async def _smoke(files):
+        return {"ok": True}
+
     bad_files = [{"path": "src/agent/x.py", "content": "import os\nos.system('id')\n"}]
-    pipeline = DeployPipeline(activator=_activator)
+    pipeline = DeployPipeline(smoke_runner=_smoke, activator=_activator)
     report = await pipeline.deploy_snapshot(
         user_id="u1", agent_id="a1", snapshot=_SNAPSHOT, files=bad_files
     )
@@ -78,7 +81,10 @@ async def test_pipeline_blocks_on_security_finding():
 
 
 async def test_pipeline_blocks_on_failed_tests():
-    pipeline = DeployPipeline()
+    async def _smoke(files):
+        return {"ok": True}
+
+    pipeline = DeployPipeline(smoke_runner=_smoke)
     snap = {**_SNAPSHOT, "test_status": "failed"}
     report = await pipeline.deploy_snapshot(
         user_id="u1", agent_id="a1", snapshot=snap, files=_CLEAN_FILES
@@ -97,6 +103,76 @@ async def test_pipeline_blocks_on_smoke_failure():
     )
     assert report.success is False
     assert report.stage("staging_smoke").status == "failed"
+
+
+async def test_pipeline_missing_smoke_runner_fails_closed():
+    pipeline = DeployPipeline(require_smoke=True, require_persistence=True)
+    report = await pipeline.deploy_snapshot(
+        user_id="u1", agent_id="a1", snapshot=_SNAPSHOT, files=_CLEAN_FILES
+    )
+    assert report.success is False
+    assert report.stage("staging_smoke").status == "failed"
+    assert report.stage("staging_smoke").detail.get("reason") == "no_runner"
+
+
+async def test_pipeline_smoke_raise_fails():
+    async def _smoke(files):
+        raise RuntimeError("sandbox boom")
+
+    pipeline = DeployPipeline(smoke_runner=_smoke)
+    report = await pipeline.deploy_snapshot(
+        user_id="u1", agent_id="a1", snapshot=_SNAPSHOT, files=_CLEAN_FILES
+    )
+    assert report.success is False
+    assert report.stage("staging_smoke").status == "failed"
+
+
+async def test_pipeline_activator_none_fails():
+    async def _smoke(files):
+        return {"ok": True}
+
+    async def _activator(req: ActivationRequest):
+        return None
+
+    pipeline = DeployPipeline(smoke_runner=_smoke, activator=_activator)
+    report = await pipeline.deploy_snapshot(
+        user_id="u1", agent_id="a1", snapshot=_SNAPSHOT, files=_CLEAN_FILES
+    )
+    assert report.success is False
+    assert report.stage("activate").status == "failed"
+    assert report.stage("activate").detail.get("persisted") is False
+
+
+async def test_pipeline_activator_raises_fails():
+    async def _smoke(files):
+        return {"ok": True}
+
+    async def _activator(req: ActivationRequest):
+        raise ConnectionError("db down")
+
+    pipeline = DeployPipeline(smoke_runner=_smoke, activator=_activator)
+    report = await pipeline.deploy_snapshot(
+        user_id="u1", agent_id="a1", snapshot=_SNAPSHOT, files=_CLEAN_FILES
+    )
+    assert report.success is False
+    assert report.stage("activate").status == "failed"
+
+
+async def test_pipeline_dev_may_skip_smoke_when_explicit():
+    async def _activator(req: ActivationRequest):
+        return {"id": req.deployment_id}
+
+    pipeline = DeployPipeline(
+        smoke_runner=None,
+        activator=_activator,
+        require_smoke=False,
+        require_persistence=True,
+    )
+    report = await pipeline.deploy_snapshot(
+        user_id="u1", agent_id="a1", snapshot=_SNAPSHOT, files=_CLEAN_FILES
+    )
+    assert report.success is True
+    assert report.stage("staging_smoke").status == "skipped"
 
 
 async def test_sandbox_smoke_runner_runs_real_tests():

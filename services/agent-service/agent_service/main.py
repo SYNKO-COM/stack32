@@ -53,11 +53,38 @@ def _check_production_runtime(settings) -> None:
         raise RuntimeError("Production startup checks failed: " + "; ".join(errors))
 
 
+def _maybe_init_sentry(settings) -> None:
+    """Optional Sentry init — no-op when SENTRY_DSN is unset or SDK missing."""
+    dsn = (getattr(settings, "SENTRY_DSN", None) or "").strip()
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+    except ImportError:
+        logger.warning("SENTRY_DSN set but sentry-sdk is not installed; skipping Sentry init")
+        return
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=getattr(settings, "ENVIRONMENT", "development") or "development",
+        release=f"agent-service@{__version__}",
+        integrations=[
+            FastApiIntegration(),
+            LoggingIntegration(level=None, event_level=None),
+        ],
+        traces_sample_rate=0.0,
+        send_default_pii=False,
+    )
+    logger.info("sentry_initialized environment=%s", settings.ENVIRONMENT)
+
+
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
     setup_logging(settings.LOG_LEVEL)
     _check_production_runtime(settings)
+    _maybe_init_sentry(settings)
 
     app = FastAPI(
         title="Stack32 Agent Service",

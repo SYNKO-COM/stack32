@@ -1,4 +1,4 @@
-import type { Agent, AgentSpec, AgentStatus, AgentVersion } from "@/lib/domain/types";
+import type { Agent, AgentSpec, AgentStatus, AgentVersion, PublishResult } from "@/lib/domain/types";
 import type { AgentRepository } from "@/lib/repositories/interfaces";
 
 import { emitMockChange } from "./events";
@@ -143,7 +143,7 @@ export class MockAgentRepository implements AgentRepository {
     writeState(state);
   }
 
-  async publishAgent(agentId: string): Promise<Agent> {
+  async publishAgent(agentId: string): Promise<PublishResult> {
     await delay(900);
     const state = readState();
     const agent = state.agents.find((a) => a.id === agentId);
@@ -152,7 +152,7 @@ export class MockAgentRepository implements AgentRepository {
     agent.publishedVersionId = agent.draftVersionId;
     agent.updatedAt = nowIso();
     writeState(state);
-    return agent;
+    return { agent, publicPath: `/@demo/${agent.id.slice(0, 8)}` };
   }
 
   async getCurrentVersion(agentId: string): Promise<AgentVersion | null> {

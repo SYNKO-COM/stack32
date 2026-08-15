@@ -8,6 +8,7 @@ import type {
   LiveThread,
   OnboardingAnswers,
   Profile,
+  PublishResult,
   Subscription,
   User,
   Workspace,
@@ -46,6 +47,13 @@ export interface AuthRepository {
   signOut(): Promise<void>;
   getProfile(): Promise<Profile | null>;
   completeOnboarding(answers: OnboardingAnswers): Promise<Profile>;
+  setUsername(username: string): Promise<Profile>;
+  checkUsernameAvailability(username: string): Promise<{
+    normalizedUsername: string | null;
+    available: boolean;
+    valid: boolean;
+    reason: string | null;
+  }>;
 }
 
 export interface AgentRepository {
@@ -55,7 +63,7 @@ export interface AgentRepository {
   renameAgent(agentId: string, name: string): Promise<Agent>;
   duplicateAgent(agentId: string): Promise<Agent>;
   deleteAgent(agentId: string): Promise<void>;
-  publishAgent(agentId: string): Promise<Agent>;
+  publishAgent(agentId: string): Promise<PublishResult>;
   getCurrentVersion(agentId: string): Promise<AgentVersion | null>;
   getSpec(agentId: string): Promise<AgentSpec | null>;
 }

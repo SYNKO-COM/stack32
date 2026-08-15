@@ -27,7 +27,13 @@ const MAX_CHAT_PCT = 72;
  * "Agent IA" workspace: chat with the agent on the left, its module canvas on
  * the right. Replaces the former Live and Structure tabs.
  */
-export function AgentIaView({ agentId }: { agentId: string }) {
+export function AgentIaView({
+  agentId,
+  mode = "owner",
+}: {
+  agentId: string;
+  mode?: "owner" | "consumer";
+}) {
   const { t } = useTranslation(["structure", "builder"]);
   const { data: graphResponse } = useAgentGraph(agentId);
   const { data: spec } = useAgentSpec(agentId);
@@ -36,6 +42,7 @@ export function AgentIaView({ agentId }: { agentId: string }) {
   const [dragging, setDragging] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const readOnly = mode === "consumer";
 
   useEffect(() => {
     const supabase = requireSupabaseBrowserClient();
@@ -274,11 +281,18 @@ export function AgentIaView({ agentId }: { agentId: string }) {
                 boundProviders={boundProviders}
                 modelStatus={modelStatus}
                 executionVisual={executionVisual}
-                onConnectionsChanged={() => void connectionsQuery.refetch()}
-                onConfigChanged={() => {
-                  void connectionsQuery.refetch();
-                  void readinessQuery.refetch();
-                }}
+                readOnly={readOnly}
+                onConnectionsChanged={
+                  readOnly ? undefined : () => void connectionsQuery.refetch()
+                }
+                onConfigChanged={
+                  readOnly
+                    ? undefined
+                    : () => {
+                        void connectionsQuery.refetch();
+                        void readinessQuery.refetch();
+                      }
+                }
               />
             ) : (
               <p className="px-6 py-10 text-center text-sm text-muted-foreground">

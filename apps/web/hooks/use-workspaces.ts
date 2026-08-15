@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import { useCurrentUser } from "@/hooks/use-auth";
 import { getWorkspaceRepository } from "@/lib/repositories/factory";
@@ -8,7 +9,6 @@ import {
   readActiveWorkspaceId,
   writeActiveWorkspaceId,
 } from "@/lib/workspace-preference";
-import { useEffect, useMemo, useState } from "react";
 
 const workspaceKeys = {
   list: ["workspaces"] as const,
@@ -25,23 +25,24 @@ export function useWorkspaces() {
 export function useActiveWorkspace() {
   const { data: user } = useCurrentUser();
   const { data: workspaces, isLoading } = useWorkspaces();
-  const [activeId, setActiveId] = useState<string | null>(null);
+  /** Explicit user selection; otherwise derive from localStorage + list. */
+  const [overrideId, setOverrideId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user?.id || !workspaces || workspaces.length === 0) return;
-    const stored = readActiveWorkspaceId(user.id);
-    const match = stored && workspaces.some((w) => w.id === stored) ? stored : workspaces[0].id;
-    setActiveId(match);
-    if (match !== stored) writeActiveWorkspaceId(user.id, match);
-  }, [user?.id, workspaces]);
+  const activeWorkspaceId = useMemo(() => {
+    const userId = user?.id;
+    if (!userId || !workspaces || workspaces.length === 0) return null;
+    if (overrideId && workspaces.some((w) => w.id === overrideId)) return overrideId;
+    const stored = readActiveWorkspaceId(userId);
+    return stored && workspaces.some((w) => w.id === stored) ? stored : workspaces[0].id;
+  }, [user, workspaces, overrideId]);
 
   const activeWorkspace = useMemo(
-    () => workspaces?.find((w) => w.id === activeId) ?? workspaces?.[0] ?? null,
-    [workspaces, activeId],
+    () => workspaces?.find((w) => w.id === activeWorkspaceId) ?? workspaces?.[0] ?? null,
+    [workspaces, activeWorkspaceId],
   );
 
   const setActiveWorkspaceId = (workspaceId: string) => {
-    setActiveId(workspaceId);
+    setOverrideId(workspaceId);
     if (user?.id) writeActiveWorkspaceId(user.id, workspaceId);
   };
 

@@ -53,13 +53,31 @@ async def test_native_tools_include_expected():
 
 
 async def test_pipedream_health_degraded_without_creds():
+    from agent_service.integrations.pipedream.provider import PipedreamToolProvider
+
+    class _UnconfiguredClient:
+        def configured(self) -> bool:
+            return False
+
+        async def get_access_token(self) -> str | None:
+            return None
+
+    provider = PipedreamToolProvider(client=_UnconfiguredClient())  # type: ignore[arg-type]
+    health = await provider.health_check()
+    # Optional integration: unconfigured must not fail the service (ok=True),
+    # but must report configured=False + degraded=True.
+    assert health["ok"] is True
+    assert health["configured"] is False
+    assert health["degraded"] is True
+
+    # Registry still reports native as healthy regardless of Pipedream creds.
     registry = get_provider_registry()
-    health = await registry.health()
-    by_name = {h["provider"]: h for h in health}
+    aggregate = await registry.health()
+    by_name = {h["provider"]: h for h in aggregate}
     assert by_name["native"]["ok"] is True
-    assert by_name["pipedream"]["ok"] is True
-    # Degraded when credentials are missing; fully healthy when PIPEDREAM_* is set.
+    assert "pipedream" in by_name
     assert "degraded" in by_name["pipedream"]
+    assert "ok" in by_name["pipedream"]
 
 
 async def test_execute_native_via_registry():

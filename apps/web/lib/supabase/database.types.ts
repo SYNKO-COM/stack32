@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.15"
-  }
   public: {
     Tables: {
       agent_approval_requests: {
@@ -192,6 +187,32 @@ export type Database = {
             columns: ["agent_version_id"]
             isOneToOne: false
             referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_favorites: {
+        Row: {
+          agent_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_favorites_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
             referencedColumns: ["id"]
           },
         ]
@@ -1307,111 +1328,6 @@ export type Database = {
           },
         ]
       }
-      checkpoint_blobs: {
-        Row: {
-          blob: string | null
-          channel: string
-          checkpoint_ns: string
-          thread_id: string
-          type: string
-          version: string
-        }
-        Insert: {
-          blob?: string | null
-          channel: string
-          checkpoint_ns?: string
-          thread_id: string
-          type: string
-          version: string
-        }
-        Update: {
-          blob?: string | null
-          channel?: string
-          checkpoint_ns?: string
-          thread_id?: string
-          type?: string
-          version?: string
-        }
-        Relationships: []
-      }
-      checkpoint_migrations: {
-        Row: {
-          v: number
-        }
-        Insert: {
-          v: number
-        }
-        Update: {
-          v?: number
-        }
-        Relationships: []
-      }
-      checkpoint_writes: {
-        Row: {
-          blob: string
-          channel: string
-          checkpoint_id: string
-          checkpoint_ns: string
-          idx: number
-          task_id: string
-          task_path: string
-          thread_id: string
-          type: string | null
-        }
-        Insert: {
-          blob: string
-          channel: string
-          checkpoint_id: string
-          checkpoint_ns?: string
-          idx: number
-          task_id: string
-          task_path?: string
-          thread_id: string
-          type?: string | null
-        }
-        Update: {
-          blob?: string
-          channel?: string
-          checkpoint_id?: string
-          checkpoint_ns?: string
-          idx?: number
-          task_id?: string
-          task_path?: string
-          thread_id?: string
-          type?: string | null
-        }
-        Relationships: []
-      }
-      checkpoints: {
-        Row: {
-          checkpoint: Json
-          checkpoint_id: string
-          checkpoint_ns: string
-          metadata: Json
-          parent_checkpoint_id: string | null
-          thread_id: string
-          type: string | null
-        }
-        Insert: {
-          checkpoint: Json
-          checkpoint_id: string
-          checkpoint_ns?: string
-          metadata?: Json
-          parent_checkpoint_id?: string | null
-          thread_id: string
-          type?: string | null
-        }
-        Update: {
-          checkpoint?: Json
-          checkpoint_id?: string
-          checkpoint_ns?: string
-          metadata?: Json
-          parent_checkpoint_id?: string | null
-          thread_id?: string
-          type?: string | null
-        }
-        Relationships: []
-      }
       connector_definitions: {
         Row: {
           auth_type: string
@@ -1956,6 +1872,7 @@ export type Database = {
           redirect_uri: string
           scopes: string[]
           state: string
+          tool_ids: string[]
           user_id: string
         }
         Insert: {
@@ -1970,6 +1887,7 @@ export type Database = {
           redirect_uri: string
           scopes?: string[]
           state: string
+          tool_ids?: string[]
           user_id: string
         }
         Update: {
@@ -1984,6 +1902,7 @@ export type Database = {
           redirect_uri?: string
           scopes?: string[]
           state?: string
+          tool_ids?: string[]
           user_id?: string
         }
         Relationships: [
@@ -2061,6 +1980,7 @@ export type Database = {
           phone: string | null
           timezone: string | null
           updated_at: string
+          username: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -2074,6 +1994,7 @@ export type Database = {
           phone?: string | null
           timezone?: string | null
           updated_at?: string
+          username?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -2087,6 +2008,7 @@ export type Database = {
           phone?: string | null
           timezone?: string | null
           updated_at?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -2108,6 +2030,18 @@ export type Database = {
           count?: number
           updated_at?: string
           window_start?: string
+        }
+        Relationships: []
+      }
+      reserved_usernames: {
+        Row: {
+          username: string
+        }
+        Insert: {
+          username: string
+        }
+        Update: {
+          username?: string
         }
         Relationships: []
       }
@@ -2881,6 +2815,42 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_agent_deployment: {
+        Args: {
+          p_agent_id: string
+          p_agent_version_id: string
+          p_deployment_id: string
+          p_environment?: string
+          p_idempotency_key?: string
+          p_runtime_version?: string
+          p_snapshot_id?: string
+          p_user_id: string
+        }
+        Returns: {
+          agent_id: string
+          agent_version_id: string
+          created_at: string
+          environment: string
+          id: string
+          public_slug: string | null
+          published_at: string | null
+          runtime_config: Json
+          status: string
+          unpublished_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_deployments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      check_username_availability: {
+        Args: { p_username: string }
+        Returns: Json
+      }
       claim_due_schedules: {
         Args: { p_limit?: number }
         Returns: {
@@ -2922,6 +2892,7 @@ export type Database = {
           p_primary_goal?: string
           p_role: string
           p_role_other_detail?: string
+          p_username?: string
         }
         Returns: {
           avatar_url: string | null
@@ -2935,6 +2906,7 @@ export type Database = {
           phone: string | null
           timezone: string | null
           updated_at: string
+          username: string | null
         }
         SetofOptions: {
           from: "*"
@@ -3036,8 +3008,36 @@ export type Database = {
           source_id: string
         }[]
       }
+      resolve_published_agent: {
+        Args: { p_agent_slug: string; p_username: string }
+        Returns: Json
+      }
+      set_username: {
+        Args: { p_username: string }
+        Returns: {
+          avatar_url: string | null
+          created_at: string
+          first_name: string | null
+          full_name: string | null
+          id: string
+          locale: string
+          onboarding_completed: boolean
+          onboarding_completed_at: string | null
+          phone: string | null
+          timezone: string | null
+          updated_at: string
+          username: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       soft_delete_agent: { Args: { p_agent_id: string }; Returns: undefined }
       user_monthly_usage_usd: { Args: { p_user_id: string }; Returns: number }
+      validate_username: { Args: { p_username: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
@@ -3170,3 +3170,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

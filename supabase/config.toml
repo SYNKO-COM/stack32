@@ -34,6 +34,11 @@ additional_redirect_urls = [
 minimum_password_length = 10
 password_requirements = "lower_upper_letters_digits_symbols"
 
+# Captcha (hCaptcha / Turnstile): intentionally disabled for local + CI so E2E
+# and developer auth flows work without a site key. Production enables captcha
+# only via the Supabase Auth dashboard (no app-level bypass or mock unlock).
+# Do not add captcha secret/site-key env vars to this repo for local use.
+
 [auth.mfa.totp]
 enroll_enabled = true
 verify_enabled = true

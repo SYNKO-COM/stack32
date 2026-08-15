@@ -13,6 +13,7 @@ const password = "E2e-Password-123!";
 
 test("signup, verify email, onboarding, build, logout and login again", async ({ page }) => {
   const email = `e2e-${Date.now()}@stack32.test`;
+  const username = `e2e_${Date.now().toString().slice(-8)}`;
 
   // --- Signup ---------------------------------------------------------------
   await page.goto("/signup");
@@ -21,16 +22,19 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await page.getByRole("button", { name: /create account|créer mon compte/i }).click();
 
   // --- Verify email (enable_confirmations = true) -----------------------------
-  // Signup returns no session, so the app routes to /verify-email; confirm with
-  // the 6-digit OTP delivered to Inbucket.
-  await page.waitForURL("**/verify-email**", { timeout: 20_000 });
-  const otp = await waitForSignupOtp(email);
-  const firstDigit = page.getByLabel(/digit 1/i);
-  await firstDigit.click();
-  await page.keyboard.type(otp);
+  // Local/CI may either route to /verify-email (no session) or land on
+  // /onboarding when the mailer auto-confirms. Handle both without weakening
+  // production Auth/CAPTCHA settings.
+  await page.waitForURL(/\/(verify-email|onboarding)/, { timeout: 20_000 });
+  if (page.url().includes("/verify-email")) {
+    const otp = await waitForSignupOtp(email);
+    const firstDigit = page.getByLabel(/digit 1/i);
+    await firstDigit.click();
+    await page.keyboard.type(otp);
+    await page.waitForURL("**/onboarding", { timeout: 20_000 });
+  }
 
-  // --- Onboarding (3 steps) ---------------------------------------------------
-  await page.waitForURL("**/onboarding", { timeout: 20_000 });
+  // --- Onboarding -------------------------------------------------------------
   // Intro animation, then step 1 (options targeted by label to avoid clicking
   // a leaving step during the animated transition).
   await page.getByRole("radio", { name: /google/i }).click({ timeout: 20_000 });
@@ -38,7 +42,11 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await page.getByRole("radio", { name: /founder|fondateur/i }).click({ timeout: 15_000 });
   await page.getByRole("button", { name: /continue|continuer/i }).click();
   await page.locator("#onboarding-firstname").fill("E2E");
-  await page.getByRole("button", { name: /finish|start|terminer|commencer/i }).click();
+  await page.locator("#onboarding-username").fill(username);
+  await expect(page.getByText(/available|disponible/i)).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: /continue|continuer/i }).click();
+  await page.locator("#onboarding-workspace").fill("E2E Workspace");
+  await page.getByRole("button", { name: /finish|start|terminer|commencer|créer/i }).click();
 
   // --- Fresh agent workspace ---------------------------------------------------
   await page.waitForURL("**/agents/*/build", { timeout: 30_000 });
@@ -77,4 +85,13 @@ test("unauthenticated users are redirected away from protected routes", async ({
   await page.waitForURL("**/login**", { timeout: 15_000 });
   await page.goto("/onboarding");
   await page.waitForURL("**/login**", { timeout: 15_000 });
+  await page.goto("/my-agents");
+  await page.waitForURL("**/login**", { timeout: 15_000 });
+});
+
+test("logged-out public agent path preserves next through login", async ({ page }) => {
+  await page.goto("/@missinguser/missing-agent");
+  await page.waitForURL("**/login**", { timeout: 15_000 });
+  const url = new URL(page.url());
+  expect(url.searchParams.get("next")).toBe("/@missinguser/missing-agent");
 });

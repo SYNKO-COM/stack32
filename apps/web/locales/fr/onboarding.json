@@ -36,14 +36,29 @@
   },
   "step3": {
     "title": "Parlez-nous un peu de vous",
-    "subtitle": "Votre prénom, et éventuellement comment vous comptez utiliser Stack32.",
+    "subtitle": "Votre prénom, un nom d'utilisateur public, et éventuellement comment vous comptez utiliser Stack32.",
     "firstName": "Prénom",
     "firstNamePlaceholder": "Ada",
+    "username": "Nom d'utilisateur",
+    "usernamePlaceholder": "ada_lovelace",
+    "usernameHint": "Les liens publics ressemblent à stack32.com/@username/nom-agent. Choisissez avec soin — c'est ainsi que l'on trouvera vos agents.",
+    "usernameChecking": "Vérification de la disponibilité…",
+    "usernameAvailable": "Nom d'utilisateur disponible",
+    "usernameTaken": "Ce nom d'utilisateur est déjà pris",
+    "usernameReserved": "Ce nom d'utilisateur est réservé",
+    "usernameInvalid": "3–30 caractères : commencez par une lettre, puis lettres, chiffres ou underscores.",
     "phone": "Numéro de téléphone",
     "phonePlaceholder": "6 12 34 56 78",
     "phoneHint": "Facultatif — choisissez votre indicatif, puis saisissez votre numéro sans le 0 initial.",
     "useCase": "Que fera votre premier agent ? (facultatif)",
     "useCasePlaceholder": "ex. Rechercher des prospects pour mon agence"
+  },
+  "username": {
+    "invalid": "Ce nom d'utilisateur n'est pas valide.",
+    "settingsTitle": "Choisir un nom d'utilisateur",
+    "settingsBody": "Un nom d'utilisateur est requis pour publier des agents et partager des liens publics.",
+    "save": "Enregistrer le nom d'utilisateur",
+    "saved": "Nom d'utilisateur enregistré"
   },
   "step4": {
     "title": "Créez votre premier workspace",

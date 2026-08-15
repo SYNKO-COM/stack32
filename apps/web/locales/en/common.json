@@ -28,7 +28,11 @@
     "duplicate": "Duplicate",
     "retry": "Retry",
     "settings": "Settings",
+    "myAgents": "My Agents",
     "newAgent": "New agent",
+    "copyLink": "Copy link",
+    "openAgent": "Open agent",
+    "copied": "Copied",
     "publish": "Publish",
     "upgrade": "Upgrade",
     "openApp": "Open the app",
@@ -112,5 +116,18 @@
     "switchToLight": "Switch to light mode"
   },
   "loading": "Loading…",
-  "comingSoon": "Coming soon"
+  "comingSoon": "Coming soon",
+  "myAgents": {
+    "title": "My Agents",
+    "subtitle": "Agents you created, use, or favorited.",
+    "empty": "Nothing here yet.",
+    "favorite": "Favorite",
+    "unfavorite": "Unfavorite",
+    "openBuilder": "Open builder",
+    "tabs": {
+      "created": "Created",
+      "using": "Using",
+      "favorites": "Favorites"
+    }
+  }
 }

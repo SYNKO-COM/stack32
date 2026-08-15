@@ -13,6 +13,7 @@ from agent_service.builder.orchestrator import BuilderOrchestrator
 from agent_service.security.rate_limit import (
     BudgetExceeded,
     RateLimitExceeded,
+    check_concurrent_runs,
     check_monthly_budget,
     check_user_rate_limit,
 )
@@ -65,6 +66,7 @@ async def _guards(user_id: str) -> None:
     try:
         await check_user_rate_limit(user_id)
         await check_monthly_budget(user_id)
+        await check_concurrent_runs(user_id=user_id, kind="builder")
     except RateLimitExceeded as exc:
         raise HTTPException(status_code=429, detail={"code": exc.code, "message": "Rate limit exceeded."}) from exc
     except BudgetExceeded as exc:

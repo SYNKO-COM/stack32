@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
+import { safeNextPath } from "@/lib/auth/post-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -40,10 +41,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/reset-password`);
   }
 
-  const next =
-    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
-      ? rawNext
-      : "/auth/confirmed";
+  const next = safeNextPath(rawNext) ?? "/auth/confirmed";
 
   if (next === "/auth/confirmed" || next.startsWith("/auth/confirmed")) {
     return NextResponse.redirect(`${origin}/auth/confirmed`);

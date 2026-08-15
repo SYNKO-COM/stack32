@@ -28,46 +28,44 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     refetch: refetchProfile,
   } = useProfile();
 
-  const [resolvedComplete, setResolvedComplete] = useState<boolean | null>(null);
+  /** Result of async retry when profile query is null. */
+  const [retryComplete, setRetryComplete] = useState<boolean | null>(null);
   const resolvingRef = useRef(false);
 
   const settling = userLoading || profileLoading || userFetching || profileFetching;
+  const knownComplete = profile?.onboardingCompleted === true;
+  const knownIncomplete = Boolean(profile && !profile.onboardingCompleted);
+  const needsRetry = Boolean(
+    user && !userError && profile == null && !profileLoading && !userLoading && !userFetching,
+  );
 
   useEffect(() => {
     if (userLoading || userFetching) return;
 
     if (userError || !user) {
-      setResolvedComplete(null);
       router.replace("/login");
       return;
     }
 
-    if (profile?.onboardingCompleted) {
-      setResolvedComplete(true);
-      return;
-    }
+    if (knownComplete) return;
 
-    // Explicit incomplete onboarding — only when we have a real profile row.
-    if (profile && !profile.onboardingCompleted) {
-      setResolvedComplete(false);
+    if (knownIncomplete) {
       router.replace("/onboarding");
       return;
     }
 
-    // profile is null/undefined: retry before sending anyone to onboarding.
-    if (resolvingRef.current) return;
+    if (!needsRetry || resolvingRef.current) return;
     resolvingRef.current = true;
-    setResolvedComplete(null);
 
     void (async () => {
       try {
         const fresh = await fetchProfileWithRetry();
         await refetchProfile();
         if (fresh?.onboardingCompleted) {
-          setResolvedComplete(true);
+          setRetryComplete(true);
           return;
         }
-        setResolvedComplete(false);
+        setRetryComplete(false);
         router.replace("/onboarding");
       } finally {
         resolvingRef.current = false;
@@ -75,13 +73,17 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     })();
   }, [
     user,
-    profile,
+    knownComplete,
+    knownIncomplete,
+    needsRetry,
     userLoading,
     userFetching,
     userError,
     router,
     refetchProfile,
   ]);
+
+  const resolvedComplete = knownComplete || retryComplete === true;
 
   if (settling || resolvedComplete !== true) {
     return (

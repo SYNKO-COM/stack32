@@ -13,6 +13,8 @@ from agent_service.runtime.live import LiveRuntime
 from agent_service.security.rate_limit import (
     BudgetExceeded,
     RateLimitExceeded,
+    check_concurrent_runs,
+    check_installation_rate_limit,
     check_monthly_budget,
     check_user_rate_limit,
 )
@@ -49,6 +51,7 @@ async def post_live_message(
     try:
         await check_user_rate_limit(user.user_id)
         await check_monthly_budget(user.user_id)
+        await check_concurrent_runs(user_id=user.user_id, kind="live")
     except RateLimitExceeded as exc:
         raise HTTPException(status_code=429, detail={"code": exc.code, "message": "Rate limit."}) from exc
     except BudgetExceeded as exc:
@@ -60,12 +63,17 @@ async def post_live_message(
         {
             "id": f"eq.{thread_id}",
             "user_id": f"eq.{user.user_id}",
-            "select": "id,agent_id",
+            "select": "id,agent_id,installation_id",
             "limit": "1",
         },
     )
     if not rows:
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Thread not found."})
+
+    try:
+        await check_installation_rate_limit(rows[0].get("installation_id"))
+    except RateLimitExceeded as exc:
+        raise HTTPException(status_code=429, detail={"code": exc.code, "message": "Rate limit."}) from exc
 
     runtime = LiveRuntime(db)
     result = await runtime.handle_message(

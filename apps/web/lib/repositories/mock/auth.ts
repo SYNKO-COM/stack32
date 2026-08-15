@@ -123,6 +123,7 @@ export class MockAuthRepository implements AuthRepository {
       userId,
       firstName: answers.firstName,
       phone: answers.phone,
+      username: answers.username?.trim().toLowerCase() || undefined,
       discoverySource: answers.discoverySource,
       role: answers.role,
       primaryUseCase: answers.primaryUseCase,
@@ -130,6 +131,46 @@ export class MockAuthRepository implements AuthRepository {
     };
     writeState({ user: state.user, profile });
     return profile;
+  }
+
+  async setUsername(username: string): Promise<Profile> {
+    await delay(200);
+    const state = readState();
+    if (!state.profile) throw new AuthUiError("errors:generic");
+    const normalized = username.trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_]{2,29}$/.test(normalized)) {
+      throw new AuthUiError("onboarding:username.invalid");
+    }
+    const profile: Profile = { ...state.profile, username: normalized };
+    writeState({ user: state.user, profile });
+    return profile;
+  }
+
+  async checkUsernameAvailability(username: string): Promise<{
+    normalizedUsername: string | null;
+    available: boolean;
+    valid: boolean;
+    reason: string | null;
+  }> {
+    await delay(100);
+    const normalized = username.trim().toLowerCase() || null;
+    if (!normalized) {
+      return { normalizedUsername: null, available: false, valid: false, reason: "empty" };
+    }
+    if (!/^[a-z][a-z0-9_]{2,29}$/.test(normalized)) {
+      return { normalizedUsername: normalized, available: false, valid: false, reason: "invalid" };
+    }
+    const reserved = new Set(["admin", "api", "login", "signup", "settings", "stack32"]);
+    if (reserved.has(normalized)) {
+      return { normalizedUsername: normalized, available: false, valid: false, reason: "reserved" };
+    }
+    const taken = readState().profile?.username === normalized;
+    return {
+      normalizedUsername: normalized,
+      available: !taken,
+      valid: true,
+      reason: taken ? "taken" : null,
+    };
   }
 }
 

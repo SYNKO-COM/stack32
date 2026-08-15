@@ -112,7 +112,9 @@ async def run_due_schedules(*, db: Any, client: Any, limit: int = 25) -> dict[st
             },
             installation_id=str(installation_id) if installation_id else None,
         )
-        await db.enqueue_run(run_id=run_id, user_id=user_id)
+        from agent_service.queue.dispatch import enqueue_run
+
+        await enqueue_run(db=db, run_id=run_id, user_id=user_id)
         await client.patch(
             "/schedule_occurrences",
             params={"occurrence_key": f"eq.{occurrence_key}"},

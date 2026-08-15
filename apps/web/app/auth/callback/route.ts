@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeNextPath } from "@/lib/auth/post-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 async function wait(ms: number): Promise<void> {
@@ -18,8 +19,7 @@ async function wait(ms: number): Promise<void> {
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const rawNext = searchParams.get("next") ?? "/agents";
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/agents";
+  const next = safeNextPath(searchParams.get("next")) ?? "/agents";
 
   if (code) {
     const supabase = await createSupabaseServerClient();
@@ -53,13 +53,22 @@ export async function GET(request: NextRequest) {
         }
 
         if (found && completed) {
-          return NextResponse.redirect(`${origin}${next === "/onboarding" ? "/agents" : next}`);
+          const dest = next === "/onboarding" ? "/agents" : next;
+          return NextResponse.redirect(`${origin}${dest}`);
         }
         if (found && !completed) {
-          return NextResponse.redirect(`${origin}/onboarding`);
+          const onboarding =
+            next && next !== "/onboarding"
+              ? `/onboarding?next=${encodeURIComponent(next)}`
+              : "/onboarding";
+          return NextResponse.redirect(`${origin}${onboarding}`);
         }
         // Still no profile after retries — safest for brand-new OAuth users.
-        return NextResponse.redirect(`${origin}/onboarding`);
+        const onboarding =
+          next && next !== "/onboarding"
+            ? `/onboarding?next=${encodeURIComponent(next)}`
+            : "/onboarding";
+        return NextResponse.redirect(`${origin}${onboarding}`);
       }
     }
   }

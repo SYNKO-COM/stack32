@@ -6,9 +6,11 @@
 | --- | --- |
 | Agent API Dockerfile | Ready (non-root, healthcheck) |
 | Terraform staging | Scaffolded — **do not apply without billing confirmation** |
-| Cloud Tasks queue | Defined in Terraform |
+| Cloud Tasks queue | Defined in Terraform (staging + production) |
+| Cloud Scheduler | Defined when `scheduler_tick_url` is set |
 | Secret Manager names | Defined in Terraform |
 | Local run queue | PostgreSQL `run_queue` (default `QUEUE_BACKEND=postgres`) |
+| Cloud Tasks publisher | `agent_service.queue.cloud_tasks` when `QUEUE_BACKEND=cloud_tasks` |
 
 ## Local development (no GCP required)
 
@@ -44,13 +46,15 @@ curl -X POST http://localhost:8000/v1/internal/tasks/run \
 3. Authenticate: `gcloud auth login && gcloud auth application-default login`
 4. Set project: `gcloud config set project YOUR_PROJECT_ID`
 5. Choose region (recommended: `europe-west1`).
-6. From `infra/terraform/environments/staging`:
+6. From `infra/terraform/environments/staging` (or `production`):
    - `terraform init`
    - `terraform plan -var="project_id=YOUR_PROJECT_ID"`
+   - Optional scale: `-var="min_instance_count=…" -var="max_instance_count=…" -var="container_concurrency=…"`
    - Review plan; apply only when authorized.
 7. Add secret versions (never commit values).
 8. Build and push the agent-service image; re-apply with `image=...`.
-9. Configure Cloud Tasks OIDC to `POST /v1/internal/tasks/run`.
+9. Configure Cloud Tasks OIDC / target URL to `POST /v1/internal/tasks/run`.
+10. Re-apply with `scheduler_tick_url=https://…/v1/internal/tasks/schedules/tick`.
 
 ## Secret Manager names (staging prefix)
 
@@ -64,3 +68,5 @@ curl -X POST http://localhost:8000/v1/internal/tasks/run \
 - `stack32-staging-agent-service-internal-token`
 
 Only create secrets that are actually configured.
+
+Production secret IDs use the `stack32-production-` prefix (same suffixes).

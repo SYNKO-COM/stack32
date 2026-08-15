@@ -40,7 +40,7 @@ function VerifyEmailForm() {
     setResent(false);
     try {
       await verify.mutateAsync({ email, token });
-      router.push(await resolvePostAuthPath());
+      router.push(await resolvePostAuthPath(searchParams.get("next")));
     } catch (err) {
       setError(t(authErrorKey(err)));
       setCode("");

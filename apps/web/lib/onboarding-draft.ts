@@ -11,6 +11,7 @@ export interface OnboardingDraft {
   discoverySource: string | null;
   role: string | null;
   firstName: string;
+  username: string;
   countryCode: string;
   phone: string;
   useCase: string;
@@ -23,6 +24,7 @@ const DEFAULT_DRAFT: OnboardingDraft = {
   discoverySource: null,
   role: null,
   firstName: "",
+  username: "",
   countryCode: "+33",
   phone: "",
   useCase: "",
@@ -48,6 +50,7 @@ export function readOnboardingDraft(userId: string): OnboardingDraft {
       Boolean(parsed.discoverySource) ||
       Boolean(parsed.role) ||
       Boolean(parsed.firstName) ||
+      Boolean(parsed.username) ||
       Boolean(parsed.workspaceName);
     return {
       step: isValidStep(parsed.step) ? parsed.step : 1,
@@ -55,6 +58,7 @@ export function readOnboardingDraft(userId: string): OnboardingDraft {
       discoverySource: typeof parsed.discoverySource === "string" ? parsed.discoverySource : null,
       role: typeof parsed.role === "string" ? parsed.role : null,
       firstName: typeof parsed.firstName === "string" ? parsed.firstName : "",
+      username: typeof parsed.username === "string" ? parsed.username : "",
       countryCode: typeof parsed.countryCode === "string" ? parsed.countryCode : "+33",
       phone: typeof parsed.phone === "string" ? parsed.phone : "",
       useCase: typeof parsed.useCase === "string" ? parsed.useCase : "",

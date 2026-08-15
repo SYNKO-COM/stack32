@@ -28,7 +28,11 @@ function LoginContent() {
       ) : null}
       <AuthForm
         mode="login"
-        onModeChange={(mode) => router.push(mode === "signup" ? "/signup" : "/login")}
+        onModeChange={(mode) => {
+          const next = searchParams.get("next");
+          const qs = next ? `?next=${encodeURIComponent(next)}` : "";
+          router.push(mode === "signup" ? `/signup${qs}` : `/login${qs}`);
+        }}
       />
     </div>
   );

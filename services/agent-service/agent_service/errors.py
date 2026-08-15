@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -33,6 +34,21 @@ _STATUS_CODES: dict[int, str] = {
 
 def _request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "unknown")
+
+
+def _json_safe_validation_details(errors: list[Any]) -> list[Any]:
+    """Strip non-JSON-serializable objects (e.g. Exception in ctx.error) from Pydantic errors."""
+
+    def _sanitize(value: Any) -> Any:
+        if isinstance(value, BaseException):
+            return str(value)
+        if isinstance(value, dict):
+            return {k: _sanitize(v) for k, v in value.items()}
+        if isinstance(value, list | tuple):
+            return [_sanitize(v) for v in value]
+        return value
+
+    return jsonable_encoder(_sanitize(errors))
 
 
 def error_response(
@@ -79,7 +95,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=422,
             code="validation_error",
             message="Request validation failed.",
-            details=exc.errors(),
+            details=_json_safe_validation_details(list(exc.errors())),
         )
 
     @app.exception_handler(Exception)

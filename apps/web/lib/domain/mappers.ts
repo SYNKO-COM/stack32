@@ -98,6 +98,7 @@ export function mapProfile(row: ProfileRow, onboarding?: OnboardingRow | null): 
     userId: row.id,
     firstName: row.first_name ?? undefined,
     phone: row.phone ?? undefined,
+    username: row.username ?? undefined,
     locale: row.locale,
     onboardingCompleted: row.onboarding_completed,
     discoverySource: onboarding?.discovery_source ?? undefined,

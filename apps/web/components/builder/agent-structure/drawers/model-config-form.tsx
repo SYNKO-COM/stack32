@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,16 +42,20 @@ export function ModelConfigForm({
   const [saved, setSaved] = useState(false);
 
   const models = useMemo(() => modelsForProvider(provider), [provider]);
+  const resolvedModelId = models.some((m) => m.id === modelId)
+    ? modelId
+    : (models[0]?.id ?? "");
 
-  useEffect(() => {
-    if (models.some((m) => m.id === modelId)) return;
-    setModelId(models[0]?.id ?? "");
-  }, [provider, models, modelId]);
+  const handleProviderChange = (next: string) => {
+    setProvider(next);
+    const nextModels = modelsForProvider(next);
+    setModelId(nextModels[0]?.id ?? "");
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting) return;
-    if (!provider || !modelId) {
+    if (!provider || !resolvedModelId) {
       setErrorKey("errors:form.required");
       return;
     }
@@ -69,10 +73,10 @@ export function ModelConfigForm({
           agentId,
           provider,
           apiKey: apiKey.trim(),
-          modelId,
+          modelId: resolvedModelId,
         });
       } else {
-        await updateAgentModel({ agentId, provider, modelId });
+        await updateAgentModel({ agentId, provider, modelId: resolvedModelId });
       }
       setApiKey("");
       setSaved(true);
@@ -94,7 +98,7 @@ export function ModelConfigForm({
           id="structure-model-provider"
           value={provider}
           onChange={(e) => {
-            setProvider(e.target.value);
+            handleProviderChange(e.target.value);
             setSaved(false);
           }}
           disabled={submitting}
@@ -112,7 +116,7 @@ export function ModelConfigForm({
         <Label htmlFor="structure-model-id">{t("structure:panel.model")}</Label>
         <select
           id="structure-model-id"
-          value={modelId}
+          value={resolvedModelId}
           onChange={(e) => {
             setModelId(e.target.value);
             setSaved(false);

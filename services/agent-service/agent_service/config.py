@@ -139,10 +139,15 @@ class Settings(BaseSettings):
     # When false (default in dev/test), emails are logged, not sent.
     EMAIL_ENABLED: bool = False
 
-    # Queue
+    # Queue — postgres (local/default) or cloud_tasks (GCP staging/production)
     QUEUE_BACKEND: Literal["postgres", "cloud_tasks"] = "postgres"
     CLOUD_TASKS_QUEUE: str = ""
     CLOUD_TASKS_TARGET_URL: str = ""
+    # Service account email used by Cloud Tasks for OIDC to Cloud Run (optional if
+    # INTERNAL_SERVICE_TOKEN is sent as X-Internal-Token on the HTTP task).
+    CLOUD_TASKS_OIDC_SERVICE_ACCOUNT: str = ""
+    # Audience for the OIDC token; defaults to CLOUD_TASKS_TARGET_URL when empty.
+    CLOUD_TASKS_OIDC_AUDIENCE: str = ""
     GCP_PROJECT_ID: str = ""
     GCP_LOCATION: str = "europe-west1"
 

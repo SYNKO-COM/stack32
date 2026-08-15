@@ -537,15 +537,25 @@ export function BuildView({ agentId }: { agentId: string }) {
   const [awaitingReply, setAwaitingReply] = useState(false);
   /** User hit Stop — free the composer even if the in-flight HTTP turn is still pending. */
   const [userStopped, setUserStopped] = useState(false);
-  const [interactionMode, setInteractionMode] = useState<BuilderInteractionMode>(() => {
-    if (typeof window === "undefined") return "build";
-    try {
-      const stored = window.localStorage.getItem(`stack32:builder-mode:${agentId}`);
-      return stored === "chat" ? "chat" : "build";
-    } catch {
-      return "build";
-    }
-  });
+  const [modeOverride, setModeOverride] = useState<{
+    agentId: string;
+    mode: BuilderInteractionMode;
+  } | null>(null);
+  const interactionMode: BuilderInteractionMode =
+    modeOverride?.agentId === agentId
+      ? modeOverride.mode
+      : (() => {
+          if (typeof window === "undefined") return "build";
+          try {
+            const stored = window.localStorage.getItem(`stack32:builder-mode:${agentId}`);
+            return stored === "chat" ? "chat" : "build";
+          } catch {
+            return "build";
+          }
+        })();
+  const setInteractionMode = (next: BuilderInteractionMode) => {
+    setModeOverride({ agentId, mode: next });
+  };
   const { data: thread } = useBuilderThread(agentId, {
     forcePoll: busy || awaitingReply,
   });
@@ -775,16 +785,6 @@ export function BuildView({ agentId }: { agentId: string }) {
       /* local fallback already handled in cancelBuilderRun */
     });
   };
-
-  // Restore per-agent Build/Chat preference when switching agents.
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(`stack32:builder-mode:${agentId}`);
-      setInteractionMode(stored === "chat" ? "chat" : "build");
-    } catch {
-      setInteractionMode("build");
-    }
-  }, [agentId]);
 
   const handleSend = async (
     value: string,
