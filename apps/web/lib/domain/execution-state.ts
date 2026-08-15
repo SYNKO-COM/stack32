@@ -297,9 +297,11 @@ export function reduceExecutionEvents(
 
   // While paused for the user, the agent node shows pause — not a spinner.
   if (!runEnded) {
-    const waitingStatuses = Object.values(nodes).filter(
-      (s) => s === "waiting_for_approval" || s === "waiting_for_connection",
-    );
+    const waitingStatuses = Object.values(nodes)
+      .map((s) => s.executionStatus)
+      .filter(
+        (s) => s === "waiting_for_approval" || s === "waiting_for_connection",
+      );
     if (waitingStatuses.length > 0) {
       const pauseStatus = waitingStatuses.includes("waiting_for_approval")
         ? "waiting_for_approval"
