@@ -15,6 +15,7 @@ from agent_service.routers import (
     builder,
     connections,
     health,
+    installations,
     integrations,
     knowledge,
     live,
@@ -89,6 +90,7 @@ def create_app() -> FastAPI:
     v1.include_router(tasks.router)
     v1.include_router(webhooks.router)
     v1.include_router(transcribe.router)
+    v1.include_router(installations.router)
     app.include_router(v1)
 
     @app.on_event("startup")

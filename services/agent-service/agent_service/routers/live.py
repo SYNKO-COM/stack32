@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from agent_service.auth import CurrentUser
 from agent_service.runtime.live import LiveRuntime
@@ -21,10 +21,23 @@ from agent_service.supabase_client import get_persistence
 router = APIRouter(tags=["live"])
 
 
+class LiveImagePayload(BaseModel):
+    name: str = Field(default="", max_length=240)
+    mime_type: str = Field(default="image/jpeg", max_length=100)
+    data_base64: str = Field(min_length=8, max_length=12_000_000)
+
+
 class LiveMessageRequest(BaseModel):
-    content: str = Field(min_length=1, max_length=8000)
+    content: str = Field(default="", max_length=8000)
     use_published: bool = False
     locale: str = Field(default="en", max_length=8)
+    images: list[LiveImagePayload] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def require_text_or_images(self) -> LiveMessageRequest:
+        if not self.content.strip() and not self.images:
+            raise ValueError("content or images required")
+        return self
 
 
 @router.post("/live/threads/{thread_id}/messages")
@@ -61,6 +74,7 @@ async def post_live_message(
         thread_id=str(thread_id),
         content=body.content,
         use_published=body.use_published,
+        images=[img.model_dump() for img in body.images],
     )
     if result.get("error") == "forbidden":
         raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Not found."})

@@ -56,19 +56,45 @@ class PublishService:
         except Exception:  # noqa: BLE001
             return {"error": "DEPLOYMENT_VALIDATION_FAILED"}
 
-        # Readiness gate: refuse publish unless fully ready.
-        from agent_service.readiness import evaluate_agent_readiness
+        # Definition readiness + sanitizer — creator OAuth/LLM are installation-scoped.
+        from agent_service.publishing.sanitizer import (
+            PublishSanitizeError,
+            assert_portable_definition,
+        )
+        from agent_service.readiness import evaluate_definition_readiness
+
+        try:
+            portable = assert_portable_definition(spec)
+            AgentSpec.model_validate(portable)
+        except PublishSanitizeError as exc:
+            await self.db.audit(
+                user_id=user_id,
+                agent_id=agent_id,
+                action="publish",
+                resource_type="agent",
+                resource_id=agent_id,
+                result="denied",
+                risk_level="high",
+                metadata={"code": exc.code, "details": exc.details[:20]},
+            )
+            return {
+                "error": "DEPLOYMENT_VALIDATION_FAILED",
+                "code": exc.code,
+                "details": exc.details[:20],
+            }
+        except Exception:  # noqa: BLE001
+            return {"error": "DEPLOYMENT_VALIDATION_FAILED", "code": "SANITIZE_FAILED"}
 
         agent_status = str(agent.get("status") or "")
-        readiness = await evaluate_agent_readiness(
+        readiness = await evaluate_definition_readiness(
             agent_id=agent_id,
             user_id=user_id,
             spec=spec,
             db=self.db,
-            build_ok=agent_status not in {"needs_attention", "building", "draft"},
+            build_ok=agent_status
+            not in {"needs_attention", "building", "draft", "waiting_for_input"},
         )
         if readiness.status != "ready" or agent_status in {
-            "needs_setup",
             "needs_attention",
             "waiting_for_input",
             "building",
@@ -86,18 +112,24 @@ class PublishService:
             )
             return {
                 "error": "DEPLOYMENT_VALIDATION_FAILED",
-                "code": "READINESS_FAILED",
+                "code": "DEFINITION_READINESS_FAILED",
                 "readiness": readiness.status,
                 "checks": [
                     {"key": c.key, "ok": c.ok, "message": c.message, "severity": c.severity}
                     for c in readiness.checks
                 ],
-                "missing_connections": readiness.missing_connections,
             }
 
         version_id = agent.get("draft_version_id")
         if not version_id:
             return {"error": "DEPLOYMENT_VALIDATION_FAILED"}
+
+        async with get_supabase_admin_client() as client:
+            await client.patch(
+                "/agent_versions",
+                params={"id": f"eq.{version_id}"},
+                json={"spec": portable},
+            )
 
         # Require successful smoke test on draft version
         rows = await self.db._select(
@@ -188,7 +220,7 @@ class PublishService:
             await client.patch(
                 "/agents",
                 params={"id": f"eq.{agent_id}", "user_id": f"eq.{user_id}"},
-                json={"status": "ready", "published_version_id": None},
+                json={"status": "built", "published_version_id": None},
             )
         await self.db.audit(
             user_id=user_id,

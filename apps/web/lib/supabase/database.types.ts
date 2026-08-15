@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           decided_at: string | null
           id: string
+          installation_id: string | null
           payload: Json
           run_id: string | null
           status: string
@@ -34,6 +35,7 @@ export type Database = {
           created_at?: string
           decided_at?: string | null
           id?: string
+          installation_id?: string | null
           payload?: Json
           run_id?: string | null
           status?: string
@@ -47,6 +49,7 @@ export type Database = {
           created_at?: string
           decided_at?: string | null
           id?: string
+          installation_id?: string | null
           payload?: Json
           run_id?: string | null
           status?: string
@@ -60,6 +63,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_approval_requests_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
           {
@@ -78,6 +88,7 @@ export type Database = {
           created_at: string
           enabled: boolean
           id: string
+          installation_id: string | null
           tool_ids: string[]
           user_id: string
         }
@@ -87,6 +98,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          installation_id?: string | null
           tool_ids?: string[]
           user_id: string
         }
@@ -96,6 +108,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          installation_id?: string | null
           tool_ids?: string[]
           user_id?: string
         }
@@ -112,6 +125,13 @@ export type Database = {
             columns: ["connection_id"]
             isOneToOne: false
             referencedRelation: "user_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_connection_bindings_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
         ]
@@ -176,6 +196,51 @@ export type Database = {
           },
         ]
       }
+      agent_installations: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          pinned_version_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          pinned_version_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          pinned_version_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_installations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_installations_pinned_version_id_fkey"
+            columns: ["pinned_version_id"]
+            isOneToOne: false
+            referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_memories: {
         Row: {
           agent_id: string
@@ -187,6 +252,7 @@ export type Database = {
           expires_at: string | null
           id: string
           importance: number
+          installation_id: string | null
           memory_type: string
           metadata: Json
           namespace: string
@@ -205,6 +271,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           importance?: number
+          installation_id?: string | null
           memory_type: string
           metadata?: Json
           namespace?: string
@@ -223,6 +290,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           importance?: number
+          installation_id?: string | null
           memory_type?: string
           metadata?: Json
           namespace?: string
@@ -237,6 +305,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_memories_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
         ]
@@ -433,7 +508,15 @@ export type Database = {
           created_at: string
           cron_expression: string | null
           enabled: boolean
+          failure_count: number
           id: string
+          installation_id: string | null
+          instruction: string | null
+          last_run_at: string | null
+          last_success_at: string | null
+          next_run_at: string | null
+          notify_email: string | null
+          recurrence: Json
           timezone: string
           updated_at: string
           user_id: string
@@ -444,7 +527,15 @@ export type Database = {
           created_at?: string
           cron_expression?: string | null
           enabled?: boolean
+          failure_count?: number
           id?: string
+          installation_id?: string | null
+          instruction?: string | null
+          last_run_at?: string | null
+          last_success_at?: string | null
+          next_run_at?: string | null
+          notify_email?: string | null
+          recurrence?: Json
           timezone?: string
           updated_at?: string
           user_id: string
@@ -455,7 +546,15 @@ export type Database = {
           created_at?: string
           cron_expression?: string | null
           enabled?: boolean
+          failure_count?: number
           id?: string
+          installation_id?: string | null
+          instruction?: string | null
+          last_run_at?: string | null
+          last_success_at?: string | null
+          next_run_at?: string | null
+          notify_email?: string | null
+          recurrence?: Json
           timezone?: string
           updated_at?: string
           user_id?: string
@@ -466,6 +565,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_schedules_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
         ]
@@ -602,6 +708,7 @@ export type Database = {
           connection_id: string | null
           created_at: string
           id: string
+          installation_id: string | null
           last_validated_at: string | null
           provider: string
           provider_action_id: string | null
@@ -617,6 +724,7 @@ export type Database = {
           connection_id?: string | null
           created_at?: string
           id?: string
+          installation_id?: string | null
           last_validated_at?: string | null
           provider?: string
           provider_action_id?: string | null
@@ -632,6 +740,7 @@ export type Database = {
           connection_id?: string | null
           created_at?: string
           id?: string
+          installation_id?: string | null
           last_validated_at?: string | null
           provider?: string
           provider_action_id?: string | null
@@ -654,6 +763,13 @@ export type Database = {
             columns: ["connection_id"]
             isOneToOne: false
             referencedRelation: "user_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tool_configurations_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
         ]
@@ -781,6 +897,7 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string
+          workspace_id: string
         }
         Insert: {
           created_at?: string
@@ -798,6 +915,7 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id: string
+          workspace_id: string
         }
         Update: {
           created_at?: string
@@ -815,6 +933,7 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -829,6 +948,13 @@ export type Database = {
             columns: ["published_version_id"]
             isOneToOne: false
             referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agents_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -1181,6 +1307,111 @@ export type Database = {
           },
         ]
       }
+      checkpoint_blobs: {
+        Row: {
+          blob: string | null
+          channel: string
+          checkpoint_ns: string
+          thread_id: string
+          type: string
+          version: string
+        }
+        Insert: {
+          blob?: string | null
+          channel: string
+          checkpoint_ns?: string
+          thread_id: string
+          type: string
+          version: string
+        }
+        Update: {
+          blob?: string | null
+          channel?: string
+          checkpoint_ns?: string
+          thread_id?: string
+          type?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      checkpoint_migrations: {
+        Row: {
+          v: number
+        }
+        Insert: {
+          v: number
+        }
+        Update: {
+          v?: number
+        }
+        Relationships: []
+      }
+      checkpoint_writes: {
+        Row: {
+          blob: string
+          channel: string
+          checkpoint_id: string
+          checkpoint_ns: string
+          idx: number
+          task_id: string
+          task_path: string
+          thread_id: string
+          type: string | null
+        }
+        Insert: {
+          blob: string
+          channel: string
+          checkpoint_id: string
+          checkpoint_ns?: string
+          idx: number
+          task_id: string
+          task_path?: string
+          thread_id: string
+          type?: string | null
+        }
+        Update: {
+          blob?: string
+          channel?: string
+          checkpoint_id?: string
+          checkpoint_ns?: string
+          idx?: number
+          task_id?: string
+          task_path?: string
+          thread_id?: string
+          type?: string | null
+        }
+        Relationships: []
+      }
+      checkpoints: {
+        Row: {
+          checkpoint: Json
+          checkpoint_id: string
+          checkpoint_ns: string
+          metadata: Json
+          parent_checkpoint_id: string | null
+          thread_id: string
+          type: string | null
+        }
+        Insert: {
+          checkpoint: Json
+          checkpoint_id: string
+          checkpoint_ns?: string
+          metadata?: Json
+          parent_checkpoint_id?: string | null
+          thread_id: string
+          type?: string | null
+        }
+        Update: {
+          checkpoint?: Json
+          checkpoint_id?: string
+          checkpoint_ns?: string
+          metadata?: Json
+          parent_checkpoint_id?: string | null
+          thread_id?: string
+          type?: string | null
+        }
+        Relationships: []
+      }
       connector_definitions: {
         Row: {
           auth_type: string
@@ -1219,6 +1450,7 @@ export type Database = {
           agent_id: string
           created_at: string
           id: string
+          installation_id: string | null
           source_message_count: number
           summary: string
           thread_id: string
@@ -1229,6 +1461,7 @@ export type Database = {
           agent_id: string
           created_at?: string
           id?: string
+          installation_id?: string | null
           source_message_count?: number
           summary: string
           thread_id: string
@@ -1239,6 +1472,7 @@ export type Database = {
           agent_id?: string
           created_at?: string
           id?: string
+          installation_id?: string | null
           source_message_count?: number
           summary?: string
           thread_id?: string
@@ -1251,6 +1485,64 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_summaries_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_deliveries: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          detail: string | null
+          id: string
+          run_id: string | null
+          status: string
+          subject: string | null
+          to_email: string
+          user_id: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          run_id?: string | null
+          status?: string
+          subject?: string | null
+          to_email: string
+          user_id?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          run_id?: string | null
+          status?: string
+          subject?: string | null
+          to_email?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_deliveries_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_deliveries_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
             referencedColumns: ["id"]
           },
         ]
@@ -1287,6 +1579,66 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      external_memory_configs: {
+        Row: {
+          agent_id: string
+          created_at: string
+          db_type: string
+          detail: string | null
+          encrypted_conn_ref: string
+          id: string
+          installation_id: string | null
+          namespace: string
+          status: string
+          updated_at: string
+          user_id: string
+          validated_at: string | null
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          db_type?: string
+          detail?: string | null
+          encrypted_conn_ref: string
+          id?: string
+          installation_id?: string | null
+          namespace?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          validated_at?: string | null
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          db_type?: string
+          detail?: string | null
+          encrypted_conn_ref?: string
+          id?: string
+          installation_id?: string | null
+          namespace?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          validated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_memory_configs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_memory_configs_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       knowledge_chunks: {
         Row: {
@@ -1427,6 +1779,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          installation_id: string | null
           metadata: Json
           role: string
           run_id: string | null
@@ -1440,6 +1793,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          installation_id?: string | null
           metadata?: Json
           role: string
           run_id?: string | null
@@ -1453,6 +1807,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          installation_id?: string | null
           metadata?: Json
           role?: string
           run_id?: string | null
@@ -1465,6 +1820,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_messages_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
           {
@@ -1481,6 +1843,7 @@ export type Database = {
           agent_id: string
           created_at: string
           id: string
+          installation_id: string | null
           is_archived: boolean
           title: string | null
           updated_at: string
@@ -1490,6 +1853,7 @@ export type Database = {
           agent_id: string
           created_at?: string
           id?: string
+          installation_id?: string | null
           is_archived?: boolean
           title?: string | null
           updated_at?: string
@@ -1499,6 +1863,7 @@ export type Database = {
           agent_id?: string
           created_at?: string
           id?: string
+          installation_id?: string | null
           is_archived?: boolean
           title?: string | null
           updated_at?: string
@@ -1512,6 +1877,70 @@ export type Database = {
             referencedRelation: "agents"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "live_threads_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      llm_validations: {
+        Row: {
+          agent_id: string | null
+          checked_at: string
+          created_at: string
+          detail: string | null
+          error_code: string | null
+          id: string
+          installation_id: string | null
+          model_id: string
+          provider: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          checked_at?: string
+          created_at?: string
+          detail?: string | null
+          error_code?: string | null
+          id?: string
+          installation_id?: string | null
+          model_id: string
+          provider: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          checked_at?: string
+          created_at?: string
+          detail?: string | null
+          error_code?: string | null
+          id?: string
+          installation_id?: string | null
+          model_id?: string
+          provider?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_validations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "llm_validations_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       oauth_connection_states: {
@@ -1522,6 +1951,7 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
+          installation_id: string | null
           provider: string
           redirect_uri: string
           scopes: string[]
@@ -1535,6 +1965,7 @@ export type Database = {
           created_at?: string
           expires_at: string
           id?: string
+          installation_id?: string | null
           provider: string
           redirect_uri: string
           scopes?: string[]
@@ -1548,6 +1979,7 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          installation_id?: string | null
           provider?: string
           redirect_uri?: string
           scopes?: string[]
@@ -1560,6 +1992,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oauth_connection_states_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
         ]
@@ -1677,6 +2116,7 @@ export type Database = {
           created_at: string
           event_type: string
           id: number
+          installation_id: string | null
           label: string | null
           payload: Json
           run_id: string
@@ -1686,6 +2126,7 @@ export type Database = {
           created_at?: string
           event_type: string
           id?: number
+          installation_id?: string | null
           label?: string | null
           payload?: Json
           run_id: string
@@ -1695,12 +2136,20 @@ export type Database = {
           created_at?: string
           event_type?: string
           id?: number
+          installation_id?: string | null
           label?: string | null
           payload?: Json
           run_id?: string
           sequence?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "run_events_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "run_events_run_id_fkey"
             columns: ["run_id"]
@@ -1778,6 +2227,7 @@ export type Database = {
           estimated_cost: number | null
           id: string
           input: Json
+          installation_id: string | null
           model: string | null
           output: Json | null
           prompt_tokens: number | null
@@ -1800,6 +2250,7 @@ export type Database = {
           estimated_cost?: number | null
           id?: string
           input?: Json
+          installation_id?: string | null
           model?: string | null
           output?: Json | null
           prompt_tokens?: number | null
@@ -1822,6 +2273,7 @@ export type Database = {
           estimated_cost?: number | null
           id?: string
           input?: Json
+          installation_id?: string | null
           model?: string | null
           output?: Json | null
           prompt_tokens?: number | null
@@ -1846,6 +2298,55 @@ export type Database = {
             columns: ["agent_version_id"]
             isOneToOne: false
             referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runs_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_occurrences: {
+        Row: {
+          created_at: string
+          id: string
+          occurrence_key: string
+          run_id: string | null
+          schedule_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          occurrence_key: string
+          run_id?: string | null
+          schedule_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          occurrence_key?: string
+          run_id?: string | null
+          schedule_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_occurrences_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_occurrences_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "agent_schedules"
             referencedColumns: ["id"]
           },
         ]
@@ -2255,6 +2756,7 @@ export type Database = {
           ciphertext: string
           created_at: string
           id: string
+          installation_id: string | null
           key_hint: string
           label: string | null
           metadata: Json
@@ -2268,6 +2770,7 @@ export type Database = {
           ciphertext: string
           created_at?: string
           id?: string
+          installation_id?: string | null
           key_hint?: string
           label?: string | null
           metadata?: Json
@@ -2281,6 +2784,7 @@ export type Database = {
           ciphertext?: string
           created_at?: string
           id?: string
+          installation_id?: string | null
           key_hint?: string
           label?: string | null
           metadata?: Json
@@ -2295,6 +2799,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_secrets_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
         ]
@@ -2341,11 +2852,63 @@ export type Database = {
         }
         Relationships: []
       }
+      workspaces: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      claim_due_schedules: {
+        Args: { p_limit?: number }
+        Returns: {
+          agent_id: string
+          config: Json
+          created_at: string
+          cron_expression: string | null
+          enabled: boolean
+          failure_count: number
+          id: string
+          installation_id: string | null
+          instruction: string | null
+          last_run_at: string | null
+          last_success_at: string | null
+          next_run_at: string | null
+          notify_email: string | null
+          recurrence: Json
+          timezone: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_schedules"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       complete_onboarding: {
         Args: {
           p_company_name?: string
@@ -2393,8 +2956,25 @@ export type Database = {
           p_create_live_thread?: boolean
           p_name?: string
           p_prompt?: string
+          p_workspace_id?: string
         }
         Returns: Json
+      }
+      create_workspace: {
+        Args: { p_name: string }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workspaces"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       heartbeat_run_queue_job: {
         Args: { p_lease_seconds?: number; p_owner: string; p_run_id: string }

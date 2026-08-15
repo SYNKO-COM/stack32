@@ -136,7 +136,10 @@ def stable_live_thread_id(live_thread_id: str) -> str:
 def _to_provider_message(msg: dict[str, Any]) -> dict[str, Any]:
     """Normalize internal messages to OpenAI/LiteLLM chat format."""
     role = msg.get("role")
-    out: dict[str, Any] = {"role": role, "content": msg.get("content") or ""}
+    raw_content = msg.get("content")
+    # Preserve multimodal content lists; only default missing/None to "".
+    content: Any = "" if raw_content is None else raw_content
+    out: dict[str, Any] = {"role": role, "content": content}
     if role == "assistant" and msg.get("tool_calls"):
         provider_calls = []
         for raw in msg["tool_calls"]:
@@ -188,6 +191,7 @@ async def run_langgraph_agent(
     knowledge_chunks: list[dict[str, Any]] | None = None,
     memories: list[dict[str, Any]] | None = None,
     conversation_summary: str | None = None,
+    user_message_content: str | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Execute a ReAct-style LangGraph loop with tool calling and checkpoints."""
     from langgraph.graph import END, START, StateGraph
@@ -258,7 +262,17 @@ async def run_langgraph_agent(
     seed_messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
     if spec.memory.conversation_enabled:
         seed_messages.extend(history)
-    seed_messages.append({"role": "user", "content": content[:8000] + untrusted})
+    turn_content: str | list[dict[str, Any]]
+    if user_message_content is not None:
+        if isinstance(user_message_content, list):
+            turn_content = list(user_message_content)
+            if untrusted:
+                turn_content.append({"type": "text", "text": untrusted})
+        else:
+            turn_content = str(user_message_content)[:8000] + untrusted
+    else:
+        turn_content = content[:8000] + untrusted
+    seed_messages.append({"role": "user", "content": turn_content})
 
     profile = ModelProfile.BALANCED
     if spec.model_policy.profile == "fast":
@@ -453,34 +467,40 @@ async def run_langgraph_agent(
                             },
                         )
                 except ToolError as exc:
+                    provider_hint = (
+                        "pipedream" if call.tool_id.startswith("pd:") else "native"
+                    )
+                    app_hint = None
                     obs = {"error": exc.code, "message": str(exc)}
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("tool failed tool=%s err=%s", call.tool_id, type(exc).__name__)
-                    obs = {"error": "TOOL_FAILED", "message": type(exc).__name__}
-
-                # CONNECTION_REQUIRED is an interrupt, not a normal tool completion.
-                err_code = None
-                if isinstance(obs, dict):
-                    err_code = obs.get("error") or obs.get("code")
-                if err_code == "CONNECTION_REQUIRED":
-                    interrupt_reason = "CONNECTION_REQUIRED"
-                    obs = {
-                        **(obs if isinstance(obs, dict) else {"result": obs}),
-                        "interrupt": True,
-                        "connection_required": True,
-                        "provider": (obs.get("provider") if isinstance(obs, dict) else None)
-                        or "google",
-                        "tool_id": call.tool_id,
-                    }
                     await db.emit_event(
                         run_id,
-                        "runtime.connection.required",
+                        "runtime.tool.failed",
                         {
-                            "mapping_key": "live.status.connection",
+                            "mapping_key": "live.status.tool",
                             "tool_id": call.tool_id,
-                            "provider": obs.get("provider"),
+                            "provider": provider_hint,
+                            "app_id": app_hint,
+                            "error": exc.code,
                         },
                     )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("tool failed tool=%s err=%s", call.tool_id, type(exc).__name__)
+                    provider_hint = (
+                        "pipedream" if call.tool_id.startswith("pd:") else "native"
+                    )
+                    obs = {"error": "TOOL_FAILED", "message": type(exc).__name__}
+                    await db.emit_event(
+                        run_id,
+                        "runtime.tool.failed",
+                        {
+                            "mapping_key": "live.status.tool",
+                            "tool_id": call.tool_id,
+                            "provider": provider_hint,
+                            "app_id": None,
+                            "error": "TOOL_FAILED",
+                        },
+                    )
+
             results.append({"tool_id": call.tool_id, "result": obs, "call_id": call.call_id})
             observations.append(
                 {
@@ -489,11 +509,6 @@ async def run_langgraph_agent(
                     "name": call.tool_id,
                     "content": json.dumps(obs, default=str)[:6000],
                 }
-            )
-            await db.emit_event(
-                run_id,
-                "runtime.tool.completed",
-                {"mapping_key": "live.status.toolDone", "tool_id": call.tool_id},
             )
             if interrupt_reason:
                 break

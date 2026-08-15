@@ -17,8 +17,9 @@ import { SecretForm } from "@/components/builder/secret-form";
 import { ToolSetupCard } from "@/components/builder/tool-setup-card";
 import { LogoMark } from "@/components/shared/logo";
 import { Markdown } from "@/components/shared/markdown";
+import { MessageAttachmentPreviews } from "@/components/shared/message-attachment-previews";
 import { PromptComposer } from "@/components/shared/prompt-composer";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAgent } from "@/hooks/use-agents";
 import { useCurrentUser } from "@/hooks/use-auth";
@@ -28,8 +29,13 @@ import {
   useSendBuilderMessage,
 } from "@/hooks/use-builder";
 import { summarizeActivity, useRunActivity } from "@/hooks/use-run-activity";
+import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
 import { useTranslation } from "@/hooks/use-translation";
 import { playAgentReadyChime } from "@/lib/audio/agent-ready-chime";
+import type {
+  BuilderInteractionMode,
+  ComposerAttachment,
+} from "@/components/shared/prompt-composer";
 import type { BuilderAction, BuilderMessage } from "@/lib/domain/types";
 import { consumePendingPrompt, consumePrefillDraft } from "@/lib/pending-prompt";
 import { cn } from "@/lib/utils";
@@ -64,6 +70,13 @@ function humanizeProblemText(raw: string): string {
   return text;
 }
 
+/** Connection/secret forms belong to AI Agent (installation), not Build. */
+function isInstallationOnlyForm(ui: BuilderMessage["uiComponent"]): boolean {
+  if (!ui) return false;
+  if (ui.context !== "builder") return false;
+  return ui.type === "connection_form" || ui.type === "secret_form";
+}
+
 function MessageActions({
   actions,
   agentId,
@@ -96,7 +109,7 @@ function MessageActions({
       {otherActions.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {otherActions.map((action) => {
-            if (action === "test_agent") {
+            if (action === "test_agent" || action === "open_ai_agent") {
               return (
                 <Button
                   key={action}
@@ -104,7 +117,9 @@ function MessageActions({
                   className="rounded-full"
                   onClick={() => router.push(`/agents/${agentId}/agent`)}
                 >
-                  {t("actions.testAgent")}
+                  {action === "open_ai_agent"
+                    ? t("actions.openAiAgent")
+                    : t("actions.testAgent")}
                 </Button>
               );
             }
@@ -182,11 +197,13 @@ function BuilderBubble({
   const revealNotified = useRef(false);
 
   const formRequestId = message.uiComponent?.requestId;
+  const skipInstallationForm = isInstallationOnlyForm(message.uiComponent);
   const formLocked =
     message.formResolved ||
     Boolean(formSuperseded) ||
+    skipInstallationForm ||
     (formRequestId ? resolvedFormIds.has(formRequestId) : false);
-  const formHidden = formLocked || !message.uiComponent;
+  const formHidden = formLocked || !message.uiComponent || skipInstallationForm;
 
   const contentKey = message.content.startsWith("builder:") ? message.content : null;
   const isCancelNotice =
@@ -225,7 +242,7 @@ function BuilderBubble({
         "Continuing with your agent…",
     });
   } else {
-    content = message.content;
+    content = stripAttachedPlaceholders(message.content);
   }
 
   const time = new Intl.DateTimeFormat(i18n.language, {
@@ -285,6 +302,7 @@ function BuilderBubble({
       <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}>
         {isUser ? (
           <Avatar className="mt-1 size-7 shrink-0">
+            {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt="" /> : null}
             <AvatarFallback className="bg-brand/30 text-xs">
               {(user?.name ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
             </AvatarFallback>
@@ -309,6 +327,9 @@ function BuilderBubble({
               </>
             )}
           </p>
+          {isUser ? (
+            <MessageAttachmentPreviews attachments={message.attachments} align="right" />
+          ) : null}
           <div
             className={cn(
               "text-left text-sm leading-relaxed",
@@ -320,6 +341,7 @@ function BuilderBubble({
                 (showReady || showForms) &&
                 "rounded-2xl border border-border/40 bg-foreground/[0.03] px-4 py-3",
               message.tone === "error" && !isCancelNotice && "text-destructive",
+              isUser && !content.trim() && "hidden",
             )}
           >
             {message.tone === "error" && !showReady && !isCancelNotice ? (
@@ -394,7 +416,9 @@ function BuilderBubble({
               />
             ) : null}
 
-            {showForms && message.uiComponent?.type === "secret_form" ? (
+            {showForms &&
+            message.uiComponent?.type === "secret_form" &&
+            message.uiComponent.context !== "builder" ? (
               <SecretForm
                 uiComponent={message.uiComponent}
                 agentId={agentId}
@@ -419,7 +443,18 @@ function BuilderBubble({
               />
             ) : null}
 
-            {showForms && message.uiComponent?.type === "connection_form" ? (
+            {showForms && message.uiComponent?.type === "provider_clarification_form" ? (
+              <DynamicQuestionsForm
+                uiComponent={message.uiComponent}
+                runId={runId || message.uiComponent.requestId}
+                variant="providers"
+                onSubmitted={() => onFormSubmitted?.(formRequestId ?? "")}
+              />
+            ) : null}
+
+            {showForms &&
+            message.uiComponent?.type === "connection_form" &&
+            message.uiComponent.context !== "builder" ? (
               <div className="mt-3 space-y-3">
                 {(message.uiComponent.connectionRequirements &&
                 message.uiComponent.connectionRequirements.length > 0
@@ -502,6 +537,15 @@ export function BuildView({ agentId }: { agentId: string }) {
   const [awaitingReply, setAwaitingReply] = useState(false);
   /** User hit Stop — free the composer even if the in-flight HTTP turn is still pending. */
   const [userStopped, setUserStopped] = useState(false);
+  const [interactionMode, setInteractionMode] = useState<BuilderInteractionMode>(() => {
+    if (typeof window === "undefined") return "build";
+    try {
+      const stored = window.localStorage.getItem(`stack32:builder-mode:${agentId}`);
+      return stored === "chat" ? "chat" : "build";
+    } catch {
+      return "build";
+    }
+  });
   const { data: thread } = useBuilderThread(agentId, {
     forcePoll: busy || awaitingReply,
   });
@@ -646,6 +690,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   const workInFlight = lastIsThinking || progressInFlight;
   const waitingOnForm = Boolean(
     lastMessage?.uiComponent &&
+      !isInstallationOnlyForm(lastMessage.uiComponent) &&
       !lastMessage.formResolved &&
       !isFormSuperseded(lastMessage) &&
       !(lastMessage.uiComponent.requestId && resolvedFormIds.has(lastMessage.uiComponent.requestId)),
@@ -731,14 +776,32 @@ export function BuildView({ agentId }: { agentId: string }) {
     });
   };
 
-  const handleSend = async (value: string) => {
+  // Restore per-agent Build/Chat preference when switching agents.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(`stack32:builder-mode:${agentId}`);
+      setInteractionMode(stored === "chat" ? "chat" : "build");
+    } catch {
+      setInteractionMode("build");
+    }
+  }, [agentId]);
+
+  const handleSend = async (
+    value: string,
+    attachments?: ComposerAttachment[],
+    options?: { mode?: BuilderInteractionMode },
+  ) => {
     // eslint-disable-next-line react-hooks/purity -- event handler; epoch token pairs the in-flight turn with its clear effect
     const token = Date.now();
     setUserStopped(false);
     setPendingToken(token);
     setAwaitingReply(true);
     try {
-      await sendMessage.mutateAsync(value);
+      await sendMessage.mutateAsync({
+        content: value,
+        attachments,
+        mode: options?.mode ?? interactionMode,
+      });
     } catch {
       setPendingToken(null);
       setAwaitingReply(false);
@@ -1035,14 +1098,26 @@ export function BuildView({ agentId }: { agentId: string }) {
           placeholder={
             waitingOnForm
               ? t("builder:composer.formLockedPlaceholder")
-              : t("builder:composer.placeholder")
+              : interactionMode === "chat"
+                ? t("builder:composer.chatPlaceholder")
+                : t("builder:composer.placeholder")
           }
-          onSubmit={(value) => void handleSend(value)}
+          onSubmit={(value, attachments, options) => void handleSend(value, attachments, options)}
           onStop={handleStop}
           busy={composerBusy}
           disabled={waitingOnForm}
           autoFocus={messages.length === 0}
           initialValue={prefill}
+          showModeSelector
+          mode={interactionMode}
+          onModeChange={(next) => {
+            setInteractionMode(next);
+            try {
+              window.localStorage.setItem(`stack32:builder-mode:${agentId}`, next);
+            } catch {
+              /* ignore */
+            }
+          }}
         />
       </div>
     </div>

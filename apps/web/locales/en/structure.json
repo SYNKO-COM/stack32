@@ -95,7 +95,7 @@
     "collapse": "Collapse structure",
     "expand": "Show structure",
     "resize": "Resize chat and structure panels",
-    "clickHint": "Click any card to open its settings",
+    "clickHint": "Click to open settings · drag to move",
     "kinds": {
       "trigger": "Message received",
       "guard": "Safety check",
@@ -158,5 +158,24 @@
     "output": "I want to change my agent's output format: ",
     "test": "Run a test on my agent and tell me the result.",
     "graph": "I want to change how my agent's execution flow works: "
+  },
+  "product": {
+    "capabilities": "Capabilities",
+    "scheduleDefault": "Runs on a schedule."
+  },
+  "panel": {
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "modelTitle": "Model",
+    "modelSubtitle": "Choose a provider, pick a model, then add your API key.",
+    "provider": "Provider",
+    "model": "Model",
+    "apiKey": "API key",
+    "apiKeyKeep": "Leave blank to keep the current key",
+    "apiKeyHint": "Your key is encrypted and never shown in full again.",
+    "agentSubtitle": "The core of your agent.",
+    "memorySubtitle": "What the agent remembers from one message to the next.",
+    "outputSubtitle": "How the agent formats its reply."
   }
 }

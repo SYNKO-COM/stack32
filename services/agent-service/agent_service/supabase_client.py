@@ -136,6 +136,7 @@ class Persistence(SupabaseRepository):
         thread_id: str | None,
         status: str = "queued",
         input_payload: dict[str, Any] | None = None,
+        installation_id: str | None = None,
     ) -> None:
         payload = {
             "id": run_id,
@@ -147,6 +148,8 @@ class Persistence(SupabaseRepository):
             "input": input_payload or {},
             "started_at": datetime.now(UTC).isoformat() if status == "running" else None,
         }
+        if installation_id:
+            payload["installation_id"] = installation_id
         async with get_supabase_admin_client() as client:
             response = await client.post("/runs", json=payload)
         if response.status_code >= 400:

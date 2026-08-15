@@ -131,6 +131,18 @@ async def test_v4_bindings_have_provider_fields():
     assert gmail.provider == "native"
 
 
+@pytest.mark.asyncio
+async def test_gmail_and_calendar_are_separate_connection_requirements():
+    caps = extract_capabilities("Check my Gmail inbox and Google Calendar")
+    _tools, reqs, _ = await resolve_tools_for_capabilities(
+        caps, prompt="Check my Gmail inbox and Google Calendar"
+    )
+    app_ids = {r.app_id for r in reqs}
+    assert "gmail" in app_ids
+    assert "google_calendar" in app_ids
+    assert "google" not in app_ids
+
+
 def test_capability_plan_outlook_prefers_pipedream():
     from agent_service.builder.capabilities import build_capability_plan
 
@@ -191,3 +203,32 @@ async def test_calendar_list_only_no_create():
     ids = {t.tool_id for t in tools}
     assert "calendar_list" in ids
     assert "calendar_create_event" not in ids
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_email_skips_gmail_without_preferred_apps():
+    from agent_service.builder.capabilities import resolve_tools_for_capabilities
+
+    tools, _reqs, ambiguous = await resolve_tools_for_capabilities(
+        [], prompt="Help me manage my email inbox"
+    )
+    assert any(a.get("group") == "email" for a in ambiguous)
+    gmail_tools = [t for t in tools if t.tool_id.startswith("gmail_")]
+    assert gmail_tools == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_gmail_and_hubspot_skips_clarification():
+    from agent_service.builder.capabilities import build_capability_plan, resolve_tools_for_capabilities
+
+    prompt = "Use Gmail for email and HubSpot for CRM"
+    plan = build_capability_plan(prompt)
+    assert "email_provider" not in plan.ambiguities
+    assert "crm_provider" not in plan.ambiguities
+    _tools, _reqs, ambiguous = await resolve_tools_for_capabilities(
+        plan.to_capabilities(),
+        prompt=prompt,
+        plan=plan,
+        preferred_apps=["gmail", "hubspot"],
+    )
+    assert not any(a.get("group") == "email" for a in ambiguous)

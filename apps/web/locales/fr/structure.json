@@ -95,7 +95,7 @@
     "collapse": "Réduire la structure",
     "expand": "Afficher la structure",
     "resize": "Ajuster la largeur du chat et de la structure",
-    "clickHint": "Cliquez sur une carte pour ouvrir ses réglages",
+    "clickHint": "Cliquez pour ouvrir les réglages · glissez pour déplacer",
     "kinds": {
       "trigger": "Message reçu",
       "guard": "Sécurité",
@@ -158,5 +158,24 @@
     "output": "Je veux changer le format de sortie de mon agent : ",
     "test": "Lance un test sur mon agent et donne-moi le résultat.",
     "graph": "Je veux modifier le flux d'exécution de mon agent : "
+  },
+  "product": {
+    "capabilities": "Capacités",
+    "scheduleDefault": "S'exécute selon un planning."
+  },
+  "panel": {
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré",
+    "modelTitle": "Modèle",
+    "modelSubtitle": "Choisissez un fournisseur, un modèle, puis saisissez votre clé API.",
+    "provider": "Fournisseur",
+    "model": "Modèle",
+    "apiKey": "Clé API",
+    "apiKeyKeep": "Laissez vide pour conserver la clé actuelle",
+    "apiKeyHint": "Votre clé est chiffrée et ne sera plus jamais affichée en entier.",
+    "agentSubtitle": "Le cœur de votre agent.",
+    "memorySubtitle": "Ce que l'agent retient d'un message à l'autre.",
+    "outputSubtitle": "La façon dont l'agent formule sa réponse."
   }
 }

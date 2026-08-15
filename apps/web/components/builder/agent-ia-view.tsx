@@ -4,16 +4,18 @@ import { useQuery } from "@tanstack/react-query";
 import { PanelRightClose, PanelRightOpen, Workflow } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AgentModuleGraph } from "@/components/builder/agent-module-graph";
+import { ProductAgentGraph } from "@/components/builder/agent-structure/product-agent-graph";
+import { buildProductAgentGraph } from "@/components/builder/agent-structure/graph-adapter";
 import { LiveView } from "@/components/builder/live-view";
 import { Button } from "@/components/ui/button";
 import { useAgentGraph, useAgentSpec } from "@/hooks/use-agents";
 import { useLiveExecutionState } from "@/hooks/use-live-execution";
 import { useLiveThread } from "@/hooks/use-live";
+import { useRunEventStream } from "@/hooks/use-run-sse";
 import { useTranslation } from "@/hooks/use-translation";
 import { listAgentConnections } from "@/lib/actions/connections";
 import { getAgentReadiness } from "@/lib/actions/integrations";
-import { buildAgentModules } from "@/lib/domain/agent-modules";
+import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ApprovalMode } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +34,15 @@ export function AgentIaView({ agentId }: { agentId: string }) {
   const [panelOpen, setPanelOpen] = useState(true);
   const [chatPct, setChatPct] = useState(DEFAULT_CHAT_PCT);
   const [dragging, setDragging] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const supabase = requireSupabaseBrowserClient();
+    void supabase.auth.getSession().then(({ data }) => {
+      setAccessToken(data.session?.access_token ?? null);
+    });
+  }, []);
 
   const { data: liveThread } = useLiveThread(agentId);
   const liveRunId = useMemo(() => {
@@ -44,10 +54,6 @@ export function AgentIaView({ agentId }: { agentId: string }) {
     }
     return null;
   }, [liveThread?.messages]);
-  const { data: executionStates } = useLiveExecutionState(
-    liveRunId,
-    Boolean(liveRunId),
-  );
 
   const connectionsQuery = useQuery({
     queryKey: ["agent-connections", agentId],
@@ -81,15 +87,40 @@ export function AgentIaView({ agentId }: { agentId: string }) {
     return providers;
   }, [connectionsQuery.data?.connections]);
 
-  const modules = useMemo(
+  const brainCheck = readinessQuery.data?.checks?.find((c) => c.key === "brain");
+  const modelStatus =
+    brainCheck === undefined
+      ? undefined
+      : brainCheck.ok
+        ? ("ready" as const)
+        : ("setup_required" as const);
+
+  const productGraph = useMemo(
     () =>
-      buildAgentModules(graphResponse?.graph, spec, {
+      buildProductAgentGraph({
+        definition: spec,
+        graph: graphResponse?.graph,
         boundToolIds,
         boundProviders,
+        modelStatus,
       }),
-    [graphResponse?.graph, spec, boundToolIds, boundProviders],
+    [spec, graphResponse?.graph, boundToolIds, boundProviders, modelStatus],
   );
-  const hasModules = modules.chain.length > 0 || modules.attachments.length > 0;
+
+  const hasGraph = productGraph.nodes.length > 0;
+
+  const { data: executionVisual } = useLiveExecutionState(
+    liveRunId,
+    Boolean(liveRunId),
+    productGraph,
+  );
+
+  useRunEventStream({
+    agentId,
+    runId: liveRunId,
+    enabled: Boolean(liveRunId),
+    accessToken,
+  });
 
   const toolApprovals = useMemo(() => {
     const map: Record<string, ApprovalMode | string> = {};
@@ -231,15 +262,23 @@ export function AgentIaView({ agentId }: { agentId: string }) {
 
         {panelOpen ? (
           <div className="min-h-0 flex-1">
-            {hasModules ? (
-              <AgentModuleGraph
+            {hasGraph && spec ? (
+              <ProductAgentGraph
                 agentId={agentId}
-                modules={modules}
+                spec={spec}
+                graph={graphResponse?.graph}
                 connections={connectionsQuery.data?.connections ?? []}
                 bindings={connectionsQuery.data?.bindings ?? []}
                 toolApprovals={toolApprovals}
+                boundToolIds={boundToolIds}
+                boundProviders={boundProviders}
+                modelStatus={modelStatus}
+                executionVisual={executionVisual}
                 onConnectionsChanged={() => void connectionsQuery.refetch()}
-                executionStates={executionStates}
+                onConfigChanged={() => {
+                  void connectionsQuery.refetch();
+                  void readinessQuery.refetch();
+                }}
               />
             ) : (
               <p className="px-6 py-10 text-center text-sm text-muted-foreground">

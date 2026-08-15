@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useTranslation } from "@/hooks/use-translation";
 import { getPendingPrompt } from "@/lib/pending-prompt";
-import { getAuthRepository } from "@/lib/repositories/factory";
+import { resolvePostAuthPath } from "@/lib/auth/post-auth";
 import { useUiStore } from "@/store/ui-store";
 
 /**
@@ -33,8 +33,7 @@ export function AuthModal() {
 
   const handleSuccess = async () => {
     closeDialog();
-    const profile = await getAuthRepository().getProfile();
-    router.push(profile?.onboardingCompleted ? "/agents" : "/onboarding");
+    router.push(await resolvePostAuthPath());
   };
 
   return (

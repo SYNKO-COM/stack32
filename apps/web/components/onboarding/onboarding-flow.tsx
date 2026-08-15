@@ -5,6 +5,7 @@ import {
   Briefcase,
   Code2,
   Ellipsis,
+  FolderKanban,
   GraduationCap,
   Handshake,
   IdCard,
@@ -30,15 +31,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCreateAgent } from "@/hooks/use-agents";
 import { useCompleteOnboarding, useCurrentUser } from "@/hooks/use-auth";
+import { useCreateWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   clearOnboardingDraft,
   readOnboardingDraft,
   writeOnboardingDraft,
 } from "@/lib/onboarding-draft";
+import { writeActiveWorkspaceId } from "@/lib/workspace-preference";
 import { cn } from "@/lib/utils";
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 type OptionIcon = ComponentType<{ className?: string }>;
 
@@ -124,6 +127,7 @@ export function OnboardingFlow() {
   const { data: user } = useCurrentUser();
   const userId = user?.id ?? "";
   const completeOnboarding = useCompleteOnboarding();
+  const createWorkspace = useCreateWorkspace();
   const createAgent = useCreateAgent();
 
   const [ready, setReady] = useState(false);
@@ -138,8 +142,8 @@ export function OnboardingFlow() {
   const [countryCode, setCountryCode] = useState<string>(COUNTRY_CODES[0]);
   const [phone, setPhone] = useState("");
   const [useCase, setUseCase] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
 
-  // Restore draft once we know who the user is (adjust state during render).
   if (userId && hydratedFor !== userId) {
     const draft = readOnboardingDraft(userId);
     setHydratedFor(userId);
@@ -155,14 +159,14 @@ export function OnboardingFlow() {
     );
     setPhone(draft.phone);
     setUseCase(draft.useCase);
+    setWorkspaceName(draft.workspaceName);
     setReady(true);
   }
 
-  // Persist on every meaningful change (after restore).
   useEffect(() => {
     if (!ready || !userId) return;
     writeOnboardingDraft(userId, {
-      step: step as 1 | 2 | 3,
+      step: step as 1 | 2 | 3 | 4,
       showIntro,
       discoverySource,
       role,
@@ -170,6 +174,7 @@ export function OnboardingFlow() {
       countryCode,
       phone,
       useCase,
+      workspaceName,
     });
   }, [
     ready,
@@ -182,6 +187,7 @@ export function OnboardingFlow() {
     countryCode,
     phone,
     useCase,
+    workspaceName,
   ]);
 
   useEffect(() => {
@@ -193,7 +199,8 @@ export function OnboardingFlow() {
   const canContinue =
     (step === 1 && discoverySource !== null) ||
     (step === 2 && role !== null) ||
-    (step === 3 && firstName.trim().length > 0);
+    (step === 3 && firstName.trim().length > 0) ||
+    (step === 4 && workspaceName.trim().length > 0);
 
   const handleFinish = async () => {
     setFinishing(true);
@@ -205,9 +212,12 @@ export function OnboardingFlow() {
         phone: phone.trim() ? `${countryCode} ${phone.trim()}` : undefined,
         primaryUseCase: useCase.trim() || undefined,
       });
-      if (userId) clearOnboardingDraft(userId);
-      // A fresh agent hosts the pending prompt (consumed by the Build view).
-      const agent = await createAgent.mutateAsync(undefined);
+      const workspace = await createWorkspace.mutateAsync(workspaceName.trim());
+      if (userId) {
+        writeActiveWorkspaceId(userId, workspace.id);
+        clearOnboardingDraft(userId);
+      }
+      const agent = await createAgent.mutateAsync({ workspaceId: workspace.id });
       router.push(`/agents/${agent.id}/build`);
     } catch {
       setFinishing(false);
@@ -341,6 +351,42 @@ export function OnboardingFlow() {
               </div>
             </>
           ) : null}
+
+          {step === 4 ? (
+            <>
+              <div className="mb-6 flex size-12 items-center justify-center rounded-2xl bg-brand/15 text-brand">
+                <FolderKanban className="size-6" aria-hidden="true" />
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                {t("step4.title")}
+              </h1>
+              <p className="mt-2 mb-4 text-sm text-muted-foreground">{t("step4.subtitle")}</p>
+              <ul className="mb-8 space-y-2 text-sm text-muted-foreground">
+                <li className="flex gap-2">
+                  <span className="text-brand">•</span>
+                  {t("step4.point1")}
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-brand">•</span>
+                  {t("step4.point2")}
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-brand">•</span>
+                  {t("step4.point3")}
+                </li>
+              </ul>
+              <div className="space-y-1.5">
+                <Label htmlFor="onboarding-workspace">{t("step4.nameLabel")}</Label>
+                <Input
+                  id="onboarding-workspace"
+                  value={workspaceName}
+                  onChange={(e) => setWorkspaceName(e.target.value)}
+                  placeholder={t("step4.namePlaceholder")}
+                  autoFocus
+                />
+              </div>
+            </>
+          ) : null}
         </motion.div>
       </AnimatePresence>
 
@@ -366,7 +412,7 @@ export function OnboardingFlow() {
             disabled={!canContinue || finishing}
             onClick={() => void handleFinish()}
           >
-            {finishing ? t("completing") : t("step3.finish")}
+            {finishing ? t("completing") : t("step4.finish")}
           </Button>
         )}
       </div>

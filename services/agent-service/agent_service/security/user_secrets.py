@@ -52,9 +52,89 @@ async def list_secret_meta(*, user_id: str, agent_id: str | None = None) -> list
     return response.json() if isinstance(response.json(), list) else []
 
 
-async def has_llm_secret(*, user_id: str, agent_id: str) -> bool:
-    rows = await list_secret_meta(user_id=user_id, agent_id=agent_id)
-    return any(r.get("secret_kind") == "llm_api_key" for r in rows)
+async def resolve_llm_credentials(
+    *,
+    user_id: str,
+    agent_id: str,
+    installation_id: str | None = None,
+    allow_legacy_owner_fallback: bool = True,
+) -> tuple[str, str] | None:
+    """Return (provider, api_key) preferring installation-scoped then legacy agent-scoped.
+
+    Never falls back to Stack32 platform keys. User-default secrets are NOT used for
+    generated agents (installation isolation).
+    """
+    async with get_supabase_admin_client() as client:
+        if installation_id:
+            response = await client.get(
+                "/user_secrets",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "secret_kind": "eq.llm_api_key",
+                    "installation_id": f"eq.{installation_id}",
+                    "select": "id,agent_id,installation_id,provider,ciphertext,updated_at",
+                    "order": "updated_at.desc",
+                    "limit": "5",
+                },
+            )
+            if response.status_code < 400:
+                rows = response.json() if isinstance(response.json(), list) else []
+                if rows:
+                    chosen = rows[0]
+                    try:
+                        key = decrypt_secret(chosen["ciphertext"])
+                    except SecretsCryptoError:
+                        return None
+                    return str(chosen["provider"]), key
+
+        # Legacy owner agent-scoped secret (transition only).
+        if allow_legacy_owner_fallback:
+            response = await client.get(
+                "/user_secrets",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "secret_kind": "eq.llm_api_key",
+                    "agent_id": f"eq.{agent_id}",
+                    "select": "id,agent_id,installation_id,provider,ciphertext,updated_at",
+                    "order": "updated_at.desc",
+                    "limit": "5",
+                },
+            )
+            if response.status_code >= 400:
+                return None
+            rows = response.json() if isinstance(response.json(), list) else []
+            chosen = None
+            for row in rows:
+                if row.get("agent_id") == agent_id:
+                    chosen = row
+                    break
+            if chosen:
+                from agent_service.installations.service import log_legacy_fallback
+
+                log_legacy_fallback(
+                    resource="user_secrets", agent_id=agent_id, user_id=user_id
+                )
+                try:
+                    key = decrypt_secret(chosen["ciphertext"])
+                except SecretsCryptoError:
+                    return None
+                return str(chosen["provider"]), key
+    return None
+
+
+async def has_llm_secret(
+    *,
+    user_id: str,
+    agent_id: str,
+    installation_id: str | None = None,
+) -> bool:
+    creds = await resolve_llm_credentials(
+        user_id=user_id,
+        agent_id=agent_id,
+        installation_id=installation_id,
+        allow_legacy_owner_fallback=True,
+    )
+    return creds is not None
 
 
 async def validate_llm_api_key(*, provider: str, api_key: str) -> None:
@@ -107,6 +187,7 @@ async def upsert_llm_secret(
     provider: str,
     api_key: str,
     label: str | None = None,
+    installation_id: str | None = None,
 ) -> dict[str, Any]:
     provider = provider.lower().strip()
     if provider not in PROVIDER_ENV_PREFIX and provider != "custom":
@@ -117,6 +198,7 @@ async def upsert_llm_secret(
     payload = {
         "user_id": user_id,
         "agent_id": agent_id,
+        "installation_id": installation_id,
         "provider": provider,
         "secret_kind": "llm_api_key",
         "ciphertext": ciphertext,
@@ -130,10 +212,14 @@ async def upsert_llm_secret(
             "provider": f"eq.{provider}",
             "secret_kind": "eq.llm_api_key",
         }
-        if agent_id:
+        if installation_id:
+            params["installation_id"] = f"eq.{installation_id}"
+        elif agent_id:
             params["agent_id"] = f"eq.{agent_id}"
+            params["installation_id"] = "is.null"
         else:
             params["agent_id"] = "is.null"
+            params["installation_id"] = "is.null"
         await client.delete("/user_secrets", params=params)
         response = await client.post(
             "/user_secrets",
@@ -150,6 +236,7 @@ async def upsert_llm_secret(
         "provider": provider,
         "key_hint": hint,
         "label": payload["label"],
+        "installation_id": installation_id,
     }
 
 
@@ -231,38 +318,3 @@ async def validate_agent_model(
         detail=result.detail,
     )
     return result
-
-
-async def resolve_llm_credentials(
-    *, user_id: str, agent_id: str
-) -> tuple[str, str] | None:
-    """Return (provider, api_key) preferring agent-scoped then user default."""
-    async with get_supabase_admin_client() as client:
-        response = await client.get(
-            "/user_secrets",
-            params={
-                "user_id": f"eq.{user_id}",
-                "secret_kind": "eq.llm_api_key",
-                "or": f"(agent_id.eq.{agent_id},agent_id.is.null)",
-                "select": "id,agent_id,provider,ciphertext,updated_at",
-                "order": "agent_id.nullslast,updated_at.desc",
-            },
-        )
-    if response.status_code >= 400:
-        return None
-    rows = response.json() if isinstance(response.json(), list) else []
-    # Prefer agent-specific
-    chosen = None
-    for row in rows:
-        if row.get("agent_id") == agent_id:
-            chosen = row
-            break
-    if chosen is None and rows:
-        chosen = rows[0]
-    if not chosen:
-        return None
-    try:
-        key = decrypt_secret(chosen["ciphertext"])
-    except SecretsCryptoError:
-        return None
-    return str(chosen["provider"]), key

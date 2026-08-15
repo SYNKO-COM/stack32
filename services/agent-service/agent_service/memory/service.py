@@ -98,9 +98,18 @@ async def latest_conversation_summary(
     return None
 
 
-async def read_memories(*, user_id: str, agent_id: str, query: str) -> list[dict[str, Any]]:
+async def read_memories(
+    *,
+    user_id: str,
+    agent_id: str,
+    query: str,
+    installation_id: str | None = None,
+) -> list[dict[str, Any]]:
     if not user_id or not agent_id:
         return []
+    # Installation isolation: prefer scoped recent list (RPC is still agent-scoped).
+    if installation_id:
+        return await _list_recent(user_id, agent_id, installation_id=installation_id)
     gateway = get_model_gateway()
     try:
         vectors = await gateway.embed([query or "preferences"])
@@ -127,18 +136,20 @@ async def read_memories(*, user_id: str, agent_id: str, query: str) -> list[dict
     return rows if isinstance(rows, list) else []
 
 
-async def _list_recent(user_id: str, agent_id: str) -> list[dict[str, Any]]:
+async def _list_recent(
+    user_id: str, agent_id: str, *, installation_id: str | None = None
+) -> list[dict[str, Any]]:
+    params: dict[str, str] = {
+        "user_id": f"eq.{user_id}",
+        "agent_id": f"eq.{agent_id}",
+        "select": "id,memory_type,content,summary,importance,metadata,created_at,installation_id",
+        "order": "created_at.desc",
+        "limit": "20",
+    }
+    if installation_id:
+        params["installation_id"] = f"eq.{installation_id}"
     async with get_supabase_admin_client() as client:
-        response = await client.get(
-            "/agent_memories",
-            params={
-                "user_id": f"eq.{user_id}",
-                "agent_id": f"eq.{agent_id}",
-                "select": "id,memory_type,content,summary,importance,metadata,created_at",
-                "order": "created_at.desc",
-                "limit": "20",
-            },
-        )
+        response = await client.get("/agent_memories", params=params)
     if response.status_code >= 400:
         return []
     return response.json()
@@ -167,6 +178,7 @@ async def maybe_write_memory(state: dict[str, Any]) -> None:
         thread_id=state.get("thread_id"),
         retention_days=state.get("memory_retention_days"),
         max_memory_items=state.get("memory_max_items"),
+        installation_id=state.get("installation_id"),
     )
 
 
@@ -179,6 +191,7 @@ async def write_memory(
     thread_id: str | None = None,
     retention_days: int | None = None,
     max_memory_items: int | None = None,
+    installation_id: str | None = None,
 ) -> dict[str, Any] | None:
     gateway = get_model_gateway()
     embedding = None
@@ -195,7 +208,10 @@ async def write_memory(
         "content": content[:8000],
         "embedding_model": "configured",
         "embedding_dimension": 1536,
+        "namespace": f"install:{installation_id}" if installation_id else "default",
     }
+    if installation_id:
+        payload["installation_id"] = installation_id
     # Retention enforcement: stamp an expiry so match_agent_memories filters it out
     # and cleanup can hard-delete it later.
     expires_at = compute_expires_at(retention_days)

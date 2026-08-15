@@ -70,6 +70,8 @@ export async function executeBuilderTurn(input: {
   agentId: string;
   threadId: string;
   prompt: string;
+  images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
+  mode?: "build" | "chat";
 }): Promise<void> {
   const { userId } = await requireOwnedAgent(input.agentId);
   if (currentAiExecutionMode() === "disabled") {
@@ -94,7 +96,15 @@ export async function executeBuilderTurn(input: {
     } as unknown as Json,
   });
 
-  await getAdapter().execute({ userId, locale: await currentLocale(), ...input });
+  await getAdapter().execute({
+    userId,
+    locale: await currentLocale(),
+    agentId: input.agentId,
+    threadId: input.threadId,
+    prompt: input.prompt,
+    images: input.images,
+    mode: input.mode ?? "build",
+  });
 }
 
 /** Automatic repair ("Fix automatically" action). */
@@ -173,6 +183,7 @@ export async function submitLiveLlmSecret(input: {
   agentId: string;
   provider: string;
   apiKey: string;
+  modelId?: string;
 }): Promise<void> {
   await requireOwnedAgent(input.agentId);
   if (currentAiExecutionMode() !== "agent-service") {
@@ -186,6 +197,28 @@ export async function submitLiveLlmSecret(input: {
       provider: input.provider,
       api_key: input.apiKey,
       scope: "agent",
+      model_id: input.modelId,
+    },
+  });
+}
+
+/** Persist the exact provider/model on the agent spec (key already stored). */
+export async function updateAgentModel(input: {
+  agentId: string;
+  provider: string;
+  modelId: string;
+}): Promise<void> {
+  await requireOwnedAgent(input.agentId);
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("secrets_require_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  await agentServiceFetch(`/v1/agents/${input.agentId}/model`, {
+    method: "PATCH",
+    accessToken,
+    body: {
+      provider: input.provider,
+      model_id: input.modelId,
     },
   });
 }
@@ -259,6 +292,27 @@ export async function submitBuilderQuestions(input: {
   }
   const accessToken = await requireAccessToken();
   await agentServiceFetch(`/v1/builder/runs/${input.runId}/questions`, {
+    method: "POST",
+    accessToken,
+    body: { answers: input.answers },
+  });
+}
+
+/** Resume builder after provider clarification (email/CRM apps). */
+export async function submitBuilderProviders(input: {
+  runId: string;
+  answers: Record<string, string>;
+}): Promise<void> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("providers_require_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  await agentServiceFetch(`/v1/builder/runs/${input.runId}/providers`, {
     method: "POST",
     accessToken,
     body: { answers: input.answers },

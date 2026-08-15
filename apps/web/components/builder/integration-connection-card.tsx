@@ -44,6 +44,7 @@ function humanizeAppSlug(raw: string): string {
     gmail: "Gmail",
     google_calendar: "Google Calendar",
     google_docs: "Google Docs",
+    google_sheets: "Google Sheets",
     microsoft_outlook: "Outlook",
   };
   if (known[slug]) return known[slug];
@@ -98,14 +99,14 @@ export function IntegrationConnectionCard({
   }, [appId, normalized, t]);
 
   const connectLabel = useMemo(() => {
-    if (normalized === "google") {
-      return t("connections.connectGoogle", { defaultValue: "Connect my Google" });
-    }
     if (appId) {
       return t("connections.connect", {
         defaultValue: `Connect ${humanizeAppSlug(appId)}`,
         provider: humanizeAppSlug(appId),
       });
+    }
+    if (normalized === "google") {
+      return t("connections.connectGoogle", { defaultValue: "Connect my Google" });
     }
     if (normalized === "pipedream") {
       return t("connections.connectApp", { defaultValue: "Connect an app" });

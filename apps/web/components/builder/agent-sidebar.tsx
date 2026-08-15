@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, Plus, Settings } from "lucide-react";
+import { Check, ChevronsUpDown, MoreHorizontal, Plus } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +9,6 @@ import { AgentIcon } from "@/components/builder/agent-icon";
 import { CreatingAgentOverlay } from "@/components/shared/brand-loader";
 import { Logo, LogoMark } from "@/components/shared/logo";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,9 +22,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   useAgents,
@@ -34,12 +35,10 @@ import {
   useDuplicateAgent,
   useRenameAgent,
 } from "@/hooks/use-agents";
-import { useCurrentUser } from "@/hooks/use-auth";
-import { useSubscription } from "@/hooks/use-billing";
+import { useActiveWorkspace, useCreateWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
 import type { Agent } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
-import { useUiStore } from "@/store/ui-store";
 
 const CREATE_MIN_MS = 900;
 const CREATE_MAX_MS = 2200;
@@ -186,16 +185,21 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
   const { t } = useTranslation(["builder", "common"]);
   const router = useRouter();
   const params = useParams<{ agentId?: string }>();
-  const { data: agents } = useAgents();
-  const { data: user } = useCurrentUser();
-  const { data: subscription } = useSubscription();
+  const {
+    workspaces,
+    activeWorkspace,
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+  } = useActiveWorkspace();
+  const { data: agents } = useAgents(activeWorkspaceId);
   const createAgent = useCreateAgent();
-  const openDialog = useUiStore((s) => s.openDialog);
+  const createWorkspace = useCreateWorkspace();
   const creatingLockRef = useRef(false);
   const pendingAgentIdRef = useRef<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [createWsOpen, setCreateWsOpen] = useState(false);
+  const [newWsName, setNewWsName] = useState("");
 
-  // Clear the overlay once the new agent route is actually open.
   useEffect(() => {
     if (!creating || !pendingAgentIdRef.current) return;
     if (params.agentId === pendingAgentIdRef.current) {
@@ -205,7 +209,6 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
     }
   }, [params.agentId, creating]);
 
-  // Safety: never leave the overlay stuck longer than ~2s.
   useEffect(() => {
     if (!creating) return;
     const timeout = window.setTimeout(() => {
@@ -217,12 +220,12 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
   }, [creating]);
 
   const handleNewAgent = async () => {
-    if (creatingLockRef.current || createAgent.isPending || creating) return;
+    if (!activeWorkspaceId || creatingLockRef.current || createAgent.isPending || creating) return;
     creatingLockRef.current = true;
     setCreating(true);
     try {
       const [agent] = await Promise.all([
-        createAgent.mutateAsync(undefined),
+        createAgent.mutateAsync({ workspaceId: activeWorkspaceId }),
         sleep(CREATE_MIN_MS),
       ]);
       pendingAgentIdRef.current = agent.id;
@@ -235,6 +238,16 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
     }
   };
 
+  const handleCreateWorkspace = async () => {
+    const name = newWsName.trim();
+    if (!name) return;
+    const ws = await createWorkspace.mutateAsync(name);
+    setActiveWorkspaceId(ws.id);
+    setCreateWsOpen(false);
+    setNewWsName("");
+    router.push("/agents");
+  };
+
   return (
     <div className="flex h-full flex-col">
       <div className="space-y-3 px-4 pt-5 pb-3">
@@ -243,7 +256,7 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
           className="w-full justify-start gap-2 rounded-2xl"
           variant="secondary"
           onClick={() => void handleNewAgent()}
-          disabled={creating || createAgent.isPending}
+          disabled={!activeWorkspaceId || creating || createAgent.isPending}
           aria-busy={creating}
         >
           {creating ? (
@@ -279,28 +292,91 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
       </ScrollArea>
 
       <div className="border-t border-border p-3">
-        <div className="flex items-center gap-2.5 rounded-2xl px-2 py-2">
-          <Avatar className="size-8">
-            <AvatarFallback className="bg-brand/30 text-xs">
-              {(user?.name ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm">{user?.name ?? user?.email}</span>
-            <span className="block text-xs text-muted-foreground">
-              {t("builder:sidebar.planLabel")} · {subscription?.planName ?? t("common:plan.free")}
-            </span>
-          </span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("common:actions.settings")}
-            onClick={() => openDialog("settings")}
-          >
-            <Settings aria-hidden="true" />
-          </Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2.5 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-foreground/[0.04]"
+              aria-label={t("builder:workspace.switcherLabel")}
+            >
+              <span className="flex size-8 items-center justify-center rounded-xl bg-brand/15 text-xs font-semibold text-brand">
+                {(activeWorkspace?.name ?? "W").slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">
+                  {activeWorkspace?.name ?? t("builder:workspace.loading")}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {t("builder:workspace.label")}
+                </span>
+              </span>
+              <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top" className="w-64">
+            {workspaces.map((ws) => (
+              <DropdownMenuItem
+                key={ws.id}
+                className="flex items-center justify-between gap-2"
+                onSelect={() => {
+                  setActiveWorkspaceId(ws.id);
+                  router.push("/agents");
+                }}
+              >
+                <span className="truncate">{ws.name}</span>
+                {ws.id === activeWorkspaceId ? (
+                  <Check className="size-4 shrink-0 text-brand" aria-hidden="true" />
+                ) : null}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                setNewWsName("");
+                setCreateWsOpen(true);
+              }}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {t("builder:workspace.create")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      <Dialog open={createWsOpen} onOpenChange={setCreateWsOpen}>
+        <DialogContent className="glass-strong border-border sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("builder:workspace.createTitle")}</DialogTitle>
+            <DialogDescription>{t("builder:workspace.createBody")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-workspace-name">{t("builder:workspace.nameLabel")}</Label>
+            <Input
+              id="new-workspace-name"
+              value={newWsName}
+              onChange={(e) => setNewWsName(e.target.value)}
+              placeholder={t("builder:workspace.namePlaceholder")}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleCreateWorkspace();
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCreateWsOpen(false)}>
+              {t("common:actions.cancel")}
+            </Button>
+            <Button
+              onClick={() => void handleCreateWorkspace()}
+              disabled={newWsName.trim().length === 0 || createWorkspace.isPending}
+            >
+              {createWorkspace.isPending
+                ? t("builder:workspace.creating")
+                : t("builder:workspace.create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <CreatingAgentOverlay
         open={creating}

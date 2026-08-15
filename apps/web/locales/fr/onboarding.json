@@ -43,8 +43,17 @@
     "phonePlaceholder": "6 12 34 56 78",
     "phoneHint": "Facultatif — choisissez votre indicatif, puis saisissez votre numéro sans le 0 initial.",
     "useCase": "Que fera votre premier agent ? (facultatif)",
-    "useCasePlaceholder": "ex. Rechercher des prospects pour mon agence",
-    "finish": "Terminer"
+    "useCasePlaceholder": "ex. Rechercher des prospects pour mon agence"
+  },
+  "step4": {
+    "title": "Créez votre premier workspace",
+    "subtitle": "Un workspace regroupe vos agents. Vous pourrez en créer d'autres plus tard et basculer entre eux à tout moment.",
+    "point1": "Séparez projets perso et clients",
+    "point2": "Chaque workspace a sa propre liste d'agents",
+    "point3": "Changez de workspace quand vous voulez depuis la barre latérale",
+    "nameLabel": "Nom du workspace",
+    "namePlaceholder": "ex. Perso, Agence, Side project",
+    "finish": "Créer le workspace et commencer"
   },
   "completing": "Préparation de votre espace de travail…",
   "a11y": {

@@ -1,3 +1,4 @@
+import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { LiveMessage, LiveThread } from "@/lib/domain/types";
 import type { LiveRepository } from "@/lib/repositories/interfaces";
 
@@ -122,12 +123,24 @@ export class MockLiveRepository implements LiveRepository {
     return getOrCreateThread(agentId);
   }
 
-  async sendMessage(agentId: string, content: string): Promise<void> {
+  async sendMessage(
+    agentId: string,
+    content: string,
+    attachments: ComposerAttachment[] = [],
+  ): Promise<void> {
     appendMessage(agentId, {
       id: generateId("lmsg"),
       threadId: agentId,
       role: "user",
       content,
+      attachments: attachments.map((a) => ({
+        id: a.id,
+        name: a.name,
+        mimeType: a.mimeType,
+        kind: a.kind,
+        url: a.previewUrl,
+        sizeBytes: a.size,
+      })),
       createdAt: nowIso(),
     });
     runSimulatedResponse(agentId, content);

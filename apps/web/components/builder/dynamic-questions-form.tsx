@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/hooks/use-translation";
-import { submitBuilderQuestions } from "@/lib/actions/builder";
+import { submitBuilderQuestions, submitBuilderProviders } from "@/lib/actions/builder";
 import type { BuilderUiComponent } from "@/lib/domain/types";
 
 function fieldLabel(
@@ -33,10 +33,12 @@ export function DynamicQuestionsForm({
   uiComponent,
   runId,
   onSubmitted,
+  variant = "questions",
 }: {
   uiComponent: BuilderUiComponent;
   runId: string;
   onSubmitted?: () => void;
+  variant?: "questions" | "providers";
 }) {
   const { t } = useTranslation("builder");
   const [pending, startTransition] = useTransition();
@@ -60,7 +62,9 @@ export function DynamicQuestionsForm({
     startTransition(async () => {
       try {
         onSubmitted?.();
-        await submitBuilderQuestions({ runId, answers: values });
+        await (variant === "providers"
+          ? submitBuilderProviders({ runId, answers: values })
+          : submitBuilderQuestions({ runId, answers: values }));
       } catch {
         setError(t("questions.error"));
       }

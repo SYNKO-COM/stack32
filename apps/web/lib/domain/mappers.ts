@@ -16,6 +16,7 @@ import type {
   GraphSpec,
   KnowledgeSource,
   LiveMessage,
+  MessageAttachment,
   Profile,
   Subscription,
   SubscriptionStatus,
@@ -27,6 +28,40 @@ import type {
   User,
 } from "@/lib/domain/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
+
+function parseMessageAttachments(raw: unknown): MessageAttachment[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const items: MessageAttachment[] = [];
+  for (const entry of raw) {
+    const rec = asRecord(entry);
+    const id = typeof rec.id === "string" ? rec.id : "";
+    const name = typeof rec.name === "string" ? rec.name : "";
+    const mimeType =
+      typeof rec.mimeType === "string"
+        ? rec.mimeType
+        : typeof rec.mime_type === "string"
+          ? rec.mime_type
+          : "application/octet-stream";
+    if (!id || !name) continue;
+    const kind = rec.kind === "file" ? "file" : "image";
+    items.push({
+      id,
+      name,
+      mimeType,
+      kind,
+      url: typeof rec.url === "string" ? rec.url : undefined,
+      bucket: typeof rec.bucket === "string" ? rec.bucket : undefined,
+      path: typeof rec.path === "string" ? rec.path : undefined,
+      sizeBytes:
+        typeof rec.sizeBytes === "number"
+          ? rec.sizeBytes
+          : typeof rec.size_bytes === "number"
+            ? rec.size_bytes
+            : undefined,
+    });
+  }
+  return items.length > 0 ? items : undefined;
+}
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type OnboardingRow = Database["public"]["Tables"]["onboarding_responses"]["Row"];
@@ -600,6 +635,7 @@ export function specToDb(spec: AgentSpec): Json {
 const AGENT_STATUSES: ReadonlySet<AgentStatus> = new Set([
   "draft",
   "building",
+  "built",
   "ready",
   "needs_attention",
   "published",
@@ -616,6 +652,7 @@ function mapAgentStatus(raw: string): AgentStatus {
 export function mapAgent(row: AgentRow): Agent {
   return {
     id: row.id,
+    workspaceId: row.workspace_id,
     name: row.name,
     icon: row.icon_key ?? "sparkles",
     status: mapAgentStatus(row.status),
@@ -678,6 +715,7 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
           const actionRaw = rec.action;
           const action: BuilderAction | undefined =
             actionRaw === "test_agent" ||
+            actionRaw === "open_ai_agent" ||
             actionRaw === "view_structure" ||
             actionRaw === "fix_automatically" ||
             actionRaw === "view_changes"
@@ -782,6 +820,7 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
         .slice(0, 6);
       return items.length > 0 ? items : undefined;
     })(),
+    attachments: parseMessageAttachments(meta.attachments),
     createdAt: row.created_at,
   };
 }
@@ -804,6 +843,7 @@ export function mapLiveMessage(row: LiveMessageRow): LiveMessage | null {
     pending: meta.pending === true,
     statusKey: typeof meta.statusKey === "string" ? meta.statusKey : undefined,
     uiComponent: uiRaw ? mapUiComponent(uiRaw) : undefined,
+    attachments: parseMessageAttachments(meta.attachments),
     createdAt: row.created_at,
   };
 }

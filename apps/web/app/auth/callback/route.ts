@@ -2,6 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 /**
  * OAuth / magic-link callback.
  *
@@ -22,20 +28,38 @@ export async function GET(request: NextRequest) {
       if (error) {
         return NextResponse.redirect(`${origin}/login?error=oauth`);
       }
-      // Incomplete onboarding lands on /onboarding instead of the app.
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
       if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("onboarding_completed")
-          .eq("id", user.id)
-          .maybeSingle();
-        // Missing profile (trigger lag) or incomplete onboarding → onboarding.
-        if (!profile || !profile.onboarding_completed) {
+        // Profile row can lag briefly after first OAuth; retry before treating
+        // a missing row as "needs onboarding".
+        let completed = false;
+        let found = false;
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("onboarding_completed")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (profile) {
+            found = true;
+            completed = Boolean(profile.onboarding_completed);
+            break;
+          }
+          await wait(200);
+        }
+
+        if (found && completed) {
+          return NextResponse.redirect(`${origin}${next === "/onboarding" ? "/agents" : next}`);
+        }
+        if (found && !completed) {
           return NextResponse.redirect(`${origin}/onboarding`);
         }
+        // Still no profile after retries — safest for brand-new OAuth users.
+        return NextResponse.redirect(`${origin}/onboarding`);
       }
     }
   }

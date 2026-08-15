@@ -17,7 +17,7 @@ router = APIRouter(tags=["connections"])
 
 class StartGoogleRequest(BaseModel):
     agent_id: UUID | None = None
-    tool_ids: list[str] = Field(default_factory=lambda: ["gmail", "calendar"])
+    tool_ids: list[str] = Field(default_factory=list)
 
 
 class BindRequest(BaseModel):

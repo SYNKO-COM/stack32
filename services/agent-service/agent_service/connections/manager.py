@@ -13,6 +13,11 @@ from urllib.parse import urlencode
 import httpx
 
 from agent_service.config import get_settings
+from agent_service.integrations.app_keys import (
+    app_keys_for_tool_ids,
+    expand_bind_tool_ids,
+    tool_ids_from_scopes,
+)
 from agent_service.security.secrets_crypto import decrypt_secret, encrypt_secret
 from agent_service.supabase_client import get_supabase_admin_client
 
@@ -117,23 +122,26 @@ class ConnectionManager:
             raise ConnectionError("GOOGLE_OAUTH_NOT_CONFIGURED")
         verifier, challenge = _pkce_pair()
         state = secrets.token_urlsafe(32)
-        scopes = scopes_for_tools(tool_ids or ["gmail", "calendar"])
+        requested_tools = expand_bind_tool_ids(tool_ids)
+        scopes = scopes_for_tools(requested_tools or tool_ids or [])
         redirect_uri = settings.GOOGLE_OAUTH_REDIRECT_URI
         expires = (datetime.now(UTC) + timedelta(minutes=15)).isoformat()
         async with get_supabase_admin_client() as client:
-            await client.post(
-                "/oauth_connection_states",
-                json={
-                    "user_id": user_id,
-                    "provider": "google",
-                    "state": state,
-                    "code_verifier": verifier,
-                    "redirect_uri": redirect_uri,
-                    "scopes": scopes,
-                    "agent_id": agent_id,
-                    "expires_at": expires,
-                },
-            )
+            payload = {
+                "user_id": user_id,
+                "provider": "google",
+                "state": state,
+                "code_verifier": verifier,
+                "redirect_uri": redirect_uri,
+                "scopes": scopes,
+                "agent_id": agent_id,
+                "expires_at": expires,
+                "tool_ids": requested_tools,
+            }
+            inserted = await client.post("/oauth_connection_states", json=payload)
+            if inserted.status_code >= 400:
+                payload.pop("tool_ids", None)
+                await client.post("/oauth_connection_states", json=payload)
         params = {
             "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
             "redirect_uri": redirect_uri,
@@ -143,7 +151,7 @@ class ConnectionManager:
             "code_challenge": challenge,
             "code_challenge_method": "S256",
             "access_type": "offline",
-            "prompt": "consent",
+            "prompt": "select_account consent",
         }
         return {"authorize_url": f"{GOOGLE_AUTH_URL}?{urlencode(params)}", "state": state}
 
@@ -187,6 +195,9 @@ class ConnectionManager:
             refresh_ref = encrypt_secret(refresh) if refresh else None
             expires_in = int(token.get("expires_in") or 3600)
             token_expires = (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat()
+            requested_tools = expand_bind_tool_ids(list(row.get("tool_ids") or []))
+            if not requested_tools:
+                requested_tools = tool_ids_from_scopes(list(row.get("scopes") or []))
 
             conn_payload = {
                 "user_id": user_id,
@@ -200,24 +211,52 @@ class ConnectionManager:
                 "token_expires_at": token_expires,
                 "last_validated_at": datetime.now(UTC).isoformat(),
                 "metadata": {"token_type": token.get("token_type", "Bearer")},
+                "provider_metadata": {"app_ids": app_keys_for_tool_ids(requested_tools)},
             }
-            # Upsert-ish: delete same email+provider then insert
+
+            connection: dict[str, Any] = {}
+            existing_rows: list[Any] = []
             if email:
-                await client.delete(
+                existing = await client.get(
                     "/user_connections",
                     params={
                         "user_id": f"eq.{user_id}",
                         "provider": "eq.google",
                         "account_email": f"eq.{email}",
+                        "select": "*",
+                        "limit": "1",
                     },
                 )
-            inserted = await client.post(
-                "/user_connections",
-                json=conn_payload,
-                headers={"Prefer": "return=representation"},
-            )
-            conn_rows = inserted.json() if inserted.status_code < 400 else []
-            connection = conn_rows[0] if conn_rows else {}
+                existing_rows = existing.json() if existing.status_code < 400 else []
+            if existing_rows:
+                existing_id = existing_rows[0]["id"]
+                prev_meta = existing_rows[0].get("provider_metadata") or {}
+                prev_apps = list(prev_meta.get("app_ids") or []) if isinstance(prev_meta, dict) else []
+                merged_apps = sorted(
+                    {
+                        *prev_apps,
+                        *list(conn_payload["provider_metadata"]["app_ids"]),
+                    }
+                )
+                conn_payload["provider_metadata"] = {**prev_meta, "app_ids": merged_apps} if isinstance(prev_meta, dict) else {
+                    "app_ids": merged_apps
+                }
+                patched = await client.patch(
+                    "/user_connections",
+                    params={"id": f"eq.{existing_id}"},
+                    json=conn_payload,
+                    headers={"Prefer": "return=representation"},
+                )
+                patched_rows = patched.json() if patched.status_code < 400 else []
+                connection = patched_rows[0] if patched_rows else {**existing_rows[0], **conn_payload, "id": existing_id}
+            else:
+                inserted = await client.post(
+                    "/user_connections",
+                    json=conn_payload,
+                    headers={"Prefer": "return=representation"},
+                )
+                conn_rows = inserted.json() if inserted.status_code < 400 else []
+                connection = conn_rows[0] if conn_rows else {}
 
             await client.patch(
                 "/oauth_connection_states",
@@ -226,22 +265,18 @@ class ConnectionManager:
             )
 
             agent_id = row.get("agent_id")
-            if agent_id and connection.get("id"):
+            if agent_id and connection.get("id") and requested_tools:
+                existing_bind = await self.list_bindings(user_id=user_id, agent_id=agent_id)
+                prior: list[str] = []
+                for b in existing_bind or []:
+                    if str(b.get("connection_id")) == str(connection["id"]):
+                        prior.extend(list(b.get("tool_ids") or []))
+                merged_tools = list(dict.fromkeys([*prior, *requested_tools]))
                 await self.bind_connection(
                     user_id=user_id,
                     agent_id=agent_id,
                     connection_id=connection["id"],
-                    tool_ids=[
-                        "gmail_list",
-                        "gmail_read",
-                        "gmail_send",
-                        "gmail_create_draft",
-                        "gmail_send_message",
-                        "calendar_list",
-                        "calendar_create_event",
-                        "google_docs_create",
-                        "google_docs_append",
-                    ],
+                    tool_ids=merged_tools,
                 )
 
         return {
@@ -291,6 +326,7 @@ class ConnectionManager:
         agent_id: str,
         connection_id: str,
         tool_ids: list[str],
+        installation_id: str | None = None,
     ) -> dict[str, Any]:
         async with get_supabase_admin_client() as client:
             # ownership checks
@@ -306,22 +342,45 @@ class ConnectionManager:
             conn_rows = conn.json() if conn.status_code < 400 else []
             if not conn_rows or conn_rows[0].get("status") != "active":
                 raise ConnectionError("CONNECTION_NOT_ACTIVE")
-            agent = await client.get(
-                "/agents",
-                params={
-                    "id": f"eq.{agent_id}",
-                    "user_id": f"eq.{user_id}",
-                    "select": "id",
-                    "limit": "1",
-                },
-            )
-            if not (agent.json() if agent.status_code < 400 else []):
-                raise ConnectionError("AGENT_NOT_FOUND")
+
+            # Resolve installation (owner or published consumer).
+            install_id = installation_id
+            if not install_id:
+                from agent_service.installations.service import InstallationService
+
+                install = await InstallationService().get_or_create(
+                    user_id=user_id, agent_id=agent_id
+                )
+                install_id = str(install["id"])
+            else:
+                inst = await client.get(
+                    "/agent_installations",
+                    params={
+                        "id": f"eq.{install_id}",
+                        "user_id": f"eq.{user_id}",
+                        "agent_id": f"eq.{agent_id}",
+                        "select": "id",
+                        "limit": "1",
+                    },
+                )
+                if not (inst.json() if inst.status_code < 400 else []):
+                    raise ConnectionError("INSTALLATION_FORBIDDEN")
+
+            # Delete prior binding for this installation+connection (or legacy agent scope).
+            if install_id:
+                await client.delete(
+                    "/agent_connection_bindings",
+                    params={
+                        "installation_id": f"eq.{install_id}",
+                        "connection_id": f"eq.{connection_id}",
+                    },
+                )
             await client.delete(
                 "/agent_connection_bindings",
                 params={
                     "agent_id": f"eq.{agent_id}",
                     "connection_id": f"eq.{connection_id}",
+                    "user_id": f"eq.{user_id}",
                 },
             )
             response = await client.post(
@@ -329,6 +388,7 @@ class ConnectionManager:
                 json={
                     "user_id": user_id,
                     "agent_id": agent_id,
+                    "installation_id": install_id,
                     "connection_id": connection_id,
                     "tool_ids": tool_ids,
                     "enabled": True,
@@ -337,6 +397,25 @@ class ConnectionManager:
             )
         rows = response.json() if response.status_code < 400 else []
         return rows[0] if rows else {}
+
+    async def unbind_connection(
+        self,
+        *,
+        user_id: str,
+        agent_id: str,
+        connection_id: str,
+        installation_id: str | None = None,
+    ) -> None:
+        """Remove installation binding only — does not revoke the global user connection."""
+        async with get_supabase_admin_client() as client:
+            params: dict[str, str] = {
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "connection_id": f"eq.{connection_id}",
+            }
+            if installation_id:
+                params["installation_id"] = f"eq.{installation_id}"
+            await client.delete("/agent_connection_bindings", params=params)
 
     async def list_connections(self, *, user_id: str) -> list[dict[str, Any]]:
         async with get_supabase_admin_client() as client:
@@ -354,17 +433,45 @@ class ConnectionManager:
         rows = response.json() if response.status_code < 400 else []
         return rows if isinstance(rows, list) else []
 
-    async def list_bindings(self, *, user_id: str, agent_id: str) -> list[dict[str, Any]]:
+    async def list_bindings(
+        self,
+        *,
+        user_id: str,
+        agent_id: str,
+        installation_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         async with get_supabase_admin_client() as client:
-            response = await client.get(
-                "/agent_connection_bindings",
-                params={
-                    "user_id": f"eq.{user_id}",
-                    "agent_id": f"eq.{agent_id}",
-                    "select": "id,connection_id,tool_ids,enabled,created_at",
-                },
-            )
-        return response.json() if response.status_code < 400 else []
+            params: dict[str, str] = {
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "select": "id,connection_id,tool_ids,enabled,created_at,installation_id",
+            }
+            if installation_id:
+                params["installation_id"] = f"eq.{installation_id}"
+            response = await client.get("/agent_connection_bindings", params=params)
+            rows = response.json() if response.status_code < 400 else []
+            if installation_id and not rows:
+                # Legacy owner fallback: agent-scoped bindings without installation_id.
+                from agent_service.installations.service import log_legacy_fallback
+
+                legacy = await client.get(
+                    "/agent_connection_bindings",
+                    params={
+                        "user_id": f"eq.{user_id}",
+                        "agent_id": f"eq.{agent_id}",
+                        "installation_id": "is.null",
+                        "select": "id,connection_id,tool_ids,enabled,created_at,installation_id",
+                    },
+                )
+                legacy_rows = legacy.json() if legacy.status_code < 400 else []
+                if legacy_rows:
+                    log_legacy_fallback(
+                        resource="agent_connection_bindings",
+                        agent_id=agent_id,
+                        user_id=user_id,
+                    )
+                    return legacy_rows if isinstance(legacy_rows, list) else []
+        return rows if isinstance(rows, list) else []
 
     @staticmethod
     def _needs_refresh(token_expires_at: str | None, *, skew_seconds: int = 120) -> bool:

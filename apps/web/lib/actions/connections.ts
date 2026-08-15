@@ -21,10 +21,7 @@ export async function startGoogleConnection(
       accessToken,
       body: {
         agent_id: agentId,
-        tool_ids:
-          toolIds && toolIds.length > 0
-            ? toolIds
-            : ["gmail", "calendar", "google_docs_create", "google_docs_append"],
+        tool_ids: toolIds && toolIds.length > 0 ? toolIds : [],
       },
     },
   );

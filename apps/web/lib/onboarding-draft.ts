@@ -6,7 +6,7 @@
 const KEY_PREFIX = "stack32.onboardingDraft.";
 
 export interface OnboardingDraft {
-  step: 1 | 2 | 3;
+  step: 1 | 2 | 3 | 4;
   showIntro: boolean;
   discoverySource: string | null;
   role: string | null;
@@ -14,6 +14,7 @@ export interface OnboardingDraft {
   countryCode: string;
   phone: string;
   useCase: string;
+  workspaceName: string;
 }
 
 const DEFAULT_DRAFT: OnboardingDraft = {
@@ -25,14 +26,15 @@ const DEFAULT_DRAFT: OnboardingDraft = {
   countryCode: "+33",
   phone: "",
   useCase: "",
+  workspaceName: "",
 };
 
 function storageKey(userId: string): string {
   return KEY_PREFIX + userId;
 }
 
-function isValidStep(value: unknown): value is 1 | 2 | 3 {
-  return value === 1 || value === 2 || value === 3;
+function isValidStep(value: unknown): value is 1 | 2 | 3 | 4 {
+  return value === 1 || value === 2 || value === 3 || value === 4;
 }
 
 export function readOnboardingDraft(userId: string): OnboardingDraft {
@@ -45,10 +47,10 @@ export function readOnboardingDraft(userId: string): OnboardingDraft {
       (typeof parsed.step === "number" && parsed.step > 1) ||
       Boolean(parsed.discoverySource) ||
       Boolean(parsed.role) ||
-      Boolean(parsed.firstName);
+      Boolean(parsed.firstName) ||
+      Boolean(parsed.workspaceName);
     return {
       step: isValidStep(parsed.step) ? parsed.step : 1,
-      // Skip the welcome animation once the user has started answering.
       showIntro: !hasProgress && parsed.showIntro !== false,
       discoverySource: typeof parsed.discoverySource === "string" ? parsed.discoverySource : null,
       role: typeof parsed.role === "string" ? parsed.role : null,
@@ -56,6 +58,7 @@ export function readOnboardingDraft(userId: string): OnboardingDraft {
       countryCode: typeof parsed.countryCode === "string" ? parsed.countryCode : "+33",
       phone: typeof parsed.phone === "string" ? parsed.phone : "",
       useCase: typeof parsed.useCase === "string" ? parsed.useCase : "",
+      workspaceName: typeof parsed.workspaceName === "string" ? parsed.workspaceName : "",
     };
   } catch {
     return { ...DEFAULT_DRAFT };

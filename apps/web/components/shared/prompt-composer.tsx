@@ -1,9 +1,15 @@
 "use client";
 
-import { ArrowUp, Check, FileText, ImageIcon, Mic, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, FileText, ImageIcon, Mic, Paperclip, Square, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
 
@@ -17,14 +23,27 @@ export type ComposerAttachment = {
   name: string;
   mimeType: string;
   size: number;
-  /** Plain text extracted for the model (text files) or a short image note. */
+  /** Plain text extracted for the model (text files only — never for images). */
   modelText: string;
   previewUrl?: string;
   kind: "image" | "file";
+  /** Original file kept until submit so we can upload / send to the model. */
+  file?: File;
+};
+
+/** Builder interaction mode — Build can change the agent; Chat is read-only. */
+export type BuilderInteractionMode = "build" | "chat";
+
+export type PromptComposerSubmitOptions = {
+  mode?: BuilderInteractionMode;
 };
 
 interface PromptComposerProps {
-  onSubmit: (value: string, attachments?: ComposerAttachment[]) => void;
+  onSubmit: (
+    value: string,
+    attachments?: ComposerAttachment[],
+    options?: PromptComposerSubmitOptions,
+  ) => void;
   onStop?: () => void;
   placeholder?: string;
   animatedPlaceholders?: string[];
@@ -36,6 +55,11 @@ interface PromptComposerProps {
   initialValue?: string;
   /** Listen for drag/drop on the whole window (homepage / chat page). */
   enablePageDrop?: boolean;
+  /** Show Build / Chat mode switcher (builder discussion only). */
+  showModeSelector?: boolean;
+  mode?: BuilderInteractionMode;
+  defaultMode?: BuilderInteractionMode;
+  onModeChange?: (mode: BuilderInteractionMode) => void;
 }
 
 function useTypewriter(examples: string[] | undefined, enabled: boolean): string {
@@ -102,7 +126,9 @@ async function fileToAttachment(file: File): Promise<ComposerAttachment | null> 
       size: file.size,
       kind: "image",
       previewUrl,
-      modelText: `[Attached image: ${file.name} (${mime}, ${file.size} bytes)]`,
+      file,
+      // Images are uploaded + sent as vision parts — never as placeholder text.
+      modelText: "",
     };
   }
   // Text-like files — read content for the model
@@ -144,9 +170,13 @@ export function formatPromptWithAttachments(
   value: string,
   attachments: ComposerAttachment[],
 ): string {
-  if (!attachments.length) return value.trim();
-  const blocks = attachments.map((a) => a.modelText).join("\n\n");
-  return `${value.trim()}\n\n${blocks}`.trim();
+  const text = value.trim();
+  const textBlocks = attachments
+    .filter((a) => a.kind === "file" && a.modelText.trim())
+    .map((a) => a.modelText);
+  if (!textBlocks.length) return text;
+  if (!text) return textBlocks.join("\n\n").trim();
+  return `${text}\n\n${textBlocks.join("\n\n")}`.trim();
 }
 
 export function PromptComposer({
@@ -161,6 +191,10 @@ export function PromptComposer({
   className,
   initialValue = "",
   enablePageDrop = true,
+  showModeSelector = false,
+  mode: controlledMode,
+  defaultMode = "build",
+  onModeChange,
 }: PromptComposerProps) {
   const { t } = useTranslation("common");
   const [value, setValue] = useState(initialValue);
@@ -169,6 +203,8 @@ export function PromptComposer({
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [internalMode, setInternalMode] = useState<BuilderInteractionMode>(defaultMode);
+  const mode = controlledMode ?? internalMode;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -177,6 +213,11 @@ export function PromptComposer({
   const dragDepthRef = useRef(0);
   const inputId = useId();
   const animated = useTypewriter(animatedPlaceholders, value.length === 0 && !recording);
+
+  const setMode = (next: BuilderInteractionMode) => {
+    if (controlledMode === undefined) setInternalMode(next);
+    onModeChange?.(next);
+  };
 
   useEffect(() => {
     if (autoFocus) textareaRef.current?.focus();
@@ -270,11 +311,11 @@ export function PromptComposer({
   const submit = () => {
     if (!canSend) return;
     const payload = formatPromptWithAttachments(value, attachments);
-    onSubmit(payload, attachments);
+    // Keep File + previewUrl on the snapshot for optimistic UI / upload.
+    // Do not revoke object URLs here — the handoff owns them briefly.
+    const snapshot = attachments.map((a) => ({ ...a }));
+    onSubmit(payload, snapshot, showModeSelector ? { mode } : undefined);
     setValue("");
-    for (const a of attachments) {
-      if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
-    }
     setAttachments([]);
   };
 
@@ -521,7 +562,7 @@ export function PromptComposer({
                 size={size === "hero" ? "icon" : "icon-sm"}
                 variant="secondary"
                 onClick={onStop}
-                className="rounded-md"
+                className="rounded-full"
                 aria-label={t("composer.stop")}
                 title={t("composer.stop")}
               >
@@ -547,20 +588,67 @@ export function PromptComposer({
                 )}
               </Button>
             ) : (
-              <Button
-                type="button"
-                size={size === "hero" ? "default" : "sm"}
-                onClick={submit}
-                disabled={!canSend}
-                className={cn(
-                  "gap-1.5 rounded-full",
-                  size === "hero" && "h-11 px-5 text-base",
-                )}
-                aria-label={t("composer.send")}
-              >
-                {t("composer.build")}
-                <ArrowUp className={size === "hero" ? "size-5" : "size-4"} aria-hidden="true" />
-              </Button>
+              <>
+                {showModeSelector ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size={size === "hero" ? "default" : "sm"}
+                        disabled={busy || disabled}
+                        className={cn(
+                          "h-8 gap-1 rounded-full border-border/70 bg-background/60 px-2.5 text-xs font-medium text-foreground/80 shadow-none hover:bg-foreground/[0.04]",
+                          size === "hero" && "h-10 px-3 text-sm",
+                        )}
+                        aria-label={t("composer.mode.label")}
+                      >
+                        {mode === "chat" ? t("composer.mode.chat") : t("composer.mode.build")}
+                        <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      sideOffset={8}
+                      className="min-w-[11.5rem] rounded-xl border-border/70 p-1.5 shadow-lg"
+                    >
+                      <DropdownMenuItem
+                        className="cursor-pointer rounded-lg px-2.5 py-2"
+                        onClick={() => setMode("build")}
+                      >
+                        <span className="flex flex-col gap-0.5">
+                          <span className="text-sm font-medium">{t("composer.mode.build")}</span>
+                          <span className="text-[11px] leading-snug text-muted-foreground">
+                            {t("composer.mode.buildHint")}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="cursor-pointer rounded-lg px-2.5 py-2"
+                        onClick={() => setMode("chat")}
+                      >
+                        <span className="flex flex-col gap-0.5">
+                          <span className="text-sm font-medium">{t("composer.mode.chat")}</span>
+                          <span className="text-[11px] leading-snug text-muted-foreground">
+                            {t("composer.mode.chatHint")}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+                <Button
+                  type="button"
+                  size={size === "hero" ? "icon-lg" : "icon-sm"}
+                  onClick={submit}
+                  disabled={!canSend}
+                  className="rounded-full"
+                  aria-label={t("composer.send")}
+                  title={t("composer.send")}
+                >
+                  <ArrowUp className={size === "hero" ? "size-5" : "size-4"} aria-hidden="true" />
+                </Button>
+              </>
             )}
           </div>
         </div>

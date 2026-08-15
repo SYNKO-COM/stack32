@@ -747,6 +747,7 @@ async def resolve_tools_for_capabilities(
     prompt: str = "",
     llm_hints: list[str] | None = None,
     plan: CapabilityPlan | None = None,
+    preferred_apps: list[str] | None = None,
 ) -> tuple[list[ToolBinding], list[ConnectionRequirement], list[dict[str, Any]]]:
     """Resolve capabilities → ToolBindings + ConnectionRequirements + ambiguous choices.
 
@@ -759,7 +760,9 @@ async def resolve_tools_for_capabilities(
     # Prefer registry.search if present (alias), else search_tools.
     search = getattr(reg, "search", None) or reg.search_tools
 
-    active_plan = plan or build_capability_plan(prompt, llm_hints=llm_hints)
+    active_plan = plan or build_capability_plan(
+        prompt, llm_hints=llm_hints, preferred_apps=preferred_apps
+    )
     if not capabilities:
         capabilities = active_plan.to_capabilities()
 
@@ -859,7 +862,11 @@ async def resolve_tools_for_capabilities(
                 )
 
     if "email" in cap_ids and not prefer_outlook:
-        await _resolve_preferred(_email_tool_ids(lower))
+        email_resolved = "email_provider" not in active_plan.ambiguities or any(
+            a in {"gmail", "microsoft_outlook", "outlook"} for a in (preferred_apps or [])
+        )
+        if email_resolved:
+            await _resolve_preferred(_email_tool_ids(lower))
 
     if "calendar" in cap_ids:
         cal_ids = ["calendar_list"]
@@ -891,6 +898,13 @@ async def resolve_tools_for_capabilities(
         skip_pd.update({"google_calendar", "calendar"})
     if "google_docs" in cap_ids:
         skip_pd.update({"google_docs", "docs"})
+    if "crm_provider" in active_plan.ambiguities and not any(
+        a in {"hubspot", "salesforce", "pipedrive", "zoho_crm", "zoho", "close", "copper"}
+        for a in (preferred_apps or [])
+    ):
+        skip_pd.update(
+            {"crm", "hubspot", "salesforce", "pipedrive", "zoho", "zoho_crm", "close", "copper"}
+        )
     if "slack" in cap_ids and "slack" not in external_apps:
         external_apps = ["slack", *external_apps]
     if prefer_outlook and "microsoft_outlook" not in external_apps:
@@ -928,16 +942,18 @@ async def resolve_tools_for_capabilities(
         if provider_name == "pipedream" or str(binding.tool_id).startswith("pd:"):
             conn_provider = "pipedream"
             app_key = app_slug or "pipedream"
-        elif app_slug in {"google", "gmail", "calendar"} or provider_name in {
-            "google",
-            "gmail",
-            "calendar",
-        }:
-            conn_provider = "google"
-            app_key = "google"
         else:
-            conn_provider = provider_name
-            app_key = app_slug or provider_name
+            from agent_service.integrations.app_keys import (
+                SUITE_APP_IDS,
+                app_key_from_tool_id,
+                oauth_provider_for_app,
+            )
+
+            app_key = app_key_from_tool_id(binding.tool_id, app_id=app_slug)
+            conn_provider = oauth_provider_for_app(app_key)
+            if app_key in SUITE_APP_IDS:
+                app_key = app_key_from_tool_id(binding.tool_id)
+                conn_provider = oauth_provider_for_app(app_key)
 
         key = f"{conn_provider}:{app_key}"
         if key not in by_key:
@@ -957,7 +973,13 @@ async def resolve_tools_for_capabilities(
                 req.tool_ids.append(binding.tool_id)
                 req.required_for.append(binding.tool_id)
         binding.connection_requirement_id = by_key[key].id
-        binding.app_id = binding.app_id or app_key
+        if not binding.app_id or binding.app_id in {
+            "google",
+            "microsoft",
+            "microsoft_365",
+            "microsoft365",
+        }:
+            binding.app_id = app_key
         if conn_provider == "pipedream":
             binding.provider = "pipedream"
 

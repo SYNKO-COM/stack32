@@ -7,7 +7,7 @@ import { CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
-import { getAuthRepository } from "@/lib/repositories/factory";
+import { resolvePostAuthPath } from "@/lib/auth/post-auth";
 
 const AUTO_REDIRECT_MS = 5000;
 
@@ -16,24 +16,13 @@ function ConfirmedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [secondsLeft, setSecondsLeft] = useState(Math.ceil(AUTO_REDIRECT_MS / 1000));
-  const [destination, setDestination] = useState("/onboarding");
+  const [destination, setDestination] = useState("/agents");
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const next = searchParams.get("next");
-      if (next?.startsWith("/") && !next.startsWith("//")) {
-        if (!cancelled) setDestination(next);
-        return;
-      }
-      try {
-        const profile = await getAuthRepository().getProfile();
-        if (!cancelled) {
-          setDestination(profile?.onboardingCompleted ? "/agents" : "/onboarding");
-        }
-      } catch {
-        if (!cancelled) setDestination("/onboarding");
-      }
+      const path = await resolvePostAuthPath(searchParams.get("next"));
+      if (!cancelled) setDestination(path);
     })();
     return () => {
       cancelled = true;

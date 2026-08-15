@@ -20,8 +20,14 @@ export function AuthSessionSync() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      void queryClient.invalidateQueries({ queryKey: ["auth"] });
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Prefer an immediate cache write for the user so RequireAuth does not
+      // briefly treat a settling session as "send to onboarding".
+      if (session?.user) {
+        void queryClient.invalidateQueries({ queryKey: ["auth"] });
+      } else {
+        queryClient.removeQueries({ queryKey: ["auth"] });
+      }
     });
 
     return () => subscription.unsubscribe();

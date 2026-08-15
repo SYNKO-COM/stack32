@@ -94,6 +94,7 @@ async def run_due_schedules(*, db: Any, client: Any, limit: int = 25) -> dict[st
 
         instruction = str(row.get("instruction") or "").strip() or DEFAULT_SCHEDULED_PROMPT
         run_id = str(uuid.uuid4())
+        installation_id = row.get("installation_id")
         await db.create_run(
             run_id=run_id,
             user_id=user_id,
@@ -107,7 +108,9 @@ async def run_due_schedules(*, db: Any, client: Any, limit: int = 25) -> dict[st
                 "occurrence_key": occurrence_key,
                 "triggered_at": now.isoformat(),
                 "notify_email": row.get("notify_email"),
+                "installation_id": installation_id,
             },
+            installation_id=str(installation_id) if installation_id else None,
         )
         await db.enqueue_run(run_id=run_id, user_id=user_id)
         await client.patch(

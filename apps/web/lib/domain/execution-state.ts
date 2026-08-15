@@ -1,0 +1,226 @@
+import type { ModuleExecState } from "@/hooks/use-live-execution";
+import { resolveAppKey } from "@/lib/integrations/app-grouping";
+import type { ProductAgentGraph } from "@/lib/domain/product-agent-graph";
+
+export type RunStatus = "idle" | "running" | "success" | "error" | "partial";
+
+export interface LiveEventPayload {
+  eventType: string;
+  toolId?: string;
+  provider?: string;
+  appId?: string;
+}
+
+export interface NodeVisualState {
+  configurationStatus?: string;
+  executionStatus: ModuleExecState;
+}
+
+export interface EdgeVisualState {
+  executionStatus: ModuleExecState;
+}
+
+export interface ExecutionVisualState {
+  runStatus: RunStatus;
+  nodes: Record<string, NodeVisualState>;
+  edges: Record<string, EdgeVisualState>;
+  /** Legacy flat map for backward compatibility. */
+  legacy: Record<string, ModuleExecState>;
+}
+
+function toolToNodeId(toolId: string, graph: ProductAgentGraph | null): string {
+  if (!graph) return toolId;
+  const appKey = resolveAppKey(toolId);
+  const integration = graph.nodes.find(
+    (n) => n.kind === "integration" && n.integration?.appKey === appKey,
+  );
+  return integration?.id ?? `app:${appKey}`;
+}
+
+function edgeBetween(graph: ProductAgentGraph | null, source: string, target: string): string | undefined {
+  if (!graph) return undefined;
+  return graph.edges.find((e) => e.source === source && e.target === target)?.id;
+}
+
+/**
+ * Map Live run_events → product graph visual states.
+ * Agent stays running until run.completed / run.failed.
+ */
+export function reduceExecutionEvents(
+  events: LiveEventPayload[],
+  graph: ProductAgentGraph | null = null,
+): ExecutionVisualState {
+  const legacy: Record<string, ModuleExecState> = {
+    input: "idle",
+    brain: "idle",
+    model: "idle",
+    output: "idle",
+  };
+  const nodes: Record<string, NodeVisualState> = {};
+  const edges: Record<string, EdgeVisualState> = {};
+  const toolStates: Record<string, ModuleExecState> = {};
+  let runStatus: RunStatus = "idle";
+  let runEnded = false;
+  let runFailed = false;
+  let anyToolError = false;
+  let anyToolSuccess = false;
+
+  const setNode = (id: string, status: ModuleExecState) => {
+    nodes[id] = { executionStatus: status };
+    legacy[id] = status;
+  };
+
+  const setEdge = (id: string, status: ModuleExecState) => {
+    edges[id] = { executionStatus: status };
+  };
+
+  for (const event of events) {
+    const t = event.eventType;
+
+    if (t.includes("run.started") || t.includes("runtime.run.started")) {
+      runStatus = "running";
+      setNode("agent", "running");
+      legacy.brain = "running";
+    }
+    if (t.includes("run.completed") || t.includes("runtime.run.completed")) {
+      runEnded = true;
+    }
+    if (t.includes("run.failed") || t.includes("runtime.run.failed")) {
+      runEnded = true;
+      runFailed = true;
+    }
+
+    if (t.includes("runtime.input.received")) {
+      setNode("trigger:chat", "success");
+      setNode("trigger:schedule", "success");
+      legacy.input = "success";
+      setNode("agent", "running");
+      legacy.brain = "running";
+      const e = edgeBetween(graph, "trigger:chat", "agent") ?? edgeBetween(graph, "trigger:schedule", "agent");
+      if (e) setEdge(e, "running");
+    }
+
+    if (t.includes("runtime.model.started")) {
+      setNode("attachment:model", "running");
+      legacy.model = "running";
+      setNode("agent", "running");
+      legacy.brain = "running";
+      const e = edgeBetween(graph, "attachment:model", "agent");
+      if (e) setEdge(e, "running");
+    }
+    if (t.includes("runtime.model.completed")) {
+      setNode("attachment:model", "success");
+      legacy.model = "success";
+    }
+
+    if (t.includes("runtime.memory.")) {
+      const memStatus = t.includes(".failed")
+        ? "error"
+        : t.includes(".started")
+          ? "running"
+          : "success";
+      setNode("attachment:memory", memStatus);
+      const e = edgeBetween(graph, "attachment:memory", "agent");
+      if (e) setEdge(e, memStatus);
+      setNode("agent", memStatus === "error" ? "error" : "running");
+      legacy.brain = memStatus === "error" ? "error" : "running";
+    }
+
+    if (t.includes("runtime.tool.started") && event.toolId) {
+      const nodeId = toolToNodeId(event.toolId, graph);
+      toolStates[event.toolId] = "running";
+      setNode(nodeId, "running");
+      setNode("agent", "running");
+      legacy.brain = "running";
+      legacy[event.toolId] = "running";
+      const e = edgeBetween(graph, nodeId, "agent");
+      if (e) setEdge(e, "running");
+    }
+    if (t.includes("runtime.tool.completed") && event.toolId) {
+      const nodeId = toolToNodeId(event.toolId, graph);
+      toolStates[event.toolId] = "success";
+      anyToolSuccess = true;
+      setNode(nodeId, "success");
+      legacy[event.toolId] = "success";
+      const e = edgeBetween(graph, nodeId, "agent");
+      if (e) setEdge(e, "success");
+    }
+    if (t.includes("runtime.tool.failed") && event.toolId) {
+      const nodeId = toolToNodeId(event.toolId, graph);
+      toolStates[event.toolId] = "error";
+      anyToolError = true;
+      setNode(nodeId, "error");
+      legacy[event.toolId] = "error";
+      const e = edgeBetween(graph, nodeId, "agent");
+      if (e) setEdge(e, "error");
+    }
+    if (t.includes("runtime.connection.required") && event.toolId) {
+      const nodeId = toolToNodeId(event.toolId, graph);
+      toolStates[event.toolId] = "waiting_for_connection";
+      setNode(nodeId, "waiting_for_connection");
+      legacy[event.toolId] = "waiting_for_connection";
+    }
+    if (
+      (t.includes("runtime.approval.requested") || t.includes("runtime.approval.pending")) &&
+      event.toolId
+    ) {
+      const nodeId = toolToNodeId(event.toolId, graph);
+      toolStates[event.toolId] = "waiting_for_approval";
+      setNode(nodeId, "waiting_for_approval");
+      legacy[event.toolId] = "waiting_for_approval";
+    }
+
+    if (t.includes("runtime.output.completed")) {
+      setNode("output", "success");
+      legacy.output = "success";
+      const e = edgeBetween(graph, "agent", "output");
+      if (e) setEdge(e, "success");
+    }
+    if (t.includes("runtime.output.failed")) {
+      setNode("output", "error");
+      legacy.output = "error";
+      runFailed = true;
+    }
+  }
+
+  if (runEnded) {
+    if (runFailed || legacy.output === "error") {
+      runStatus = anyToolSuccess ? "partial" : "error";
+      setNode("agent", anyToolSuccess ? "error" : "error");
+      legacy.brain = "error";
+    } else if (legacy.output === "success") {
+      runStatus = anyToolError ? "partial" : "success";
+      setNode("agent", "success");
+      legacy.brain = "success";
+    }
+  } else if (runStatus === "running" || legacy.brain === "running") {
+    runStatus = "running";
+    if (!nodes.agent) {
+      setNode("agent", "running");
+      legacy.brain = "running";
+    }
+  }
+
+  // Aggregate integration nodes from per-tool states when multiple tools share an app.
+  if (graph) {
+    for (const node of graph.nodes) {
+      if (node.kind !== "integration" || !node.integration) continue;
+      const statuses = node.integration.toolIds.map((tid) => toolStates[tid]).filter(Boolean);
+      if (statuses.length === 0) continue;
+      let agg: ModuleExecState = "idle";
+      if (statuses.some((s) => s === "running" || s === "queued")) agg = "running";
+      else if (statuses.some((s) => s === "error")) agg = "error";
+      else if (statuses.some((s) => s === "waiting_for_connection" || s === "waiting_for_approval"))
+        agg = statuses.find((s) => s === "waiting_for_connection" || s === "waiting_for_approval")!;
+      else if (statuses.every((s) => s === "success")) agg = "success";
+      setNode(node.id, agg);
+    }
+  }
+
+  return { runStatus, nodes, edges, legacy };
+}
+
+/** Backward-compatible flat map reducer. */
+export function reduceExecutionState(events: LiveEventPayload[]): Record<string, ModuleExecState> {
+  return reduceExecutionEvents(events).legacy;
+}

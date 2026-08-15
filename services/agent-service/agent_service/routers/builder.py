@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from agent_service.auth import CurrentUser
 from agent_service.builder.orchestrator import BuilderOrchestrator
@@ -21,11 +21,25 @@ from agent_service.supabase_client import get_persistence
 router = APIRouter(tags=["builder"])
 
 
+class BuilderImagePayload(BaseModel):
+    name: str = Field(default="", max_length=240)
+    mime_type: str = Field(default="image/jpeg", max_length=100)
+    data_base64: str = Field(min_length=8, max_length=12_000_000)
+
+
 class BuilderMessageRequest(BaseModel):
-    content: str = Field(min_length=1, max_length=8000)
+    content: str = Field(default="", max_length=8000)
     thread_id: UUID | None = None
     # UI language the assistant must answer in, regardless of the prompt language.
     locale: str = Field(default="en", max_length=8)
+    mode: str = Field(default="build", pattern="^(build|chat)$")
+    images: list[BuilderImagePayload] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def require_text_or_images(self) -> BuilderMessageRequest:
+        if not self.content.strip() and not self.images:
+            raise ValueError("content or images required")
+        return self
 
 
 class IdentityResumeRequest(BaseModel):
@@ -96,6 +110,8 @@ async def post_agent_builder_message(
         thread_id=thread_id,
         content=body.content,
         locale=body.locale,
+        mode=body.mode,
+        images=[img.model_dump() for img in body.images],
     )
     return _http_from_result(result)
 

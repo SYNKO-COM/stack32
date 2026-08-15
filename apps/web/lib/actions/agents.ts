@@ -45,6 +45,7 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
     .from("agents")
     .insert({
       user_id: user.id,
+      workspace_id: source.workspace_id,
       name: `${source.name} (copy)`,
       slug,
       description: source.description,

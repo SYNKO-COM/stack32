@@ -34,6 +34,7 @@ export const SEED_AGENTS: SeedAgent[] = [
   {
     agent: {
       id: "agent_sales",
+      workspaceId: "ws_default",
       name: "Sales agent",
       icon: "briefcase",
       status: "ready",
@@ -64,6 +65,7 @@ export const SEED_AGENTS: SeedAgent[] = [
   {
     agent: {
       id: "agent_research",
+      workspaceId: "ws_default",
       name: "Research agent",
       icon: "search",
       status: "published",
@@ -95,6 +97,7 @@ export const SEED_AGENTS: SeedAgent[] = [
   {
     agent: {
       id: "agent_support",
+      workspaceId: "ws_default",
       name: "Support agent",
       icon: "life-buoy",
       status: "needs_attention",
@@ -126,6 +129,7 @@ export const SEED_AGENTS: SeedAgent[] = [
   {
     agent: {
       id: "agent_content",
+      workspaceId: "ws_default",
       name: "Content agent",
       icon: "pen-line",
       status: "draft",

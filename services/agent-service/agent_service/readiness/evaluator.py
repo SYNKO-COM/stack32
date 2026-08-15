@@ -38,9 +38,12 @@ def _as_spec(spec: AgentSpec | dict[str, Any]) -> AgentSpec | None:
 
 
 async def _agent_bound_coverage(
-    user_id: str, agent_id: str
+    user_id: str,
+    agent_id: str,
+    *,
+    installation_id: str | None = None,
 ) -> tuple[set[str], set[str], dict[str, set[str]]]:
-    """Return (providers, app_ids, tool_id -> providers) from *this agent*'s bindings only."""
+    """Return (providers, app_ids, tool_id -> providers) from installation/agent bindings."""
     providers: set[str] = set()
     app_ids: set[str] = set()
     tool_coverage: dict[str, set[str]] = {}
@@ -48,7 +51,9 @@ async def _agent_bound_coverage(
         from agent_service.connections.manager import ConnectionManager
 
         mgr = ConnectionManager()
-        bindings = await mgr.list_bindings(user_id=user_id, agent_id=agent_id)
+        bindings = await mgr.list_bindings(
+            user_id=user_id, agent_id=agent_id, installation_id=installation_id
+        )
         connections = await mgr.list_connections(user_id=user_id)
         by_id = {str(c.get("id")): c for c in connections or []}
         for binding in bindings or []:
@@ -70,13 +75,65 @@ async def _agent_bound_coverage(
                 app = meta.get("app_id")
             if app:
                 app_ids.add(str(app))
-            if provider == "google":
-                app_ids.add("google")
+            extra_apps = meta.get("app_ids") if isinstance(meta, dict) else None
+            if isinstance(extra_apps, list):
+                for item in extra_apps:
+                    if item:
+                        app_ids.add(str(item))
             for tid in binding.get("tool_ids") or []:
                 tool_coverage.setdefault(str(tid), set()).add(provider)
     except Exception:  # noqa: BLE001
         logger.exception("readiness_bindings_lookup_failed")
     return providers, app_ids, tool_coverage
+
+
+async def evaluate_definition_readiness(
+    *,
+    agent_id: str,
+    user_id: str,
+    spec: AgentSpec | dict[str, Any],
+    db: Any | None = None,
+    build_ok: bool | None = None,
+    verification_passed: bool | None = None,
+) -> ReadinessResult:
+    """Portable template readiness — never requires user OAuth / LLM secrets."""
+    return await evaluate_agent_readiness(
+        agent_id=agent_id,
+        user_id=user_id,
+        spec=spec,
+        db=db,
+        build_ok=build_ok,
+        require_brain=False,
+        llm_status=None,
+        verification_passed=verification_passed,
+        include_installation_checks=False,
+    )
+
+
+async def evaluate_installation_readiness(
+    *,
+    agent_id: str,
+    user_id: str,
+    spec: AgentSpec | dict[str, Any],
+    db: Any | None = None,
+    installation_id: str | None = None,
+    build_ok: bool | None = None,
+    llm_status: str | None = None,
+    verification_passed: bool | None = None,
+) -> ReadinessResult:
+    """Runtime installation readiness — LLM, connections, tool config, memory."""
+    return await evaluate_agent_readiness(
+        agent_id=agent_id,
+        user_id=user_id,
+        spec=spec,
+        db=db,
+        build_ok=build_ok,
+        require_brain=True,
+        llm_status=llm_status,
+        verification_passed=verification_passed,
+        include_installation_checks=True,
+        installation_id=installation_id,
+    )
 
 
 async def evaluate_agent_readiness(
@@ -89,6 +146,8 @@ async def evaluate_agent_readiness(
     require_brain: bool = False,
     llm_status: str | None = None,
     verification_passed: bool | None = None,
+    include_installation_checks: bool = True,
+    installation_id: str | None = None,
 ) -> ReadinessResult:
     checks: list[ReadinessCheck] = []
     missing_connections: list[dict[str, Any]] = []
@@ -190,149 +249,164 @@ async def evaluate_agent_readiness(
             )
         )
 
-    bound_providers, bound_apps, tool_coverage = await _agent_bound_coverage(user_id, agent_id)
-    needed: dict[str, dict[str, Any]] = {}
+    if include_installation_checks:
+        bound_providers, bound_apps, tool_coverage = await _agent_bound_coverage(
+            user_id, agent_id, installation_id=installation_id
+        )
+        needed: dict[str, dict[str, Any]] = {}
 
-    for req in parsed.connection_requirements:
-        if not req.required:
-            continue
-        provider = req.provider
-        app_id = req.app_id or provider
-        tool_ids = list(req.tool_ids or req.required_for or [])
-        key = f"{provider}:{app_id}"
-        needed[key] = {
-            "provider": provider,
-            "app_id": app_id,
-            "auth_type": req.auth_type,
-            "tool_ids": tool_ids,
-        }
-
-    for binding, tool in connection_required_tools:
-        provider = getattr(tool, "provider", None) or binding.provider or "native"
-        if provider == "native":
-            provider = "google"
-        app_id = getattr(tool, "provider_app_id", None) or binding.app_id or provider
-        key = f"{provider}:{app_id}"
-        needed.setdefault(
-            key,
-            {
+        for req in parsed.connection_requirements:
+            if not req.required:
+                continue
+            provider = req.provider
+            app_id = req.app_id or provider
+            tool_ids = list(req.tool_ids or req.required_for or [])
+            key = f"{provider}:{app_id}"
+            needed[key] = {
                 "provider": provider,
                 "app_id": app_id,
-                "auth_type": getattr(tool, "auth_type", "oauth2"),
-                "tool_ids": [],
-            },
-        )
-        needed[key]["tool_ids"] = list({*needed[key].get("tool_ids", []), binding.tool_id})
+                "auth_type": req.auth_type,
+                "tool_ids": tool_ids,
+            }
 
-    for _key, req in needed.items():
-        provider = str(req["provider"])
-        app_id = str(req.get("app_id") or provider)
-        tool_ids = list(req.get("tool_ids") or [])
-        covered = False
-        if provider == "pipedream":
-            # Need a binding whose connection app matches and tool_ids cover requirement.
-            if app_id in bound_apps or provider in bound_providers:
-                if not tool_ids:
-                    covered = provider in bound_providers and (
-                        not app_id or app_id in bound_apps or app_id == provider
-                    )
-                else:
-                    covered = all(
-                        provider in tool_coverage.get(tid, set())
-                        or "pipedream" in tool_coverage.get(tid, set())
-                        for tid in tool_ids
-                    )
-        else:
-            # Google / native: provider must be bound on *this* agent for the tools.
-            if tool_ids:
-                covered = all(provider in tool_coverage.get(tid, set()) for tid in tool_ids)
-                if not covered and provider in bound_providers:
-                    # Binding may list a subset — require at least one overlapping tool_id
-                    covered = any(provider in tool_coverage.get(tid, set()) for tid in tool_ids)
-                    if not covered:
-                        # Some agents bind google with a tool list that includes these ids
-                        covered = provider in bound_providers and any(
-                            tid in tool_coverage for tid in tool_ids
+        for binding, tool in connection_required_tools:
+            provider = getattr(tool, "provider", None) or binding.provider or "native"
+            if provider == "native":
+                provider = "google"
+            app_id = getattr(tool, "provider_app_id", None) or binding.app_id or provider
+            key = f"{provider}:{app_id}"
+            needed.setdefault(
+                key,
+                {
+                    "provider": provider,
+                    "app_id": app_id,
+                    "auth_type": getattr(tool, "auth_type", "oauth2"),
+                    "tool_ids": [],
+                },
+            )
+            needed[key]["tool_ids"] = list({*needed[key].get("tool_ids", []), binding.tool_id})
+
+        for _key, req in needed.items():
+            provider = str(req["provider"])
+            app_id = str(req.get("app_id") or provider)
+            tool_ids = list(req.get("tool_ids") or [])
+            covered = False
+            if provider == "pipedream":
+                if app_id in bound_apps or provider in bound_providers:
+                    if not tool_ids:
+                        covered = provider in bound_providers and (
+                            not app_id or app_id in bound_apps or app_id == provider
+                        )
+                    else:
+                        covered = all(
+                            provider in tool_coverage.get(tid, set())
+                            or "pipedream" in tool_coverage.get(tid, set())
+                            for tid in tool_ids
                         )
             else:
-                covered = provider in bound_providers
-        if not covered:
-            missing_connections.append(req)
+                if tool_ids:
+                    covered = all(
+                        provider in tool_coverage.get(tid, set()) or tid in tool_coverage
+                        for tid in tool_ids
+                    )
+                else:
+                    covered = app_id in bound_apps
+            if not covered:
+                missing_connections.append(req)
 
-    # Static tool configuration for Pipedream (required static props)
-    try:
-        from agent_service.integrations.pipedream.accounts import load_agent_tool_config
+        try:
+            from agent_service.integrations.pipedream.accounts import load_agent_tool_config
 
-        pd = registry.get_provider("pipedream")
-        for binding in parsed.tools:
-            if not binding.enabled or binding.provider not in {"pipedream", ""}:
-                continue
-            if not str(binding.tool_id).startswith("pd:") and binding.provider != "pipedream":
-                continue
-            if pd is None:
-                continue
-            schema_payload = await pd.get_tool_schema(binding.tool_id)
-            if not schema_payload:
-                continue
-            static_schema = schema_payload.get("static_schema") or {}
-            required_static = list(static_schema.get("required") or [])
-            if not required_static:
-                continue
-            stored = await load_agent_tool_config(
-                user_id=user_id, agent_id=agent_id, tool_id=binding.tool_id
-            )
-            binding_cfg = binding.config if isinstance(binding.config, dict) else {}
-            merged = {**binding_cfg, **stored}
-            missing_keys = [k for k in required_static if k not in merged or merged[k] in (None, "")]
-            if missing_keys:
-                missing_config.append(
-                    {
-                        "type": "tool_config",
-                        "tool_id": binding.tool_id,
-                        "fields": missing_keys,
-                    }
+            pd = registry.get_provider("pipedream")
+            for binding in parsed.tools:
+                if not binding.enabled or binding.provider not in {"pipedream", ""}:
+                    continue
+                if not str(binding.tool_id).startswith("pd:") and binding.provider != "pipedream":
+                    continue
+                if pd is None:
+                    continue
+                schema_payload = await pd.get_tool_schema(binding.tool_id)
+                if not schema_payload:
+                    continue
+                static_schema = schema_payload.get("static_schema") or {}
+                required_static = list(static_schema.get("required") or [])
+                if not required_static:
+                    continue
+                stored = await load_agent_tool_config(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    tool_id=binding.tool_id,
+                    installation_id=installation_id,
                 )
-    except Exception:  # noqa: BLE001
-        logger.debug("readiness_tool_config_check_failed", exc_info=True)
+                binding_cfg = binding.config if isinstance(binding.config, dict) else {}
+                merged = {**binding_cfg, **stored}
+                missing_keys = [
+                    k for k in required_static if k not in merged or merged[k] in (None, "")
+                ]
+                if missing_keys:
+                    missing_config.append(
+                        {
+                            "type": "tool_config",
+                            "tool_id": binding.tool_id,
+                            "fields": missing_keys,
+                        }
+                    )
+        except Exception:  # noqa: BLE001
+            logger.debug("readiness_tool_config_check_failed", exc_info=True)
 
-    if missing_connections:
+        if missing_connections:
+            checks.append(
+                ReadinessCheck(
+                    key="connections",
+                    ok=False,
+                    message=(
+                        f"Connect {len(missing_connections)} account(s) so this agent can use its tools."
+                        if len(missing_connections) != 1
+                        else "Connect one account so this agent can use its tools."
+                    ),
+                    severity="error",
+                )
+            )
+        else:
+            checks.append(
+                ReadinessCheck(
+                    key="connections",
+                    ok=True,
+                    message="Required accounts are connected for this agent.",
+                    severity="info",
+                )
+            )
+
+        if any(m.get("type") == "tool_config" for m in missing_config):
+            checks.append(
+                ReadinessCheck(
+                    key="tool_config",
+                    ok=False,
+                    message="One or more tools still need a setting (channel, calendar, …).",
+                    severity="error",
+                )
+            )
+        else:
+            checks.append(
+                ReadinessCheck(
+                    key="tool_config",
+                    ok=True,
+                    message="Tool settings look complete.",
+                    severity="info",
+                )
+            )
+    else:
+        # Definition readiness: requirements are declared, not satisfied.
+        req_count = len([r for r in parsed.connection_requirements if r.required])
         checks.append(
             ReadinessCheck(
-                key="connections",
-                ok=False,
+                key="connection_requirements",
+                ok=True,
                 message=(
-                    f"Connect {len(missing_connections)} account(s) so this agent can use its tools."
-                    if len(missing_connections) != 1
-                    else "Connect one account so this agent can use its tools."
+                    f"{req_count} portable connection requirement(s) declared."
+                    if req_count
+                    else "No external account requirements."
                 ),
-                severity="error",
-            )
-        )
-    else:
-        checks.append(
-            ReadinessCheck(
-                key="connections",
-                ok=True,
-                message="Required accounts are connected for this agent.",
-                severity="info",
-            )
-        )
-
-    if any(m.get("type") == "tool_config" for m in missing_config):
-        checks.append(
-            ReadinessCheck(
-                key="tool_config",
-                ok=False,
-                message="One or more tools still need a setting (channel, calendar, …).",
-                severity="error",
-            )
-        )
-    else:
-        checks.append(
-            ReadinessCheck(
-                key="tool_config",
-                ok=True,
-                message="Tool settings look complete.",
                 severity="info",
             )
         )
@@ -358,20 +432,26 @@ async def evaluate_agent_readiness(
             )
         )
 
-    # Brain (LLM) P0 — the generated agent must run on an exact, agent-scoped BYOK
-    # model. Enforced hard only for the publish gate (require_brain); informational
-    # otherwise so the general readiness card doesn't block earlier build steps.
-    brain_severity = "error" if require_brain else "info"
+    # Brain: installation requires BYOK; definition only notes recommended model.
+    brain_severity = "error" if (require_brain and include_installation_checks) else "info"
     model_cfg = parsed.model
-    if model_cfg is None or not (model_cfg.provider and model_cfg.model_id):
-        brain_ok = False
-        brain_msg = "Choose the exact model your agent runs on."
-    elif llm_status is not None and llm_status != "valid":
-        brain_ok = False
-        brain_msg = "Re-validate your model API key — the last check did not pass."
+    if include_installation_checks:
+        if model_cfg is None or not (model_cfg.provider and model_cfg.model_id):
+            brain_ok = False
+            brain_msg = "Configure the AI model for this installation."
+        elif llm_status is not None and llm_status != "valid":
+            brain_ok = False
+            brain_msg = "Re-validate your model API key — the last check did not pass."
+        else:
+            brain_ok = True
+            brain_msg = "Agent brain (model + key) is configured."
     else:
         brain_ok = True
-        brain_msg = "Agent brain (model + key) is configured."
+        brain_msg = (
+            f"Recommended model: {model_cfg.provider}/{model_cfg.model_id}."
+            if model_cfg and model_cfg.provider and model_cfg.model_id
+            else "Model credential is configured at installation time."
+        )
     checks.append(
         ReadinessCheck(
             key="brain",
@@ -380,7 +460,7 @@ async def evaluate_agent_readiness(
             severity="info" if brain_ok else brain_severity,
         )
     )
-    if not brain_ok and require_brain:
+    if not brain_ok and require_brain and include_installation_checks:
         missing_config.append({"type": "brain", "message": brain_msg})
 
     # Trigger P0 — at least one enabled Chat or Schedule trigger.
@@ -388,6 +468,14 @@ async def evaluate_agent_readiness(
         t for t in parsed.triggers if t.enabled and t.kind in ("chat", "schedule")
     ]
     trigger_ok = bool(active_triggers)
+    if include_installation_checks:
+        trigger_severity = "info" if trigger_ok else ("error" if require_brain else "warn")
+    else:
+        # Definition: missing trigger is advisory — Builder usually adds chat by default.
+        trigger_severity = "info"
+        trigger_ok = True if not parsed.triggers else trigger_ok or True
+        # Prefer true when any trigger present; empty triggers still OK for portable template.
+        trigger_ok = True
     checks.append(
         ReadinessCheck(
             key="trigger",
@@ -397,7 +485,7 @@ async def evaluate_agent_readiness(
                 if trigger_ok
                 else "Enable a Chat or Schedule trigger."
             ),
-            severity="info" if trigger_ok else ("error" if require_brain else "warn"),
+            severity=trigger_severity,
         )
     )
 

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 
 import { setPendingPrompt } from "@/lib/pending-prompt";
+import { resolvePostAuthPath } from "@/lib/auth/post-auth";
 import { getAuthRepository } from "@/lib/repositories/factory";
 import { useUiStore } from "@/store/ui-store";
 
@@ -26,8 +27,7 @@ export function useStartFromPrompt() {
         openDialog("auth", { authMode: "signup" });
         return;
       }
-      const profile = await auth.getProfile();
-      router.push(profile?.onboardingCompleted ? "/agents" : "/onboarding");
+      router.push(await resolvePostAuthPath());
     },
     [openDialog, router],
   );

@@ -8,21 +8,36 @@ import { Topbar } from "@/components/builder/topbar";
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { Button } from "@/components/ui/button";
 import { useAgent, useAgents, useCreateAgent } from "@/hooks/use-agents";
+import { useActiveWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
 
 export default function AgentWorkspaceLayout({ children }: { children: React.ReactNode }) {
   const params = useParams<{ agentId: string }>();
   const router = useRouter();
   const { t } = useTranslation(["errors", "common"]);
+  const { activeWorkspaceId, isLoading: wsLoading } = useActiveWorkspace();
   const { data: agent, isLoading } = useAgent(params.agentId);
-  const { data: agents, isLoading: agentsLoading } = useAgents();
+  const { data: agents, isLoading: agentsLoading } = useAgents(activeWorkspaceId);
   const createAgent = useCreateAgent();
   const [creating, startCreate] = useTransition();
 
-  if (isLoading || agentsLoading) {
+  if (isLoading || agentsLoading || wsLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <BrandLoader label={t("common:loading")} size="lg" />
+      </div>
+    );
+  }
+
+  if (!activeWorkspaceId) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {t("errors:noAgentsYet.title")}
+        </h1>
+        <p className="mt-3 max-w-md text-sm text-muted-foreground">
+          {t("errors:noAgentsYet.subtitle")}
+        </p>
       </div>
     );
   }
@@ -44,7 +59,9 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
             disabled={creating || createAgent.isPending}
             onClick={() => {
               startCreate(async () => {
-                const created = await createAgent.mutateAsync(undefined);
+                const created = await createAgent.mutateAsync({
+                  workspaceId: activeWorkspaceId,
+                });
                 router.replace(`/agents/${created.id}/build`);
               });
             }}

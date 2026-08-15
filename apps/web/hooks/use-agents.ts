@@ -13,10 +13,11 @@ const agentKeys = {
   projectStructure: (id: string) => ["agents", id, "project-structure"] as const,
 };
 
-export function useAgents() {
+export function useAgents(workspaceId?: string | null) {
   return useQuery({
-    queryKey: agentKeys.list,
-    queryFn: () => getAgentRepository().listAgents(),
+    queryKey: [...agentKeys.list, workspaceId ?? "all"] as const,
+    queryFn: () => getAgentRepository().listAgents(workspaceId ?? undefined),
+    enabled: workspaceId !== null,
   });
 }
 
@@ -69,9 +70,15 @@ export function useAgentProjectStructure(agentId: string) {
 export function useCreateAgent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name?: string) => getAgentRepository().createAgent(name),
+    mutationFn: (input?: { name?: string; workspaceId?: string } | string) => {
+      if (typeof input === "string" || input === undefined) {
+        return getAgentRepository().createAgent(
+          typeof input === "string" ? { name: input } : undefined,
+        );
+      }
+      return getAgentRepository().createAgent(input);
+    },
     onSuccess: (agent) => {
-      // Seed detail cache immediately so /agents/[id] never flashes "not found".
       queryClient.setQueryData(agentKeys.detail(agent.id), agent);
       queryClient.setQueryData(agentKeys.list, (prev: unknown) => {
         if (!Array.isArray(prev)) return [agent];

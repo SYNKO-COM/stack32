@@ -131,6 +131,7 @@
   },
   "actions": {
     "testAgent": "Try the agent",
+    "openAiAgent": "Open AI Agent",
     "viewStructure": "See the structure",
     "fixAutomatically": "Fix it for me",
     "fixAutomaticallyHint": "Click to let Stack32 repair what it found.",
@@ -150,6 +151,7 @@
   },
   "composer": {
     "placeholder": "Describe what to build or change…",
+    "chatPlaceholder": "Ask about your agent — Chat mode won’t change anything…",
     "formLockedPlaceholder": "Finish the step above to continue…"
   },
   "builderName": "Stack32",
@@ -197,7 +199,11 @@
   "ready": {
     "title": "First version ready",
     "titleNamed": "{{name}} is ready",
+    "builtTitle": "Agent built",
+    "builtTitleNamed": "{{name}} is built",
     "success": "Your agent is ready to try. I wrote its instructions, unlocked abilities and memory, built the structure, and passed a quick test. Open Live to chat with it, or keep improving it here.",
+    "builtSuccess": "Your agent is built. Configure the model, connections, and secrets in AI Agent before using it.",
+    "setupInAiAgent": "Model setup and connections happen in AI Agent.",
     "llmKeyRequired": "Add your LLM API key before testing Live."
   },
   "modify": {
@@ -246,6 +252,10 @@
     "continue": "Build my agent",
     "submitting": "Building…",
     "formClosed": "Settings saved. Building now."
+  },
+  "providers": {
+    "prompt": "Which exact apps should this agent use? Name the email service and CRM (or other tools) — no account linking yet.",
+    "saved": "Got it — I'll wire those apps into your agent definition."
   },
   "questions": {
     "prompt": "Before I continue, I need one or two quick details so the agent is built the right way.",
@@ -362,5 +372,24 @@
     "building": "Building the agent",
     "repairing": "Fixing the agent",
     "complete": "Build complete"
+  },
+  "workspace": {
+    "label": "Workspace",
+    "loading": "Loading…",
+    "switcherLabel": "Switch workspace",
+    "create": "New workspace",
+    "createTitle": "Create a workspace",
+    "createBody": "Agents you create will belong to this workspace.",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Personal",
+    "creating": "Creating…"
+  },
+  "profile": {
+    "plan": "Current plan",
+    "managePlan": "Manage plan",
+    "credits": "Credits",
+    "creditsValue": "{{used}} / {{limit}}",
+    "creditsHint": "Usage is approximate until billing is connected.",
+    "changePassword": "Change password"
   }
 }

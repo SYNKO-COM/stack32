@@ -54,6 +54,9 @@ export function useRunEventStream(opts: {
               if (typeof payload.sequence === "number") {
                 lastSeq.current = Math.max(lastSeq.current, payload.sequence);
               }
+              await queryClient.invalidateQueries({
+                queryKey: ["live-execution", opts.runId],
+              });
               if (payload.type === "stream.end") {
                 await queryClient.invalidateQueries({ queryKey: ["builder", opts.agentId] });
                 return;

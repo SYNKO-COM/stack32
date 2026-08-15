@@ -4,6 +4,7 @@ import type { AgentRepository } from "@/lib/repositories/interfaces";
 import { emitMockChange } from "./events";
 import { makeSpecForPrompt, SEED_AGENTS } from "./seed";
 import { delay, generateId, nowIso, readStore, writeStore } from "./storage";
+import { DEFAULT_MOCK_WORKSPACE_ID } from "./workspaces";
 
 interface AgentsState {
   agents: Agent[];
@@ -65,20 +66,23 @@ export function upsertAgentSpec(agentId: string, spec: AgentSpec): AgentVersion 
 }
 
 export class MockAgentRepository implements AgentRepository {
-  async listAgents(): Promise<Agent[]> {
-    return readState().agents;
+  async listAgents(workspaceId?: string): Promise<Agent[]> {
+    const agents = readState().agents;
+    if (!workspaceId) return agents;
+    return agents.filter((a) => a.workspaceId === workspaceId);
   }
 
   async getAgent(agentId: string): Promise<Agent | null> {
     return readState().agents.find((a) => a.id === agentId) ?? null;
   }
 
-  async createAgent(name?: string): Promise<Agent> {
+  async createAgent(input?: { name?: string; workspaceId?: string }): Promise<Agent> {
     await delay(250);
     const state = readState();
     const agent: Agent = {
       id: generateId("agent"),
-      name: name ?? "",
+      workspaceId: input?.workspaceId ?? DEFAULT_MOCK_WORKSPACE_ID,
+      name: input?.name ?? "",
       icon: "sparkles",
       status: "draft",
       createdAt: nowIso(),
@@ -106,6 +110,7 @@ export class MockAgentRepository implements AgentRepository {
     const copy: Agent = {
       ...source,
       id: generateId("agent"),
+      workspaceId: source.workspaceId,
       name: `${source.name} (copy)`,
       status: "draft",
       publishedVersionId: undefined,

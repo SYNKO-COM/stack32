@@ -10,13 +10,8 @@ import { useResendSignupOtp, useVerifySignupOtp } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import { authErrorKey } from "@/lib/auth/errors";
 import { AUTH_OTP_EXPIRY_MINUTES, AUTH_OTP_LENGTH } from "@/lib/auth/password";
-import { getAuthRepository } from "@/lib/repositories/factory";
+import { resolvePostAuthPath } from "@/lib/auth/post-auth";
 import { USE_MOCK_DATA } from "@/lib/site";
-
-async function postVerifyDestination(): Promise<string> {
-  const profile = await getAuthRepository().getProfile();
-  return profile?.onboardingCompleted ? "/agents" : "/onboarding";
-}
 
 function VerifyEmailForm() {
   const { t } = useTranslation(["auth", "errors"]);
@@ -45,7 +40,7 @@ function VerifyEmailForm() {
     setResent(false);
     try {
       await verify.mutateAsync({ email, token });
-      router.push(await postVerifyDestination());
+      router.push(await resolvePostAuthPath());
     } catch (err) {
       setError(t(authErrorKey(err)));
       setCode("");

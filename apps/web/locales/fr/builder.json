@@ -131,6 +131,7 @@
   },
   "actions": {
     "testAgent": "Essayer l'agent",
+    "openAiAgent": "Ouvrir l'Agent IA",
     "viewStructure": "Voir la structure",
     "fixAutomatically": "Corriger pour moi",
     "fixAutomaticallyHint": "Cliquez pour laisser Stack32 corriger ce qu'il a trouvé.",
@@ -150,6 +151,7 @@
   },
   "composer": {
     "placeholder": "Décrivez quoi construire ou modifier…",
+    "chatPlaceholder": "Posez une question sur votre agent — le mode Chat ne change rien…",
     "formLockedPlaceholder": "Terminez l’étape ci-dessus pour continuer…"
   },
   "builderName": "Stack32",
@@ -197,7 +199,11 @@
   "ready": {
     "title": "Première version prête",
     "titleNamed": "{{name}} est prêt",
+    "builtTitle": "Agent construit",
+    "builtTitleNamed": "{{name}} est construit",
     "success": "Votre agent est prêt à essayer. J'ai écrit ses instructions, débloqué capacités et mémoire, construit la structure, et passé un petit test. Ouvrez Live pour discuter avec lui, ou continuez à l'améliorer ici.",
+    "builtSuccess": "Votre agent est construit. Configurez le modèle, les connexions et les secrets dans l'Agent IA avant de l'utiliser.",
+    "setupInAiAgent": "La configuration du modèle et des connexions se fait dans l'Agent IA.",
     "llmKeyRequired": "Ajoutez votre clé API LLM avant de tester Live."
   },
   "modify": {
@@ -246,6 +252,10 @@
     "continue": "Construire mon agent",
     "submitting": "Construction…",
     "formClosed": "Réglages enregistrés. Construction en cours."
+  },
+  "providers": {
+    "prompt": "Quelles applications exactes cet agent doit-il utiliser ? Indiquez le service e-mail et le CRM (ou autres outils) — sans connexion de compte pour l'instant.",
+    "saved": "Compris — j'intègre ces apps dans la définition de l'agent."
   },
   "questions": {
     "prompt": "Avant de continuer, j’ai besoin d’un ou deux détails pour construire l’agent correctement.",
@@ -362,5 +372,24 @@
     "building": "Construction de l'agent",
     "repairing": "Correction de l'agent",
     "complete": "Construction terminée"
+  },
+  "workspace": {
+    "label": "Workspace",
+    "loading": "Chargement…",
+    "switcherLabel": "Changer de workspace",
+    "create": "Nouveau workspace",
+    "createTitle": "Créer un workspace",
+    "createBody": "Les agents que vous créez appartiendront à ce workspace.",
+    "nameLabel": "Nom",
+    "namePlaceholder": "ex. Perso",
+    "creating": "Création…"
+  },
+  "profile": {
+    "plan": "Plan actuel",
+    "managePlan": "Gérer l'abonnement",
+    "credits": "Crédits",
+    "creditsValue": "{{used}} / {{limit}}",
+    "creditsHint": "Usage approximatif — le suivi réel arrivera avec le paiement.",
+    "changePassword": "Changer le mot de passe"
   }
 }

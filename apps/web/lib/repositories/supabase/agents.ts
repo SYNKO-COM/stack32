@@ -5,12 +5,11 @@ import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { AgentRepository } from "@/lib/repositories/interfaces";
 
 export class SupabaseAgentRepository implements AgentRepository {
-  async listAgents(): Promise<Agent[]> {
+  async listAgents(workspaceId?: string): Promise<Agent[]> {
     const supabase = requireSupabaseBrowserClient();
-    const { data, error } = await supabase
-      .from("agents")
-      .select("*")
-      .order("updated_at", { ascending: false });
+    let query = supabase.from("agents").select("*").order("updated_at", { ascending: false });
+    if (workspaceId) query = query.eq("workspace_id", workspaceId);
+    const { data, error } = await query;
     if (error) throw error;
     return data.map(mapAgent);
   }
@@ -26,10 +25,11 @@ export class SupabaseAgentRepository implements AgentRepository {
     return data ? mapAgent(data) : null;
   }
 
-  async createAgent(name?: string): Promise<Agent> {
+  async createAgent(input?: { name?: string; workspaceId?: string }): Promise<Agent> {
     const supabase = requireSupabaseBrowserClient();
     const { data, error } = await supabase.rpc("create_agent_workspace", {
-      p_name: name,
+      p_name: input?.name,
+      p_workspace_id: input?.workspaceId,
     });
     if (error) throw error;
     const result = data as { agent_id: string };

@@ -53,35 +53,89 @@ class LiveRuntime:
         thread_id: str,
         content: str,
         use_published: bool = False,
+        images: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        content = redact_text(content.strip())
-        if not content:
+        content = redact_text((content or "").strip())
+        image_payloads = [img for img in (images or []) if isinstance(img, dict)]
+        if not content and not image_payloads:
             return {"error": "BUILDER_INPUT_REJECTED"}
+        if not content and image_payloads:
+            content = "Please analyze the attached image(s)."
 
         agent = await self.db.get_owned_agent(agent_id, user_id)
+        published_only = False
         if not agent:
-            return {"error": "forbidden"}
-
-        spec = await self.db.load_draft_spec(agent_id, user_id)
-        if use_published and agent.get("published_version_id"):
+            # Consumer of a published definition — load published agent metadata.
             rows = await self.db._select(
-                "agent_versions",
+                "agents",
                 {
-                    "id": f"eq.{agent['published_version_id']}",
-                    "select": "id,spec,graph_spec",
+                    "id": f"eq.{agent_id}",
+                    "status": "eq.published",
+                    "deleted_at": "is.null",
+                    "select": "*",
                     "limit": "1",
                 },
             )
-            if rows:
-                from agent_service.models.agent_spec import migrate_v1_to_v2
+            agent = rows[0] if rows else None
+            published_only = True
+            use_published = True
+        if not agent:
+            return {"error": "forbidden"}
 
-                raw = rows[0].get("spec") or {}
-                if rows[0].get("graph_spec") and "graph" not in raw:
-                    raw = {**raw, "graph": rows[0]["graph_spec"]}
-                try:
-                    spec = migrate_v1_to_v2(raw)
-                except Exception:  # noqa: BLE001
-                    pass
+        from agent_service.installations.service import InstallationService
+
+        installation = await InstallationService(self.db).get_or_create(
+            user_id=user_id, agent_id=agent_id
+        )
+        installation_id = str(installation["id"])
+
+        if published_only or use_published:
+            version_id = installation.get("pinned_version_id") or agent.get(
+                "published_version_id"
+            )
+            spec = None
+            if version_id:
+                rows = await self.db._select(
+                    "agent_versions",
+                    {
+                        "id": f"eq.{version_id}",
+                        "select": "id,spec,graph_spec",
+                        "limit": "1",
+                    },
+                )
+                if rows:
+                    from agent_service.models.agent_spec import migrate_v1_to_v2
+
+                    raw = rows[0].get("spec") or {}
+                    if rows[0].get("graph_spec") and "graph" not in raw:
+                        raw = {**raw, "graph": rows[0]["graph_spec"]}
+                    try:
+                        spec = migrate_v1_to_v2(raw)
+                    except Exception:  # noqa: BLE001
+                        pass
+            if not spec:
+                return {"error": "AGENT_SPEC_INVALID"}
+        else:
+            spec = await self.db.load_draft_spec(agent_id, user_id)
+            if use_published and agent.get("published_version_id"):
+                rows = await self.db._select(
+                    "agent_versions",
+                    {
+                        "id": f"eq.{agent['published_version_id']}",
+                        "select": "id,spec,graph_spec",
+                        "limit": "1",
+                    },
+                )
+                if rows:
+                    from agent_service.models.agent_spec import migrate_v1_to_v2
+
+                    raw = rows[0].get("spec") or {}
+                    if rows[0].get("graph_spec") and "graph" not in raw:
+                        raw = {**raw, "graph": rows[0]["graph_spec"]}
+                    try:
+                        spec = migrate_v1_to_v2(raw)
+                    except Exception:  # noqa: BLE001
+                        pass
         if not spec:
             return {"error": "AGENT_SPEC_INVALID"}
 
@@ -89,9 +143,16 @@ class LiveRuntime:
         from agent_service.security.user_secrets import resolve_llm_credentials
 
         settings = get_settings()
-        user_creds = await resolve_llm_credentials(user_id=user_id, agent_id=agent_id)
+        # Owner installs may use legacy agent-scoped secrets; consumers must not.
+        allow_legacy = not published_only and agent.get("user_id") == user_id
+        user_creds = await resolve_llm_credentials(
+            user_id=user_id,
+            agent_id=agent_id,
+            installation_id=installation_id,
+            allow_legacy_owner_fallback=allow_legacy,
+        )
         if settings.LIVE_REQUIRE_USER_LLM_KEY and not user_creds:
-            # Ask the user to add a key via Build — do not burn platform keys.
+            # Ask the user to configure model on this installation — never platform keys.
             await self.db.insert_assistant_message(
                 thread_id=thread_id,
                 agent_id=agent_id,
@@ -99,18 +160,23 @@ class LiveRuntime:
                 content="live:errors.missingUserLlmKey",
                 metadata={
                     "tone": "warning",
-                    "code": "USER_LLM_KEY_REQUIRED",
+                    "code": "LLM_CONFIGURATION_REQUIRED",
+                    "installation_id": installation_id,
                     "ui_component": {
                         "type": "secret_form",
                         "version": "1",
                         "request_id": str(uuid.uuid4()),
                         "context": "live",
+                        "installation_id": installation_id,
                         "fields": [
                             {
                                 "key": "provider",
                                 "type": "select",
                                 "required": True,
-                                "suggested_value": "openai",
+                                "suggested_value": (
+                                    getattr(getattr(spec, "model", None), "provider", None)
+                                    or "openai"
+                                ),
                                 "options": [
                                     "openai",
                                     "anthropic",
@@ -120,6 +186,15 @@ class LiveRuntime:
                                     "groq",
                                     "openrouter",
                                 ],
+                            },
+                            {
+                                "key": "model_id",
+                                "type": "text",
+                                "required": True,
+                                "suggested_value": getattr(
+                                    getattr(spec, "model", None), "model_id", None
+                                )
+                                or "",
                             },
                             {
                                 "key": "api_key",
@@ -132,7 +207,11 @@ class LiveRuntime:
                 },
                 table="live_messages",
             )
-            return {"error": "USER_LLM_KEY_REQUIRED", "status": "needs_secret"}
+            return {
+                "error": "LLM_CONFIGURATION_REQUIRED",
+                "status": "needs_secret",
+                "installation_id": installation_id,
+            }
 
         run_id = str(uuid.uuid4())
         await self.db.create_run(
@@ -142,7 +221,11 @@ class LiveRuntime:
             kind="live",
             thread_id=thread_id,
             status="queued",
-            input_payload={"prompt": content},
+            input_payload={
+                "prompt": content,
+                "image_count": len(image_payloads),
+            },
+            installation_id=installation_id,
         )
         from agent_service.queue.dispatch import dispatch_run
 
@@ -158,6 +241,8 @@ class LiveRuntime:
                 content=content,
                 spec=spec,
                 user_creds=user_creds,
+                installation_id=installation_id,
+                images=image_payloads,
             ),
         )
 
@@ -171,9 +256,19 @@ class LiveRuntime:
         content: str,
         spec: AgentSpec,
         user_creds: tuple[str, str] | None = None,
+        installation_id: str | None = None,
+        images: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         await self.db.update_run_status(run_id, "running")
-        await self.db.emit_event(run_id, "run.started", {"mapping_key": "live.status.started"})
+        await self.db.emit_event(
+            run_id,
+            "run.started",
+            {
+                "mapping_key": "live.status.started",
+                "installation_id": installation_id,
+                "agent_definition_id": agent_id,
+            },
+        )
         from agent_service.security.llm_budget import llm_run_budget
 
         async with llm_run_budget(
@@ -190,6 +285,8 @@ class LiveRuntime:
                 content=content,
                 spec=spec,
                 user_creds=user_creds,
+                installation_id=installation_id,
+                images=images,
             )
 
     async def _execute_live_run_inner(
@@ -202,15 +299,22 @@ class LiveRuntime:
         content: str,
         spec: AgentSpec,
         user_creds: tuple[str, str] | None = None,
+        installation_id: str | None = None,
+        images: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         try:
             if user_creds is None:
                 from agent_service.security.user_secrets import resolve_llm_credentials
 
-                user_creds = await resolve_llm_credentials(user_id=user_id, agent_id=agent_id)
+                user_creds = await resolve_llm_credentials(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    installation_id=installation_id,
+                    allow_legacy_owner_fallback=True,
+                )
             if self.settings.LIVE_REQUIRE_USER_LLM_KEY and not user_creds:
-                await self.db.fail_run(run_id, "USER_LLM_KEY_REQUIRED")
-                return {"error": "USER_LLM_KEY_REQUIRED"}
+                await self.db.fail_run(run_id, "LLM_CONFIGURATION_REQUIRED")
+                return {"error": "LLM_CONFIGURATION_REQUIRED"}
 
             from agent_service.memory.service import (
                 extract_memory_candidate,
@@ -263,12 +367,33 @@ class LiveRuntime:
             if spec.memory.semantic_enabled and state.get("memories") is None:
                 from agent_service.memory.service import maybe_write_memory, read_memories
 
-                state["memories"] = await read_memories(
-                    user_id=user_id, agent_id=agent_id, query=content
+                await self.db.emit_event(
+                    run_id,
+                    "runtime.memory.read.started",
+                    {"mapping_key": "live.status.memory"},
                 )
+                try:
+                    state["memories"] = await read_memories(
+                        user_id=user_id, agent_id=agent_id, query=content
+                    )
+                    await self.db.emit_event(
+                        run_id,
+                        "runtime.memory.read.completed",
+                        {"mapping_key": "live.status.memoryDone"},
+                    )
+                except Exception:  # noqa: BLE001
+                    await self.db.emit_event(
+                        run_id,
+                        "runtime.memory.read.failed",
+                        {"mapping_key": "live.status.memoryError"},
+                    )
+                    raise
                 await maybe_write_memory(state)
 
+            from agent_service.runtime.multimodal import build_user_message_content
             from agent_service.runtime.runtime_selector import use_langgraph_runtime
+
+            user_message_content = build_user_message_content(content, images)
 
             if use_langgraph_runtime():
                 from agent_service.runtime.langgraph_runtime import run_langgraph_agent
@@ -285,6 +410,7 @@ class LiveRuntime:
                     knowledge_chunks=state.get("knowledge_chunks") or [],
                     memories=state.get("memories") or [],
                     conversation_summary=state.get("conversation_summary") or "",
+                    user_message_content=user_message_content,
                 )
                 answer = str(lg.get("answer") or "")
                 interrupt = lg.get("interrupt")
@@ -431,6 +557,15 @@ class LiveRuntime:
                     window=spec.memory.conversation_window,
                 )
 
+            if isinstance(user_message_content, list):
+                # Multimodal: keep image parts; append untrusted context as extra text.
+                multimodal_user: list[dict[str, Any]] = list(user_message_content)
+                if untrusted_block:
+                    multimodal_user.append({"type": "text", "text": untrusted_block})
+                user_turn_content: str | list[dict[str, Any]] = multimodal_user
+            else:
+                user_turn_content = str(user_message_content)[:8000] + untrusted_block
+
             messages: list[dict[str, Any]] = [
                 {
                     "role": "system",
@@ -442,7 +577,7 @@ class LiveRuntime:
                     )[:12000],
                 },
                 *history,
-                {"role": "user", "content": content[:8000] + untrusted_block},
+                {"role": "user", "content": user_turn_content},
             ]
             result = await self.gateway.complete(
                 profile=profile,

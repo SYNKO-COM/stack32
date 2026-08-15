@@ -86,6 +86,9 @@ def summarize_detected_problems(
             if message:
                 problems.append(message[:160])
         for miss in (getattr(readiness, "missing_connections", None) or [])[:3]:
+            # Connections are installation-scoped — do not surface as Build problems.
+            if status in {"built", "building", "draft"}:
+                break
             if isinstance(miss, dict):
                 label = (
                     miss.get("app_id")
@@ -98,6 +101,13 @@ def summarize_detected_problems(
                 problems.append(f"Connect your {miss} account to continue.")
         for cfg in (getattr(readiness, "missing_config", None) or [])[:2]:
             if isinstance(cfg, dict):
+                # Skip brain/connection install tips during definition build.
+                if cfg.get("type") in {"brain", "tool_config"} and status in {
+                    "built",
+                    "building",
+                    "draft",
+                }:
+                    continue
                 label = cfg.get("tool_id") or cfg.get("key") or "a tool"
                 problems.append(f"Finish setup for {label}.")
 
@@ -105,7 +115,7 @@ def summarize_detected_problems(
         problems.append("The build stopped unexpectedly. You can ask me to try again.")
 
     if status == "needs_setup" and not any("connect" in p.lower() for p in problems):
-        problems.append("Connect the required accounts to finish setup.")
+        problems.append("Complete runtime setup in AI Agent.")
     if status == "needs_attention" and not problems:
         problems.append("Stack32 found something to adjust before your agent is ready.")
 
@@ -145,10 +155,17 @@ class BuilderOrchestrator:
         thread_id: str,
         content: str,
         locale: str = "en",
+        mode: str = "build",
+        images: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        content = redact_text(content.strip())
-        if not content:
+        content = redact_text((content or "").strip())
+        image_payloads = [img for img in (images or []) if isinstance(img, dict)]
+        if not content and not image_payloads:
             return {"error": "BUILDER_INPUT_REJECTED"}
+        if not content and image_payloads:
+            content = "Please analyze the attached image(s) and help me build from them."
+
+        interaction_mode = "chat" if str(mode or "").strip().lower() == "chat" else "build"
 
         agent = await self.db.get_owned_agent(agent_id, user_id)
         if not agent:
@@ -162,7 +179,12 @@ class BuilderOrchestrator:
             kind="build",
             thread_id=thread_id,
             status="queued",
-            input_payload={"prompt": content, "locale": locale},
+            input_payload={
+                "prompt": content,
+                "locale": locale,
+                "mode": interaction_mode,
+                "image_count": len(image_payloads),
+            },
         )
         from agent_service.queue.dispatch import dispatch_run
 
@@ -177,6 +199,9 @@ class BuilderOrchestrator:
                 thread_id=thread_id,
                 content=content,
                 agent_row=agent,
+                images=image_payloads,
+                mode=interaction_mode,
+                locale=locale,
             ),
         )
 
@@ -189,18 +214,34 @@ class BuilderOrchestrator:
         thread_id: str,
         content: str,
         agent_row: dict[str, Any] | None = None,
+        images: list[dict[str, Any]] | None = None,
+        mode: str = "build",
+        locale: str = "en",
     ) -> dict[str, Any]:
         agent = agent_row or await self.db.get_owned_agent(agent_id, user_id)
         if not agent:
             await self.db.fail_run(run_id, "forbidden")
             return {"error": "forbidden"}
 
+        turn_images = [img for img in (images or []) if isinstance(img, dict)]
+        self._turn_images: list[dict[str, Any]] = turn_images
         await self.db.update_run_status(run_id, "running")
         await self.db.emit_event(run_id, "run.started", {"mapping_key": "builder.progress.started"})
         await self.db.tag_thinking_with_run(thread_id=thread_id, run_id=run_id)
         # Keep draft until identity/setup is done — "building" is reserved for the real compile.
 
         try:
+            if str(mode or "").strip().lower() == "chat":
+                return await self._handle_chat_turn(
+                    run_id=run_id,
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    thread_id=thread_id,
+                    content=content,
+                    agent=agent,
+                    locale=locale,
+                )
+
             await self.db.emit_event(
                 run_id, "builder.analysis.started", {"mapping_key": "builder.progress.understanding"}
             )
@@ -789,6 +830,159 @@ class BuilderOrchestrator:
             identity=identity,
         )
 
+    async def resume_with_provider_clarification(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        answers: dict[str, Any],
+    ) -> dict[str, Any]:
+        interrupt = await self.db.get_builder_interrupt(run_id, user_id)
+        if not interrupt or interrupt.get("status") == "completed":
+            return {"error": "BUILDER_INTERRUPTED"}
+
+        agent_id = interrupt["agent_id"]
+        thread_id = interrupt["thread_id"]
+        prompt = interrupt["prompt"]
+        draft = interrupt.get("identity_draft") or {}
+        identity = AgentIdentity(
+            name=str(draft.get("name") or "Agent")[:120],
+            role=str(draft.get("role") or "Assist the user")[:240],
+            tone=str(draft.get("tone") or "professional")[:64],
+            description=str(draft.get("description") or "")[:2000],
+        )
+        caps = dict(draft.get("capabilities") or {})
+        preferred: list[str] = list(caps.get("preferred_apps") or [])
+        _alias = {
+            "gmail": "gmail",
+            "google mail": "gmail",
+            "outlook": "microsoft_outlook",
+            "microsoft outlook": "microsoft_outlook",
+            "hubspot": "hubspot",
+            "salesforce": "salesforce",
+            "pipedrive": "pipedrive",
+            "zoho": "zoho_crm",
+            "zoho crm": "zoho_crm",
+        }
+        for _key, value in (answers or {}).items():
+            text = str(value or "").strip().lower()
+            if not text:
+                continue
+            slug = _alias.get(text, text.replace(" ", "_"))
+            if slug not in preferred:
+                preferred.append(slug)
+        caps["preferred_apps"] = preferred[:12]
+        notes = str(caps.get("context_notes") or "")
+        for key, value in (answers or {}).items():
+            text = str(value or "").strip()
+            if text:
+                notes = (notes + f"\n{key}: {text}").strip()
+        caps["context_notes"] = notes[:2000]
+
+        await self.db.resolve_builder_form(thread_id=thread_id, request_id=run_id)
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content="builder:providers.saved",
+            metadata={"tone": "normal", "card": "providers_confirmed"},
+        )
+        await self.db.clear_builder_interrupt(run_id, user_id)
+        await self.db.update_run_status(run_id, "running")
+        await self.db.update_agent_status(agent_id, user_id, "building")
+
+        complexity = detect_complexity(prompt, is_first_build=True)
+        return await self._continue_build(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            content=prompt,
+            identity=identity,
+            complexity=complexity,
+            current_spec=None,
+            capabilities=caps,
+        )
+
+    async def _maybe_interrupt_for_provider_clarification(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        prompt: str,
+        identity: AgentIdentity,
+        capabilities: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        from agent_service.builder.capabilities import build_capability_plan
+
+        caps = capabilities or {}
+        if caps.get("preferred_apps"):
+            return None
+        notes = str(caps.get("context_notes") or "").strip()
+        plan = build_capability_plan(f"{prompt}\n{notes}".strip())
+        if not plan.ambiguities:
+            return None
+
+        fields: list[dict[str, Any]] = []
+        if "email_provider" in plan.ambiguities:
+            fields.append(
+                {
+                    "key": "email_service",
+                    "type": "text",
+                    "required": True,
+                    "label": "Email service",
+                    "suggested_value": "",
+                }
+            )
+        if "crm_provider" in plan.ambiguities:
+            fields.append(
+                {
+                    "key": "crm",
+                    "type": "text",
+                    "required": True,
+                    "label": "CRM",
+                    "suggested_value": "",
+                }
+            )
+        if not fields:
+            return None
+
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content="builder:providers.prompt",
+            metadata={
+                "tone": "normal",
+                "interrupt_run_id": run_id,
+                "ui_component": {
+                    "type": "provider_clarification_form",
+                    "version": "1",
+                    "request_id": str(uuid.uuid4()),
+                    "context": "builder",
+                    "fields": fields,
+                },
+            },
+        )
+        await self.db.save_builder_interrupt(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity_draft={
+                **identity.model_dump(),
+                "_interrupt_type": "provider_clarification",
+                "capabilities": caps,
+            },
+            interrupt_type="provider_clarification",
+        )
+        await self.db.update_run_status(run_id, "waiting_for_input")
+        await self.db.update_agent_status(agent_id, user_id, "draft")
+        return {"status": "interrupted", "run_id": run_id, "reason": "provider_clarification"}
+
     async def _connection_providers_bound(self, *, user_id: str, agent_id: str) -> set[str]:
         """Providers/apps bound to *this* agent (not merely any user connection)."""
         bound: set[str] = set()
@@ -1352,6 +1546,17 @@ class BuilderOrchestrator:
             )
             spec = await self._fast_patch(current_spec, content, identity)
         else:
+            clarified = await self._maybe_interrupt_for_provider_clarification(
+                run_id=run_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                thread_id=thread_id,
+                prompt=content,
+                identity=identity,
+                capabilities=capabilities,
+            )
+            if clarified:
+                return clarified
             await tick(
                 steps=[
                     {"labelKey": "understanding", "state": "done"},
@@ -1365,21 +1570,7 @@ class BuilderOrchestrator:
                 content, identity, complexity, current_spec, capabilities=capabilities
             )
 
-        # Connection interrupt when requirements exist but no binding yet.
-        conn_interrupt = await self._maybe_interrupt_for_connections(
-            run_id=run_id,
-            user_id=user_id,
-            agent_id=agent_id,
-            thread_id=thread_id,
-            prompt=content,
-            identity=identity,
-            spec=spec,
-            capabilities=capabilities,
-            progress_id=progress_id,
-        )
-        if conn_interrupt is not None:
-            return conn_interrupt
-
+        # Connection binding is installation-scoped (AI Agent), never a Build gate.
         tool_names = ", ".join(t.tool_id for t in spec.tools[:4]) or "core tools"
         await self.db.emit_event(
             run_id, "builder.spec.updated", {"mapping_key": "builder.progress.spec"}
@@ -1709,42 +1900,35 @@ class BuilderOrchestrator:
             raise _BuildCanceled()
 
         tests_passed = test_report["status"].startswith("passed")
-        from agent_service.readiness import evaluate_agent_readiness
+        from agent_service.installations.service import InstallationService
+        from agent_service.readiness import evaluate_definition_readiness
 
-        readiness = await evaluate_agent_readiness(
+        # Ensure owner installation exists (runtime setup happens in AI Agent).
+        try:
+            await InstallationService(self.db).ensure_owner_installation(
+                agent_id=agent_id, owner_user_id=user_id
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("owner_installation_ensure_failed", exc_info=True)
+
+        readiness = await evaluate_definition_readiness(
             agent_id=agent_id,
             user_id=user_id,
             spec=spec,
             db=self.db,
             build_ok=build_ok,
         )
-        # Never finish with "Problems detected" for missing connections — interrupt instead.
-        if readiness.status == "needs_setup" and getattr(readiness, "missing_connections", None):
-            conn_interrupt = await self._maybe_interrupt_for_connections(
-                run_id=run_id,
-                user_id=user_id,
-                agent_id=agent_id,
-                thread_id=thread_id,
-                prompt=content,
-                identity=identity,
-                spec=spec,
-                capabilities=capabilities,
-                progress_id=progress_id,
-            )
-            if conn_interrupt is not None:
-                return conn_interrupt
+        # Missing connections never block Build — they belong to installation setup.
 
         if build_ok is False:
             status = "needs_attention"
-        elif readiness.status == "needs_setup":
-            status = "needs_setup"
         elif readiness.status == "ready" and tests_passed:
-            status = "ready"
+            status = "built"
         else:
             status = "needs_attention"
         await self.db.update_agent_status(agent_id, user_id, status)
         play_ready_sound = False
-        if status == "ready":
+        if status == "built":
             play_ready_sound = await self.db.claim_first_ready_celebration(
                 agent_id=agent_id, user_id=user_id
             )
@@ -1755,7 +1939,7 @@ class BuilderOrchestrator:
             {"labelKey": "building", "state": "done"},
             {
                 "labelKey": "testing",
-                "state": "done" if status == "ready" else "failed",
+                "state": "done" if status == "built" else "failed",
             },
         ]
         final_nodes = [
@@ -1766,7 +1950,7 @@ class BuilderOrchestrator:
             {
                 "id": "tests",
                 "labelKey": "tests",
-                "state": "done" if status == "ready" else "failed",
+                "state": "done" if status == "built" else "failed",
             },
         ]
         if progress_id:
@@ -1784,9 +1968,8 @@ class BuilderOrchestrator:
                 },
             )
 
-        # Ready celebration + "Try the agent" only on the *first* successful build.
-        # Later turns stay conversational (Cursor-style modify chat).
-        first_ready = bool(play_ready_sound and status == "ready")
+        # Ready celebration + "Open AI Agent" on first successful definition build.
+        first_ready = bool(play_ready_sound and status == "built")
         file_paths = [str(p.get("path")) for p in project_files if p.get("path")]
         timeline = await self._build_turn_timeline(run_id=run_id, user_id=user_id)
         run_input = (current or {}).get("input") or {}
@@ -1799,7 +1982,7 @@ class BuilderOrchestrator:
                 build_ok=build_ok,
                 build_failure_reason=build_failure_reason,
             )
-            if status != "ready"
+            if status != "built"
             else []
         )
         narrative = await self._compose_builder_reply(
@@ -1818,74 +2001,31 @@ class BuilderOrchestrator:
             meta: dict[str, Any] = {
                 "tone": "success",
                 "card": "ready",
-                "actions": ["test_agent"],
+                "actions": ["open_ai_agent"],
                 "version_id": version.get("id"),
                 "test_report": test_report,
                 "playReadySound": True,
                 "identity_summary": identity.model_dump(),
                 "project_files": file_paths,
-                "requires_llm_key_for_live": True,
+                "requires_llm_key_for_live": False,
+                "setup_in_ai_agent": True,
             }
-        elif status == "ready":
+        elif status == "built":
             meta = {
                 "tone": "success",
-                "actions": [],
+                "actions": ["open_ai_agent"],
                 "version_id": version.get("id"),
                 "test_report": test_report,
                 "playReadySound": False,
                 "identity_summary": identity.model_dump(),
                 "project_files": file_paths,
-            }
-        elif status == "needs_setup":
-            missing = list(getattr(readiness, "missing_connections", None) or [])
-            providers = sorted(
-                {
-                    str(m.get("provider") or m.get("app_id") or "")
-                    for m in missing
-                    if isinstance(m, dict) and (m.get("provider") or m.get("app_id"))
-                }
-            )
-            tool_ids = sorted(
-                {
-                    tid
-                    for m in missing
-                    if isinstance(m, dict)
-                    for tid in (m.get("tool_ids") or [])
-                    if tid
-                }
-            )
-            # Soft setup prompt only — never "Problems detected" / Fix it for connections.
-            meta = {
-                "tone": "normal",
-                "actions": [],
-                "version_id": version.get("id"),
-                "test_report": test_report,
-                "playReadySound": False,
-                "identity_summary": identity.model_dump(),
-                "project_files": file_paths,
-                "interrupt_run_id": run_id,
-                "ui_component": {
-                    "type": "connection_form",
-                    "version": "1",
-                    "request_id": str(uuid.uuid4()),
-                    "context": "builder",
-                    "providers": providers,
-                    "tool_ids": tool_ids,
-                    "requirements": [
-                        {
-                            "provider": m.get("provider"),
-                            "app_id": m.get("app_id"),
-                            "tool_ids": list(m.get("tool_ids") or []),
-                        }
-                        for m in missing
-                        if isinstance(m, dict)
-                    ],
-                },
+                "setup_in_ai_agent": True,
             }
         else:
+            # Soft setup / problems — never connection_form mid-build.
             meta = {
-                "tone": "warning",
-                "actions": ["fix_automatically"],
+                "tone": "warning" if status == "needs_attention" else "normal",
+                "actions": ["fix_it"] if status == "needs_attention" else [],
                 "version_id": version.get("id"),
                 "test_report": test_report,
                 "playReadySound": False,
@@ -1893,6 +2033,8 @@ class BuilderOrchestrator:
                 "project_files": file_paths,
                 "detected_problems": detected_problems,
             }
+            if status == "needs_attention" and detected_problems:
+                meta["card"] = "problems"
         await self.db.insert_assistant_message(
             thread_id=thread_id,
             agent_id=agent_id,
@@ -2009,6 +2151,113 @@ class BuilderOrchestrator:
         if agent.get("status") in ("ready", "published", "needs_attention"):
             return BuilderIntent.MODIFY
         return BuilderIntent.CREATE
+
+    def _spec_context_for_chat(self, agent: dict[str, Any], spec: AgentSpec | None) -> str:
+        name = (spec.identity.name if spec else None) or agent.get("name") or "Untitled agent"
+        role = (spec.identity.role if spec else None) or ""
+        status = agent.get("status") or "draft"
+        tools: list[str] = []
+        if spec:
+            tools = [t.tool_id for t in (spec.tools or []) if getattr(t, "enabled", True)]
+        tools_line = ", ".join(tools[:12]) if tools else "(none yet)"
+        system = ""
+        if spec and getattr(spec, "instructions", None):
+            system = str(getattr(spec.instructions, "system", "") or "")[:600]
+        return (
+            f"Agent name: {name}\n"
+            f"Status: {status}\n"
+            f"Role: {role or '(not set)'}\n"
+            f"Enabled tools: {tools_line}\n"
+            f"System instructions (excerpt):\n{system or '(empty)'}"
+        )
+
+    async def _handle_chat_turn(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        content: str,
+        agent: dict[str, Any],
+        locale: str = "en",
+    ) -> dict[str, Any]:
+        """Read-only builder turn — answer questions, never mutate the agent."""
+        await self.db.emit_event(
+            run_id,
+            "builder.chat.started",
+            {"mapping_key": "builder.progress.understanding", "mode": "chat"},
+        )
+        await self.db.clear_thinking_messages(thread_id=thread_id)
+
+        spec = await self.db.load_draft_spec(agent_id, user_id)
+        context = self._spec_context_for_chat(agent, spec)
+        lang = "French" if str(locale).lower().startswith("fr") else "English"
+
+        from agent_service.runtime.multimodal import build_user_message_content
+
+        system = (
+            "You are Stack32 Builder in Chat mode (read-only), like Cursor Ask mode.\n"
+            f"ALWAYS write in {lang} — this is the app language.\n"
+            "You may explain the current agent, answer questions, brainstorm ideas, "
+            "and review what already exists.\n"
+            "HARD RULES:\n"
+            "- Do NOT claim you changed, built, fixed, added, removed, or saved anything.\n"
+            "- Do NOT invent file edits, new tools, or structure changes.\n"
+            "- If the user asks you to build, modify, add tools, delete files, repair, "
+            "or otherwise change the agent, refuse the mutation politely and tell them "
+            "to switch the composer mode from Chat to Build.\n"
+            "Be concise and helpful (2–8 short sentences or a few bullets)."
+        )
+        user_content = build_user_message_content(
+            f"Current agent snapshot:\n{context}\n\nUser message:\n{content[:4000]}",
+            getattr(self, "_turn_images", None),
+        )
+
+        answer = ""
+        try:
+            result = await self.gateway.complete(
+                profile=ModelProfile.FAST,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_content},
+                ],
+                temperature=0.3,
+                max_tokens=900,
+            )
+            answer = (result.content if hasattr(result, "content") else str(result) or "").strip()
+        except Exception:  # noqa: BLE001
+            logger.exception("builder chat mode LLM failed run=%s", run_id)
+            answer = (
+                "Je suis en mode Chat (lecture seule) : je peux répondre et expliquer, "
+                "mais je ne peux pas modifier l’agent. Passe en mode Build pour construire "
+                "ou changer quelque chose."
+                if lang == "French"
+                else "I'm in Chat mode (read-only): I can answer and explain, but I can't "
+                "modify the agent. Switch to Build mode to create or change something."
+            )
+
+        if not answer:
+            answer = (
+                "Mode Chat actif — pose-moi une question, ou passe en Build pour modifier."
+                if lang == "French"
+                else "Chat mode is on — ask me a question, or switch to Build to make changes."
+            )
+
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content=answer,
+            metadata={"tone": "normal", "mode": "chat", "run_id": run_id},
+        )
+        await self.db.emit_event(
+            run_id,
+            "run.completed",
+            {"mapping_key": "builder.progress.completed", "mode": "chat"},
+        )
+        await self.db.complete_run(run_id)
+        return {"status": "completed", "run_id": run_id, "mode": "chat", "answer": answer}
 
     def _needs_identity_setup(
         self, agent: dict[str, Any], current_spec: AgentSpec | None
@@ -2137,17 +2386,17 @@ class BuilderOrchestrator:
                     else ""
                 )
                 + (
-                    "Tu peux l’essayer dans Live."
+                    "Ouvre AI Agent pour configurer le modèle et les connexions."
                     if first_ready
                     else (
                         (
                             "Il reste des points à corriger :\n"
                             + "\n".join(f"- {p}" for p in problems[:3])
                         )
-                        if status != "ready" and problems
+                        if status not in {"ready", "built"} and problems
                         else (
                             "Le test rapide a signalé un souci — on peut corriger ensemble."
-                            if status != "ready"
+                            if status not in {"ready", "built"}
                             else "Dis-moi si tu veux ajuster le comportement."
                         )
                     )
@@ -2164,17 +2413,17 @@ class BuilderOrchestrator:
                     else ""
                 )
                 + (
-                    "You can try it in Live."
+                    "Open AI Agent to configure model and connections."
                     if first_ready
                     else (
                         (
                             "Some issues remain:\n"
                             + "\n".join(f"- {p}" for p in problems[:3])
                         )
-                        if status != "ready" and problems
+                        if status not in {"ready", "built"} and problems
                         else (
                             "The quick test flagged an issue — we can fix it together."
-                            if status != "ready"
+                            if status not in {"ready", "built"}
                             else "Tell me if you want to adjust its behavior."
                         )
                     )
@@ -2240,6 +2489,12 @@ class BuilderOrchestrator:
         elif "content" in lower or "marketing" in lower:
             name, role = "Content Strategist", "Plan and draft marketing content"
         try:
+            from agent_service.runtime.multimodal import build_user_message_content
+
+            user_content = build_user_message_content(
+                content[:2000],
+                getattr(self, "_turn_images", None),
+            )
             result = await self.gateway.complete(
                 profile=ModelProfile.FAST,
                 messages=[
@@ -2254,7 +2509,7 @@ class BuilderOrchestrator:
                             "description: one sentence."
                         ),
                     },
-                    {"role": "user", "content": content[:2000]},
+                    {"role": "user", "content": user_content},
                 ],
                 temperature=0.2,
                 max_tokens=300,
@@ -2295,8 +2550,11 @@ class BuilderOrchestrator:
         notes = str(caps.get("context_notes") or "").strip()
         design = await self._design_agent_blueprint(content, identity, notes)
         tool_prompt = content + " " + notes + " " + " ".join(design.get("tool_hints") or [])
+        preferred_apps = list(caps.get("preferred_apps") or [])
         tools, connection_requirements, _ambiguous = await self._select_tools(
-            tool_prompt, llm_hints=list(design.get("tool_hints") or [])
+            tool_prompt,
+            llm_hints=list(design.get("tool_hints") or []),
+            preferred_apps=preferred_apps or None,
         )
         knowledge_enabled = bool(caps.get("knowledge_enabled")) or any(
             k in content.lower() for k in ("document", "knowledge", "pdf", "rag")
@@ -2386,6 +2644,16 @@ class BuilderOrchestrator:
         import json
 
         try:
+            from agent_service.runtime.multimodal import build_user_message_content
+
+            user_content = build_user_message_content(
+                (
+                    f"Agent name: {identity.name}\nRole: {identity.role}\n"
+                    f"Tone: {identity.tone}\nGoal: {content[:2500]}\n"
+                    f"Extra notes: {notes[:800]}"
+                ),
+                getattr(self, "_turn_images", None),
+            )
             result = await self.gateway.complete(
                 profile=ModelProfile.CODING,
                 messages=[
@@ -2407,11 +2675,7 @@ class BuilderOrchestrator:
                     },
                     {
                         "role": "user",
-                        "content": (
-                            f"Agent name: {identity.name}\nRole: {identity.role}\n"
-                            f"Tone: {identity.tone}\nGoal: {content[:2500]}\n"
-                            f"Extra notes: {notes[:800]}"
-                        ),
+                        "content": user_content,
                     },
                 ],
                 temperature=0.2,
@@ -2448,18 +2712,22 @@ class BuilderOrchestrator:
         content: str,
         *,
         llm_hints: list[str] | None = None,
+        preferred_apps: list[str] | None = None,
     ) -> tuple[list[ToolBinding], list[ConnectionRequirement], list[dict[str, Any]]]:
         from agent_service.builder.capabilities import (
             build_capability_plan,
             resolve_tools_for_capabilities,
         )
 
-        plan = build_capability_plan(content, llm_hints=llm_hints)
+        plan = build_capability_plan(
+            content, llm_hints=llm_hints, preferred_apps=preferred_apps
+        )
         return await resolve_tools_for_capabilities(
             plan.to_capabilities(),
             prompt=content,
             llm_hints=llm_hints,
             plan=plan,
+            preferred_apps=preferred_apps,
         )
 
     def _build_graph(
@@ -2944,9 +3212,9 @@ class BuilderOrchestrator:
             change_summary="Automatic repair",
         )
         await self.db.complete_run(run_id)
-        from agent_service.readiness import evaluate_agent_readiness
+        from agent_service.readiness import evaluate_definition_readiness
 
-        readiness = await evaluate_agent_readiness(
+        readiness = await evaluate_definition_readiness(
             agent_id=agent_id,
             user_id=user_id,
             spec=repaired,
@@ -2954,10 +3222,8 @@ class BuilderOrchestrator:
             build_ok=True,
         )
         tests_passed = str(test_report.get("status") or "").startswith("passed")
-        if readiness.status == "needs_setup":
-            status = "needs_setup"
-        elif readiness.status == "ready" and tests_passed:
-            status = "ready"
+        if readiness.status == "ready" and tests_passed:
+            status = "built"
         else:
             status = "needs_attention"
         await self.db.update_agent_status(agent_id, user_id, status)
@@ -2966,19 +3232,20 @@ class BuilderOrchestrator:
             test_report=test_report,
             readiness=readiness,
         )
-        if status == "ready":
+        if status == "built":
             reply = (
-                "Repair pass complete. Smoke checks passed and the agent is ready to try."
+                "Repair pass complete. The agent definition is built — "
+                "finish runtime setup in AI Agent before using all capabilities."
             )
-            actions = ["test_agent"]
+            actions = ["open_ai_agent"]
             tone = "normal"
             card = "ready"
         else:
             reply = (
-                "I ran a repair pass. Some issues still need attention — "
-                "connect missing apps or try Fix again after setup."
+                "I ran a repair pass. Some structural issues still need attention — "
+                "try Fix again."
             )
-            actions = ["fix_automatically", "test_agent"]
+            actions = ["fix_automatically"]
             tone = "warning"
             card = None
         await self.db.insert_assistant_message(

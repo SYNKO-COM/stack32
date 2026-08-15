@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { LiveThread } from "@/lib/domain/types";
 import { getLiveRepository } from "@/lib/repositories/factory";
 
@@ -12,6 +13,11 @@ function isThreadActive(thread: LiveThread | undefined): boolean {
   if (!last) return false;
   return last.role === "user" || last.pending === true;
 }
+
+export type SendLiveMessageInput = {
+  content: string;
+  attachments?: ComposerAttachment[];
+};
 
 export function useLiveThread(agentId: string) {
   return useQuery({
@@ -27,7 +33,11 @@ export function useLiveThread(agentId: string) {
 export function useSendLiveMessage(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (content: string) => getLiveRepository().sendMessage(agentId, content),
+    mutationFn: (input: string | SendLiveMessageInput) => {
+      const content = typeof input === "string" ? input : input.content;
+      const attachments = typeof input === "string" ? undefined : input.attachments;
+      return getLiveRepository().sendMessage(agentId, content, attachments);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["live", agentId] }),
   });
 }

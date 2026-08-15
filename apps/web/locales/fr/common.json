@@ -44,6 +44,13 @@
     "voice": "Dicter à la voix",
     "send": "Envoyer",
     "build": "Créer",
+    "mode": {
+      "label": "Mode d’interaction",
+      "build": "Build",
+      "chat": "Chat",
+      "buildHint": "Créer et modifier votre agent",
+      "chatHint": "Poser des questions — aucune modification"
+    },
     "sending": "Envoi…",
     "working": "En cours…",
     "stop": "Arrêter",
@@ -60,6 +67,7 @@
   "status": {
     "draft": "Brouillon",
     "building": "En construction",
+    "built": "Construit",
     "ready": "Prêt",
     "needsAttention": "Attention requise",
     "published": "Publié",

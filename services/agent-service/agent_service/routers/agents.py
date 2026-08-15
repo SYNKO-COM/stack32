@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from agent_service.auth import CurrentUser
 from agent_service.publishing.service import PublishService
@@ -64,31 +65,102 @@ async def get_graph(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
 
 
 @router.get("/{agent_id}/readiness")
-async def get_agent_readiness(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
-    """Evaluate whether the agent can go Live / be published."""
-    from agent_service.readiness import evaluate_agent_readiness
+async def get_agent_readiness(
+    agent_id: UUID,
+    user: CurrentUser,
+    scope: str = "installation",
+) -> dict[str, Any]:
+    """Evaluate definition or installation readiness.
+
+    scope=definition → portable template checks (publish/build)
+    scope=installation → runtime setup for the caller's installation (default)
+    """
+    from agent_service.installations.service import InstallationService
+    from agent_service.readiness import (
+        evaluate_definition_readiness,
+        evaluate_installation_readiness,
+    )
 
     db = get_persistence()
     agent = await db.get_owned_agent(str(agent_id), user.user_id)
     if not agent:
+        # Published consumer path for installation scope only.
+        if scope != "installation":
+            raise _not_found()
+        rows = await db._select(
+            "agents",
+            {
+                "id": f"eq.{agent_id}",
+                "status": "eq.published",
+                "deleted_at": "is.null",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+        agent = rows[0] if rows else None
+    if not agent:
         raise _not_found()
     spec = await db.load_draft_spec(str(agent_id), user.user_id)
+    if not spec and agent.get("published_version_id"):
+        rows = await db._select(
+            "agent_versions",
+            {
+                "id": f"eq.{agent['published_version_id']}",
+                "select": "id,spec,graph_spec",
+                "limit": "1",
+            },
+        )
+        if rows:
+            from agent_service.models.agent_spec import migrate_v1_to_v2
+
+            raw = rows[0].get("spec") or {}
+            if rows[0].get("graph_spec") and "graph" not in raw:
+                raw = {**raw, "graph": rows[0]["graph_spec"]}
+            try:
+                spec = migrate_v1_to_v2(raw)
+            except Exception:  # noqa: BLE001
+                spec = None
     if not spec:
         raise HTTPException(
             status_code=400,
             detail={"code": "AGENT_SPEC_INVALID", "message": "Draft spec missing."},
         )
-    status = str(agent.get("status") or "")
-    result = await evaluate_agent_readiness(
+
+    if scope == "definition":
+        result = await evaluate_definition_readiness(
+            agent_id=str(agent_id),
+            user_id=user.user_id,
+            spec=spec,
+            db=db,
+            build_ok=str(agent.get("status") or "")
+            not in {"needs_attention", "building", "draft"},
+        )
+        return {
+            "scope": "definition",
+            "status": result.status,
+            "checks": [
+                {"key": c.key, "ok": c.ok, "message": c.message, "severity": c.severity}
+                for c in result.checks
+            ],
+            "missing_connections": [],
+            "missing_config": result.missing_config,
+        }
+
+    install = await InstallationService(db).get_or_create(
+        user_id=user.user_id, agent_id=str(agent_id)
+    )
+    result = await evaluate_installation_readiness(
         agent_id=str(agent_id),
         user_id=user.user_id,
         spec=spec,
         db=db,
-        build_ok=status not in {"needs_attention", "building", "draft"},
+        installation_id=str(install["id"]),
     )
     return {
+        "scope": "installation",
         "status": result.status,
-        "agent_status": status,
+        "installation_id": install["id"],
+        "installation_status": install.get("status"),
         "checks": [
             {"key": c.key, "ok": c.ok, "message": c.message, "severity": c.severity}
             for c in result.checks
@@ -226,6 +298,44 @@ async def patch_memory_settings(
         change_summary="Memory settings updated",
     )
     return {"version_id": version.get("id"), "memory": updated.memory.model_dump()}
+
+
+class ModelPatchRequest(BaseModel):
+    provider: str = Field(min_length=2, max_length=32)
+    model_id: str = Field(min_length=1, max_length=200)
+
+
+@router.patch("/{agent_id}/model")
+async def patch_model(
+    agent_id: UUID, user: CurrentUser, body: ModelPatchRequest
+) -> dict[str, Any]:
+    db: Persistence = get_persistence()
+    spec = await db.load_draft_spec(str(agent_id), user.user_id)
+    if not spec:
+        raise HTTPException(
+            status_code=400, detail={"code": "AGENT_SPEC_INVALID", "message": "No draft spec."}
+        )
+    data = spec.model_dump()
+    model = dict(data.get("model") or {})
+    model["provider"] = body.provider.lower().strip()
+    model["model_id"] = body.model_id.strip()
+    model["credential_scope"] = "agent"
+    model["fallback_enabled"] = False
+    data["model"] = model
+    from agent_service.models.agent_spec import AgentSpec
+
+    updated = AgentSpec.model_validate(data)
+    version = await db.persist_version(
+        agent_id=str(agent_id),
+        user_id=user.user_id,
+        spec=updated,
+        test_status="not_run",
+        change_summary="Model updated",
+    )
+    return {
+        "version_id": version.get("id"),
+        "model": updated.model.model_dump() if updated.model else None,
+    }
 
 
 @router.get("/{agent_id}/project/files")

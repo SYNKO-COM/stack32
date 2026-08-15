@@ -49,6 +49,28 @@ export interface BuildAgentModulesOptions {
   boundToolIds?: Iterable<string>;
   /** Providers that already have an active connection. */
   boundProviders?: Iterable<string>;
+  /**
+   * Optional readiness overrides from the installation (parent passes when known).
+   * When omitted, model stays "ready" for backward compatibility until data exists.
+   */
+  modelStatus?: "ready" | "setup_required" | "needs_setup" | "needs_attention";
+  memoryStatus?: "ready" | "setup_required" | "needs_setup" | "needs_attention";
+  /** Per toolId status overrides. */
+  toolStatuses?: Record<string, "ready" | "setup_required" | "needs_setup" | "needs_attention">;
+}
+
+function statusToReady(status: string | undefined, fallbackReady: boolean): boolean {
+  if (!status) return fallbackReady;
+  return status === "ready";
+}
+
+function normalizeSetupStatus(
+  status: string | undefined,
+  fallback: string,
+): string {
+  if (!status) return fallback;
+  if (status === "setup_required") return "needs_setup";
+  return status;
 }
 
 // MVP Structure is a straight line: Trigger → AI Agent (brain) → Output. Internal
@@ -201,8 +223,7 @@ function enrichToolModule(
   }
 
   const toolBound = module.toolId ? boundToolIds.has(module.toolId) : false;
-  const providerBound = provider ? boundProviders.has(provider) : false;
-  const connected = toolBound || providerBound;
+  const connected = toolBound;
 
   return {
     ...module,
@@ -221,6 +242,7 @@ function fromGraph(
   boundToolIds: Set<string>,
   boundProviders: Set<string>,
   spec: AgentSpec | null | undefined,
+  options?: BuildAgentModulesOptions,
 ): AgentModuleMap {
   const chain: AgentModule[] = [];
   const attachments: AgentModule[] = [];
@@ -253,18 +275,35 @@ function fromGraph(
     const key = attachmentKind === "memory" ? "memory" : (toolId ?? node.id);
     if (seenAttachments.has(key)) continue;
     seenAttachments.add(key);
+    const memoryOverride = attachmentKind === "memory" ? options?.memoryStatus : undefined;
+    const toolOverride =
+      attachmentKind === "tool" && toolId ? options?.toolStatuses?.[toolId] : undefined;
     const base: AgentModule = {
       id: key,
       kind: attachmentKind,
       label: attachmentKind === "memory" ? undefined : node.name,
       detail: node.description,
       toolId,
-      ready: true,
-      setupStatus: "ready",
+      ready: statusToReady(memoryOverride ?? toolOverride, true),
+      setupStatus: normalizeSetupStatus(memoryOverride ?? toolOverride, "ready"),
     };
     attachments.push(
       attachmentKind === "tool"
-        ? enrichToolModule(base, bindings, boundToolIds, boundProviders, node.config)
+        ? (() => {
+            const enriched = enrichToolModule(
+              base,
+              bindings,
+              boundToolIds,
+              boundProviders,
+              node.config,
+            );
+            if (!toolOverride) return enriched;
+            return {
+              ...enriched,
+              ready: statusToReady(toolOverride, enriched.ready ?? false),
+              setupStatus: normalizeSetupStatus(toolOverride, enriched.setupStatus ?? "ready"),
+            };
+          })()
         : base,
     );
   }
@@ -277,6 +316,7 @@ function fromSpec(
   bindings: Map<string, ToolBinding>,
   boundToolIds: Set<string>,
   boundProviders: Set<string>,
+  options?: BuildAgentModulesOptions,
 ): AgentModuleMap {
   const chain: AgentModule[] = [
     { id: "input", kind: "trigger", detail: primaryTriggerKind(spec), ready: true, setupStatus: "ready" },
@@ -286,20 +326,33 @@ function fromSpec(
 
   const attachments: AgentModule[] = spec.tools
     .filter((tool) => tool.enabled && isProductFacingTool(tool.tool))
-    .map((tool) =>
-      enrichToolModule(
+    .map((tool) => {
+      const enriched = enrichToolModule(
         { id: tool.tool, kind: "tool" as const, toolId: tool.tool },
         bindings,
         boundToolIds,
         boundProviders,
-      ),
-    );
+      );
+      const override = options?.toolStatuses?.[tool.tool];
+      if (!override) return enriched;
+      return {
+        ...enriched,
+        ready: statusToReady(override, enriched.ready ?? false),
+        setupStatus: normalizeSetupStatus(override, enriched.setupStatus ?? "ready"),
+      };
+    });
 
   if (spec.knowledge.enabled) {
     attachments.push({ id: "knowledge", kind: "knowledge", ready: true, setupStatus: "ready" });
   }
   if (spec.memory.conversationEnabled ?? spec.memory.conversationWindow > 0) {
-    attachments.push({ id: "memory", kind: "memory", ready: true, setupStatus: "ready" });
+    const memStatus = options?.memoryStatus;
+    attachments.push({
+      id: "memory",
+      kind: "memory",
+      ready: statusToReady(memStatus, true),
+      setupStatus: normalizeSetupStatus(memStatus, "ready"),
+    });
   }
 
   return { chain, attachments };
@@ -317,29 +370,33 @@ export function buildAgentModules(
   const boundToolIds = new Set(options?.boundToolIds ?? []);
   const boundProviders = new Set(options?.boundProviders ?? []);
   const bindings = bindingLookup(spec);
+  const modelStatus = options?.modelStatus;
+  const modelReady = statusToReady(modelStatus, true);
+  const modelSetup = normalizeSetupStatus(modelStatus, "ready");
 
   if (graph && graph.nodes.length > 0) {
-    const fromCompiled = fromGraph(graph, bindings, boundToolIds, boundProviders, spec);
+    const fromCompiled = fromGraph(graph, bindings, boundToolIds, boundProviders, spec, options);
     if (fromCompiled.chain.length > 0) {
       // The model node is always shown as a capability of the brain, like n8n.
+      // Readiness comes from installation LLM config when the parent passes modelStatus.
       fromCompiled.attachments.unshift({
         id: "model",
         kind: "model",
         detail: exactModelLabel(spec),
-        ready: true,
-        setupStatus: "ready",
+        ready: modelReady,
+        setupStatus: modelSetup,
       });
       return fromCompiled;
     }
   }
   if (spec) {
-    const derived = fromSpec(spec, bindings, boundToolIds, boundProviders);
+    const derived = fromSpec(spec, bindings, boundToolIds, boundProviders, options);
     derived.attachments.unshift({
       id: "model",
       kind: "model",
       detail: exactModelLabel(spec),
-      ready: true,
-      setupStatus: "ready",
+      ready: modelReady,
+      setupStatus: modelSetup,
     });
     return derived;
   }

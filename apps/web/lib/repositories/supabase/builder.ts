@@ -1,8 +1,11 @@
+import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { BuilderThread } from "@/lib/domain/types";
 import { executeBuilderRepair, executeBuilderTurn } from "@/lib/actions/builder";
+import { prepareChatAttachments, signMessageAttachments } from "@/lib/chat/prepare-attachments";
 import { mapBuilderMessage } from "@/lib/domain/mappers";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { BuilderRepository } from "@/lib/repositories/interfaces";
+import type { Json } from "@/lib/supabase/database.types";
 
 /** Page size for message history (pagination-ready). */
 const MESSAGE_PAGE_SIZE = 200;
@@ -42,14 +45,31 @@ export class SupabaseBuilderRepository implements BuilderRepository {
       .order("created_at", { ascending: true })
       .limit(MESSAGE_PAGE_SIZE);
     if (error) throw error;
+    const messages = (
+      await Promise.all(
+        data.map(async (row) => {
+          const mapped = mapBuilderMessage(row);
+          if (!mapped?.attachments?.length) return mapped;
+          return {
+            ...mapped,
+            attachments: await signMessageAttachments(supabase, mapped.attachments),
+          };
+        }),
+      )
+    ).filter((m): m is NonNullable<typeof m> => m !== null);
     return {
       id: threadId,
       agentId,
-      messages: data.map(mapBuilderMessage).filter((m) => m !== null),
+      messages,
     };
   }
 
-  async sendMessage(agentId: string, content: string): Promise<void> {
+  async sendMessage(
+    agentId: string,
+    content: string,
+    attachments: ComposerAttachment[] = [],
+    mode: "build" | "chat" = "build",
+  ): Promise<void> {
     const supabase = requireSupabaseBrowserClient();
     const threadId = await this.getOrCreateThreadId(agentId);
     const {
@@ -57,19 +77,56 @@ export class SupabaseBuilderRepository implements BuilderRepository {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("not_authenticated");
 
-    // The client may only insert its own user-role messages (enforced by RLS).
+    const messageId = crypto.randomUUID();
+    const text = content.trim();
+    const prepared =
+      attachments.length > 0
+        ? await prepareChatAttachments({
+            supabase,
+            userId: user.id,
+            agentId,
+            threadId,
+            messageId,
+            attachments,
+            context: "builder",
+          })
+        : { messageAttachments: [], imagePayloads: [] };
+
+    const displayContent =
+      text ||
+      (prepared.messageAttachments.some((a) => a.kind === "image")
+        ? ""
+        : prepared.messageAttachments.length
+          ? prepared.messageAttachments.map((a) => a.name).join(", ")
+          : "");
+
     const { error } = await supabase.from("builder_messages").insert({
+      id: messageId,
       thread_id: threadId,
       agent_id: agentId,
       user_id: user.id,
       role: "user",
-      content,
+      content: displayContent,
+      metadata: {
+        attachments: prepared.messageAttachments,
+        mode,
+      } as unknown as Json,
     });
     if (error) throw error;
 
-    // Assistant simulation runs through trusted server code (fire and forget:
-    // the UI polls/subscribes for progressive updates).
-    void executeBuilderTurn({ agentId, threadId, prompt: content });
+    const promptForModel =
+      text ||
+      (prepared.imagePayloads.length
+        ? "Please analyze the attached image(s) and help me build from them."
+        : displayContent.trim() || "Hello");
+
+    void executeBuilderTurn({
+      agentId,
+      threadId,
+      prompt: promptForModel,
+      images: prepared.imagePayloads,
+      mode,
+    });
   }
 
   async repairAgent(agentId: string): Promise<void> {

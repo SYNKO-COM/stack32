@@ -1,3 +1,4 @@
+import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { BuilderMessage, BuilderThread, BuildStep } from "@/lib/domain/types";
 import type { BuilderRepository } from "@/lib/repositories/interfaces";
 
@@ -175,14 +176,38 @@ export class MockBuilderRepository implements BuilderRepository {
     return getOrCreateThread(agentId);
   }
 
-  async sendMessage(agentId: string, content: string): Promise<void> {
+  async sendMessage(
+    agentId: string,
+    content: string,
+    attachments: ComposerAttachment[] = [],
+    mode: "build" | "chat" = "build",
+  ): Promise<void> {
     appendMessage(agentId, {
       id: generateId("bmsg"),
       threadId: agentId,
       role: "user",
       content,
+      attachments: attachments.map((a) => ({
+        id: a.id,
+        name: a.name,
+        mimeType: a.mimeType,
+        kind: a.kind,
+        url: a.previewUrl,
+        sizeBytes: a.size,
+      })),
       createdAt: nowIso(),
     });
+    if (mode === "chat") {
+      appendMessage(agentId, {
+        id: generateId("bmsg"),
+        threadId: agentId,
+        role: "assistant",
+        content:
+          "I'm in Chat mode (read-only). I can explain your agent, but I won't change files or tools. Switch to Build to make edits.",
+        createdAt: nowIso(),
+      });
+      return;
+    }
     runSimulatedBuild(agentId, content);
   }
 

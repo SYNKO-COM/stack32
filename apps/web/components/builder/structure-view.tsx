@@ -86,7 +86,14 @@ function SectionCard({ icon: Icon, title, children, action, defaultOpen = true }
   );
 }
 
-export function StructureView({ agentId }: { agentId: string }) {
+export function StructureView({
+  agentId,
+  showConnections = false,
+}: {
+  agentId: string;
+  /** Build structure hides connection cards by default (setup lives in AI Agent). */
+  showConnections?: boolean;
+}) {
   const { t, i18n } = useTranslation("structure");
   const router = useRouter();
   const { data: spec, isLoading } = useAgentSpec(agentId);
@@ -148,7 +155,7 @@ export function StructureView({ agentId }: { agentId: string }) {
           <p className="mb-4 text-sm text-muted-foreground">{t("graph.fallback")}</p>
         )}
 
-        <ConnectGoogleCard agentId={agentId} />
+        {showConnections ? <ConnectGoogleCard agentId={agentId} /> : null}
 
         {spec ? (
           <>

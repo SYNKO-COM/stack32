@@ -2,9 +2,30 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { BuilderMessage, BuilderThread } from "@/lib/domain/types";
+import type { ComposerAttachment } from "@/components/shared/prompt-composer";
+import type { BuilderMessage, BuilderThread, MessageAttachment } from "@/lib/domain/types";
 import { cancelBuilderRun } from "@/lib/actions/builder";
 import { getBuilderRepository } from "@/lib/repositories/factory";
+
+export type SendBuilderMessageInput = {
+  content: string;
+  attachments?: ComposerAttachment[];
+  mode?: "build" | "chat";
+};
+
+function composerToMessageAttachments(
+  attachments: ComposerAttachment[] | undefined,
+): MessageAttachment[] | undefined {
+  if (!attachments?.length) return undefined;
+  return attachments.map((a) => ({
+    id: a.id,
+    name: a.name,
+    mimeType: a.mimeType,
+    kind: a.kind,
+    url: a.previewUrl,
+    sizeBytes: a.size,
+  }));
+}
 
 /** True while the (mock) builder is still producing progressive updates. */
 function isThreadActive(thread: BuilderThread | undefined): boolean {
@@ -39,8 +60,15 @@ export function useBuilderThread(agentId: string, opts?: { forcePoll?: boolean }
 export function useSendBuilderMessage(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (content: string) => getBuilderRepository().sendMessage(agentId, content),
-    onMutate: async (content) => {
+    mutationFn: (input: string | SendBuilderMessageInput) => {
+      const content = typeof input === "string" ? input : input.content;
+      const attachments = typeof input === "string" ? undefined : input.attachments;
+      const mode = typeof input === "string" ? undefined : input.mode;
+      return getBuilderRepository().sendMessage(agentId, content, attachments, mode);
+    },
+    onMutate: async (input) => {
+      const content = typeof input === "string" ? input : input.content;
+      const attachments = typeof input === "string" ? undefined : input.attachments;
       await queryClient.cancelQueries({ queryKey: ["builder", agentId] });
       await queryClient.cancelQueries({ queryKey: ["agents", agentId] });
       const previous = queryClient.getQueryData<BuilderThread>(["builder", agentId]);
@@ -50,6 +78,7 @@ export function useSendBuilderMessage(agentId: string) {
           threadId: previous.id,
           role: "user",
           content,
+          attachments: composerToMessageAttachments(attachments),
           createdAt: new Date().toISOString(),
         };
         queryClient.setQueryData<BuilderThread>(["builder", agentId], {
@@ -57,14 +86,18 @@ export function useSendBuilderMessage(agentId: string) {
           messages: [...previous.messages, optimistic],
         });
       }
-      queryClient.setQueryData(["agents", agentId], (old: { status?: string } | undefined) =>
-        old ? { ...old, status: "building" } : old,
-      );
-      queryClient.setQueryData(["agents"], (old: Array<{ id: string; status?: string }> | undefined) =>
-        Array.isArray(old)
-          ? old.map((a) => (a.id === agentId ? { ...a, status: "building" } : a))
-          : old,
-      );
+      const mode = typeof input === "string" ? "build" : (input.mode ?? "build");
+      // Chat mode must not flip the agent into "building".
+      if (mode === "build") {
+        queryClient.setQueryData(["agents", agentId], (old: { status?: string } | undefined) =>
+          old ? { ...old, status: "building" } : old,
+        );
+        queryClient.setQueryData(["agents"], (old: Array<{ id: string; status?: string }> | undefined) =>
+          Array.isArray(old)
+            ? old.map((a) => (a.id === agentId ? { ...a, status: "building" } : a))
+            : old,
+        );
+      }
       return { previous };
     },
     onError: (_err, _content, ctx) => {

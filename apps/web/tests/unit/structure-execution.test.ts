@@ -68,11 +68,13 @@ describe("live execution state mapping", () => {
       { eventType: "runtime.tool.failed", toolId: "gmail_send_message" },
       { eventType: "runtime.connection.required", toolId: "pd:hubspot-create-contact" },
       { eventType: "runtime.output.completed" },
+      { eventType: "run.completed" },
     ]);
     expect(state.model).toBe("success");
     expect(state["pd:slack-send-message-to-channel"]).toBe("success");
     expect(state.gmail_send_message).toBe("error");
     expect(state["pd:hubspot-create-contact"]).toBe("waiting_for_connection");
     expect(state.output).toBe("success");
+    expect(state.brain).toBe("success");
   });
 });

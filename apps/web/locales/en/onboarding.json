@@ -43,8 +43,17 @@
     "phonePlaceholder": "6 12 34 56 78",
     "phoneHint": "Optional — choose your country code, then enter your number without the leading 0.",
     "useCase": "What will your first agent do? (optional)",
-    "useCasePlaceholder": "e.g. Research prospects for my agency",
-    "finish": "Finish"
+    "useCasePlaceholder": "e.g. Research prospects for my agency"
+  },
+  "step4": {
+    "title": "Create your first workspace",
+    "subtitle": "A workspace groups your agents. You can create more later and switch between them anytime.",
+    "point1": "Keep personal and client projects separate",
+    "point2": "Each workspace has its own list of agents",
+    "point3": "Switch workspaces anytime from the sidebar",
+    "nameLabel": "Workspace name",
+    "namePlaceholder": "e.g. Personal, Agency, Side project",
+    "finish": "Create workspace & start building"
   },
   "completing": "Preparing your workspace…",
   "a11y": {

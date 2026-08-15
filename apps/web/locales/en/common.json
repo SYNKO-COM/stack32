@@ -44,6 +44,13 @@
     "voice": "Dictate with your voice",
     "send": "Send",
     "build": "Create",
+    "mode": {
+      "label": "Interaction mode",
+      "build": "Build",
+      "chat": "Chat",
+      "buildHint": "Create and change your agent",
+      "chatHint": "Ask anything — no changes"
+    },
     "sending": "Sending…",
     "working": "Working…",
     "stop": "Stop",
@@ -60,6 +67,7 @@
   "status": {
     "draft": "Draft",
     "building": "Building",
+    "built": "Built",
     "ready": "Ready",
     "needsAttention": "Needs attention",
     "published": "Published",

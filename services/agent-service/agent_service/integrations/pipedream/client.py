@@ -183,6 +183,7 @@ class PipedreamClient:
                 {
                     "app_id": row.get("name_slug") or row.get("id") or row.get("name"),
                     "name": row.get("name") or row.get("name_slug"),
+                    "img_src": row.get("img_src") or row.get("icon") or row.get("logo"),
                     "summary": row.get("description") or "",
                     "auth_type": row.get("auth_type") or "oauth",
                     "raw": row,

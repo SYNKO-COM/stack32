@@ -104,7 +104,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["email", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "gmail",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -122,7 +122,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["email", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "gmail",
         "input_schema": {
             "type": "object",
             "properties": {"message_id": {"type": "string"}},
@@ -137,7 +137,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["email", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "gmail",
         "side_effect": True,
         "input_schema": {
             "type": "object",
@@ -157,7 +157,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["email", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "gmail",
         "side_effect": True,
         "input_schema": {
             "type": "object",
@@ -178,7 +178,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["email", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "gmail",
         "side_effect": True,
         "metadata": {"alias_of": "gmail_create_draft", "deprecated": True},
         "input_schema": {
@@ -200,7 +200,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["calendar", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "google_calendar",
         "input_schema": {
             "type": "object",
             "properties": {"max_results": {"type": "integer"}},
@@ -215,7 +215,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["calendar", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "google_calendar",
         "side_effect": True,
         "input_schema": {
             "type": "object",
@@ -244,7 +244,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["docs", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "google_docs",
         "side_effect": True,
         "input_schema": {
             "type": "object",
@@ -271,7 +271,7 @@ _NATIVE_DEFS: list[dict[str, Any]] = [
         "categories": ["docs", "google"],
         "auth_type": "oauth2",
         "connection_required": True,
-        "provider_app_id": "google",
+        "provider_app_id": "google_docs",
         "side_effect": True,
         "input_schema": {
             "type": "object",
@@ -390,7 +390,9 @@ class NativeToolProvider:
     async def start_connection(
         self, *, user_id: str, app_id: str, **kwargs: Any
     ) -> dict[str, Any]:
-        if app_id != "google":
+        from agent_service.integrations.app_keys import oauth_provider_for_app
+
+        if oauth_provider_for_app(app_id) != "google" and app_id != "google":
             return {"error": "UNSUPPORTED_APP", "app_id": app_id}
         from agent_service.connections.manager import ConnectionManager
 

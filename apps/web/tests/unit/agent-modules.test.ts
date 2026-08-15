@@ -45,9 +45,9 @@ describe("buildAgentModules readiness", () => {
     expect(search?.setupStatus).toBe("ready");
   });
 
-  it("marks tools ready when provider is bound", () => {
+  it("marks tools ready when those tool ids are bound", () => {
     const modules = buildAgentModules(null, baseSpec, {
-      boundProviders: ["google"],
+      boundToolIds: ["gmail_list"],
     });
     const gmail = modules.attachments.find((m) => m.toolId === "gmail_list");
     expect(gmail?.ready).toBe(true);

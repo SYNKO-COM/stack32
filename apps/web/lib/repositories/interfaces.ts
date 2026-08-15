@@ -1,3 +1,4 @@
+import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type {
   Agent,
   AgentSpec,
@@ -9,7 +10,9 @@ import type {
   Profile,
   Subscription,
   User,
+  Workspace,
 } from "@/lib/domain/types";
+import type { ChatImagePayload } from "@/lib/chat/message-attachments";
 
 /**
  * Repository abstractions.
@@ -46,9 +49,9 @@ export interface AuthRepository {
 }
 
 export interface AgentRepository {
-  listAgents(): Promise<Agent[]>;
+  listAgents(workspaceId?: string): Promise<Agent[]>;
   getAgent(agentId: string): Promise<Agent | null>;
-  createAgent(name?: string): Promise<Agent>;
+  createAgent(input?: { name?: string; workspaceId?: string }): Promise<Agent>;
   renameAgent(agentId: string, name: string): Promise<Agent>;
   duplicateAgent(agentId: string): Promise<Agent>;
   deleteAgent(agentId: string): Promise<void>;
@@ -57,18 +60,36 @@ export interface AgentRepository {
   getSpec(agentId: string): Promise<AgentSpec | null>;
 }
 
+export interface WorkspaceRepository {
+  listWorkspaces(): Promise<Workspace[]>;
+  getWorkspace(workspaceId: string): Promise<Workspace | null>;
+  createWorkspace(name: string): Promise<Workspace>;
+  renameWorkspace(workspaceId: string, name: string): Promise<Workspace>;
+}
+
 export interface BuilderRepository {
   getThread(agentId: string): Promise<BuilderThread>;
-  sendMessage(agentId: string, content: string): Promise<void>;
+  sendMessage(
+    agentId: string,
+    content: string,
+    attachments?: ComposerAttachment[],
+    mode?: "build" | "chat",
+  ): Promise<void>;
   /** "Fix automatically" action — mock repair until the real Builder Agent. */
   repairAgent(agentId: string): Promise<void>;
 }
 
 export interface LiveRepository {
   getThread(agentId: string): Promise<LiveThread>;
-  sendMessage(agentId: string, content: string): Promise<void>;
+  sendMessage(
+    agentId: string,
+    content: string,
+    attachments?: ComposerAttachment[],
+  ): Promise<void>;
   clearThread(agentId: string): Promise<void>;
 }
+
+export type { ChatImagePayload };
 
 export interface BillingRepository {
   getSubscription(): Promise<Subscription | null>;

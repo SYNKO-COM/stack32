@@ -7,15 +7,32 @@
  * (@stack32/generated-api-types).
  */
 
+import type { MessageAttachment } from "@/lib/chat/message-attachments";
+
+export type { MessageAttachment };
+
 export type AgentStatus =
   | "draft"
   | "building"
+  | "built"
   | "ready"
   | "needs_attention"
   | "published"
   | "waiting_for_input"
   | "needs_setup"
   | "archived";
+
+export type InstallationStatus = "setup_required" | "ready" | "needs_attention";
+
+export interface AgentInstallation {
+  id: string;
+  agentId: string;
+  userId: string;
+  pinnedVersionId?: string;
+  status: InstallationStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export type SubscriptionStatus =
   | "active"
@@ -51,6 +68,21 @@ export interface Subscription {
   planName: string;
   status: SubscriptionStatus;
   currentPeriodEnd?: string;
+}
+
+/** Product workspace — a container for agents. */
+export interface Workspace {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Mock credit usage shown in the profile menu until billing is wired. */
+export interface CreditUsage {
+  used: number;
+  limit: number;
 }
 
 /**
@@ -196,6 +228,7 @@ export interface AgentVersion {
 
 export interface Agent {
   id: string;
+  workspaceId: string;
   name: string;
   icon: string;
   status: AgentStatus;
@@ -218,6 +251,7 @@ export type BuilderMessageTone = "normal" | "success" | "warning" | "error";
 
 export type BuilderAction =
   | "test_agent"
+  | "open_ai_agent"
   | "view_structure"
   | "fix_automatically"
   | "view_changes";
@@ -237,6 +271,7 @@ export interface BuilderUiComponent {
     | "secret_form"
     | "agent_capabilities_form"
     | "dynamic_questions_form"
+    | "provider_clarification_form"
     | "connection_form"
     | "approval_form";
   version: "1";
@@ -306,6 +341,7 @@ export interface BuilderMessage {
   projectFiles?: string[];
   /** Short human-readable problems when Fix it for me is offered. */
   detectedProblems?: string[];
+  attachments?: MessageAttachment[];
   createdAt: string;
 }
 
@@ -337,6 +373,8 @@ export interface LiveMessage {
   /** i18n key under live:status.* describing the current tool activity. */
   statusKey?: string;
   uiComponent?: BuilderUiComponent;
+  /** User-uploaded files / images shown as thumbnails above the bubble. */
+  attachments?: MessageAttachment[];
   createdAt: string;
 }
 

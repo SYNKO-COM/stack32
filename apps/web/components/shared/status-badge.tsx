@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const STATUS_STYLES: Record<AgentStatus, { dot: string; text: string }> = {
   draft: { dot: "bg-zinc-400", text: "text-muted-foreground" },
   building: { dot: "bg-brand animate-pulse", text: "text-brand" },
+  built: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" },
   ready: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" },
   needs_attention: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300" },
   published: { dot: "bg-sky-500", text: "text-sky-700 dark:text-sky-300" },
@@ -18,6 +19,7 @@ const STATUS_STYLES: Record<AgentStatus, { dot: string; text: string }> = {
 const STATUS_KEYS: Record<AgentStatus, string> = {
   draft: "status.draft",
   building: "status.building",
+  built: "status.built",
   ready: "status.ready",
   needs_attention: "status.needsAttention",
   published: "status.published",

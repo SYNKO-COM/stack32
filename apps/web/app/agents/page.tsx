@@ -6,6 +6,7 @@ import { useEffect, useRef, useTransition } from "react";
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { Button } from "@/components/ui/button";
 import { useAgents, useCreateAgent } from "@/hooks/use-agents";
+import { useActiveWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
 import { getPendingPrompt } from "@/lib/pending-prompt";
 
@@ -18,20 +19,21 @@ import { getPendingPrompt } from "@/lib/pending-prompt";
 export default function AgentsIndexPage() {
   const { t } = useTranslation(["common", "errors"]);
   const router = useRouter();
-  const { data: agents, isLoading } = useAgents();
+  const { activeWorkspaceId } = useActiveWorkspace();
+  const { data: agents, isLoading } = useAgents(activeWorkspaceId);
   const createAgent = useCreateAgent();
   const handledRef = useRef(false);
   const [creating, startCreate] = useTransition();
 
   useEffect(() => {
-    if (isLoading || handledRef.current || !agents) return;
+    if (isLoading || handledRef.current || !agents || !activeWorkspaceId) return;
 
     const pending = getPendingPrompt();
     if (pending || agents.length > 0) {
       handledRef.current = true;
       const go = async () => {
         if (pending || agents.length === 0) {
-          const agent = await createAgent.mutateAsync(undefined);
+          const agent = await createAgent.mutateAsync({ workspaceId: activeWorkspaceId });
           router.replace(`/agents/${agent.id}/build`);
           return;
         }
@@ -39,9 +41,9 @@ export default function AgentsIndexPage() {
       };
       void go();
     }
-  }, [agents, isLoading, createAgent, router]);
+  }, [agents, isLoading, createAgent, router, activeWorkspaceId]);
 
-  if (isLoading || !agents) {
+  if (isLoading || !agents || !activeWorkspaceId) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <BrandLoader label={t("common:loading")} size="lg" />
@@ -49,7 +51,6 @@ export default function AgentsIndexPage() {
     );
   }
 
-  // Empty workspace — invite the user to create their first agent.
   if (agents.length === 0 && !getPendingPrompt()) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
@@ -62,7 +63,7 @@ export default function AgentsIndexPage() {
           disabled={creating || createAgent.isPending}
           onClick={() => {
             startCreate(async () => {
-              const created = await createAgent.mutateAsync(undefined);
+              const created = await createAgent.mutateAsync({ workspaceId: activeWorkspaceId });
               router.replace(`/agents/${created.id}/build`);
             });
           }}

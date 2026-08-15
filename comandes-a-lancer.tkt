@@ -1,0 +1,9 @@
+pnpm dev:web
+
+pnpm dev:agent
+
+pnpm dev:all
+
+cd services/agent-service
+source .venv/bin/activate
+uvicorn agent_service.main:app --reload --port 8000 --host 127.0.0.1

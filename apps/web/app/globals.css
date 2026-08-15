@@ -309,6 +309,28 @@
     -webkit-mask-image: radial-gradient(ellipse at center, black 35%, transparent 75%);
     mask-image: radial-gradient(ellipse at center, black 35%, transparent 75%);
   }
+
+  /* Structure canvas: edges pass behind modules */
+  .structure-agent-flow .react-flow__edges {
+    z-index: 0 !important;
+  }
+  .structure-agent-flow .react-flow__edge {
+    z-index: 0 !important;
+    pointer-events: none;
+  }
+  .structure-agent-flow .react-flow__edge-path {
+    fill: none;
+  }
+  .structure-agent-flow .react-flow__nodes {
+    z-index: 2;
+  }
+  .structure-agent-flow .react-flow__node {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    z-index: 2 !important;
+  }
 }
 
 @keyframes builder-live-pulse {

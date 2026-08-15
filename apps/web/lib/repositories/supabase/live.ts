@@ -1,8 +1,11 @@
+import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { LiveThread } from "@/lib/domain/types";
 import { executeLiveTurn } from "@/lib/actions/live";
+import { prepareChatAttachments, signMessageAttachments } from "@/lib/chat/prepare-attachments";
 import { mapLiveMessage } from "@/lib/domain/mappers";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { LiveRepository } from "@/lib/repositories/interfaces";
+import type { Json } from "@/lib/supabase/database.types";
 
 /** Page size for message history (pagination-ready). */
 const MESSAGE_PAGE_SIZE = 200;
@@ -43,14 +46,30 @@ export class SupabaseLiveRepository implements LiveRepository {
       .order("created_at", { ascending: true })
       .limit(MESSAGE_PAGE_SIZE);
     if (error) throw error;
+    const messages = (
+      await Promise.all(
+        data.map(async (row) => {
+          const mapped = mapLiveMessage(row);
+          if (!mapped?.attachments?.length) return mapped;
+          return {
+            ...mapped,
+            attachments: await signMessageAttachments(supabase, mapped.attachments),
+          };
+        }),
+      )
+    ).filter((m): m is NonNullable<typeof m> => m !== null);
     return {
       id: threadId,
       agentId,
-      messages: data.map(mapLiveMessage).filter((m) => m !== null),
+      messages,
     };
   }
 
-  async sendMessage(agentId: string, content: string): Promise<void> {
+  async sendMessage(
+    agentId: string,
+    content: string,
+    attachments: ComposerAttachment[] = [],
+  ): Promise<void> {
     const supabase = requireSupabaseBrowserClient();
     const threadId = await this.getOrCreateThreadId(agentId);
     const {
@@ -58,16 +77,55 @@ export class SupabaseLiveRepository implements LiveRepository {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("not_authenticated");
 
+    const messageId = crypto.randomUUID();
+    const text = content.trim();
+    const prepared =
+      attachments.length > 0
+        ? await prepareChatAttachments({
+            supabase,
+            userId: user.id,
+            agentId,
+            threadId,
+            messageId,
+            attachments,
+            context: "live",
+          })
+        : { messageAttachments: [], imagePayloads: [] };
+
+    const displayContent =
+      text ||
+      (prepared.messageAttachments.some((a) => a.kind === "image")
+        ? ""
+        : prepared.messageAttachments.length
+          ? prepared.messageAttachments.map((a) => a.name).join(", ")
+          : "");
+
+    // Persist clean user text — never the old [Attached image: …] placeholder.
     const { error } = await supabase.from("live_messages").insert({
+      id: messageId,
       thread_id: threadId,
       agent_id: agentId,
       user_id: user.id,
       role: "user",
-      content,
+      content: displayContent,
+      metadata: {
+        attachments: prepared.messageAttachments,
+      } as unknown as Json,
     });
     if (error) throw error;
 
-    void executeLiveTurn({ agentId, threadId, prompt: content });
+    const promptForModel =
+      text ||
+      (prepared.imagePayloads.length
+        ? "Please analyze the attached image(s)."
+        : displayContent.trim() || "Hello");
+
+    void executeLiveTurn({
+      agentId,
+      threadId,
+      prompt: promptForModel,
+      images: prepared.imagePayloads,
+    });
   }
 
   async clearThread(agentId: string): Promise<void> {

@@ -29,6 +29,7 @@ export async function executeLiveTurn(input: {
   agentId: string;
   threadId: string;
   prompt: string;
+  images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
 }): Promise<void> {
   const supabase = await requireSupabaseServerClient();
   const {
@@ -57,5 +58,12 @@ export async function executeLiveTurn(input: {
 
   const store = await cookies();
   const locale = readLocaleCookie(store.get(LOCALE_COOKIE)?.value);
-  await getAdapter().execute({ userId: user.id, locale, ...input });
+  await getAdapter().execute({
+    userId: user.id,
+    locale,
+    agentId: input.agentId,
+    threadId: input.threadId,
+    prompt: input.prompt,
+    images: input.images,
+  });
 }

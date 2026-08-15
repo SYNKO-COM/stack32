@@ -9,14 +9,16 @@ import { IntegrationConnectionCard } from "@/components/builder/integration-conn
 import { SecretForm } from "@/components/builder/secret-form";
 import { ToolSetupCard } from "@/components/builder/tool-setup-card";
 import { Markdown } from "@/components/shared/markdown";
+import { MessageAttachmentPreviews } from "@/components/shared/message-attachment-previews";
 import { PromptComposer } from "@/components/shared/prompt-composer";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAgent, useAgentSpec } from "@/hooks/use-agents";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { useClearLiveThread, useLiveThread, useSendLiveMessage } from "@/hooks/use-live";
 import { useTranslation } from "@/hooks/use-translation";
+import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
 import type { LiveMessage } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +62,7 @@ function LiveBubble({
     <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}>
       {isUser ? (
         <Avatar className="mt-1 size-7 shrink-0">
+          {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt="" /> : null}
           <AvatarFallback className="bg-brand/30 text-xs">
             {(user?.name ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
           </AvatarFallback>
@@ -70,6 +73,22 @@ function LiveBubble({
 
       <div className={cn("max-w-[85%] sm:max-w-[75%]", isUser && "text-right")}>
         <p className="mb-1 font-mono text-[11px] text-muted-foreground/60">{time}</p>
+        {isUser ? (
+          <MessageAttachmentPreviews attachments={message.attachments} align="right" />
+        ) : null}
+        {(() => {
+          const raw = message.content.startsWith("live:")
+            ? t(message.content.replace(/^live:/, ""))
+            : message.content.startsWith("builder:")
+              ? t(message.content)
+              : stripAttachedPlaceholders(message.content);
+          const hasBody =
+            Boolean(raw.trim()) ||
+            Boolean(message.uiComponent) ||
+            Boolean(message.artifacts?.length) ||
+            Boolean(message.citations?.length);
+          if (!hasBody) return null;
+          return (
         <div
           className={cn(
             "rounded-3xl px-4 py-3 text-left text-sm leading-relaxed",
@@ -77,15 +96,7 @@ function LiveBubble({
           )}
         >
           {/* Controlled notices (e.g. execution disabled) reference i18n keys. */}
-          <Markdown
-            content={
-              message.content.startsWith("live:")
-                ? t(message.content.replace(/^live:/, ""))
-                : message.content.startsWith("builder:")
-                  ? t(message.content)
-                  : message.content
-            }
-          />
+          {raw.trim() ? <Markdown content={raw} /> : null}
 
           {message.uiComponent?.type === "secret_form" ? (
             <SecretForm
@@ -164,6 +175,8 @@ function LiveBubble({
             </div>
           ) : null}
         </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -275,7 +288,9 @@ export function LiveView({ agentId }: { agentId: string }) {
         <PromptComposer
           className="mx-auto max-w-3xl"
           placeholder={t("live:composer.placeholder")}
-          onSubmit={(value) => void sendMessage.mutateAsync(value)}
+          onSubmit={(value, attachments) =>
+            void sendMessage.mutateAsync({ content: value, attachments })
+          }
           busy={busy}
         />
       </div>

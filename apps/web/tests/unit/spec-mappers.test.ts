@@ -225,6 +225,7 @@ describe("message mappers", () => {
       thread_id: "t2",
       agent_id: "a1",
       user_id: "u1",
+      installation_id: null,
       role: "assistant",
       content: "",
       artifacts: [],

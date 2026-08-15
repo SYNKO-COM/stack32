@@ -19,7 +19,7 @@ import {
   isPasswordValid,
   passwordIssueErrorKey,
 } from "@/lib/auth/password";
-import { getAuthRepository } from "@/lib/repositories/factory";
+import { resolvePostAuthPath } from "@/lib/auth/post-auth";
 import { USE_MOCK_DATA } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -51,12 +51,11 @@ interface AuthFormProps {
 
 /** Where a successful auth should lead when no onSuccess override is given. */
 async function defaultDestination(): Promise<string> {
-  if (typeof window !== "undefined") {
-    const next = new URLSearchParams(window.location.search).get("next");
-    if (next?.startsWith("/") && !next.startsWith("//")) return next;
-  }
-  const profile = await getAuthRepository().getProfile();
-  return profile?.onboardingCompleted ? "/agents" : "/onboarding";
+  const next =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("next")
+      : null;
+  return resolvePostAuthPath(next);
 }
 
 export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormProps) {

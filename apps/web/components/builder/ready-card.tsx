@@ -5,15 +5,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { TypewriterText } from "@/components/builder/message-motion";
-import { SecretForm } from "@/components/builder/secret-form";
 import { Markdown } from "@/components/shared/markdown";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
-import { listAgentSecretsMeta } from "@/lib/actions/agents";
 import type {
   BuilderAction,
   BuilderSuggestion,
-  BuilderUiComponent,
   IdentitySummary,
 } from "@/lib/domain/types";
 
@@ -77,6 +74,7 @@ export function ReadyCard({
   fixResolved = false,
   animate = false,
   onDone,
+  setupInAiAgent = false,
 }: {
   agentId: string;
   content: string;
@@ -89,15 +87,28 @@ export function ReadyCard({
   onSuggestion?: (prompt: string) => void;
   animate?: boolean;
   onDone?: () => void;
+  /** When true (or when actions include open_ai_agent), CTA opens AI Agent without LLM key gate. */
+  setupInAiAgent?: boolean;
 }) {
   const { t } = useTranslation("builder");
   const router = useRouter();
   const [typedDone, setTypedDone] = useState(!animate);
-  const [needsKey, setNeedsKey] = useState(false);
-  const [checkingKey, setCheckingKey] = useState(false);
   const name = identitySummary?.name;
 
-  const lead = name ? t("ready.titleNamed", { name }) : t("ready.title");
+  const actionList = actions ?? ["open_ai_agent"];
+  const opensAiAgent =
+    setupInAiAgent ||
+    actionList.includes("open_ai_agent") ||
+    actionList.includes("test_agent");
+
+  const lead = (() => {
+    if (opensAiAgent) {
+      return name
+        ? t("ready.builtTitleNamed", { name })
+        : t("ready.builtTitle");
+    }
+    return name ? t("ready.titleNamed", { name }) : t("ready.title");
+  })();
   const plainBody = `${lead}\n\n${content}`.replace(/\*\*/g, "");
 
   const finish = () => {
@@ -105,21 +116,8 @@ export function ReadyCard({
     onDone?.();
   };
 
-  const goLive = async () => {
-    setCheckingKey(true);
-    try {
-      const secrets = await listAgentSecretsMeta(agentId);
-      const hasLlm = secrets.some((s) => s.secret_kind === "llm_api_key");
-      if (!hasLlm) {
-        setNeedsKey(true);
-        return;
-      }
-      router.push(`/agents/${agentId}/agent`);
-    } catch {
-      router.push(`/agents/${agentId}/agent`);
-    } finally {
-      setCheckingKey(false);
-    }
+  const goAiAgent = () => {
+    router.push(`/agents/${agentId}/agent`);
   };
 
   if (animate && !typedDone) {
@@ -130,60 +128,45 @@ export function ReadyCard({
     );
   }
 
-  const liveGateForm: BuilderUiComponent = {
-    type: "secret_form",
-    version: "1",
-    requestId: `ready-live-${agentId}`,
-    context: "live",
-    fields: [
-      { key: "provider", type: "select", required: true, suggested_value: "openai" },
-      { key: "api_key", type: "password", required: true },
-    ],
-  };
-
   return (
     <div className="space-y-4">
       <Markdown content={`${lead}\n\n${content}`} />
 
-      {needsKey ? (
-        <div className="rounded-xl border border-border p-3">
-          <p className="mb-2 text-sm text-muted-foreground">
-            {t("ready.llmKeyRequired", {
-              defaultValue: "Add your LLM API key before testing Live.",
-            })}
-          </p>
-          <SecretForm
-            uiComponent={liveGateForm}
-            agentId={agentId}
-            runId={liveGateForm.requestId}
-            onSubmitted={() => {
-              setNeedsKey(false);
-              router.push(`/agents/${agentId}/agent`);
-            }}
-          />
-        </div>
+      {opensAiAgent ? (
+        <p className="text-sm text-muted-foreground">
+          {t("ready.setupInAiAgent", {
+            defaultValue:
+              "Configure the model, connections, and secrets in AI Agent when you’re ready.",
+          })}
+        </p>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {(actions ?? ["test_agent"])
-          .filter((a) => a !== "view_structure" && a !== "view_changes" && a !== "fix_automatically")
+        {actionList
+          .filter(
+            (a) =>
+              a !== "view_structure" &&
+              a !== "view_changes" &&
+              a !== "fix_automatically",
+          )
           .map((action) => {
-          if (action === "test_agent") {
-            return (
-              <Button
-                key={action}
-                size="sm"
-                className="rounded-full"
-                disabled={checkingKey}
-                onClick={() => void goLive()}
-              >
-                {t("actions.testAgent")}
-                <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
-              </Button>
-            );
-          }
-          return null;
-        })}
+            if (action === "test_agent" || action === "open_ai_agent") {
+              return (
+                <Button
+                  key={action}
+                  size="sm"
+                  className="rounded-full"
+                  onClick={goAiAgent}
+                >
+                  {action === "open_ai_agent"
+                    ? t("actions.openAiAgent")
+                    : t("actions.testAgent")}
+                  <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+                </Button>
+              );
+            }
+            return null;
+          })}
       </div>
 
       {(actions ?? []).includes("fix_automatically") ? (

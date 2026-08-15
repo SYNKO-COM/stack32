@@ -166,22 +166,40 @@ async def resolve_pipedream_auth_for_tool(
 
 
 async def load_agent_tool_config(
-    *, user_id: str, agent_id: str, tool_id: str
+    *,
+    user_id: str,
+    agent_id: str,
+    tool_id: str,
+    installation_id: str | None = None,
 ) -> dict[str, Any]:
     async with get_supabase_admin_client() as sb:
-        response = await sb.get(
-            "/agent_tool_configurations",
-            params={
-                "user_id": f"eq.{user_id}",
-                "agent_id": f"eq.{agent_id}",
-                "tool_id": f"eq.{tool_id}",
-                "select": "config,status,provider_action_id,connection_id,schema_version",
-                "limit": "1",
-            },
-        )
+        params: dict[str, str] = {
+            "user_id": f"eq.{user_id}",
+            "agent_id": f"eq.{agent_id}",
+            "tool_id": f"eq.{tool_id}",
+            "select": "config,status,provider_action_id,connection_id,schema_version,installation_id",
+            "limit": "1",
+        }
+        if installation_id:
+            params["installation_id"] = f"eq.{installation_id}"
+        response = await sb.get("/agent_tool_configurations", params=params)
         if response.status_code >= 400:
             return {}
         rows = response.json() or []
+        if not rows and installation_id:
+            # Legacy owner fallback without installation_id.
+            response = await sb.get(
+                "/agent_tool_configurations",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "agent_id": f"eq.{agent_id}",
+                    "tool_id": f"eq.{tool_id}",
+                    "installation_id": "is.null",
+                    "select": "config,status,provider_action_id,connection_id,schema_version",
+                    "limit": "1",
+                },
+            )
+            rows = response.json() or [] if response.status_code < 400 else []
         if not rows:
             return {}
         cfg = rows[0].get("config")

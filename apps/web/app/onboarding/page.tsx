@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { AnimatedBackground } from "@/components/shared/animated-background";
@@ -11,6 +11,7 @@ import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { useCurrentUser, useProfile } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
+import { fetchProfileWithRetry } from "@/lib/auth/post-auth";
 
 function OnboardingShell({ children }: { children: React.ReactNode }) {
   return (
@@ -37,29 +38,69 @@ export default function OnboardingPage() {
     data: user,
     isLoading: userLoading,
     isError: userError,
+    isFetching: userFetching,
     refetch: refetchUser,
   } = useCurrentUser();
   const {
     data: profile,
     isLoading: profileLoading,
     isError: profileError,
+    isFetching: profileFetching,
     refetch: refetchProfile,
   } = useProfile();
 
-  const settling = userLoading || profileLoading;
+  const [readyForFlow, setReadyForFlow] = useState(false);
+  const resolvingRef = useRef(false);
+
+  const settling = userLoading || profileLoading || userFetching || profileFetching;
 
   useEffect(() => {
-    if (settling) return;
+    if (userLoading || userFetching) return;
+
     if (userError || !user) {
       router.replace("/signup");
       return;
     }
+
     if (profile?.onboardingCompleted) {
       router.replace("/agents");
+      return;
     }
-  }, [user, profile, settling, userError, router]);
 
-  if (settling) {
+    if (profile && !profile.onboardingCompleted) {
+      setReadyForFlow(true);
+      return;
+    }
+
+    // Null profile: retry — do not flash the onboarding form for completed users.
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
+
+    void (async () => {
+      try {
+        const fresh = await fetchProfileWithRetry();
+        await refetchProfile();
+        if (fresh?.onboardingCompleted) {
+          router.replace("/agents");
+          return;
+        }
+        // New user (or still no row after retries): show the flow.
+        setReadyForFlow(true);
+      } finally {
+        resolvingRef.current = false;
+      }
+    })();
+  }, [
+    user,
+    profile,
+    userLoading,
+    userFetching,
+    userError,
+    router,
+    refetchProfile,
+  ]);
+
+  if (settling || !readyForFlow || profile?.onboardingCompleted) {
     return (
       <OnboardingShell>
         <BrandLoader label={t("loading")} size="lg" />
@@ -67,17 +108,7 @@ export default function OnboardingPage() {
     );
   }
 
-  if (userError || !user || profile?.onboardingCompleted) {
-    return (
-      <OnboardingShell>
-        <BrandLoader label={t("loading")} size="lg" />
-      </OnboardingShell>
-    );
-  }
-
-  // Profile may still be null briefly for a brand-new auth user (trigger lag);
-  // treat missing profile as "onboarding not completed".
-  if (profileError) {
+  if (profileError && !profile) {
     return (
       <OnboardingShell>
         <div className="max-w-sm space-y-3 text-center text-sm" role="alert">
