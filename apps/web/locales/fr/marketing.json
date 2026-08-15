@@ -92,7 +92,7 @@
   },
   "pricingPreview": {
     "title": "Une tarification simple",
-    "subtitle": "Commencez gratuitement, passez au niveau supérieur quand vos agents font partie de votre quotidien."
+    "subtitle": "Commencez gratuitement, puis Starter, Pro ou Scale selon votre rythme — −20 % en annuel."
   },
   "finalCta": {
     "title": "Votre premier agent est à une phrase de vous",
@@ -211,40 +211,72 @@
   },
   "pricing": {
     "title": "Tarifs",
-    "subtitle": "Commencez gratuitement. Passez à Pro quand Stack32 fait partie de votre quotidien.",
+    "subtitle": "Commencez gratuitement. Passez à Starter, Pro ou Scale quand vos agents font partie de votre quotidien.",
     "perMonth": "/mois",
-    "intro": "Un Free clair pour explorer, un Pro quand les agents sont utilisés régulièrement. Pas de complexité par siège pendant la bêta — juste la capacité dont vous avez besoin.",
+    "intro": "Quatre niveaux clairs : tester sans carte, publier vos premiers agents, accélérer en Pro, ou scaler une flotte. En annuel (−20 %) : Starter 20 $, Pro 40 $, Scale 80 $/mois.",
+    "billingToggleLabel": "Période de facturation",
+    "monthly": "Mensuel",
+    "annual": "Annuel",
+    "annualSave": "−20 %",
+    "billedAnnually": "Soit {{amount}} facturés par an",
     "free": {
       "name": "Gratuit",
-      "price": "0 $",
-      "description": "Explorez Stack32 et livrez votre premier agent fonctionnel.",
+      "description": "Découvrez Stack32 et construisez un premier agent pour tester le produit.",
       "features": [
-        "1 agent",
+        "1 agent (non publiable)",
         "Vues Build, Live et Structure",
-        "Création et itération conversationnelles",
+        "Création conversationnelle limitée",
+        "Live avec votre propre clé LLM (BYOK)",
         "Support communautaire"
       ],
-      "cta": "Commencer"
+      "cta": "Commencer gratuitement"
+    },
+    "starter": {
+      "name": "Starter",
+      "description": "Pour lancer et publier vos premiers agents utiles au quotidien.",
+      "features": [
+        "Jusqu’à 5 agents",
+        "Publication d’agents",
+        "Crédits Builder généreux pour itérer",
+        "Tests automatiques et réparation guidée",
+        "Live avec votre clé LLM (BYOK)",
+        "Support par e-mail"
+      ],
+      "cta": "Choisir Starter"
     },
     "pro": {
       "name": "Pro",
-      "price": "29 $",
-      "description": "Pour celles et ceux qui s'appuient sur leurs agents chaque semaine.",
+      "description": "Pour celles et ceux qui s’appuient sur une flotte d’agents chaque semaine.",
       "badge": "Le plus populaire",
       "features": [
-        "Agents illimités",
-        "Tests automatiques et réparation guidée",
+        "Jusqu’à 30 agents",
+        "Publication et partage",
+        "Plus de crédits Builder pour itérer vite",
         "Sources de connaissances avec citations",
         "Historique des versions",
+        "Live avec votre clé LLM (BYOK)",
         "Support prioritaire"
       ],
-      "cta": "Passer à Pro"
+      "cta": "Choisir Pro"
+    },
+    "scale": {
+      "name": "Scale",
+      "description": "Pour les équipes et power users qui enchaînent agents, builds et usage intensif.",
+      "features": [
+        "Agents illimités",
+        "Gros pool de crédits Builder + top-ups",
+        "Knowledge et stockage étendus",
+        "Tout inclus dans Pro",
+        "Live avec votre clé LLM (BYOK)",
+        "Support prioritaire dédié"
+      ],
+      "cta": "Choisir Scale"
     },
     "included": {
       "title": "Inclus dans tous les plans",
       "items": [
         "Builder en langage naturel — sans code ni canvas de workflow",
-        "Chat Live avec progression visible pendant le travail de l'agent",
+        "Chat Live avec progression visible pendant le travail de l’agent",
         "Vue Structure qui explique objectif, règles et capacités",
         "Interface en anglais et en français"
       ]
@@ -253,16 +285,20 @@
       "title": "Questions facturation",
       "items": [
         {
+          "question": "Quelle est la différence entre mensuel et annuel ?",
+          "answer": "Le mensuel se renouvelle chaque mois (Starter 24 $, Pro 49 $, Scale 99 $). L’annuel facture 12 mois d’un coup au tarif réduit (−20 %) : Starter 20 $, Pro 40 $, Scale 80 $ par mois équivalent."
+        },
+        {
           "question": "Puis-je annuler à tout moment ?",
-          "answer": "Oui. L'abonnement est mensuel et annulable quand vous n'avez plus besoin de Pro. Vous conservez l'accès jusqu'à la fin de la période déjà payée, puis le plan Free. L'annulation ne donne pas lieu à un remboursement de la période entamée."
+          "answer": "Oui. Vous conservez l’accès jusqu’à la fin de la période déjà payée, puis vous repassez sur le plan Gratuit. L’annulation ne rembourse pas la période entamée."
         },
         {
           "question": "Puis-je être remboursé ?",
-          "answer": "Non pour une période déjà commencée : le service (accès Pro, crédits, création d'agents) s'active immédiatement dès le paiement. En commandant, vous acceptez l'exécution immédiate et renoncez au droit de rétractation (Code de la consommation). Voir la Politique de remboursement pour les exceptions très limitées."
+          "answer": "Non pour une période déjà commencée : l’accès (crédits Builder, création d’agents, publication selon le plan) s’active dès le paiement. En commandant, vous acceptez l’exécution immédiate et renoncez au droit de rétractation (Code de la consommation). Voir la Politique de remboursement pour les exceptions très limitées."
         },
         {
           "question": "Qui gère le paiement ?",
-          "answer": "La facturation est traitée de façon sécurisée par Whop. Stack32 ne vous demande jamais de coller un numéro de carte dans un formulaire maison."
+          "answer": "La facturation sera traitée de façon sécurisée par Whop. Stack32 ne vous demande jamais de coller un numéro de carte dans un formulaire maison."
         },
         {
           "question": "Les prix vont-ils changer ?",
@@ -270,7 +306,7 @@
         }
       ]
     },
-    "note": "Prix affichés à titre indicatif pendant la bêta. La facturation est gérée de manière sécurisée par Whop."
+    "note": "Prix affichés à titre indicatif pendant la bêta. Paiement Whop à venir — aucun checkout réel pour l’instant."
   },
   "faq": {
     "title": "Questions fréquentes",

@@ -14,7 +14,22 @@
     "searching": "Searching the web…",
     "reading": "Reading your documents…",
     "analyzing": "Analyzing…",
-    "preparing": "Preparing the answer…"
+    "preparing": "Preparing the answer…",
+    "started": "Starting…",
+    "input": "Message received…",
+    "model": "Thinking with the model…",
+    "tool": "Using a tool…",
+    "knowledge": "Searching knowledge…",
+    "memory": "Reading memory…",
+    "memoryDone": "Memory updated…",
+    "memoryError": "Memory error…",
+    "approval": "Waiting for your approval…",
+    "connection": "Waiting for an account connection…",
+    "output": "Formatting the reply…",
+    "done": "Finishing…",
+    "completed": "Done",
+    "failed": "Something went wrong…",
+    "canceled": "Stopped"
   },
   "execution": {
     "disabled": "Agent execution is currently unavailable. Your message has been saved and previous conversations remain accessible."
@@ -35,6 +50,7 @@
     "markdown": "Document"
   },
   "errors": {
+    "canceled": "Run stopped.",
     "missingUserLlmKey": "To chat with this agent, connect a brain (LLM) with your API key below. It is stored securely.",
     "runFailed": "Something went wrong while running your agent. Please try again.",
     "budgetExceeded": "This run used too many model calls. Try a shorter request.",
@@ -44,5 +60,15 @@
   "agentLabel": "Agent",
   "a11y": {
     "conversation": "Conversation with your agent"
+  },
+  "approval": {
+    "title": "Approval required",
+    "defaultAction": "Allow this action to continue.",
+    "approve": "Approve",
+    "deny": "Deny",
+    "approved": "Approved — continuing…",
+    "denied": "Denied — the agent will not run this action.",
+    "missing": "Approval details are missing. Try sending your request again.",
+    "error": "Could not save your decision. Try again."
   }
 }

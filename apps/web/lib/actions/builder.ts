@@ -223,6 +223,41 @@ export async function updateAgentModel(input: {
   });
 }
 
+/** Persist memory settings from Structure (conversation / semantic / provider). */
+export async function updateAgentMemorySettings(input: {
+  agentId: string;
+  conversationEnabled?: boolean;
+  semanticEnabled?: boolean;
+  writePolicy?: "never" | "explicit" | "automatic";
+  retentionDays?: number;
+  provider?: "stack32" | "external_postgres";
+  conversationWindow?: number;
+}): Promise<void> {
+  await requireOwnedAgent(input.agentId);
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("memory_require_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  const body: Record<string, unknown> = {};
+  if (input.conversationEnabled !== undefined) {
+    body.conversation_enabled = input.conversationEnabled;
+  }
+  if (input.semanticEnabled !== undefined) {
+    body.semantic_enabled = input.semanticEnabled;
+  }
+  if (input.writePolicy !== undefined) body.write_policy = input.writePolicy;
+  if (input.retentionDays !== undefined) body.retention_days = input.retentionDays;
+  if (input.provider !== undefined) body.provider = input.provider;
+  if (input.conversationWindow !== undefined) {
+    body.conversation_window = input.conversationWindow;
+  }
+  await agentServiceFetch(`/v1/agents/${input.agentId}/memory-settings`, {
+    method: "PATCH",
+    accessToken,
+    body,
+  });
+}
+
 /** Resume builder after capabilities / memory form. */
 export async function submitBuilderCapabilities(input: {
   runId: string;

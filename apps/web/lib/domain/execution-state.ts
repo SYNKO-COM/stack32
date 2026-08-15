@@ -9,6 +9,12 @@ export interface LiveEventPayload {
   toolId?: string;
   provider?: string;
   appId?: string;
+  code?: string;
+  errorType?: string;
+  error?: string;
+  mappingKey?: string;
+  sequence?: number;
+  rawPayload?: Record<string, unknown>;
 }
 
 export interface NodeVisualState {
@@ -26,6 +32,20 @@ export interface ExecutionVisualState {
   edges: Record<string, EdgeVisualState>;
   /** Legacy flat map for backward compatibility. */
   legacy: Record<string, ModuleExecState>;
+  /** Last failure details for Structure drawers (copyable logs). */
+  error?: ExecutionErrorInfo | null;
+  /** Per-node failure details (so Canva never shows Calendar errors). */
+  nodeErrors?: Record<string, ExecutionErrorInfo>;
+}
+
+export interface ExecutionErrorInfo {
+  code?: string;
+  message?: string;
+  errorType?: string;
+  /** Best-effort node that failed (agent / integration / model…). */
+  nodeId?: string;
+  logs: Array<{ sequence: number; eventType: string; summary: string }>;
+  fullLogText: string;
 }
 
 function toolToNodeId(toolId: string, graph: ProductAgentGraph | null): string {
@@ -59,11 +79,17 @@ export function reduceExecutionEvents(
   const nodes: Record<string, NodeVisualState> = {};
   const edges: Record<string, EdgeVisualState> = {};
   const toolStates: Record<string, ModuleExecState> = {};
+  const nodeErrors: Record<string, ExecutionErrorInfo> = {};
   let runStatus: RunStatus = "idle";
   let runEnded = false;
   let runFailed = false;
   let anyToolError = false;
   let anyToolSuccess = false;
+  let lastFailCode: string | undefined;
+  let lastFailType: string | undefined;
+  let lastFailMessage: string | undefined;
+  let lastFailNodeId: string | undefined;
+  const logLines: ExecutionErrorInfo["logs"] = [];
 
   const setNode = (id: string, status: ModuleExecState) => {
     nodes[id] = { executionStatus: status };
@@ -76,6 +102,19 @@ export function reduceExecutionEvents(
 
   for (const event of events) {
     const t = event.eventType;
+    const seq = event.sequence ?? logLines.length + 1;
+    const bits = [
+      event.toolId ? `tool=${event.toolId}` : null,
+      event.code ? `code=${event.code}` : null,
+      event.errorType ? `type=${event.errorType}` : null,
+      event.error ? `error=${event.error}` : null,
+      event.mappingKey ? `key=${event.mappingKey}` : null,
+    ].filter(Boolean);
+    logLines.push({
+      sequence: seq,
+      eventType: t,
+      summary: bits.length ? bits.join(" · ") : "—",
+    });
 
     if (t.includes("run.started") || t.includes("runtime.run.started")) {
       runStatus = "running";
@@ -88,6 +127,22 @@ export function reduceExecutionEvents(
     if (t.includes("run.failed") || t.includes("runtime.run.failed")) {
       runEnded = true;
       runFailed = true;
+      lastFailCode = event.code || lastFailCode;
+      lastFailType = event.errorType || lastFailType;
+      lastFailMessage = event.error || lastFailMessage;
+      lastFailNodeId = "agent";
+    }
+    if (t.includes("run.canceled") || t.includes("runtime.run.canceled")) {
+      // Cancel / clear = reset to idle, not an error state on the structure.
+      runEnded = true;
+      runFailed = false;
+      runStatus = "idle";
+      for (const key of Object.keys(nodes)) delete nodes[key];
+      for (const key of Object.keys(edges)) delete edges[key];
+      for (const key of Object.keys(legacy)) delete legacy[key];
+      lastFailCode = undefined;
+      lastFailMessage = undefined;
+      lastFailNodeId = undefined;
     }
 
     if (t.includes("runtime.input.received")) {
@@ -97,7 +152,7 @@ export function reduceExecutionEvents(
       setNode("agent", "running");
       legacy.brain = "running";
       const e = edgeBetween(graph, "trigger:chat", "agent") ?? edgeBetween(graph, "trigger:schedule", "agent");
-      if (e) setEdge(e, "running");
+      if (e) setEdge(e, "success");
     }
 
     if (t.includes("runtime.model.started")) {
@@ -111,6 +166,8 @@ export function reduceExecutionEvents(
     if (t.includes("runtime.model.completed")) {
       setNode("attachment:model", "success");
       legacy.model = "success";
+      const e = edgeBetween(graph, "attachment:model", "agent");
+      if (e) setEdge(e, "success");
     }
 
     if (t.includes("runtime.memory.")) {
@@ -153,6 +210,26 @@ export function reduceExecutionEvents(
       legacy[event.toolId] = "error";
       const e = edgeBetween(graph, nodeId, "agent");
       if (e) setEdge(e, "error");
+      const failCode = event.code || event.error || undefined;
+      const failMessage =
+        (typeof event.rawPayload?.message === "string"
+          ? event.rawPayload.message
+          : undefined) ||
+        event.error ||
+        failCode;
+      lastFailCode = failCode || lastFailCode;
+      lastFailMessage = failMessage || lastFailMessage;
+      lastFailNodeId = nodeId;
+      nodeErrors[nodeId] = {
+        code: failCode,
+        message: failMessage || failCode || "Tool failed",
+        errorType: event.errorType,
+        nodeId,
+        logs: logLines.slice(),
+        fullLogText: logLines
+          .map((l) => `#${l.sequence} ${l.eventType} — ${l.summary}`)
+          .join("\n"),
+      };
     }
     if (t.includes("runtime.connection.required") && event.toolId) {
       const nodeId = toolToNodeId(event.toolId, graph);
@@ -188,6 +265,7 @@ export function reduceExecutionEvents(
       runStatus = anyToolSuccess ? "partial" : "error";
       setNode("agent", anyToolSuccess ? "error" : "error");
       legacy.brain = "error";
+      lastFailNodeId = lastFailNodeId || "agent";
     } else if (legacy.output === "success") {
       runStatus = anyToolError ? "partial" : "success";
       setNode("agent", "success");
@@ -217,7 +295,38 @@ export function reduceExecutionEvents(
     }
   }
 
-  return { runStatus, nodes, edges, legacy };
+  // While paused for the user, the agent node shows pause — not a spinner.
+  if (!runEnded) {
+    const waitingStatuses = Object.values(nodes).filter(
+      (s) => s === "waiting_for_approval" || s === "waiting_for_connection",
+    );
+    if (waitingStatuses.length > 0) {
+      const pauseStatus = waitingStatuses.includes("waiting_for_approval")
+        ? "waiting_for_approval"
+        : "waiting_for_connection";
+      setNode("agent", pauseStatus);
+      legacy.brain = pauseStatus;
+      runStatus = pauseStatus === "waiting_for_approval" ? "running" : runStatus;
+    }
+  }
+
+  const error: ExecutionErrorInfo | null =
+    runStatus === "error" || runStatus === "partial"
+      ? {
+          code: lastFailCode,
+          message:
+            lastFailMessage ||
+            (lastFailCode ? `Run failed (${lastFailCode})` : "Run failed"),
+          errorType: lastFailType,
+          nodeId: lastFailNodeId,
+          logs: logLines,
+          fullLogText: logLines
+            .map((l) => `#${l.sequence} ${l.eventType} — ${l.summary}`)
+            .join("\n"),
+        }
+      : null;
+
+  return { runStatus, nodes, edges, legacy, error, nodeErrors };
 }
 
 /** Backward-compatible flat map reducer. */

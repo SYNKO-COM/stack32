@@ -137,6 +137,8 @@ export interface AgentSpec {
     semanticEnabled?: boolean;
     writePolicy?: "never" | "explicit" | "automatic";
     retentionDays?: number;
+    /** stack32 built-in vs external Postgres (BYO). */
+    provider?: "stack32" | "external_postgres";
   };
   rules: string[];
   output: {
@@ -369,10 +371,12 @@ export interface LiveMessage {
   content: string;
   citations?: Citation[];
   artifacts?: Artifact[];
-  /** True while the mock agent is still "working" on this reply. */
+  /** True while the agent is still working on this reply. */
   pending?: boolean;
   /** i18n key under live:status.* describing the current tool activity. */
   statusKey?: string;
+  /** Active live run id (for structure animation + stop). */
+  runId?: string;
   uiComponent?: BuilderUiComponent;
   /** User-uploaded files / images shown as thumbnails above the bubble. */
   attachments?: MessageAttachment[];

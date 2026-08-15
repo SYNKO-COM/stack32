@@ -81,6 +81,11 @@ def app_key_from_tool_id(tool_id: str, *, app_id: str | None = None) -> str:
 
 
 def oauth_provider_for_app(app_key: str) -> str:
+    """OAuth/connect provider for a product app.
+
+    Google product apps (Gmail, Calendar, Docs, …) connect via Pipedream so each
+    app can bind a distinct Google account without Stack32's Google OAuth client.
+    """
     key = (app_key or "").lower()
     if key in {
         "gmail",
@@ -91,7 +96,7 @@ def oauth_provider_for_app(app_key: str) -> str:
         "google_slides",
         "google",
     }:
-        return "google"
+        return "pipedream"
     if key in {
         "microsoft_outlook",
         "outlook",

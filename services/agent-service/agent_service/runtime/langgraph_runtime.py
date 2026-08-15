@@ -10,8 +10,17 @@ from typing import Annotated, Any, TypedDict
 from agent_service.config import get_settings
 from agent_service.gateway.model_gateway import ModelProfile, get_model_gateway
 from agent_service.models.agent_spec import AgentSpec
-from agent_service.runtime.context import load_live_history
-from agent_service.runtime.tool_schema import RuntimeToolCall, async_schemas_for_tools
+from agent_service.runtime.context import (
+    has_prior_conversation_context,
+    load_live_history,
+    memory_event_payload,
+)
+from agent_service.runtime.tool_schema import (
+    RuntimeToolCall,
+    async_schemas_for_tools,
+    from_openai_function_name,
+    to_openai_function_name,
+)
 from agent_service.supabase_client import Persistence
 from agent_service.tools.runtime import ToolError, execute_tool
 
@@ -133,7 +142,9 @@ def stable_live_thread_id(live_thread_id: str) -> str:
     return f"live:{live_thread_id}"
 
 
-def _to_provider_message(msg: dict[str, Any]) -> dict[str, Any]:
+def _to_provider_message(
+    msg: dict[str, Any], *, allowed_tool_ids: list[str] | None = None
+) -> dict[str, Any]:
     """Normalize internal messages to OpenAI/LiteLLM chat format."""
     role = msg.get("role")
     raw_content = msg.get("content")
@@ -147,13 +158,23 @@ def _to_provider_message(msg: dict[str, Any]) -> dict[str, Any]:
                 continue
             # Already provider-shaped
             if raw.get("type") == "function" and isinstance(raw.get("function"), dict):
-                provider_calls.append(raw)
+                fn = dict(raw["function"])
+                name = str(fn.get("name") or "")
+                if name and allowed_tool_ids:
+                    original = from_openai_function_name(name, allowed_tool_ids)
+                    fn["name"] = to_openai_function_name(original)
+                elif name:
+                    fn["name"] = to_openai_function_name(name)
+                provider_calls.append({**raw, "function": fn})
                 continue
             # Compact gateway shape: {call_id, tool_id, arguments}
             call_id = str(raw.get("call_id") or raw.get("id") or f"call_{len(provider_calls)}")
             name = str(raw.get("tool_id") or raw.get("name") or "")
             if not name:
                 continue
+            if allowed_tool_ids:
+                name = from_openai_function_name(name, allowed_tool_ids)
+            safe_name = to_openai_function_name(name)
             args = raw.get("arguments", {})
             if isinstance(args, dict):
                 import json
@@ -165,7 +186,7 @@ def _to_provider_message(msg: dict[str, Any]) -> dict[str, Any]:
                 {
                     "id": call_id,
                     "type": "function",
-                    "function": {"name": name, "arguments": args_str},
+                    "function": {"name": safe_name, "arguments": args_str},
                 }
             )
         if provider_calls:
@@ -174,7 +195,10 @@ def _to_provider_message(msg: dict[str, Any]) -> dict[str, Any]:
         if msg.get("tool_call_id"):
             out["tool_call_id"] = msg["tool_call_id"]
         if msg.get("name"):
-            out["name"] = msg["name"]
+            name = str(msg["name"])
+            if allowed_tool_ids:
+                name = from_openai_function_name(name, allowed_tool_ids)
+            out["name"] = to_openai_function_name(name)
     return out
 
 
@@ -192,6 +216,7 @@ async def run_langgraph_agent(
     memories: list[dict[str, Any]] | None = None,
     conversation_summary: str | None = None,
     user_message_content: str | list[dict[str, Any]] | None = None,
+    progress_message_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute a ReAct-style LangGraph loop with tool calling and checkpoints."""
     from langgraph.graph import END, START, StateGraph
@@ -213,11 +238,32 @@ async def run_langgraph_agent(
     tool_schemas = await async_schemas_for_tools(enabled_tools, tool_configs=tool_configs)
     max_loops = min(settings.MAX_LLM_CALLS_PER_RUN, max(1, spec.runtime.max_tool_calls + 1))
 
-    await db.emit_event(
-        run_id,
-        "runtime.input.received",
-        {"mapping_key": "live.status.input", "chars": len(content or "")},
-    )
+    async def emit(event_type: str, payload: dict[str, Any]) -> None:
+        await db.emit_event(run_id, event_type, payload)
+        if not progress_message_id:
+            return
+        mapping = payload.get("mapping_key")
+        if not isinstance(mapping, str) or not mapping.startswith("live.status."):
+            return
+        status_key = mapping[len("live.status.") :]
+        meta: dict[str, Any] = {
+            "pending": True,
+            "statusKey": status_key,
+            "run_id": run_id,
+        }
+        tool_id = payload.get("tool_id")
+        if isinstance(tool_id, str) and tool_id:
+            meta["toolId"] = tool_id
+        await db.update_assistant_message(
+            message_id=progress_message_id,
+            metadata=meta,
+            table="live_messages",
+        )
+
+    await emit(
+            "runtime.input.received",
+            {"mapping_key": "live.status.input", "chars": len(content or "")},
+        )
 
     history = await load_live_history(
         db=db,
@@ -226,6 +272,23 @@ async def run_langgraph_agent(
         agent_id=agent_id,
         window=spec.memory.conversation_window if spec.memory.conversation_enabled else 1,
     )
+
+    # Conversation memory (window + rolling summary) is the default Stack32 context
+    # path. From the 2nd user message onward it is applied on every turn so the
+    # Structure Memory node lights up and the model keeps thread continuity.
+    apply_conversation_memory = bool(
+        spec.memory.conversation_enabled
+        and has_prior_conversation_context(
+            history=history, conversation_summary=conversation_summary
+        )
+    )
+    if apply_conversation_memory:
+        await emit(
+            "runtime.memory.read.started",
+            memory_event_payload(
+                history=history, conversation_summary=conversation_summary
+            ),
+        )
 
     system = (
         spec.instructions.system
@@ -237,7 +300,7 @@ async def run_langgraph_agent(
     # Inject the rolling conversation summary so long threads keep continuity beyond
     # the recent-message window. This is Stack32-generated context (not external),
     # so it is trusted, but kept concise to preserve context budget.
-    if conversation_summary and spec.memory.conversation_enabled:
+    if apply_conversation_memory and conversation_summary:
         summary_text = conversation_summary.strip()[:2000]
         if summary_text:
             system = (
@@ -260,8 +323,18 @@ async def run_langgraph_agent(
         )
 
     seed_messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
-    if spec.memory.conversation_enabled:
+    if apply_conversation_memory and history:
         seed_messages.extend(history)
+    if apply_conversation_memory:
+        await emit(
+            "runtime.memory.read.completed",
+            {
+                **memory_event_payload(
+                    history=history, conversation_summary=conversation_summary
+                ),
+                "mapping_key": "live.status.memoryDone",
+            },
+        )
     turn_content: str | list[dict[str, Any]]
     if user_message_content is not None:
         if isinstance(user_message_content, list):
@@ -280,13 +353,23 @@ async def run_langgraph_agent(
     elif spec.model_policy.profile == "reasoning":
         profile = ModelProfile.REASONING
 
+    exact_model: str | None = None
+    model_cfg = getattr(spec, "model", None)
+    if model_cfg is not None and getattr(model_cfg, "provider", None) and getattr(
+        model_cfg, "model_id", None
+    ):
+        from agent_service.gateway.llm_validation import exact_model_route
+
+        exact_model = exact_model_route(str(model_cfg.provider), str(model_cfg.model_id))
+
     async def agent_node(state: AgentState) -> dict[str, Any]:
         # OpenAI requires assistant tool_calls in provider format ({id,type,function}).
         # Our gateway returns a compact {call_id,tool_id,arguments} shape — normalize
         # the conversation before every model call.
-        outbound = [_to_provider_message(m) for m in state["messages"]]
-        await db.emit_event(
-            run_id,
+        outbound = [
+            _to_provider_message(m, allowed_tool_ids=enabled_tools) for m in state["messages"]
+        ]
+        await emit(
             "runtime.model.started",
             {"mapping_key": "live.status.model"},
         )
@@ -297,14 +380,20 @@ async def run_langgraph_agent(
             api_key=user_creds[1] if user_creds else None,
             provider=user_creds[0] if user_creds else None,
             tools=tool_schemas or None,
+            model=exact_model,
         )
         content_text = result.content if hasattr(result, "content") else str(result)
-        tool_calls = list(getattr(result, "tool_calls", None) or [])
+        raw_tool_calls = list(getattr(result, "tool_calls", None) or [])
+        tool_calls: list[dict[str, Any]] = []
+        for tc in raw_tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            tid = from_openai_function_name(str(tc.get("tool_id") or ""), enabled_tools)
+            tool_calls.append({**tc, "tool_id": tid})
         assistant_msg: dict[str, Any] = {"role": "assistant", "content": content_text or ""}
         if tool_calls:
             assistant_msg["tool_calls"] = tool_calls
-        await db.emit_event(
-            run_id,
+        await emit(
             "runtime.model.completed",
             {"mapping_key": "live.status.model", "tool_calls": len(tool_calls)},
         )
@@ -314,17 +403,17 @@ async def run_langgraph_agent(
         }
         if not tool_calls:
             out["answer"] = content_text or ""
-            await db.emit_event(
-                run_id,
-                "runtime.output.completed",
-                {"mapping_key": "live.status.output"},
-            )
+            await emit(
+            "runtime.output.completed",
+            {"mapping_key": "live.status.output"},
+        )
         return out
 
     async def tools_node(state: AgentState) -> dict[str, Any]:
         from agent_service.runtime.approvals import (
             approved_tool_ids_for_run,
             create_approval_request,
+            denied_tool_ids_for_run,
             requires_approval,
             summarize_action,
         )
@@ -334,15 +423,33 @@ async def run_langgraph_agent(
         observations: list[dict[str, Any]] = []
         results: list[dict[str, Any]] = []
         approved_ids = await approved_tool_ids_for_run(user_id=user_id, run_id=run_id)
+        denied_ids = await denied_tool_ids_for_run(user_id=user_id, run_id=run_id)
+        # Connecting an account authorizes actions — do not pause live runs for
+        # Approve/Deny unless the user previously denied this tool on this run.
+        approved_ids = list(set(approved_ids) | set(enabled_tools))
         interrupt_reason: str | None = None
 
         for raw in raw_calls:
             try:
-                call = RuntimeToolCall.model_validate(raw)
+                payload = dict(raw) if isinstance(raw, dict) else raw
+                if isinstance(payload, dict) and payload.get("tool_id"):
+                    payload = {
+                        **payload,
+                        "tool_id": from_openai_function_name(
+                            str(payload["tool_id"]), enabled_tools
+                        ),
+                    }
+                call = RuntimeToolCall.model_validate(payload)
             except Exception:  # noqa: BLE001
                 continue
             if call.tool_id not in enabled_tools:
                 obs = {"error": "TOOL_NOT_ALLOWED", "tool_id": call.tool_id}
+            elif call.tool_id in denied_ids:
+                obs = {
+                    "error": "APPROVAL_DENIED",
+                    "tool_id": call.tool_id,
+                    "message": "The user denied this action.",
+                }
             elif requires_approval(call.tool_id) and call.tool_id not in approved_ids:
                 # Persist approval + interrupt; return dry-run preview via execute_tool.
                 approval = await create_approval_request(
@@ -374,8 +481,7 @@ async def run_langgraph_agent(
                     "interrupt": True,
                 }
                 interrupt_reason = "APPROVAL_REQUIRED"
-                await db.emit_event(
-                    run_id,
+                await emit(
                     "runtime.approval.requested",
                     {
                         "mapping_key": "live.status.approval",
@@ -396,16 +502,15 @@ async def run_langgraph_agent(
                             app_hint = t.app_id
                             provider_hint = t.provider or provider_hint
                             break
-                    await db.emit_event(
-                        run_id,
-                        "runtime.tool.started",
-                        {
+                    await emit(
+            "runtime.tool.started",
+            {
                             "mapping_key": "live.status.tool",
                             "tool_id": call.tool_id,
                             "provider": provider_hint,
                             "app_id": app_hint,
                         },
-                    )
+        )
                     obs = await execute_tool(
                         call.tool_id,
                         call.arguments,
@@ -419,87 +524,98 @@ async def run_langgraph_agent(
                     )
                     if isinstance(obs, dict) and obs.get("error") == "CONNECTION_REQUIRED":
                         interrupt_reason = "CONNECTION_REQUIRED"
-                        await db.emit_event(
-                            run_id,
-                            "runtime.connection.required",
-                            {
+                        await emit(
+            "runtime.connection.required",
+            {
                                 "mapping_key": "live.status.connection",
                                 "tool_id": call.tool_id,
                                 "provider": obs.get("provider") or provider_hint,
                                 "app_id": obs.get("app_id") or app_hint,
                             },
-                        )
+        )
                     elif isinstance(obs, dict) and (
                         obs.get("error") == "APPROVAL_REQUIRED" or obs.get("approval_required")
                     ):
                         interrupt_reason = "APPROVAL_REQUIRED"
-                        await db.emit_event(
-                            run_id,
-                            "runtime.approval.requested",
-                            {
+                        await emit(
+            "runtime.approval.requested",
+            {
                                 "mapping_key": "live.status.approval",
                                 "tool_id": call.tool_id,
                                 "provider": provider_hint,
                                 "app_id": app_hint,
                             },
-                        )
+        )
                     elif isinstance(obs, dict) and obs.get("error"):
-                        await db.emit_event(
-                            run_id,
-                            "runtime.tool.failed",
-                            {
+                        err_val = obs.get("error")
+                        err_msg = obs.get("message") or obs.get("detail")
+                        if not err_msg and isinstance(err_val, dict):
+                            err_msg = err_val.get("message") or err_val.get("name")
+                        await emit(
+            "runtime.tool.failed",
+            {
                                 "mapping_key": "live.status.tool",
                                 "tool_id": call.tool_id,
                                 "provider": provider_hint,
                                 "app_id": app_hint,
-                                "error": obs.get("error"),
+                                "error": err_val if not isinstance(err_val, dict) else (
+                                    err_val.get("code") or "PIPEDREAM_ACTION_FAILED"
+                                ),
+                                "code": (
+                                    err_val
+                                    if isinstance(err_val, str)
+                                    else (
+                                        err_val.get("code")
+                                        if isinstance(err_val, dict)
+                                        else "TOOL_FAILED"
+                                    )
+                                ),
+                                "message": str(err_msg or "")[:400] or None,
+                                "status": obs.get("status"),
                             },
-                        )
+        )
                     else:
-                        await db.emit_event(
-                            run_id,
-                            "runtime.tool.completed",
-                            {
+                        await emit(
+            "runtime.tool.completed",
+            {
                                 "mapping_key": "live.status.tool",
                                 "tool_id": call.tool_id,
                                 "provider": provider_hint,
                                 "app_id": app_hint,
                             },
-                        )
+        )
                 except ToolError as exc:
                     provider_hint = (
                         "pipedream" if call.tool_id.startswith("pd:") else "native"
                     )
                     app_hint = None
                     obs = {"error": exc.code, "message": str(exc)}
-                    await db.emit_event(
-                        run_id,
-                        "runtime.tool.failed",
-                        {
+                    await emit(
+            "runtime.tool.failed",
+            {
                             "mapping_key": "live.status.tool",
                             "tool_id": call.tool_id,
                             "provider": provider_hint,
                             "app_id": app_hint,
                             "error": exc.code,
                         },
-                    )
+        )
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("tool failed tool=%s err=%s", call.tool_id, type(exc).__name__)
                     provider_hint = (
                         "pipedream" if call.tool_id.startswith("pd:") else "native"
                     )
                     obs = {"error": "TOOL_FAILED", "message": type(exc).__name__}
-                    await db.emit_event(
-                        run_id,
-                        "runtime.tool.failed",
-                        {
+                    await emit(
+            "runtime.tool.failed",
+            {
                             "mapping_key": "live.status.tool",
                             "tool_id": call.tool_id,
                             "provider": provider_hint,
                             "app_id": None,
                             "error": "TOOL_FAILED",
                         },
-                    )
+        )
 
             results.append({"tool_id": call.tool_id, "result": obs, "call_id": call.call_id})
             observations.append(
@@ -512,6 +628,38 @@ async def run_langgraph_agent(
             )
             if interrupt_reason:
                 break
+
+        # OpenAI requires a tool message for EVERY tool_call_id on the last assistant turn.
+        # If we interrupt mid-batch (approval/connection), stub the remaining calls.
+        answered_ids = {
+            str(o.get("tool_call_id"))
+            for o in observations
+            if isinstance(o, dict) and o.get("tool_call_id")
+        }
+        for raw in raw_calls:
+            if not isinstance(raw, dict):
+                continue
+            call_id = str(raw.get("call_id") or raw.get("id") or "")
+            if not call_id or call_id in answered_ids:
+                continue
+            tid = str(raw.get("tool_id") or raw.get("name") or "tool")
+            if enabled_tools:
+                tid = from_openai_function_name(tid, enabled_tools)
+            stub = {
+                "skipped": True,
+                "reason": interrupt_reason or "INTERRUPTED",
+                "message": "Tool call skipped because the run is waiting for user input.",
+            }
+            observations.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": tid,
+                    "content": json.dumps(stub),
+                }
+            )
+            answered_ids.add(call_id)
+
         out: dict[str, Any] = {"messages": observations, "tool_results": results}
         if interrupt_reason == "CONNECTION_REQUIRED":
             out["interrupt"] = interrupt_reason
@@ -531,12 +679,19 @@ async def run_langgraph_agent(
             return "tools"
         return "end"
 
+    def after_tools(state: AgentState) -> str:
+        # Never call the model again while waiting for approval/connection —
+        # incomplete tool transcripts cause OpenAI 400s (masked as MODEL_PROVIDER_UNAVAILABLE).
+        if state.get("interrupt"):
+            return "end"
+        return "agent"
+
     graph = StateGraph(AgentState)
     graph.add_node("agent", agent_node)
     graph.add_node("tools", tools_node)
     graph.add_edge(START, "agent")
     graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
-    graph.add_edge("tools", "agent")
+    graph.add_conditional_edges("tools", after_tools, {"agent": "agent", "end": END})
 
     checkpointer = await _get_checkpointer()
     compiled = graph.compile(checkpointer=checkpointer)
@@ -560,8 +715,38 @@ async def run_langgraph_agent(
                 answer = str(msg["content"])
                 break
     if not answer:
-        answer = "I could not produce an answer."
-
+        tool_results = list(final.get("tool_results") or [])
+        failures: list[str] = []
+        for tr in tool_results:
+            if not isinstance(tr, dict):
+                continue
+            res = tr.get("result") if isinstance(tr.get("result"), dict) else tr
+            if not isinstance(res, dict):
+                continue
+            if res.get("error") or res.get("approval_required"):
+                tid = str(tr.get("tool_id") or res.get("tool_id") or "tool")
+                msg = str(
+                    res.get("message")
+                    or (
+                        res.get("error", {}).get("message")
+                        if isinstance(res.get("error"), dict)
+                        else res.get("error")
+                    )
+                    or "failed"
+                )[:180]
+                failures.append(f"- {tid}: {msg}")
+        if failures:
+            answer = (
+                "I tried to complete your request, but one or more tools failed:\n"
+                + "\n".join(failures[:6])
+                + "\n\nOpen the failed tool in Agent structure for details, "
+                "or use “Try to fix” to send the error to Stack32 Builder."
+            )
+        else:
+            answer = (
+                "I wasn't able to finish a complete answer for that request. "
+                "Please try again, or open Agent structure if a tool shows an error."
+            )
     return {
         "answer": answer,
         "tool_results": final.get("tool_results") or [],

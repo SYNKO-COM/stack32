@@ -129,7 +129,7 @@
   },
   "steps": {
     "understanding": "Understanding your goal",
-    "capabilities": "Choosing abilities",
+    "capabilities": "Choosing triggers",
     "building": "Building the agent",
     "testing": "Running a quick test",
     "repairing": "Fixing issues"
@@ -240,26 +240,21 @@
     }
   },
   "capabilities": {
-    "prompt": "Almost there. Tell me how this agent should work:\n\n• remember this chat?\n• keep long-term memory?\n• use your documents?\n• run on a schedule?\n\nToggle what you want below, add a note if useful, then build.",
-    "promptAfterSecret": "Key saved — thank you.\n\nNow, how should this agent work?\n\n• remember this chat?\n• keep long-term memory?\n• use your documents?\n• run on a schedule?\n\nToggle your choices below, then build the agent.",
-    "saved": "Got it.\n\nI'm building the first version with these settings. This can take a moment.",
-    "memoryConversation": "Remember this chat",
-    "memoryConversationHint": "Keeps the conversation coherent as you talk.",
-    "memorySemantic": "Long-term memory",
-    "memorySemanticHint": "Remembers important facts between sessions (you stay in control).",
-    "knowledge": "Documents (knowledge base)",
-    "knowledgeHint": "Lets the agent search files you add later.",
-    "scheduleHourly": "Run every hour",
-    "scheduleHourlyHint": "Prepares an automatic hourly run (coming soon). We already save it in the config.",
-    "contextNotes": "Anything else I should know?",
-    "contextNotesPlaceholder": "e.g. short answers, school level, tools to connect later…",
-    "appsComingSoon": "App connections (email, Slack, Drive) arrive next. Leave a note if you want them.",
+    "prompt": "How should this agent start?\n\nChat is always on. You can also add an hourly schedule if you want it to run on its own.",
+    "promptAfterSecret": "Key saved — thank you.\n\nHow should this agent start?\n\nChat is always on. Optionally add an hourly schedule below.",
+    "hint": "Choose how this agent is triggered. Chat cannot be turned off.",
+    "saved": "Got it.\n\nI'm building the first version now. This can take a moment.",
+    "triggerChat": "Chat messages",
+    "triggerChatHint": "Anyone can talk to the agent in Live. Always included.",
+    "required": "Required",
+    "scheduleHourly": "Also run every hour",
+    "scheduleHourlyHint": "Adds an automatic hourly run when scheduling is available.",
     "continue": "Build my agent",
     "submitting": "Building…",
-    "formClosed": "Settings saved. Building now."
+    "formClosed": "Triggers saved. Building now."
   },
   "providers": {
-    "prompt": "Which exact apps should this agent use? Name the email service and CRM (or other tools) — no account linking yet.",
+    "prompt": "Several tools look alike (e.g. Canva vs Canvas). Pick the exact app — you can also paste the website URL. No account linking yet.",
     "saved": "Got it — I'll wire those apps into your agent definition."
   },
   "questions": {
@@ -274,21 +269,51 @@
       "goal_details": "What should this agent accomplish?",
       "knowledge_scope": "Which documents or topics should it know?",
       "connection_intent": "Does it need an external account (email, calendar…)?",
-      "audience": "Who will use this agent?"
+      "audience": "Who will use this agent?",
+      "email_service": "Which email service?",
+      "crm": "Which CRM?",
+      "tool_website": "Tool website URL (optional)",
+      "app_canva": "Which design tool did you mean?"
     },
     "placeholders": {
       "goal_details": "Describe the main job in one or two sentences…",
       "knowledge_scope": "e.g. product docs, pricing PDF…",
-      "audience": "e.g. sales team, founders…"
+      "audience": "e.g. sales team, founders…",
+      "tool_website": "e.g. https://www.canva.com"
     },
     "options": {
       "none": "No account for now",
       "google": "Yes — Google (Gmail / Calendar)",
       "later": "Maybe later — remind me",
+      "gmail": "Gmail (Google)",
+      "microsoft_outlook": "Outlook",
+      "hubspot": "HubSpot",
+      "salesforce": "Salesforce",
+      "pipedrive": "Pipedrive",
+      "zoho_crm": "Zoho CRM",
+      "canva": "Canva (design tool)",
+      "canvas": "Canvas (Instructure LMS)",
+      "gocanvas": "GoCanvas",
+      "notion": "Notion",
       "connection_intent": {
         "none": "No account for now",
         "google": "Yes — Google (Gmail / Calendar)",
         "later": "Maybe later — remind me"
+      },
+      "email_service": {
+        "gmail": "Gmail (Google)",
+        "microsoft_outlook": "Outlook"
+      },
+      "crm": {
+        "hubspot": "HubSpot",
+        "salesforce": "Salesforce",
+        "pipedrive": "Pipedrive",
+        "zoho_crm": "Zoho CRM"
+      },
+      "app_canva": {
+        "canva": "Canva (design tool)",
+        "canvas": "Canvas (Instructure LMS)",
+        "gocanvas": "GoCanvas"
       }
     }
   },
@@ -361,8 +386,8 @@
     "identity": "Confirming identity",
     "identityDone": "Identity confirmed",
     "secret": "Connecting your brain (LLM)",
-    "capabilities": "Setting memory and documents",
-    "capabilitiesDone": "Settings saved",
+    "capabilities": "Choosing triggers",
+    "capabilitiesDone": "Triggers saved",
     "architecture": "Designing the structure",
     "spec": "Writing instructions",
     "graph": "Connecting the pieces",

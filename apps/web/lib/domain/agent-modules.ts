@@ -120,7 +120,7 @@ function toolNeedsConnection(toolId: string | undefined, provider?: string, conf
 function inferProvider(toolId: string | undefined, provider?: string): string | undefined {
   if (!toolId) return provider;
   const id = toolId.toLowerCase();
-  // Native Google tools still authenticate via the Google connection.
+  // Google product tools connect via Pipedream (per-app accounts).
   if (
     id.startsWith("gmail_") ||
     id.startsWith("calendar_") ||
@@ -128,18 +128,18 @@ function inferProvider(toolId: string | undefined, provider?: string): string | 
     id === "gmail" ||
     id === "calendar" ||
     id === "email" ||
-    id === "mail"
-  ) {
-    return "google";
-  }
-  // Docs / Drive and marketplace apps go through Pipedream Connect.
-  if (
-    id.startsWith("pd:") ||
-    id.startsWith("pipedream:") ||
-    id.includes("pipedream") ||
+    id === "mail" ||
     id.includes("google_docs") ||
     id.includes("google-docs") ||
     id.includes("google_drive")
+  ) {
+    return "pipedream";
+  }
+  // Marketplace apps go through Pipedream Connect.
+  if (
+    id.startsWith("pd:") ||
+    id.startsWith("pipedream:") ||
+    id.includes("pipedream")
   ) {
     return provider && provider !== "native" ? provider : "pipedream";
   }

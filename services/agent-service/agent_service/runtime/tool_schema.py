@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -13,6 +14,28 @@ class RuntimeToolCall(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
+# OpenAI function.name must match ^[a-zA-Z0-9_-]+$ — colons in pd:… are rejected.
+_OPENAI_FN_SAFE = re.compile(r"[^a-zA-Z0-9_-]+")
+
+
+def to_openai_function_name(tool_id: str) -> str:
+    """Sanitize a Stack32 tool_id for OpenAI/Anthropic function calling."""
+    name = _OPENAI_FN_SAFE.sub("_", (tool_id or "").strip())
+    return name or "tool"
+
+
+def from_openai_function_name(name: str, allowed_tool_ids: list[str] | set[str]) -> str:
+    """Map a sanitized function name back to the original tool_id."""
+    raw = (name or "").strip()
+    allowed = list(allowed_tool_ids)
+    if raw in allowed:
+        return raw
+    for tid in allowed:
+        if to_openai_function_name(tid) == raw:
+            return tid
+    return raw
+
+
 def _fn(
     name: str,
     description: str,
@@ -22,7 +45,7 @@ def _fn(
     return {
         "type": "function",
         "function": {
-            "name": name,
+            "name": to_openai_function_name(name),
             "description": description,
             "parameters": {
                 "type": "object",
@@ -166,7 +189,7 @@ def _generic_schema(tool_id: str, catalog_schema: dict[str, Any] | None = None) 
     return {
         "type": "function",
         "function": {
-            "name": tool_id,
+            "name": to_openai_function_name(tool_id),
             "description": f"Tool {tool_id}",
             "parameters": params,
         },
@@ -298,7 +321,7 @@ async def async_schemas_for_tools(
             {
                 "type": "function",
                 "function": {
-                    "name": tid.replace(":", "_") if False else tid,  # keep tool_id as-is
+                    "name": to_openai_function_name(tid),
                     "description": description,
                     "parameters": {
                         "type": "object",

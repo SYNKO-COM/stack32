@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
-import { startGoogleConnection, revokeConnection } from "@/lib/actions/connections";
+import { startGoogleConnection, revokeConnection, disconnectAgentApp } from "@/lib/actions/connections";
 import { getConnectToken, syncIntegrationAccounts } from "@/lib/actions/integrations";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +80,10 @@ export function IntegrationConnectionCard({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [waitingForOauth, setWaitingForOauth] = useState(false);
+  /** Optimistic override so Disconnect feels instant and survives stale refetch. */
+  const [localOverride, setLocalOverride] = useState<"connected" | "disconnected" | null>(
+    null,
+  );
   const [pipedreamFallback, setPipedreamFallback] = useState<{
     token?: string | null;
     connectLinkUrl?: string | null;
@@ -89,9 +93,37 @@ export function IntegrationConnectionCard({
   const finishedRef = useRef(false);
 
   const normalized = (provider || "native").toLowerCase();
-  const connected =
+  const googleProductApps = new Set([
+    "gmail",
+    "google_calendar",
+    "google_docs",
+    "google_sheets",
+    "google_drive",
+    "google_slides",
+    "google",
+  ]);
+  /** Always use Pipedream Connect for Google product apps (per-app accounts). */
+  const usePipedreamConnect =
+    normalized === "pipedream" ||
+    (normalized === "google" && Boolean(appId)) ||
+    (appId != null && googleProductApps.has(appId.toLowerCase()));
+
+  const parentConnected =
     status === "connected" ||
     Boolean(accountEmail && status !== "error" && status !== "disconnected");
+  const connected =
+    localOverride === "disconnected"
+      ? false
+      : localOverride === "connected"
+        ? true
+        : parentConnected;
+
+  // Clear optimistic disconnect only once the parent agrees we're disconnected.
+  useEffect(() => {
+    if (localOverride === "disconnected" && !parentConnected) {
+      setLocalOverride(null);
+    }
+  }, [parentConnected, localOverride]);
 
   const title = useMemo(() => {
     if (appId) return humanizeAppSlug(appId);
@@ -105,17 +137,17 @@ export function IntegrationConnectionCard({
         provider: humanizeAppSlug(appId),
       });
     }
-    if (normalized === "google") {
+    if (normalized === "google" && !usePipedreamConnect) {
       return t("connections.connectGoogle", { defaultValue: "Connect my Google" });
     }
-    if (normalized === "pipedream") {
+    if (normalized === "pipedream" || usePipedreamConnect) {
       return t("connections.connectApp", { defaultValue: "Connect an app" });
     }
     return t("connections.connect", {
       defaultValue: `Connect ${providerLabel(normalized, t)}`,
       provider: providerLabel(normalized, t),
     });
-  }, [appId, normalized, t]);
+  }, [appId, normalized, t, usePipedreamConnect]);
 
   /** Detect a newly linked account. Existing-account bind only via explicit confirm. */
   const finishIfLinked = async (opts?: { allowExistingBind?: boolean }): Promise<boolean> => {
@@ -125,15 +157,26 @@ export function IntegrationConnectionCard({
       agentId,
       toolIds: toolIds && toolIds.length > 0 ? toolIds : undefined,
     });
-    const count = synced.accounts?.length ?? 0;
+    const accounts = synced.accounts ?? [];
+    const count = accounts.length;
+    const activeAccounts = accounts.filter((a) => {
+      const st = String(a.status ?? "active").toLowerCase();
+      return st === "active" || st === "connected" || st === "ok" || st === "";
+    });
     const newlyAppeared = count > accountsBeforeRef.current;
+    const hasActiveForApp = activeAccounts.length > 0;
     const existingBound =
-      Boolean(opts?.allowExistingBind) && Boolean(synced.binding) && count > 0;
-    if (!newlyAppeared && !existingBound) {
+      Boolean(opts?.allowExistingBind) && Boolean(synced.binding) && hasActiveForApp;
+    // While waiting on OAuth, any active synced account for this app means success —
+    // count may not increase when Pipedream reuses an account (Google Calendar).
+    const oauthReady = waitingForOauth && hasActiveForApp;
+
+    if (!newlyAppeared && !existingBound && !oauthReady) {
       return false;
     }
     finishedRef.current = true;
     setWaitingForOauth(false);
+    setLocalOverride("connected");
     setError(null);
     onConnected?.();
     onChanged?.();
@@ -221,21 +264,38 @@ export function IntegrationConnectionCard({
   };
 
   const handleConnect = () => {
-    if (normalized === "google") {
-      connectGoogle();
+    // Google Calendar / Gmail / Docs → Pipedream Connect (per-app account).
+    if (usePipedreamConnect || normalized !== "google") {
+      connectPipedream();
       return;
     }
-    connectPipedream();
+    connectGoogle();
   };
 
   const disconnect = () => {
-    if (!connectionId) return;
     setError(null);
+    // Instant UI: flip to disconnected before the network round-trip.
+    setLocalOverride("disconnected");
     startTransition(async () => {
       try {
-        await revokeConnection(connectionId);
+        let result: { disconnected?: boolean; revoked?: string[] } | null = null;
+        if (appId) {
+          result = await disconnectAgentApp({
+            agentId,
+            appId,
+            toolIds,
+            connectionId,
+          });
+        } else if (connectionId) {
+          const revoked = await revokeConnection(connectionId);
+          result = { disconnected: Boolean(revoked?.revoked), revoked: [connectionId] };
+        } else {
+          throw new Error("missing_app_and_connection");
+        }
+
         onChanged?.();
-      } catch {
+      } catch (err) {
+        setLocalOverride(null);
         setError(
           t("connections.disconnectError", {
             defaultValue: "Could not disconnect this account.",
@@ -320,12 +380,10 @@ export function IntegrationConnectionCard({
       <div className="flex flex-wrap gap-2">
         {connected ? (
           <>
-            {connectionId ? (
-              <Button type="button" size="sm" variant="outline" disabled={pending} onClick={disconnect}>
-                {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
-                {t("connections.disconnect", { defaultValue: "Disconnect" })}
-              </Button>
-            ) : null}
+            <Button type="button" size="sm" variant="outline" disabled={pending} onClick={disconnect}>
+              {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
+              {t("connections.disconnect", { defaultValue: "Disconnect" })}
+            </Button>
             <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={handleConnect}>
               {t("connections.change", { defaultValue: "Change" })}
             </Button>

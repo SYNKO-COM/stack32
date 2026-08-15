@@ -39,4 +39,12 @@ TOOLS
 COMPLETION
 A coding task is complete only after the relevant tests pass. When done, reply
 with a short plain-text summary and DO NOT call a tool.
+
+PIPEDREAM / LIVE TOOLS (when repairing integrations)
+- Auth prop names come from the component definition (e.g. googleCalendar), never invent slugs.
+- After reloadProps, always pass dynamic_props_id on run.
+- Never strip required tools to make tests green; fix tool_config / prop mapping surgically.
+- App-specific static config often needed: Notion page/database, Slack/Discord channel,
+  Canva designType+name, Sheets spreadsheet→worksheet, Airtable base→table.
+- Consult docs/pipedream/CONNECT_KNOWLEDGE.md and app_hints.json when available in context.
 """

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { reduceExecutionState } from "@/hooks/use-live-execution";
 import { buildAgentModules } from "@/lib/domain/agent-modules";
+import { reduceExecutionEvents } from "@/lib/domain/execution-state";
 import type { AgentSpec } from "@/lib/domain/types";
 
 function baseSpec(tools: AgentSpec["tools"]): AgentSpec {
@@ -76,5 +77,18 @@ describe("live execution state mapping", () => {
     expect(state["pd:hubspot-create-contact"]).toBe("waiting_for_connection");
     expect(state.output).toBe("success");
     expect(state.brain).toBe("success");
+  });
+
+  it("maps conversation memory events onto the Memory node", () => {
+    const visual = reduceExecutionEvents([
+      { eventType: "runtime.input.received" },
+      { eventType: "runtime.memory.read.started" },
+      { eventType: "runtime.memory.read.completed" },
+      { eventType: "runtime.model.started" },
+      { eventType: "runtime.model.completed" },
+      { eventType: "run.completed" },
+    ]);
+    expect(visual.nodes["attachment:memory"]?.executionStatus).toBe("success");
+    expect(visual.legacy.model).toBe("success");
   });
 });

@@ -52,6 +52,23 @@ const edgeTypes = {
   status: StatusEdge,
 };
 
+/** Resolve the error banner payload for a selected structure node (all agents/tools). */
+function errorForSelectedNode(
+  selected: ProductNode | null | undefined,
+  executionVisual: ExecutionVisualState | null | undefined,
+): ExecutionVisualState["error"] {
+  if (!selected?.id || !executionVisual) return null;
+  const fromNode = executionVisual.nodeErrors?.[selected.id];
+  if (fromNode) return fromNode;
+  if (
+    executionVisual.error &&
+    executionVisual.error.nodeId === selected.id
+  ) {
+    return executionVisual.error;
+  }
+  return null;
+}
+
 export interface ProductAgentGraphProps {
   agentId: string;
   spec: AgentSpec | null | undefined;
@@ -61,6 +78,7 @@ export interface ProductAgentGraphProps {
   toolApprovals?: Record<string, ApprovalMode | string>;
   boundToolIds?: Set<string>;
   boundProviders?: Set<string>;
+  boundAppIds?: Set<string>;
   modelStatus?: string;
   memoryStatus?: string;
   executionVisual?: ExecutionVisualState;
@@ -98,6 +116,7 @@ function ProductAgentGraphCanvas({
   toolApprovals,
   boundToolIds,
   boundProviders,
+  boundAppIds,
   modelStatus,
   memoryStatus,
   executionVisual,
@@ -151,10 +170,11 @@ function ProductAgentGraphCanvas({
         graph,
         boundToolIds,
         boundProviders,
+        boundAppIds,
         modelStatus: modelStatus as never,
         memoryStatus: memoryStatus as never,
       }),
-    [spec, graph, boundToolIds, boundProviders, modelStatus, memoryStatus],
+    [spec, graph, boundToolIds, boundProviders, boundAppIds, modelStatus, memoryStatus],
   );
 
   const layoutSignature = useMemo(
@@ -285,8 +305,12 @@ function ProductAgentGraphCanvas({
           proOptions={{ hideAttribution: true }}
           className="structure-agent-flow h-full w-full"
           onNodeClick={(_, node) => {
-            const pn = (node.data as { productNode?: ProductNode })?.productNode;
-            if (pn) setSelected(pn);
+            const pn = (node.data as { productNode?: ProductNode; executionStatus?: ProductNode["executionStatus"] })
+              ?.productNode;
+            if (!pn) return;
+            const exec = (node.data as { executionStatus?: ProductNode["executionStatus"] })
+              ?.executionStatus;
+            setSelected(exec ? { ...pn, executionStatus: exec } : pn);
           }}
         >
           <Background gap={22} size={1.2} color="#c4c4c8" />
@@ -308,13 +332,17 @@ function ProductAgentGraphCanvas({
         bindings={bindings}
         toolApprovals={toolApprovals}
         onConnectionsChanged={onConnectionsChanged}
+        executionError={errorForSelectedNode(selected, executionVisual)}
       />
       <AgentDrawer
         open={selected?.kind === "agent"}
         onOpenChange={(open) => !open && setSelected(null)}
         node={selected}
+        agentId={agentId}
+        spec={spec}
         modelSubtitle={modelNode?.subtitle}
         integrationCount={integrationCount}
+        executionError={executionVisual?.error ?? null}
       />
       <TriggerDrawer
         open={selected?.kind === "trigger_chat" || selected?.kind === "trigger_schedule"}
@@ -332,7 +360,9 @@ function ProductAgentGraphCanvas({
         onOpenChange={(open) => !open && setSelected(null)}
         node={selected}
         agentId={agentId}
+        spec={spec}
         onSaved={onConfigChanged}
+        executionError={errorForSelectedNode(selected, executionVisual)}
       />
     </div>
   );

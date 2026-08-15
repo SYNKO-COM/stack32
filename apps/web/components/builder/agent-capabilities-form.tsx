@@ -1,11 +1,9 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Check, Loader2, Lock, MessageSquare, Timer } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { submitBuilderCapabilities } from "@/lib/actions/builder";
 import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import type { BuilderUiComponent } from "@/lib/domain/types";
@@ -28,19 +26,8 @@ export function AgentCapabilitiesForm({
   onSubmitted,
 }: CapabilitiesFormProps) {
   const { t } = useTranslation(["builder", "errors"]);
-  const [memoryConversation, setMemoryConversation] = useState(
-    () => fieldDefault(uiComponent.fields, "memory_conversation") !== "false",
-  );
-  const [memorySemantic, setMemorySemantic] = useState(
-    () => fieldDefault(uiComponent.fields, "memory_semantic") === "true",
-  );
-  // Knowledge/RAG is a conditional capability — the server enables it only when the
-  // agent actually needs retrieval, so we no longer surface a universal toggle here.
   const [scheduleHourly, setScheduleHourly] = useState(
     () => fieldDefault(uiComponent.fields, "schedule_hourly") === "true",
-  );
-  const [contextNotes, setContextNotes] = useState(() =>
-    fieldDefault(uiComponent.fields, "context_notes"),
   );
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -51,17 +38,17 @@ export function AgentCapabilitiesForm({
     if (submitting || completed) return;
     setSubmitting(true);
     setErrorKey(null);
-    // Hide the form immediately and let BuildView show live activity + Stop.
     setCompleted(true);
     onSubmitted?.();
     try {
       await submitBuilderCapabilities({
         runId,
-        memoryConversation,
-        memorySemantic,
+        // Chat memory is always on by default — configured later in Structure if needed.
+        memoryConversation: true,
+        memorySemantic: false,
         knowledgeEnabled: false,
         scheduleHourly,
-        contextNotes: contextNotes.trim(),
+        contextNotes: "",
       });
     } catch (err) {
       setCompleted(false);
@@ -79,52 +66,39 @@ export function AgentCapabilitiesForm({
       onSubmit={(e) => void handleSubmit(e)}
       className="mt-3 space-y-3 border-t border-border/60 pt-3"
     >
-      <ToggleRow
-        id="cap-memory-conversation"
-        label={t("builder:capabilities.memoryConversation")}
-        hint={t("builder:capabilities.memoryConversationHint")}
-        checked={memoryConversation}
-        disabled={submitting}
-        onChange={setMemoryConversation}
-      />
-      <ToggleRow
-        id="cap-memory-semantic"
-        label={t("builder:capabilities.memorySemantic")}
-        hint={t("builder:capabilities.memorySemanticHint")}
-        checked={memorySemantic}
-        disabled={submitting}
-        onChange={setMemorySemantic}
-      />
-      <ToggleRow
-        id="cap-schedule"
-        label={t("builder:capabilities.scheduleHourly")}
-        hint={t("builder:capabilities.scheduleHourlyHint")}
-        checked={scheduleHourly}
-        disabled={submitting}
-        onChange={setScheduleHourly}
-      />
+      <p className="text-xs text-muted-foreground">{t("builder:capabilities.hint")}</p>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="cap-notes">{t("builder:capabilities.contextNotes")}</Label>
-        <Textarea
-          id="cap-notes"
-          value={contextNotes}
-          onChange={(e) => setContextNotes(e.target.value)}
+      <div className="space-y-2">
+        <TriggerOption
+          icon={<MessageSquare className="size-4" aria-hidden="true" />}
+          label={t("builder:capabilities.triggerChat")}
+          hint={t("builder:capabilities.triggerChatHint")}
+          checked
+          locked
+          badge={t("builder:capabilities.required")}
           disabled={submitting}
-          rows={3}
-          placeholder={t("builder:capabilities.contextNotesPlaceholder")}
-          className="rounded-xl bg-background/40"
+        />
+        <TriggerOption
+          icon={<Timer className="size-4" aria-hidden="true" />}
+          label={t("builder:capabilities.scheduleHourly")}
+          hint={t("builder:capabilities.scheduleHourlyHint")}
+          checked={scheduleHourly}
+          disabled={submitting}
+          onChange={setScheduleHourly}
         />
       </div>
 
-      <p className="text-[11px] text-muted-foreground">{t("builder:capabilities.appsComingSoon")}</p>
-
       {errorKey ? <p className="text-xs text-destructive">{t(errorKey)}</p> : null}
 
-      <Button type="submit" size="sm" className="rounded-full" disabled={submitting}>
+      <Button
+        type="submit"
+        size="default"
+        className="h-10 w-full rounded-full text-sm font-medium sm:w-auto sm:min-w-[11rem]"
+        disabled={submitting}
+      >
         {submitting ? (
           <>
-            <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             {t("builder:capabilities.submitting")}
           </>
         ) : (
@@ -135,41 +109,76 @@ export function AgentCapabilitiesForm({
   );
 }
 
-function ToggleRow({
-  id,
+function TriggerOption({
+  icon,
   label,
   hint,
   checked,
+  locked = false,
+  badge,
   disabled,
   onChange,
 }: {
-  id: string;
+  icon: ReactNode;
   label: string;
   hint: string;
   checked: boolean;
-  disabled: boolean;
-  onChange: (value: boolean) => void;
+  locked?: boolean;
+  badge?: string;
+  disabled?: boolean;
+  onChange?: (value: boolean) => void;
 }) {
+  const interactive = !locked && Boolean(onChange);
+
   return (
-    <label
-      htmlFor={id}
+    <button
+      type="button"
+      disabled={disabled || locked}
+      aria-pressed={checked}
+      aria-disabled={locked || disabled}
+      onClick={() => {
+        if (!interactive || disabled) return;
+        onChange?.(!checked);
+      }}
       className={cn(
-        "flex cursor-pointer items-start gap-3 rounded-xl border border-border/50 bg-background/30 px-3 py-2.5",
+        "flex w-full items-start gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors",
+        checked
+          ? "border-brand/35 bg-brand/[0.08]"
+          : "border-border/60 bg-background/50 hover:border-border hover:bg-foreground/[0.03]",
+        locked && "cursor-default",
+        interactive && !disabled && "cursor-pointer",
         disabled && "opacity-60",
       )}
     >
-      <input
-        id={id}
-        type="checkbox"
-        className="mt-1 size-4 rounded border-border"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className="min-w-0 text-left">
-        <span className="block text-sm font-medium">{label}</span>
-        <span className="mt-0.5 block text-[11px] text-muted-foreground">{hint}</span>
+      <span
+        className={cn(
+          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+          checked
+            ? "border-brand bg-brand text-white shadow-sm"
+            : "border-border/80 bg-background text-transparent",
+        )}
+        aria-hidden="true"
+      >
+        {checked ? <Check className="size-3.5 stroke-[2.5]" /> : null}
       </span>
-    </label>
+
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <span className="text-brand/80">{icon}</span>
+            {label}
+          </span>
+          {badge ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-medium tracking-wide text-brand uppercase">
+              <Lock className="size-2.5" aria-hidden="true" />
+              {badge}
+            </span>
+          ) : null}
+        </span>
+        <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+          {hint}
+        </span>
+      </span>
+    </button>
   );
 }

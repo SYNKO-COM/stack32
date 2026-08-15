@@ -61,14 +61,19 @@ async def create_connect_token(
 
 @router.post("/integrations/accounts/sync")
 async def sync_accounts(body: SyncAccountsRequest, user: CurrentUser) -> dict[str, Any]:
+    from agent_service.integrations.pipedream.accounts import _apps_equivalent
+
     synced = await sync_pipedream_accounts(user_id=user.user_id, app_id=body.app_id)
     binding = None
     if body.agent_id and body.tool_ids:
         conn_id = body.connection_id
         if not conn_id and synced:
-            # Prefer matching app_id
             match = next(
-                (s for s in synced if not body.app_id or s.get("app_id") == body.app_id),
+                (
+                    s
+                    for s in synced
+                    if not body.app_id or _apps_equivalent(str(s.get("app_id") or ""), body.app_id)
+                ),
                 synced[0],
             )
             conn_id = match.get("connection_id")
@@ -110,8 +115,20 @@ async def list_integration_accounts(
         c_app = meta.get("app_id") if isinstance(meta, dict) else None
         if c.get("provider") == "google":
             c_app = "google"
-        if app_id and c_app and c_app != app_id and c.get("provider") != app_id:
-            continue
+        # Strict app filter: never leak Google accounts into Notion/Canva pickers.
+        if app_id:
+            from agent_service.integrations.pipedream.accounts import _apps_equivalent
+
+            app_l = str(app_id).lower()
+            c_app_l = str(c_app or "").lower()
+            provider_l = str(c.get("provider") or "").lower()
+            if not (
+                _apps_equivalent(c_app_l, app_l)
+                or provider_l == app_l
+            ):
+                continue
+            if not c_app_l and provider_l == "pipedream":
+                continue
         out.append(
             {
                 "connection_id": c.get("id"),
@@ -148,7 +165,35 @@ async def get_tool_config(agent_id: str, tool_id: str, user: CurrentUser) -> dic
             schema = await pd.get_tool_schema(tool_id)
     except Exception:  # noqa: BLE001
         schema = None
-    return {"config": row, "schema": schema}
+
+    app_hint = None
+    playbooks: list[dict[str, Any]] = []
+    try:
+        from agent_service.integrations.pipedream.knowledge import hint_for_tool
+        from agent_service.learning.playbooks import playbooks_for_tool
+
+        app_hint = hint_for_tool(tool_id)
+        action_id = None
+        if isinstance(schema, dict):
+            action_id = schema.get("provider_tool_id") or schema.get("key")
+        elif schema is not None:
+            action_id = getattr(schema, "provider_tool_id", None) or getattr(
+                schema, "key", None
+            )
+        playbooks = await playbooks_for_tool(
+            tool_id=tool_id,
+            action_id=str(action_id) if action_id else tool_id.removeprefix("pd:"),
+            limit=5,
+        )
+    except Exception:  # noqa: BLE001
+        app_hint = None
+        playbooks = []
+    return {
+        "config": row,
+        "schema": schema,
+        "app_hint": app_hint,
+        "playbooks": playbooks,
+    }
 
 
 @router.put("/agents/{agent_id}/tools/{tool_id}/config")

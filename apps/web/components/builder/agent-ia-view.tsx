@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { PanelRightClose, PanelRightOpen, Workflow } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { PanelRightClose, PanelRightOpen, RefreshCw, Workflow } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { ProductAgentGraph } from "@/components/builder/agent-structure/product-agent-graph";
 import { buildProductAgentGraph } from "@/components/builder/agent-structure/graph-adapter";
@@ -13,6 +13,7 @@ import { useLiveExecutionState } from "@/hooks/use-live-execution";
 import { useLiveThread } from "@/hooks/use-live";
 import { useRunEventStream } from "@/hooks/use-run-sse";
 import { useTranslation } from "@/hooks/use-translation";
+import { cancelLiveRun } from "@/lib/actions/live";
 import { listAgentConnections } from "@/lib/actions/connections";
 import { getAgentReadiness } from "@/lib/actions/integrations";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -35,12 +36,15 @@ export function AgentIaView({
   mode?: "owner" | "consumer";
 }) {
   const { t } = useTranslation(["structure", "builder"]);
+  const queryClient = useQueryClient();
   const { data: graphResponse } = useAgentGraph(agentId);
   const { data: spec } = useAgentSpec(agentId);
   const [panelOpen, setPanelOpen] = useState(true);
   const [chatPct, setChatPct] = useState(DEFAULT_CHAT_PCT);
   const [dragging, setDragging] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [refreshing, startRefresh] = useTransition();
+  const [setupOpen, setSetupOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const readOnly = mode === "consumer";
 
@@ -52,15 +56,47 @@ export function AgentIaView({
   }, []);
 
   const { data: liveThread } = useLiveThread(agentId);
-  const liveRunId = useMemo(() => {
+  const messageRunId = useMemo(() => {
     const messages = liveThread?.messages ?? [];
     for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const m = messages[i] as { interruptRunId?: string; runId?: string };
-      if (m?.interruptRunId) return m.interruptRunId;
+      const m = messages[i];
+      if (m?.pending && m.runId) return m.runId;
+    }
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
       if (m?.runId) return m.runId;
     }
     return null;
   }, [liveThread?.messages]);
+
+  const activeRunQuery = useQuery({
+    queryKey: ["active-live-run", agentId],
+    enabled: Boolean(agentId),
+    refetchInterval: (q) => {
+      const row = q.state.data as { id?: string; status?: string } | null | undefined;
+      if (row?.status === "queued" || row?.status === "running") return 800;
+      const msgs = liveThread?.messages ?? [];
+      const last = msgs[msgs.length - 1];
+      if (last?.role === "user" || last?.pending) return 800;
+      return false;
+    },
+    queryFn: async () => {
+      const supabase = requireSupabaseBrowserClient();
+      const { data, error } = await supabase
+        .from("runs")
+        .select("id,status,created_at")
+        .eq("agent_id", agentId)
+        .eq("run_type", "live")
+        .in("status", ["queued", "running"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const liveRunId = messageRunId || activeRunQuery.data?.id || null;
 
   const connectionsQuery = useQuery({
     queryKey: ["agent-connections", agentId],
@@ -94,6 +130,27 @@ export function AgentIaView({
     return providers;
   }, [connectionsQuery.data?.connections]);
 
+  const boundAppIds = useMemo(() => {
+    const apps = new Set<string>();
+    for (const connection of connectionsQuery.data?.connections ?? []) {
+      const status = (connection.status || "active").toLowerCase();
+      if (!(status === "active" || status === "connected" || status === "ok")) continue;
+      if (connection.provider === "google") {
+        // Suite-level Google OAuth must not mark Calendar/Gmail ready —
+        // each product app needs its own Pipedream (or scoped) connection.
+        apps.add("google");
+        continue;
+      }
+      const appId =
+        connection.app_id ||
+        (typeof connection.provider_metadata?.app_id === "string"
+          ? connection.provider_metadata.app_id
+          : null);
+      if (appId) apps.add(String(appId).toLowerCase());
+    }
+    return apps;
+  }, [connectionsQuery.data?.connections]);
+
   const brainCheck = readinessQuery.data?.checks?.find((c) => c.key === "brain");
   const modelStatus =
     brainCheck === undefined
@@ -109,9 +166,10 @@ export function AgentIaView({
         graph: graphResponse?.graph,
         boundToolIds,
         boundProviders,
+        boundAppIds,
         modelStatus,
       }),
-    [spec, graphResponse?.graph, boundToolIds, boundProviders, modelStatus],
+    [spec, graphResponse?.graph, boundToolIds, boundProviders, boundAppIds, modelStatus],
   );
 
   const hasGraph = productGraph.nodes.length > 0;
@@ -136,6 +194,59 @@ export function AgentIaView({
     }
     return map;
   }, [spec?.toolBindings]);
+
+  const setupMissing = useMemo(() => {
+    const items: string[] = [];
+    for (const c of readinessQuery.data?.checks ?? []) {
+      if (!c.ok && c.message) items.push(c.message);
+    }
+    for (const m of readinessQuery.data?.missingConnections ?? []) {
+      const provider = typeof m.provider === "string" ? m.provider : "app";
+      const appId = typeof m.app_id === "string" ? m.app_id : provider;
+      items.push(`Connect ${appId}`);
+    }
+    for (const m of readinessQuery.data?.missingConfig ?? []) {
+      if (typeof m.message === "string" && m.message) items.push(m.message);
+      else if (typeof m.tool_id === "string") {
+        const fields = Array.isArray(m.fields) ? m.fields.join(", ") : "";
+        items.push(
+          fields
+            ? `Configure ${m.tool_id}: ${fields}`
+            : `Configure ${m.tool_id}`,
+        );
+      }
+    }
+    // Graph nodes still needing setup (UI source of truth for Structure badge)
+    for (const n of productGraph.nodes) {
+      if (n.configurationStatus === "setup_required") {
+        items.push(`${n.label} needs setup`);
+      }
+    }
+    return [...new Set(items)];
+  }, [
+    readinessQuery.data?.checks,
+    readinessQuery.data?.missingConnections,
+    readinessQuery.data?.missingConfig,
+    productGraph.nodes,
+  ]);
+
+  const showSetupBadge =
+    readinessQuery.data?.status === "needs_setup" ||
+    readinessQuery.data?.status === "needs_attention" ||
+    productGraph.nodes.some((n) => n.configurationStatus === "setup_required");
+
+  const resetStructureExecution = () => {
+    startRefresh(async () => {
+      try {
+        await cancelLiveRun({ agentId, runId: liveRunId, silent: true });
+      } catch {
+        // Best-effort stop.
+      }
+      void queryClient.removeQueries({ queryKey: ["live-execution"] });
+      void queryClient.removeQueries({ queryKey: ["active-live-run", agentId] });
+      void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
+    });
+  };
 
   useEffect(() => {
     if (!dragging) return;
@@ -172,7 +283,7 @@ export function AgentIaView({
         className={cn("min-w-0", panelOpen ? "shrink-0" : "min-w-0 flex-1")}
         style={panelOpen ? { width: `${chatPct}%` } : undefined}
       >
-        <LiveView agentId={agentId} />
+        <LiveView agentId={agentId} activeRunId={liveRunId} />
       </div>
 
       <aside
@@ -219,52 +330,110 @@ export function AgentIaView({
           )}
         >
           {panelOpen ? (
-            <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+            <span className="relative flex min-w-0 items-center gap-2 text-sm font-medium">
               <Workflow className="size-4 text-brand" aria-hidden="true" />
               <span className="truncate">{t("structure:modules.title")}</span>
-              {readinessQuery.data?.status ? (
-                <span
+              {showSetupBadge || readinessQuery.data?.status === "ready" ? (
+                <button
+                  type="button"
+                  onClick={() => setSetupOpen((o) => !o)}
                   className={cn(
                     "truncate rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide",
-                    readinessQuery.data.status === "ready" &&
+                    (readinessQuery.data?.status === "ready" && !showSetupBadge) &&
                       "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                    readinessQuery.data.status === "needs_setup" &&
+                    (showSetupBadge && readinessQuery.data?.status !== "needs_attention") &&
                       "bg-amber-500/10 text-amber-800 dark:text-amber-300",
-                    readinessQuery.data.status === "needs_attention" &&
+                    readinessQuery.data?.status === "needs_attention" &&
                       "bg-red-500/10 text-red-700 dark:text-red-400",
-                    !["ready", "needs_setup", "needs_attention"].includes(
-                      readinessQuery.data.status,
-                    ) && "bg-muted text-muted-foreground",
                   )}
+                  title={
+                    setupMissing.length > 0
+                      ? setupMissing.join(" · ")
+                      : t("structure:modules.setupBanner.body")
+                  }
+                  aria-expanded={setupOpen}
                 >
-                  {t(`structure:modules.readiness.status.${readinessQuery.data.status}`, {
-                    defaultValue:
-                      readinessQuery.data.status === "ready"
-                        ? "Ready"
-                        : readinessQuery.data.status === "needs_setup"
-                          ? "Setup needed"
-                          : readinessQuery.data.status === "needs_attention"
-                            ? "Needs attention"
-                            : readinessQuery.data.status.replaceAll("_", " "),
-                  })}
-                </span>
+                  {showSetupBadge
+                    ? t("structure:modules.readiness.status.needs_setup", {
+                        defaultValue: "Setup needed",
+                      })
+                    : t("structure:modules.readiness.status.ready", {
+                        defaultValue: "Ready",
+                      })}
+                </button>
+              ) : null}
+              {setupOpen ? (
+                <div className="absolute left-0 top-full z-30 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-border bg-background p-3 shadow-xl">
+                  <p className="text-xs font-semibold text-foreground">
+                    {showSetupBadge
+                      ? t("structure:modules.setupBanner.title")
+                      : t("structure:modules.readiness.status.ready", {
+                          defaultValue: "Ready",
+                        })}
+                  </p>
+                  {setupMissing.length > 0 ? (
+                    <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto text-xs text-muted-foreground">
+                      {setupMissing.map((item) => (
+                        <li key={item} className="leading-snug">
+                          · {item}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t("structure:modules.readiness.connected", {
+                        defaultValue: "Accounts look connected.",
+                      })}
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="mt-2 h-7 w-full text-xs"
+                    onClick={() => setSetupOpen(false)}
+                  >
+                    {t("common:actions.close", { defaultValue: "Close" })}
+                  </Button>
+                </div>
               ) : null}
             </span>
           ) : null}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setPanelOpen((open) => !open)}
-            aria-label={t(
-              panelOpen ? "structure:modules.collapse" : "structure:modules.expand",
-            )}
-          >
-            {panelOpen ? (
-              <PanelRightClose className="size-4" aria-hidden="true" />
-            ) : (
-              <PanelRightOpen className="size-4" aria-hidden="true" />
-            )}
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            {panelOpen && !readOnly ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={resetStructureExecution}
+                disabled={refreshing}
+                aria-label={t("structure:modules.refresh", {
+                  defaultValue: "Reset execution",
+                })}
+                title={t("structure:modules.refreshHint", {
+                  defaultValue: "Stop the agent and reset structure colors",
+                })}
+              >
+                <RefreshCw
+                  className={cn("size-4", refreshing && "animate-spin")}
+                  aria-hidden="true"
+                />
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setPanelOpen((open) => !open)}
+              aria-label={t(
+                panelOpen ? "structure:modules.collapse" : "structure:modules.expand",
+              )}
+            >
+              {panelOpen ? (
+                <PanelRightClose className="size-4" aria-hidden="true" />
+              ) : (
+                <PanelRightOpen className="size-4" aria-hidden="true" />
+              )}
+            </Button>
+          </div>
         </div>
 
         {panelOpen ? (
@@ -279,11 +448,17 @@ export function AgentIaView({
                 toolApprovals={toolApprovals}
                 boundToolIds={boundToolIds}
                 boundProviders={boundProviders}
+                boundAppIds={boundAppIds}
                 modelStatus={modelStatus}
                 executionVisual={executionVisual}
                 readOnly={readOnly}
                 onConnectionsChanged={
-                  readOnly ? undefined : () => void connectionsQuery.refetch()
+                  readOnly
+                    ? undefined
+                    : () => {
+                        void connectionsQuery.refetch();
+                        void readinessQuery.refetch();
+                      }
                 }
                 onConfigChanged={
                   readOnly

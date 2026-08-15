@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -308,6 +309,26 @@ class PipedreamToolProvider:
             nested = dict(runtime_args.pop("configured_props"))
             runtime_args = {**nested, **runtime_args}
 
+        # Canva create-design uses reloadProps: designType=preset requires `name`
+        # (e.g. doc / presentation). Models often omit both → API "'name' must not be null".
+        if str(action_id).endswith("canva-create-design") or tool_ref.tool_id.endswith(
+            "canva-create-design"
+        ):
+            if not runtime_args.get("designType"):
+                runtime_args["designType"] = "preset"
+            if runtime_args.get("designType") == "preset" and not runtime_args.get("name"):
+                runtime_args["name"] = (
+                    runtime_args.get("preset")
+                    or runtime_args.get("type")
+                    or "doc"
+                )
+            if not runtime_args.get("title"):
+                runtime_args["title"] = (
+                    runtime_args.get("designTitle")
+                    or runtime_args.get("design_name")
+                    or "Untitled design"
+                )
+
         configured = build_configured_props(
             schema,
             auth_provision_id=str(auth_provision_id),
@@ -315,14 +336,114 @@ class PipedreamToolProvider:
             runtime_args=runtime_args,
         )
 
+        # reloadProps (e.g. Canva `name` after designType=preset) are absent from the
+        # base schema — inject them directly so run_action still receives them.
+        dynamic_props_id: str | None = None
+        needs_reload = any(
+            bool((p.raw or {}).get("reloadProps") or (p.raw or {}).get("reload_props"))
+            for p in (schema.props or [])
+        ) or str(action_id).endswith("canva-create-design")
+        if str(action_id).endswith("canva-create-design") or tool_ref.tool_id.endswith(
+            "canva-create-design"
+        ):
+            for key in ("designType", "name", "title", "assetId", "width", "height"):
+                if key in runtime_args and runtime_args[key] not in (None, ""):
+                    configured[key] = runtime_args[key]
+            needs_reload = True
+
+        if needs_reload:
+            # Seed only auth + reload trigger props for the props reload call.
+            seed = {
+                k: v
+                for k, v in configured.items()
+                if k
+                in {
+                    schema.auth_prop_name,
+                    "designType",
+                    "sheetId",
+                    "drive",
+                    "worksheetId",
+                }
+                or k == schema.auth_prop_name
+            }
+            if schema.auth_prop_name and schema.auth_prop_name in configured:
+                seed[schema.auth_prop_name] = configured[schema.auth_prop_name]
+            if "designType" in configured:
+                seed["designType"] = configured["designType"]
+            reloaded = await self._client.reload_props(
+                action_id=action_id,
+                external_user_id=user_id,
+                configured_props=seed,
+                version=schema.version,
+            )
+            if isinstance(reloaded, dict) and reloaded.get("dynamic_props_id"):
+                dynamic_props_id = str(reloaded["dynamic_props_id"])
+
         result = await self._client.run_action(
             action_id=action_id,
             external_user_id=user_id,
             configured_props=configured,
             version=schema.version,
+            dynamic_props_id=dynamic_props_id,
         )
         if isinstance(result, dict) and result.get("error"):
-            return result
+            err = result.get("error")
+            message = (
+                result.get("message")
+                or result.get("detail")
+                or (
+                    err.get("message")
+                    if isinstance(err, dict)
+                    else None
+                )
+                or f"Pipedream action failed for {action_id}"
+            )
+            if isinstance(err, dict) and not result.get("message"):
+                message = str(err.get("message") or err.get("name") or message)[:400]
+            try:
+                from agent_service.learning.playbooks import record_tool_playbook_failure
+
+                asyncio.create_task(
+                    record_tool_playbook_failure(
+                        tool_id=tool_ref.tool_id,
+                        action_id=str(action_id),
+                        app_id=schema.app_id or tool_ref.provider_app_id,
+                        error_message=str(message)[:400],
+                    )
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug("tool_playbook_failure_record_skipped", exc_info=True)
+            return {
+                **{k: v for k, v in result.items() if k != "error"},
+                "error": "PIPEDREAM_ACTION_FAILED"
+                if isinstance(err, dict)
+                else (err or "PIPEDREAM_ACTION_FAILED"),
+                "message": str(message)[:400],
+                "provider": "pipedream",
+                "tool_id": tool_ref.tool_id,
+            }
+        try:
+            from agent_service.learning.playbooks import record_tool_playbook_success
+
+            auth_key = schema.auth_prop_name
+            static_for_learn = {
+                k: v
+                for k, v in configured.items()
+                if k != auth_key and not (isinstance(v, dict) and "authProvisionId" in v)
+            }
+            asyncio.create_task(
+                record_tool_playbook_success(
+                    tool_id=tool_ref.tool_id,
+                    action_id=str(action_id),
+                    app_id=schema.app_id or tool_ref.provider_app_id,
+                    static_config=static_for_learn,
+                    runtime_keys=list(runtime_args.keys()),
+                    needs_dynamic_props=bool(dynamic_props_id),
+                    notes="auto from successful Live run",
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("tool_playbook_success_record_skipped", exc_info=True)
         return {"ok": True, "provider": "pipedream", "tool_id": tool_ref.tool_id, "result": result}
 
     async def health_check(self) -> dict[str, Any]:

@@ -38,7 +38,7 @@ describe("buildAgentModules readiness", () => {
     const gmail = modules.attachments.find((m) => m.toolId === "gmail_list");
     expect(gmail?.setupStatus).toBe("needs_setup");
     expect(gmail?.ready).toBe(false);
-    expect(gmail?.provider).toBe("google");
+    expect(gmail?.provider).toBe("pipedream");
 
     const search = modules.attachments.find((m) => m.toolId === "web_search");
     expect(search?.ready).toBe(true);

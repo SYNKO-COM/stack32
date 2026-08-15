@@ -37,9 +37,43 @@ import type {
   ComposerAttachment,
 } from "@/components/shared/prompt-composer";
 import type { BuilderAction, BuilderMessage } from "@/lib/domain/types";
-import { consumePendingPrompt, consumePrefillDraft } from "@/lib/pending-prompt";
+import { consumePendingPrompt, consumePrefillAutoSend, consumePrefillDraft } from "@/lib/pending-prompt";
 import { cn } from "@/lib/utils";
 import type { BuilderOperation } from "@/components/builder/builder-working-panel";
+
+/** Intermediate builder acks — must not clear the working UI or end the turn. */
+function isEphemeralBuilderAck(message: BuilderMessage | undefined): boolean {
+  if (!message || message.role !== "assistant") return false;
+  if (
+    message.card === "thinking" ||
+    message.card === "build_progress" ||
+    message.card === "identity_confirmed"
+  ) {
+    return true;
+  }
+  // Locked/submitted form bubble still on screen while the next step starts.
+  if (message.formResolved && !message.uiComponent) return true;
+  if (message.uiComponent) return false;
+  const content = message.content ?? "";
+  if (!content.startsWith("builder:")) return false;
+  return (
+    content === "builder:capabilities.saved" ||
+    content === "builder:capabilities.formClosed" ||
+    content === "builder:identity.confirmed" ||
+    content.startsWith("builder:identity.confirmed") ||
+    content === "builder:identity.formClosed" ||
+    content === "builder:secrets.saved" ||
+    content === "builder:secrets.formClosed" ||
+    content === "builder:providers.saved" ||
+    content === "builder:questions.formClosed" ||
+    content === "builder:connection.prompt" ||
+    content === "builder:connection.required"
+  );
+}
+
+function isWorkingCard(message: BuilderMessage | undefined): boolean {
+  return message?.card === "thinking" || message?.card === "build_progress";
+}
 
 function humanizeProblemText(raw: string): string {
   const text = raw.trim();
@@ -232,7 +266,8 @@ function BuilderBubble({
       "builder:connection.required":
         "An account connection is still needed before we can continue.",
       "builder:identity.prompt": "Before I build your agent, tell me how it should introduce itself.",
-      "builder:capabilities.prompt": "Almost there. Tell me how this agent should work.",
+      "builder:capabilities.prompt":
+        "How should this agent start? Chat is always on — add a schedule if you want.",
       "builder:secrets.prompt": "Add an AI provider key so your agent can think.",
       "builder:questions.prompt": "A few quick questions so I build the right agent.",
     };
@@ -313,7 +348,7 @@ function BuilderBubble({
           </span>
         )}
 
-        <div className={cn("max-w-[90%] sm:max-w-[80%]", isUser && "text-right")}>
+        <div className={cn("min-w-0 max-w-[90%] sm:max-w-[80%]", isUser && "text-right")}>
           <p className="mb-1 flex items-baseline gap-2 font-mono text-[11px] text-muted-foreground/60">
             {isUser ? (
               <>
@@ -332,7 +367,7 @@ function BuilderBubble({
           ) : null}
           <div
             className={cn(
-              "text-left text-sm leading-relaxed",
+              "min-w-0 overflow-hidden text-left text-sm leading-relaxed",
               isUser
                 ? "rounded-3xl bg-brand/15 px-4 py-3 text-foreground"
                 : "px-0 py-0 text-foreground/90",
@@ -705,35 +740,38 @@ export function BuildView({ agentId }: { agentId: string }) {
       !isFormSuperseded(lastMessage) &&
       !(lastMessage.uiComponent.requestId && resolvedFormIds.has(lastMessage.uiComponent.requestId)),
   );
-  const showLocalWorking =
+  const hasVisibleWorkingBubble = isWorkingCard(lastMessage);
+  // Keep a local working panel whenever the turn is still active but the server
+  // thinking/progress bubble is missing (common gap after "Settings saved").
+  const buildTurnActive =
     !userStopped &&
-    !waitingOnForm &&
-    !lastIsThinking &&
     !lastIsReady &&
-    lastMessage?.card !== "build_progress" &&
     (awaitingReply ||
       pendingToken !== null ||
       sendMessage.isPending ||
-      (busy && lastIsUser));
+      busy ||
+      workInFlight ||
+      Boolean(liveProgress) ||
+      turnMessages.some((m) => m.card === "thinking") ||
+      (lastIsUser && sendMessage.isPending));
+  const showLocalWorking =
+    buildTurnActive && !waitingOnForm && !hasVisibleWorkingBubble;
   // Keep Stop available for the whole in-flight turn (not only while awaitingReply).
   // Ready is terminal — never keep Stop / busy composer over a Ready card.
   const composerBusy =
     !userStopped &&
     !waitingOnForm &&
     !lastIsReady &&
-    (awaitingReply ||
-      pendingToken !== null ||
-      sendMessage.isPending ||
-      cancelRun.isPending ||
-      workInFlight ||
-      (busy && !lastMessage?.uiComponent));
+    (buildTurnActive || cancelRun.isPending);
 
   const pendingReveal = visibleMessages.filter(
     (m) =>
       m.role === "assistant" &&
       baselineIds !== null &&
       !baselineIds.has(m.id) &&
-      !revealedIds.has(m.id),
+      !revealedIds.has(m.id) &&
+      // Working cards must never wait behind typewriter queue — they fill the gap.
+      !isWorkingCard(m),
   );
   const activeRevealId = pendingReveal[0]?.id ?? null;
 
@@ -808,9 +846,6 @@ export function BuildView({ agentId }: { agentId: string }) {
     }
   };
 
-  const lastFocus = messages.at(-1)?.focus;
-  const lastSteps = messages.at(-1)?.steps;
-
   // Clear waiting when the turn produces a terminal assistant reply.
   // Critical: form continuations set awaitingReply without a new user message, so we
   // must NOT require pendingToken — otherwise Ready stays under a stuck "working" UI.
@@ -825,6 +860,7 @@ export function BuildView({ agentId }: { agentId: string }) {
       last.card !== "build_progress" &&
       last.card !== "identity_confirmed" &&
       !last.uiComponent &&
+      !isEphemeralBuilderAck(last) &&
       Boolean(last.content || (last.actions && last.actions.length > 0));
 
     let hasFinalFromSend = false;
@@ -849,6 +885,7 @@ export function BuildView({ agentId }: { agentId: string }) {
             m.role === "assistant" &&
             m.card !== "thinking" &&
             m.card !== "build_progress" &&
+            !isEphemeralBuilderAck(m) &&
             Boolean(m.uiComponent || m.card || m.content),
         );
       }
@@ -860,7 +897,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     // intermediate content message must NOT be treated as terminal — only a Ready
     // card ends the turn. Otherwise the working panel disappears before progress
     // events arrive and the UI goes silent.
-    if (!readyTerminal && busy) return;
+    if (!readyTerminal && (busy || isEphemeralBuilderAck(last))) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- derive turn-completion from server messages; guarded by terminal checks above
     setPendingToken(null);
     setAwaitingReply(false);
@@ -883,41 +920,45 @@ export function BuildView({ agentId }: { agentId: string }) {
       }
     }
     const draft = consumePrefillDraft();
+    const autoSend = consumePrefillAutoSend();
     if (draft) {
+      if (autoSend) {
+        const timer = window.setTimeout(() => {
+          setPendingToken(Date.now());
+          setAwaitingReply(true);
+          void sendMessage.mutateAsync(draft);
+        }, 0);
+        return () => window.clearTimeout(timer);
+      }
       const timeout = window.setTimeout(() => setPrefill(draft), 0);
       return () => window.clearTimeout(timeout);
     }
   }, [thread, sendMessage]);
 
+  // Soft pin only when new messages arrive — ResizeObserver handles growth without
+  // re-running on every activity-line poll (those caused micro-jumps every ~1s).
   useEffect(() => {
     const el = scrollRef.current;
-    const anchor = bottomRef.current;
-    if (!el || !anchor) return;
-    // Keep the live conversation above the composer (safety scroll).
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // Don't yank scroll if the user scrolled up to read history.
+    if (distanceFromBottom > 120) return;
     const pin = () => {
       el.scrollTop = el.scrollHeight;
     };
     pin();
     const raf = window.requestAnimationFrame(pin);
     return () => window.cancelAnimationFrame(raf);
-  }, [
-    messages.length,
-    busy,
-    showLocalWorking,
-    activeRevealId,
-    revealedIds.size,
-    lastFocus,
-    lastSteps,
-    activityLines.length,
-    workInFlight,
-    composerBusy,
-  ]);
+  }, [messages.length, showLocalWorking, activeRevealId, revealedIds.size]);
 
   // Keep pinned while content grows (typewriter / activity lines).
   useEffect(() => {
     const root = scrollRef.current;
     if (!root || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
+      const distanceFromBottom =
+        root.scrollHeight - root.scrollTop - root.clientHeight;
+      if (distanceFromBottom > 120) return;
       root.scrollTop = root.scrollHeight;
     });
     observer.observe(root);
@@ -1023,12 +1064,15 @@ export function BuildView({ agentId }: { agentId: string }) {
               {visibleMessages.map((message) => {
                 const isFresh =
                   baselineIds !== null && !baselineIds.has(message.id);
+                const isWorking = isWorkingCard(message);
                 const isPendingFresh =
                   isFresh &&
                   message.role === "assistant" &&
                   !revealedIds.has(message.id) &&
-                  message.id !== activeRevealId;
+                  message.id !== activeRevealId &&
+                  !isWorking;
                 // Hold later assistant bubbles until the previous one finishes typing.
+                // Working cards always render immediately (fills silent build gaps).
                 if (isPendingFresh) return null;
                 return (
                   <BuilderBubble
@@ -1040,10 +1084,11 @@ export function BuildView({ agentId }: { agentId: string }) {
                     fixResolved={fixedMessageIds.has(message.id)}
                     isFresh={isFresh}
                     animateNow={
-                      message.role === "assistant" && message.id === activeRevealId
+                      isWorking ||
+                      (message.role === "assistant" && message.id === activeRevealId)
                     }
                     activityLines={
-                      (message.card === "thinking" || message.card === "build_progress") &&
+                      isWorking &&
                       message.id === (visibleMessages.at(-1)?.id ?? "")
                         ? activityLines
                         : undefined

@@ -28,6 +28,12 @@ type LiveEvent = {
   toolId?: string;
   provider?: string;
   appId?: string;
+  code?: string;
+  errorType?: string;
+  error?: string;
+  mappingKey?: string;
+  sequence?: number;
+  rawPayload?: Record<string, unknown>;
 };
 
 /**
@@ -43,10 +49,9 @@ export function useLiveExecutionState(
     queryKey: ["live-execution", runId],
     enabled: Boolean(runId) && enabled,
     refetchInterval: enabled ? 800 : false,
-    placeholderData: (prev) => prev,
     queryFn: async (): Promise<ExecutionVisualState> => {
       if (!runId) {
-        return { runStatus: "idle", nodes: {}, edges: {}, legacy: {} };
+        return { runStatus: "idle", nodes: {}, edges: {}, legacy: {}, error: null };
       }
       const supabase = requireSupabaseBrowserClient();
       const { data, error } = await supabase
@@ -66,6 +71,23 @@ export function useLiveExecutionState(
           toolId: typeof payload.tool_id === "string" ? payload.tool_id : undefined,
           provider: typeof payload.provider === "string" ? payload.provider : undefined,
           appId: typeof payload.app_id === "string" ? payload.app_id : undefined,
+          code: typeof payload.code === "string" ? payload.code : undefined,
+          errorType:
+            typeof payload.error_type === "string"
+              ? payload.error_type
+              : typeof payload.errorType === "string"
+                ? payload.errorType
+                : undefined,
+          error:
+            typeof payload.error === "string"
+              ? payload.error
+              : typeof payload.message === "string"
+                ? payload.message
+                : undefined,
+          mappingKey:
+            typeof payload.mapping_key === "string" ? payload.mapping_key : undefined,
+          sequence: typeof row.sequence === "number" ? row.sequence : undefined,
+          rawPayload: payload,
         };
       });
       return reduceExecutionEvents(events, graph ?? null);

@@ -417,7 +417,9 @@ class ConnectionManager:
                 params["installation_id"] = f"eq.{installation_id}"
             await client.delete("/agent_connection_bindings", params=params)
 
-    async def list_connections(self, *, user_id: str) -> list[dict[str, Any]]:
+    async def list_connections(
+        self, *, user_id: str, include_revoked: bool = False
+    ) -> list[dict[str, Any]]:
         async with get_supabase_admin_client() as client:
             response = await client.get(
                 "/user_connections",
@@ -431,7 +433,16 @@ class ConnectionManager:
                 },
             )
         rows = response.json() if response.status_code < 400 else []
-        return rows if isinstance(rows, list) else []
+        if not isinstance(rows, list):
+            return []
+        if include_revoked:
+            return rows
+        return [
+            r
+            for r in rows
+            if str(r.get("status") or "").lower()
+            not in {"revoked", "disabled", "deleted"}
+        ]
 
     async def list_bindings(
         self,
@@ -503,30 +514,43 @@ class ConnectionManager:
         return response.json()
 
     @staticmethod
+    def _scope_set(raw: Any) -> set[str]:
+        if isinstance(raw, str):
+            return {s for s in raw.split() if s}
+        if isinstance(raw, (list, tuple, set)):
+            return {str(s) for s in raw if s}
+        return set()
+
+    @staticmethod
     def _select_scoped_connection(
         rows: list[dict[str, Any]], *, provider: str, tool_id: str | None
-    ) -> dict[str, Any]:
-        """Pick the connection best satisfying a tool's required scopes.
+    ) -> dict[str, Any] | None:
+        """Pick a connection that fully covers the tool's required scopes.
 
-        Falls back to the first (most recently validated) row when scoping does
-        not apply or no connection fully covers the required scopes.
+        Never fall back to a partial-scope token — that yields opaque API 403s
+        (e.g. CALENDAR_API_FAILED) instead of asking the user to reconnect.
         """
+        if not rows:
+            return None
         if provider != "google" or not tool_id:
             return rows[0]
-        required = set(scopes_for_tools([tool_id]))
+        required = ConnectionManager._scope_set(scopes_for_tools([tool_id]))
+        # openid/email are always requested; ignore them for coverage checks.
+        required -= ConnectionManager._scope_set(GOOGLE_SCOPES.get("openid") or [])
         if not required:
             return rows[0]
-        best_partial: dict[str, Any] | None = None
-        best_overlap = -1
         for row in rows:
-            granted = set(row.get("scopes") or [])
+            granted = ConnectionManager._scope_set(row.get("scopes"))
+            # Legacy rows with empty scopes: keep previous behavior (use token)
+            # but prefer a fully scoped connection when available.
+            if not granted:
+                continue
             if required <= granted:
                 return row
-            overlap = len(required & granted)
-            if overlap > best_overlap:
-                best_overlap = overlap
-                best_partial = row
-        return best_partial or rows[0]
+        # No scoped match — if every row has empty scopes, use first (legacy).
+        if all(not ConnectionManager._scope_set(r.get("scopes")) for r in rows):
+            return rows[0]
+        return None
 
     async def resolve_access_token(
         self,
@@ -567,6 +591,13 @@ class ConnectionManager:
             if not rows:
                 return None
             row = self._select_scoped_connection(rows, provider=provider, tool_id=tool_id)
+            if not row:
+                logger.info(
+                    "no google connection covers scopes for tool=%s agent=%s",
+                    tool_id,
+                    agent_id,
+                )
+                return None
 
             if provider == "google" and self._needs_refresh(row.get("token_expires_at")) and row.get("refresh_secret_ref"):
                 try:
@@ -597,12 +628,139 @@ class ConnectionManager:
 
     async def revoke(self, *, user_id: str, connection_id: str) -> bool:
         async with get_supabase_admin_client() as client:
+            # Load row first so we can delete the remote Pipedream account.
+            existing = await client.get(
+                "/user_connections",
+                params={
+                    "id": f"eq.{connection_id}",
+                    "user_id": f"eq.{user_id}",
+                    "select": "id,provider,external_account_id,provider_metadata",
+                    "limit": "1",
+                },
+            )
+            rows = existing.json() if existing.status_code < 400 else []
+            row = rows[0] if isinstance(rows, list) and rows else None
+
             response = await client.patch(
                 "/user_connections",
                 params={"id": f"eq.{connection_id}", "user_id": f"eq.{user_id}"},
-                json={"status": "revoked", "secret_ref": None, "refresh_secret_ref": None},
+                json={
+                    "status": "revoked",
+                    "secret_ref": None,
+                    "refresh_secret_ref": None,
+                    # Free unique(user_id, provider, account_email) so reconnect
+                    # (new Pipedream apn_* id, same Google email) can insert/upsert.
+                    "account_email": None,
+                },
             )
-        return response.status_code < 400
+            if response.status_code >= 400:
+                return False
+            # Drop all agent bindings so Structure / readiness stop showing Connected.
+            await client.delete(
+                "/agent_connection_bindings",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "connection_id": f"eq.{connection_id}",
+                },
+            )
+
+        if row and str(row.get("provider") or "") == "pipedream":
+            external = str(row.get("external_account_id") or "").strip()
+            if external:
+                try:
+                    from agent_service.integrations.pipedream.client import PipedreamClient
+
+                    await PipedreamClient().delete_account(external)
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "pipedream remote delete failed connection=%s", connection_id
+                    )
+        return True
+
+    async def disconnect_app(
+        self,
+        *,
+        user_id: str,
+        agent_id: str,
+        app_id: str,
+        tool_ids: list[str] | None = None,
+        connection_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Disconnect one product app only (Calendar ≠ Gmail ≠ Notion).
+
+        - Revokes matching Pipedream/app connections (and deletes remote PD accounts)
+        - Strips this app's tools from agent bindings without touching other apps
+        - Does not revoke unrelated connections
+        """
+        from agent_service.integrations.app_keys import app_key_from_tool_id
+
+        app = (app_id or "").strip().lower()
+        if not app:
+            return {"disconnected": False, "revoked": [], "unbound_tools": []}
+
+        connections = await self.list_connections(user_id=user_id, include_revoked=False)
+        bindings = await self.list_bindings(user_id=user_id, agent_id=agent_id)
+        by_id = {str(c.get("id")): c for c in connections}
+
+        def _conn_app(conn: dict[str, Any]) -> str:
+            meta = conn.get("provider_metadata") or {}
+            if isinstance(meta, dict) and meta.get("app_id"):
+                return str(meta["app_id"]).lower()
+            if conn.get("provider") == "google":
+                return "google"
+            return ""
+
+        target_tools: set[str] = {str(t) for t in (tool_ids or []) if t}
+        for binding in bindings or []:
+            for tid in binding.get("tool_ids") or []:
+                if app_key_from_tool_id(str(tid)) == app:
+                    target_tools.add(str(tid))
+
+        revoked: list[str] = []
+        # 1) Explicit connection id (UI selected account)
+        if connection_id and connection_id in by_id:
+            if await self.revoke(user_id=user_id, connection_id=connection_id):
+                revoked.append(connection_id)
+
+        # 2) All active connections for this exact app slug
+        for conn in connections:
+            cid = str(conn.get("id") or "")
+            if not cid or cid in revoked:
+                continue
+            if _conn_app(conn) == app:
+                if await self.revoke(user_id=user_id, connection_id=cid):
+                    revoked.append(cid)
+
+        # 3) Strip this app's tools from remaining bindings (e.g. suite Google row)
+        unbound: list[str] = []
+        async with get_supabase_admin_client() as client:
+            refreshed = await self.list_bindings(user_id=user_id, agent_id=agent_id)
+            for binding in refreshed or []:
+                bid = binding.get("id")
+                tids = [str(t) for t in (binding.get("tool_ids") or [])]
+                keep = [t for t in tids if app_key_from_tool_id(t) != app and t not in target_tools]
+                removed = [t for t in tids if t not in keep]
+                if not removed:
+                    continue
+                unbound.extend(removed)
+                if not keep:
+                    await client.delete(
+                        "/agent_connection_bindings",
+                        params={"id": f"eq.{bid}", "user_id": f"eq.{user_id}"},
+                    )
+                else:
+                    await client.patch(
+                        "/agent_connection_bindings",
+                        params={"id": f"eq.{bid}", "user_id": f"eq.{user_id}"},
+                        json={"tool_ids": keep},
+                    )
+
+        return {
+            "disconnected": True,
+            "app_id": app,
+            "revoked": revoked,
+            "unbound_tools": unbound,
+        }
 
 
 # Scaffolded providers (disabled)

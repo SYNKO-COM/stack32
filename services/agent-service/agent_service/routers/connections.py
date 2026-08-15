@@ -106,6 +106,27 @@ async def list_agent_bindings(agent_id: UUID, user: CurrentUser) -> dict[str, An
     }
 
 
+class DisconnectAppRequest(BaseModel):
+    app_id: str = Field(min_length=1, max_length=120)
+    tool_ids: list[str] = Field(default_factory=list)
+    connection_id: UUID | None = None
+
+
+@router.post("/agents/{agent_id}/connections/disconnect-app")
+async def disconnect_app(
+    agent_id: UUID, body: DisconnectAppRequest, user: CurrentUser
+) -> dict[str, Any]:
+    """Disconnect a single product app for this agent (does not touch other apps)."""
+    mgr = ConnectionManager()
+    return await mgr.disconnect_app(
+        user_id=user.user_id,
+        agent_id=str(agent_id),
+        app_id=body.app_id,
+        tool_ids=body.tool_ids,
+        connection_id=str(body.connection_id) if body.connection_id else None,
+    )
+
+
 @router.post("/connections/{connection_id}/revoke")
 async def revoke_connection(connection_id: UUID, user: CurrentUser) -> dict[str, Any]:
     mgr = ConnectionManager()

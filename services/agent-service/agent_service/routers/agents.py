@@ -283,7 +283,14 @@ async def patch_memory_settings(
         )
     data = spec.model_dump()
     memory = data.get("memory") or {}
-    for key in ("conversation_enabled", "semantic_enabled", "write_policy", "retention_days"):
+    for key in (
+        "conversation_enabled",
+        "semantic_enabled",
+        "write_policy",
+        "retention_days",
+        "provider",
+        "conversation_window",
+    ):
         if key in body:
             memory[key] = body[key]
     data["memory"] = memory

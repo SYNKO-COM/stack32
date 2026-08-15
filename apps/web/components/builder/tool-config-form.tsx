@@ -42,12 +42,13 @@ export function ToolConfigForm({
   const [connectionId, setConnectionId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [hintKeys, setHintKeys] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [{ config, schema }, listed] = await Promise.all([
+        const [{ config, schema, appHint, playbooks }, listed] = await Promise.all([
           getToolConfig(agentId, toolId),
           listIntegrationAccounts(appId),
         ]);
@@ -83,6 +84,28 @@ export function ToolConfigForm({
             ? config.connection_id
             : "";
         setConnectionId(storedConn || acctRows[0]?.connectionId || "");
+
+        // Keep hint keys for required markers only — never surface builder/tech copy in UI.
+        const fromHints: string[] = [];
+        const hints = Array.isArray(appHint?.required_static_hints)
+          ? appHint.required_static_hints
+          : [];
+        for (const h of hints) {
+          if (h && typeof h === "object" && Array.isArray((h as { keys?: unknown }).keys)) {
+            for (const k of (h as { keys: unknown[] }).keys) {
+              if (typeof k === "string") fromHints.push(k);
+            }
+          }
+        }
+        for (const pb of playbooks) {
+          const shape = pb.config_shape;
+          if (shape && typeof shape === "object") {
+            for (const k of Object.keys(shape as Record<string, unknown>)) {
+              if (!k.startsWith("_")) fromHints.push(k);
+            }
+          }
+        }
+        setHintKeys([...new Set(fromHints)]);
         setLoaded(true);
         for (const [key, meta] of Object.entries(props)) {
           if (meta.enum && meta.enum.length > 0) continue;
@@ -152,7 +175,7 @@ export function ToolConfigForm({
           <label key={key} className="block space-y-1 text-xs">
             <span className="font-medium text-foreground">
               {key}
-              {required.includes(key) ? " *" : ""}
+              {required.includes(key) || hintKeys.includes(key) ? " *" : ""}
             </span>
             {meta.description ? (
               <span className="block text-muted-foreground">{meta.description}</span>

@@ -33,10 +33,18 @@ export function consumePendingPrompt(): string | null {
  * to open the Build composer with a prepared prompt.
  */
 const PREFILL_KEY = "stack32.prefillDraft";
+const PREFILL_META_KEY = "stack32.prefillDraftMeta";
 
-export function setPrefillDraft(prompt: string): void {
+export function setPrefillDraft(
+  prompt: string,
+  opts?: { autoSend?: boolean },
+): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(PREFILL_KEY, prompt);
+  window.sessionStorage.setItem(
+    PREFILL_META_KEY,
+    JSON.stringify({ autoSend: Boolean(opts?.autoSend) }),
+  );
 }
 
 export function consumePrefillDraft(): string | null {
@@ -44,4 +52,18 @@ export function consumePrefillDraft(): string | null {
   const value = window.sessionStorage.getItem(PREFILL_KEY);
   if (value !== null) window.sessionStorage.removeItem(PREFILL_KEY);
   return value;
+}
+
+/** Consume auto-send flag paired with the latest prefill draft. */
+export function consumePrefillAutoSend(): boolean {
+  if (typeof window === "undefined") return false;
+  const raw = window.sessionStorage.getItem(PREFILL_META_KEY);
+  window.sessionStorage.removeItem(PREFILL_META_KEY);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as { autoSend?: boolean };
+    return Boolean(parsed.autoSend);
+  } catch {
+    return false;
+  }
 }

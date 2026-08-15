@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Send, X } from "lucide-react";
+import { Check, Loader2, Pause, Send, X } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -38,11 +38,11 @@ export function statusToTone(status: string): StructureTone {
 }
 
 export function statusShowsWarning(status: string): boolean {
-  return (
-    status === "setup_required" ||
-    status === "waiting_for_connection" ||
-    status === "waiting_for_approval"
-  );
+  return status === "setup_required";
+}
+
+export function statusShowsPause(status: string): boolean {
+  return status === "waiting_for_connection" || status === "waiting_for_approval";
 }
 
 export function statusShowsSpinner(status: string): boolean {
@@ -59,7 +59,7 @@ export function statusShowsError(status: string): boolean {
 
 /** Outer border color for the node shell (white fill always). */
 export function toneBorderColor(tone: StructureTone, status: string): string {
-  if (statusShowsWarning(status)) return STRUCTURE_COLORS.amber.border;
+  if (statusShowsPause(status) || statusShowsWarning(status)) return STRUCTURE_COLORS.amber.border;
   if (statusShowsSpinner(status)) return STRUCTURE_COLORS.orange.icon;
   if (statusShowsCheck(status)) return STRUCTURE_COLORS.green.border;
   if (statusShowsError(status)) return STRUCTURE_COLORS.red.border;
@@ -138,6 +138,13 @@ function brandLogoCandidates(appKey: string): string[] {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  if (statusShowsPause(status)) {
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-amber-400 text-white shadow-sm">
+        <Pause className="size-3" fill="currentColor" strokeWidth={0} aria-hidden />
+      </span>
+    );
+  }
   if (statusShowsSpinner(status)) {
     return (
       <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-white shadow-sm">

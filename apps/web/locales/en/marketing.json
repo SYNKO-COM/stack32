@@ -92,7 +92,7 @@
   },
   "pricingPreview": {
     "title": "Simple pricing",
-    "subtitle": "Start free, upgrade when your agents become part of your workflow."
+    "subtitle": "Start free, then Starter, Pro or Scale as you grow — 20% off on annual billing."
   },
   "finalCta": {
     "title": "Your first agent is one sentence away",
@@ -211,34 +211,66 @@
   },
   "pricing": {
     "title": "Pricing",
-    "subtitle": "Start free. Upgrade when Stack32 becomes part of how you work every day.",
+    "subtitle": "Start free. Move to Starter, Pro or Scale when agents become part of how you work.",
     "perMonth": "/month",
-    "intro": "One clear Free tier to explore, one Pro plan when agents are in daily use. No per-seat complexity during the beta — just the capacity you need.",
+    "intro": "Four clear tiers: try without a card, publish your first agents, accelerate on Pro, or scale a full fleet. Annual (20% off): Starter $20, Pro $40, Scale $80 / month.",
+    "billingToggleLabel": "Billing period",
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "annualSave": "−20%",
+    "billedAnnually": "{{amount}} billed yearly",
     "free": {
       "name": "Free",
-      "price": "$0",
-      "description": "Explore Stack32 and ship your first working agent.",
+      "description": "Explore Stack32 and build one agent to see how the product feels.",
       "features": [
-        "1 agent",
+        "1 agent (not publishable)",
         "Build, Live and Structure views",
-        "Conversational creation and iteration",
+        "Limited conversational creation",
+        "Live with your own LLM key (BYOK)",
         "Community support"
       ],
-      "cta": "Get started"
+      "cta": "Start for free"
+    },
+    "starter": {
+      "name": "Starter",
+      "description": "Ship and publish your first agents that actually help day to day.",
+      "features": [
+        "Up to 5 agents",
+        "Agent publishing",
+        "Generous Builder credits to iterate",
+        "Automatic testing and guided repair",
+        "Live with your LLM key (BYOK)",
+        "Email support"
+      ],
+      "cta": "Choose Starter"
     },
     "pro": {
       "name": "Pro",
-      "price": "$29",
-      "description": "For people who rely on their agents every week.",
+      "description": "For people who rely on a fleet of agents every week.",
       "badge": "Most popular",
       "features": [
-        "Unlimited agents",
-        "Automatic testing and guided repair",
+        "Up to 30 agents",
+        "Publish and share",
+        "More Builder credits to move fast",
         "Knowledge sources with citations",
         "Version history",
+        "Live with your LLM key (BYOK)",
         "Priority support"
       ],
-      "cta": "Upgrade to Pro"
+      "cta": "Choose Pro"
+    },
+    "scale": {
+      "name": "Scale",
+      "description": "For teams and power users shipping many agents with heavy build usage.",
+      "features": [
+        "Unlimited agents",
+        "Large Builder credit pool + top-ups",
+        "Extended knowledge and storage",
+        "Everything in Pro",
+        "Live with your LLM key (BYOK)",
+        "Dedicated priority support"
+      ],
+      "cta": "Choose Scale"
     },
     "included": {
       "title": "Included on every plan",
@@ -253,16 +285,20 @@
       "title": "Billing questions",
       "items": [
         {
+          "question": "What’s the difference between monthly and annual?",
+          "answer": "Monthly renews each month (Starter $24, Pro $49, Scale $99). Annual charges 12 months upfront at the reduced rate (20% off): Starter $20, Pro $40, Scale $80 per month equivalent."
+        },
+        {
           "question": "Can I cancel anytime?",
-          "answer": "Yes. Subscriptions are monthly and can be cancelled when you no longer need Pro. You keep access until the end of the period already paid, then Free. Cancellation does not refund the started period."
+          "answer": "Yes. You keep access until the end of the period already paid, then you return to Free. Cancellation does not refund the started period."
         },
         {
           "question": "Can I get a refund?",
-          "answer": "Not for a period that has already started: the service (Pro access, credits, agent creation) activates immediately on payment. By ordering, you accept immediate performance and waive the withdrawal right under the French Consumer Code. See the Refund Policy for very limited exceptions."
+          "answer": "Not for a period that has already started: access (Builder credits, agent creation, publishing per plan) activates immediately on payment. By ordering, you accept immediate performance and waive the withdrawal right under the French Consumer Code. See the Refund Policy for very limited exceptions."
         },
         {
           "question": "Who handles payment?",
-          "answer": "Billing is processed securely by Whop. Stack32 never asks you to paste card numbers into a custom form."
+          "answer": "Billing will be processed securely by Whop. Stack32 never asks you to paste card numbers into a custom form."
         },
         {
           "question": "Will prices change?",
@@ -270,7 +306,7 @@
         }
       ]
     },
-    "note": "Prices shown for illustration during the beta. Billing is handled securely by Whop."
+    "note": "Prices shown for illustration during the beta. Whop checkout coming soon — no real payment yet."
   },
   "faq": {
     "title": "Frequently asked questions",

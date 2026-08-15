@@ -256,6 +256,48 @@ class PipedreamClient:
                 return inner
         return None
 
+    async def reload_props(
+        self,
+        *,
+        action_id: str,
+        external_user_id: str,
+        configured_props: dict[str, Any] | None = None,
+        version: str | None = "latest",
+    ) -> dict[str, Any]:
+        """Reload dynamic props after setting a reloadProps field (e.g. Canva designType).
+
+        Returns ``{dynamic_props_id, configurable_props}`` or an error dict.
+        """
+        if not self.configured():
+            return {"error": "PIPEDREAM_NOT_CONFIGURED"}
+        body: dict[str, Any] = {
+            "id": action_id,
+            "external_user_id": external_user_id,
+            "configured_props": configured_props or {},
+        }
+        if version:
+            body["version"] = version
+        data = await self._request(
+            "POST",
+            f"/connect/{self._project_id()}/actions/props",
+            json=body,
+        )
+        if not isinstance(data, dict):
+            return {"error": "PIPEDREAM_RELOAD_PROPS_FAILED"}
+        dynamic = data.get("dynamicProps") if isinstance(data.get("dynamicProps"), dict) else {}
+        dyp_id = dynamic.get("id")
+        props = dynamic.get("configurableProps") or dynamic.get("configurable_props") or []
+        if not dyp_id:
+            return {
+                "error": "PIPEDREAM_RELOAD_PROPS_FAILED",
+                "message": "No dynamicProps.id returned",
+                "raw_errors": data.get("errors"),
+            }
+        return {
+            "dynamic_props_id": str(dyp_id),
+            "configurable_props": props if isinstance(props, list) else [],
+        }
+
     async def run_action(
         self,
         *,
@@ -263,6 +305,7 @@ class PipedreamClient:
         external_user_id: str,
         configured_props: dict[str, Any] | None = None,
         version: str | None = "latest",
+        dynamic_props_id: str | None = None,
     ) -> dict[str, Any]:
         """Run a Connect action. Auth must already be inside configured_props.<app>.authProvisionId."""
         if not self.configured():
@@ -278,6 +321,8 @@ class PipedreamClient:
         }
         if version:
             body["version"] = version
+        if dynamic_props_id:
+            body["dynamic_props_id"] = dynamic_props_id
         try:
             data = await self._request(
                 "POST",
@@ -325,13 +370,15 @@ class PipedreamClient:
         return options if isinstance(options, list) else []
 
     async def list_accounts(
-        self, *, external_user_id: str, app: str | None = None
+        self, *, external_user_id: str, app: str | None = None, include_credentials: bool = False
     ) -> list[dict[str, Any]]:
         if not self.configured():
             return []
         params: dict[str, Any] = {"external_user_id": external_user_id}
         if app:
             params["app"] = app
+        if include_credentials:
+            params["include_credentials"] = "true"
         data = await self._request(
             "GET",
             f"/connect/{self._project_id()}/accounts",
@@ -357,6 +404,7 @@ class PipedreamClient:
                 or row.get("app")
                 or row.get("app_id")
             )
+            creds = row.get("credentials") if isinstance(row.get("credentials"), dict) else None
             out.append(
                 {
                     "id": row.get("id") or row.get("account_id"),
@@ -366,7 +414,51 @@ class PipedreamClient:
                     if isinstance(row.get("metadata"), dict)
                     else None,
                     "healthy": row.get("healthy"),
+                    "credentials": creds,
                     "raw": row,
                 }
             )
         return out
+
+    async def get_oauth_access_token_for_app(
+        self, *, external_user_id: str, app: str, account_id: str | None = None
+    ) -> str | None:
+        """Best-effort Google/etc token from a Pipedream connected account (BYOA)."""
+        accounts = await self.list_accounts(
+            external_user_id=external_user_id, app=app, include_credentials=True
+        )
+        for account in accounts:
+            if account_id and str(account.get("id")) != str(account_id):
+                continue
+            creds = account.get("credentials") if isinstance(account.get("credentials"), dict) else {}
+            token = (
+                creds.get("oauth_access_token")
+                or creds.get("access_token")
+                or creds.get("token")
+            )
+            if token:
+                return str(token)
+        return None
+
+    async def delete_account(self, account_id: str) -> bool:
+        """Remove a connected account from Pipedream so sync cannot resurrect it."""
+        if not self.configured() or not account_id:
+            return False
+        try:
+            await self._request(
+                "DELETE",
+                f"/connect/{self._project_id()}/accounts/{account_id}",
+            )
+            return True
+        except PipedreamError as exc:
+            if exc.status == 404:
+                return True
+            logger.warning(
+                "pipedream_delete_account_failed id=%s status=%s",
+                account_id,
+                exc.status,
+            )
+            return False
+        except Exception:  # noqa: BLE001
+            logger.exception("pipedream_delete_account_error id=%s", account_id)
+            return False

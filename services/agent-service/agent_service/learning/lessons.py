@@ -243,6 +243,46 @@ PLATFORM_BOOTSTRAP_LESSONS: list[dict[str, Any]] = [
         "times_helped": 5,
         "times_seen": 5,
     },
+    {
+        "error_code": "PIPEDREAM_ACTION_FAILED",
+        "reason": (
+            "Live Pipedream tool failed: wrong auth prop key (google_calendar vs "
+            "googleCalendar), wrong calendar fields (start/end vs eventStartDate/"
+            "eventEndDate), or Canva create-design missing designType=preset + name"
+        ),
+        "resolution_summary": (
+            "Do NOT remove the tool. Fix prop mapping: use Pipedream auth prop names "
+            "(googleCalendar/canva), map calendar to eventStartDate/eventEndDate or "
+            "quick-add text; for canva-create-design default designType=preset and "
+            "name=doc, then reload dynamic props (POST .../actions/props) and pass "
+            "dynamic_props_id on run. Prefer config/binding fixes over deleting tools."
+        ),
+        "times_helped": 4,
+        "times_seen": 4,
+    },
+    {
+        "error_code": "LIVE_TOOL_MISCONFIGURED",
+        "reason": "Generated agent tools fail at runtime while connections appear Connected",
+        "resolution_summary": (
+            "Inspect run_events for tool.failed message; fix action prop schemas and "
+            "static tool_config; never strip required tools from Meet-prep style agents; "
+            "keep surgical patches; ask user to re-run Live after fix. When binding "
+            "Calendar, pass calendar_list/calendar_create_event tool_ids explicitly — "
+            "empty tool_ids leave list/create unbound."
+        ),
+        "times_helped": 4,
+        "times_seen": 5,
+    },
+    {
+        "error_code": "LLM_CONFIGURATION_REQUIRED",
+        "reason": "New agent Live blocked: no installation-scoped llm_api_key",
+        "resolution_summary": (
+            "Collect BYOK via secret_form on the installation before Live; do not expect "
+            "platform OPENAI_API_KEY to power user Live when LIVE_REQUIRE_USER_LLM_KEY=true."
+        ),
+        "times_helped": 2,
+        "times_seen": 2,
+    },
 ]
 
 

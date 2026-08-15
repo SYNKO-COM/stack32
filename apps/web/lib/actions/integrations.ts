@@ -160,19 +160,31 @@ export async function bindIntegrationConnection(input: {
 export async function getToolConfig(
   agentId: string,
   toolId: string,
-): Promise<{ config: Record<string, unknown> | null; schema: Record<string, unknown> | null }> {
+): Promise<{
+  config: Record<string, unknown> | null;
+  schema: Record<string, unknown> | null;
+  appHint: Record<string, unknown> | null;
+  playbooks: Array<Record<string, unknown>>;
+}> {
   if (currentAiExecutionMode() !== "agent-service") {
-    return { config: null, schema: null };
+    return { config: null, schema: null, appHint: null, playbooks: [] };
   }
   const accessToken = await requireAccessToken();
   const result = await agentServiceFetch<{
     config: Record<string, unknown> | null;
     schema: Record<string, unknown> | null;
+    app_hint?: Record<string, unknown> | null;
+    playbooks?: Array<Record<string, unknown>>;
   }>(`/v1/agents/${agentId}/tools/${encodeURIComponent(toolId)}/config`, {
     method: "GET",
     accessToken,
   });
-  return { config: result.config, schema: result.schema };
+  return {
+    config: result.config,
+    schema: result.schema,
+    appHint: result.app_hint ?? null,
+    playbooks: result.playbooks ?? [],
+  };
 }
 
 export async function saveToolConfig(

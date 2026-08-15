@@ -69,6 +69,22 @@ class CalendarCreateEventInput(BaseModel):
     description: str = Field(default="", max_length=10_000)
     dry_run: bool = True
 
+    @classmethod
+    def model_validate(cls, obj: Any, **kwargs: Any) -> "CalendarCreateEventInput":  # type: ignore[override]
+        if isinstance(obj, dict):
+            data = dict(obj)
+            if not data.get("title") and data.get("summary"):
+                data["title"] = data["summary"]
+            if not data.get("start"):
+                data["start"] = data.get("start_time") or data.get("startTime") or data.get("begin")
+            if not data.get("end"):
+                data["end"] = data.get("end_time") or data.get("endTime") or data.get("finish")
+            # If end missing, default +1h from start (string passthrough; normalize later).
+            if data.get("start") and not data.get("end"):
+                data["end"] = data["start"]
+            obj = data
+        return super().model_validate(obj, **kwargs)
+
 
 class GoogleDocsCreateInput(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -261,27 +277,10 @@ async def execute_tool(
 
 
 def _requires_pipedream_approval(tool_id: str, ref: Any) -> bool:
-    if tool_id in SIDE_EFFECT_TOOLS:
-        return True
-    # Default: Pipedream actions are side-effectful unless clearly read-only.
-    name = (getattr(ref, "provider_tool_id", None) or tool_id).lower()
-    read_hints = ("list", "get", "find", "search", "retrieve", "read", "fetch")
-    write_hints = (
-        "send",
-        "create",
-        "update",
-        "delete",
-        "post",
-        "write",
-        "insert",
-        "charge",
-        "refund",
-    )
-    if any(h in name for h in write_hints):
-        return True
-    if any(h in name for h in read_hints):
-        return False
-    return True
+    # Runtime Approve/Deny is disabled by default — connecting the account is
+    # the authorization gate. LangGraph may still inject approved_tool_ids.
+    del tool_id, ref
+    return False
 
 
 async def _execute_google_tool(

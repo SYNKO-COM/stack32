@@ -553,14 +553,16 @@ class BuilderOrchestrator:
             tone=str(draft.get("tone") or "professional")[:64],
             description=str(draft.get("description") or "")[:2000],
         )
-        notes = (context_notes or "")[:2000]
-        if schedule_hourly and "hourly" not in notes.lower():
-            notes = (notes + "\n\nSchedule: run every hour when scheduling is available.").strip()
+        # Trigger form only collects schedule — chat memory is always enabled by default.
+        # Semantic memory / notes are configured later in Structure if the user wants.
+        _ = (memory_conversation, memory_semantic, context_notes)
+        notes = "Schedule: run every hour when scheduling is available." if schedule_hourly else ""
         caps = {
-            "memory_conversation": memory_conversation,
-            "memory_semantic": memory_semantic,
-            "knowledge_enabled": knowledge_enabled,
+            "memory_conversation": True,
+            "memory_semantic": False,
+            "knowledge_enabled": bool(knowledge_enabled),
             "schedule_hourly": schedule_hourly,
+            "trigger_chat": True,
             "context_notes": notes,
         }
         if schedule_hourly:
@@ -575,7 +577,7 @@ class BuilderOrchestrator:
                         "cron_expression": "0 * * * *",
                         "timezone": "UTC",
                         "enabled": True,
-                        "config": {"source": "builder_capabilities"},
+                        "config": {"source": "builder_capabilities", "trigger_chat": True},
                     },
                 )
         await self.db.clear_builder_interrupt(run_id, user_id)
@@ -639,33 +641,21 @@ class BuilderOrchestrator:
                 "interrupt_run_id": run_id,
                 "ui_component": {
                     "type": "agent_capabilities_form",
-                    "version": "1",
+                    "version": "2",
                     "request_id": str(uuid.uuid4()),
                     "context": "builder",
                     "fields": [
                         {
-                            "key": "memory_conversation",
+                            "key": "trigger_chat",
                             "type": "toggle",
-                            "required": False,
+                            "required": True,
                             "suggested_value": "true",
-                        },
-                        {
-                            "key": "memory_semantic",
-                            "type": "toggle",
-                            "required": False,
-                            "suggested_value": "false",
                         },
                         {
                             "key": "schedule_hourly",
                             "type": "toggle",
                             "required": False,
                             "suggested_value": "false",
-                        },
-                        {
-                            "key": "context_notes",
-                            "type": "textarea",
-                            "required": False,
-                            "suggested_value": "",
                         },
                     ],
                 },
@@ -863,13 +853,33 @@ class BuilderOrchestrator:
             "pipedrive": "pipedrive",
             "zoho": "zoho_crm",
             "zoho crm": "zoho_crm",
+            "canva": "canva",
+            "canvas": "canvas",
+            "gocanvas": "gocanvas",
+            "notion": "notion",
         }
-        for _key, value in (answers or {}).items():
-            text = str(value or "").strip().lower()
+        from agent_service.builder.capabilities import slug_from_website
+
+        for key, value in (answers or {}).items():
+            text = str(value or "").strip()
             if not text:
                 continue
-            slug = _alias.get(text, text.replace(" ", "_"))
-            if slug not in preferred:
+            key_l = str(key or "").lower()
+            if "website" in key_l or key_l in {"tool_url", "app_url"}:
+                site_slug = slug_from_website(text)
+                if site_slug and site_slug not in preferred:
+                    preferred.append(site_slug)
+                continue
+            # Select values may be "canva — Canva (design)"; keep the slug token.
+            raw = text.lower().split("—")[0].split("-")[0].strip()
+            # Prefer full alias lookup on the whole answer first.
+            full = text.lower().strip()
+            slug = _alias.get(full) or _alias.get(raw) or full.replace(" ", "_")
+            # If answer looks like "Canva (design tool)", take first word.
+            if slug not in _alias.values() and " " in full:
+                first = full.split()[0].strip("()[]")
+                slug = _alias.get(first, first.replace(" ", "_"))
+            if slug and slug not in preferred:
                 preferred.append(slug)
         caps["preferred_apps"] = preferred[:12]
         notes = str(caps.get("context_notes") or "")
@@ -878,6 +888,10 @@ class BuilderOrchestrator:
             if text:
                 notes = (notes + f"\n{key}: {text}").strip()
         caps["context_notes"] = notes[:2000]
+
+        # Keep the original build brief when clarifying tools mid-edit.
+        original_goal = str(draft.get("original_goal") or prompt or "")[:4000]
+        resume_prompt = original_goal or prompt
 
         await self.db.resolve_builder_form(thread_id=thread_id, request_id=run_id)
         await self.db.insert_assistant_message(
@@ -891,16 +905,21 @@ class BuilderOrchestrator:
         await self.db.update_run_status(run_id, "running")
         await self.db.update_agent_status(agent_id, user_id, "building")
 
-        complexity = detect_complexity(prompt, is_first_build=True)
+        complexity = detect_complexity(resume_prompt, is_first_build=True)
+        current_spec = None
+        try:
+            current_spec = await self.db.load_draft_spec(agent_id, user_id)
+        except Exception:  # noqa: BLE001
+            current_spec = None
         return await self._continue_build(
             run_id=run_id,
             user_id=user_id,
             agent_id=agent_id,
             thread_id=thread_id,
-            content=prompt,
+            content=resume_prompt,
             identity=identity,
             complexity=complexity,
-            current_spec=None,
+            current_spec=current_spec,
             capabilities=caps,
         )
 
@@ -918,37 +937,142 @@ class BuilderOrchestrator:
         from agent_service.builder.capabilities import build_capability_plan
 
         caps = capabilities or {}
-        if caps.get("preferred_apps"):
-            return None
+        preferred = list(caps.get("preferred_apps") or [])
         notes = str(caps.get("context_notes") or "").strip()
-        plan = build_capability_plan(f"{prompt}\n{notes}".strip())
+        plan = build_capability_plan(
+            f"{prompt}\n{notes}".strip(),
+            preferred_apps=preferred or None,
+        )
         if not plan.ambiguities:
             return None
 
         fields: list[dict[str, Any]] = []
-        if "email_provider" in plan.ambiguities:
+        if "email_provider" in plan.ambiguities and not any(
+            a in {"gmail", "microsoft_outlook", "outlook"} for a in preferred
+        ):
             fields.append(
                 {
                     "key": "email_service",
-                    "type": "text",
+                    "type": "select",
                     "required": True,
                     "label": "Email service",
-                    "suggested_value": "",
+                    "options": ["gmail", "microsoft_outlook"],
+                    "suggested_value": "gmail",
                 }
             )
-        if "crm_provider" in plan.ambiguities:
+        if "crm_provider" in plan.ambiguities and not any(
+            a in {"hubspot", "salesforce", "pipedrive", "zoho_crm", "zoho"}
+            for a in preferred
+        ):
             fields.append(
                 {
                     "key": "crm",
-                    "type": "text",
+                    "type": "select",
                     "required": True,
                     "label": "CRM",
-                    "suggested_value": "",
+                    "options": ["hubspot", "salesforce", "pipedrive", "zoho_crm"],
+                    "suggested_value": "hubspot",
                 }
             )
         if not fields:
             return None
 
+        return await self._interrupt_provider_form(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity=identity,
+            capabilities=caps,
+            fields=fields,
+            original_goal=prompt,
+        )
+
+    async def _maybe_interrupt_for_ambiguous_apps(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        prompt: str,
+        identity: AgentIdentity,
+        capabilities: dict[str, Any] | None,
+        ambiguous: list[dict[str, Any]],
+        original_goal: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Stop the build when Pipedream app search is ambiguous (Canva vs Canvas…)."""
+        from agent_service.builder.capabilities import blocking_ambiguities
+
+        caps = capabilities or {}
+        preferred = list(caps.get("preferred_apps") or [])
+        blocking = blocking_ambiguities(ambiguous, preferred_apps=preferred)
+        app_blocks = [
+            b for b in blocking if b.get("reason") in {"ambiguous_app", "no_match"}
+        ]
+        if not app_blocks:
+            return None
+
+        fields: list[dict[str, Any]] = []
+        for item in app_blocks[:4]:
+            query = str(item.get("app_query") or item.get("capability") or "app")
+            query = query.replace("ext:", "").strip() or "app"
+            key = f"app_{re.sub(r'[^a-z0-9]+', '_', query.lower())[:32]}"
+            choices = item.get("choices") or []
+            options: list[str] = []
+            for choice in choices:
+                if isinstance(choice, dict):
+                    slug = str(choice.get("tool_id") or choice.get("app_id") or "").strip()
+                    if slug and slug not in options:
+                        options.append(slug)
+                elif isinstance(choice, str) and choice not in options:
+                    options.append(choice)
+            field: dict[str, Any] = {
+                "key": key,
+                "type": "select" if options else "text",
+                "required": True,
+                "label": f"Which app did you mean by “{query}”?",
+                "suggested_value": options[0] if options else query,
+            }
+            if options:
+                field["options"] = options[:8]
+            fields.append(field)
+
+        fields.append(
+            {
+                "key": "tool_website",
+                "type": "text",
+                "required": False,
+                "label": "Or paste the tool website URL",
+                "suggested_value": "",
+            }
+        )
+        return await self._interrupt_provider_form(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity=identity,
+            capabilities=caps,
+            fields=fields,
+            original_goal=original_goal or prompt,
+        )
+
+    async def _interrupt_provider_form(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        prompt: str,
+        identity: AgentIdentity,
+        capabilities: dict[str, Any],
+        fields: list[dict[str, Any]],
+        original_goal: str,
+    ) -> dict[str, Any]:
         await self.db.insert_assistant_message(
             thread_id=thread_id,
             agent_id=agent_id,
@@ -975,7 +1099,8 @@ class BuilderOrchestrator:
             identity_draft={
                 **identity.model_dump(),
                 "_interrupt_type": "provider_clarification",
-                "capabilities": caps,
+                "capabilities": capabilities,
+                "original_goal": original_goal[:4000],
             },
             interrupt_type="provider_clarification",
         )
@@ -1026,10 +1151,17 @@ class BuilderOrchestrator:
                 if not binding.enabled:
                     continue
                 provider = (binding.provider or "native").lower()
+                app_id = binding.app_id
                 if provider in {"native", ""} and str(binding.tool_id).startswith(
                     ("gmail_", "calendar_", "google_docs")
                 ):
-                    provider = "google"
+                    from agent_service.integrations.app_keys import (
+                        app_key_from_tool_id,
+                        oauth_provider_for_app,
+                    )
+
+                    app_id = app_key_from_tool_id(binding.tool_id, app_id=app_id)
+                    provider = oauth_provider_for_app(app_id)
                 if provider in {"native", ""}:
                     continue
                 synthesized.append(
@@ -1039,7 +1171,7 @@ class BuilderOrchestrator:
                         {
                             "id": f"auto:{binding.tool_id}",
                             "provider": provider,
-                            "app_id": binding.app_id,
+                            "app_id": app_id,
                             "tool_ids": [binding.tool_id],
                             "required": True,
                             "required_for": [binding.tool_id],
@@ -1059,7 +1191,8 @@ class BuilderOrchestrator:
                 covered = True
             if app_id and app_id in bound:
                 covered = True
-            if provider in {"google", "gmail"} and "google" in bound:
+            # Per-app Pipedream accounts cover Google product apps — never a suite token.
+            if provider in {"google", "gmail"} and app_id and app_id in bound:
                 covered = True
             if provider in {"slack", "slack_v2"} and (
                 "pipedream" in bound or "slack" in bound or "slack_v2" in bound
@@ -1566,9 +1699,31 @@ class BuilderOrchestrator:
                 ],
                 focus="Planning next moves",
             )
-            spec = await self._generate_spec(
-                content, identity, complexity, current_spec, capabilities=capabilities
+            spec, ambiguous = await self._generate_spec(
+                content,
+                identity,
+                complexity,
+                current_spec,
+                capabilities=capabilities,
             )
+            original_goal = (
+                (capabilities or {}).get("original_goal")
+                or (current_spec.goal if current_spec else None)
+                or content
+            )
+            app_clarified = await self._maybe_interrupt_for_ambiguous_apps(
+                run_id=run_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                thread_id=thread_id,
+                prompt=content,
+                identity=identity,
+                capabilities=capabilities,
+                ambiguous=ambiguous,
+                original_goal=str(original_goal),
+            )
+            if app_clarified:
+                return app_clarified
 
         # Connection binding is installation-scoped (AI Agent), never a Build gate.
         tool_names = ", ".join(t.tool_id for t in spec.tools[:4]) or "core tools"
@@ -2545,39 +2700,111 @@ class BuilderOrchestrator:
         complexity: TaskComplexity,
         current: AgentSpec | None,
         capabilities: dict[str, Any] | None = None,
-    ) -> AgentSpec:
+    ) -> tuple[AgentSpec, list[dict[str, Any]]]:
+        from agent_service.builder.capabilities import (
+            build_connection_requirements,
+            extract_external_app_queries,
+            is_surgical_tool_edit,
+            merge_tools_on_edit,
+        )
+
         caps = capabilities or {}
         notes = str(caps.get("context_notes") or "").strip()
-        design = await self._design_agent_blueprint(content, identity, notes)
-        tool_prompt = content + " " + notes + " " + " ".join(design.get("tool_hints") or [])
+        original_goal = str(
+            caps.get("original_goal") or (current.goal if current else "") or content
+        )[:4000]
+        # On edits, design against the durable goal + the current change request.
+        design_goal = (
+            f"{original_goal}\n\nUser change request: {content[:1500]}"
+            if current is not None and content.strip() != original_goal.strip()
+            else content
+        )
+        design = await self._design_agent_blueprint(
+            design_goal,
+            identity,
+            notes,
+            current_tools=[t.tool_id for t in current.tools] if current else None,
+        )
+        tool_prompt = (
+            design_goal + " " + notes + " " + " ".join(design.get("tool_hints") or [])
+        )
         preferred_apps = list(caps.get("preferred_apps") or [])
-        tools, connection_requirements, _ambiguous = await self._select_tools(
+        tools, connection_requirements, ambiguous = await self._select_tools(
             tool_prompt,
             llm_hints=list(design.get("tool_hints") or []),
             preferred_apps=preferred_apps or None,
         )
+
+        surgical = bool(
+            current is not None
+            and is_surgical_tool_edit(content, current_tool_count=len(current.tools))
+        )
+        if current is not None and surgical:
+            tools = merge_tools_on_edit(current.tools, tools, edit_prompt=content)
+            connection_requirements = await build_connection_requirements(tools)
+            goal = original_goal
+        elif current is not None and not extract_external_app_queries(content):
+            # Soft edit with no new apps named — preserve prior tools + goal.
+            tools = list(current.tools)
+            connection_requirements = list(current.connection_requirements or [])
+            goal = original_goal
+        else:
+            goal = original_goal if current is not None else content[:4000]
+
         knowledge_enabled = bool(caps.get("knowledge_enabled")) or any(
             k in content.lower() for k in ("document", "knowledge", "pdf", "rag")
         ) or any(t.tool_id == "knowledge_search" for t in tools)
+        if current is not None and surgical:
+            knowledge_enabled = knowledge_enabled or bool(current.knowledge.enabled)
         memory_conversation = (
             bool(caps["memory_conversation"])
             if "memory_conversation" in caps
-            else True
+            else (current.memory.conversation_enabled if current else True)
         )
         memory_semantic = bool(caps.get("memory_semantic")) or "remember" in content.lower()
+        if current is not None and surgical:
+            memory_semantic = memory_semantic or bool(current.memory.semantic_enabled)
         graph = self._build_graph(
             tools,
-            content,
+            goal,
             knowledge_enabled=knowledge_enabled,
             memory_enabled=memory_semantic,
         )
         system_extra = str(design.get("system_extra") or "").strip()
+        pd_knowledge = ""
+        try:
+            from agent_service.integrations.pipedream.knowledge import (
+                builder_guidance_block,
+                orchestrator_pipedream_system_addon,
+            )
+            from agent_service.learning.playbooks import (
+                format_playbooks_for_prompt,
+                playbooks_for_tool,
+            )
+
+            pd_bits = [
+                orchestrator_pipedream_system_addon(),
+                builder_guidance_block(
+                    tool_ids=[t.tool_id for t in tools],
+                    app_ids=preferred_apps or None,
+                ),
+            ]
+            for t in tools[:8]:
+                pbs = await playbooks_for_tool(tool_id=t.tool_id, limit=2)
+                block = format_playbooks_for_prompt(pbs)
+                if block:
+                    pd_bits.append(block)
+                    break
+            pd_knowledge = "\n\n".join(b for b in pd_bits if b).strip()[:1800]
+        except Exception:  # noqa: BLE001
+            logger.debug("pipedream_knowledge_inject_failed", exc_info=True)
         instructions = AgentInstructions(
             system=(
                 f"You are {identity.name}. Role: {identity.role}. "
-                f"Tone: {identity.tone}. Goal context: {content[:1500]}"
+                f"Tone: {identity.tone}. Goal context: {goal[:1500]}"
                 + (f"\n\n{system_extra}" if system_extra else "")
                 + (f"\n\nUser context notes: {notes[:800]}" if notes else "")
+                + (f"\n\n{pd_knowledge}" if pd_knowledge else "")
             )[:12000],
             behavioral_rules=[
                 "Stay within the agent's role.",
@@ -2596,6 +2823,10 @@ class BuilderOrchestrator:
             AgentRule(id="no_secrets", text="Never request or expose secrets."),
             AgentRule(id="cite_sources", text="Cite knowledge sources when used."),
         ]
+        if current is not None and surgical:
+            for rule in current.rules or []:
+                if rule.id not in {"no_secrets", "cite_sources"}:
+                    rules.append(rule)
         for extra_rule in design.get("extra_rules") or []:
             text = str(extra_rule).strip()[:500]
             if text:
@@ -2606,16 +2837,20 @@ class BuilderOrchestrator:
             str(s)[:240]
             for s in starters
             if isinstance(s, str) and s.strip()
-        ][:4] or [
-            f"What can you help me with as {identity.name}?",
-            "Summarize the key points.",
-        ]
+        ][:4] or (
+            list(current.starter_prompts[:4])
+            if current and current.starter_prompts
+            else [
+                f"What can you help me with as {identity.name}?",
+                "Summarize the key points.",
+            ]
+        )
 
         profile = "reasoning" if complexity == TaskComplexity.HEAVY else "balanced"
-        return AgentSpec(
+        spec = AgentSpec(
             schema_version="4.0",
             identity=identity,
-            goal=content[:4000],
+            goal=goal[:4000],
             instructions=instructions,
             tools=tools,
             knowledge=KnowledgeConfig(
@@ -2633,12 +2868,14 @@ class BuilderOrchestrator:
             graph=graph,
             connection_requirements=connection_requirements,
         )
+        return spec, ambiguous
 
     async def _design_agent_blueprint(
         self,
         content: str,
         identity: AgentIdentity,
         notes: str,
+        current_tools: list[str] | None = None,
     ) -> dict[str, Any]:
         """Use a reasoning model to personalize the agent beyond templates."""
         import json
@@ -2646,16 +2883,18 @@ class BuilderOrchestrator:
         try:
             from agent_service.runtime.multimodal import build_user_message_content
 
+            existing = ", ".join((current_tools or [])[:20]) or "(none yet)"
             user_content = build_user_message_content(
                 (
                     f"Agent name: {identity.name}\nRole: {identity.role}\n"
                     f"Tone: {identity.tone}\nGoal: {content[:2500]}\n"
-                    f"Extra notes: {notes[:800]}"
+                    f"Extra notes: {notes[:800]}\n"
+                    f"Existing tools to preserve unless the user asks to remove them: {existing}"
                 ),
                 getattr(self, "_turn_images", None),
             )
             result = await self.gateway.complete(
-                profile=ModelProfile.CODING,
+                profile=ModelProfile.REASONING,
                 messages=[
                     {
                         "role": "system",
@@ -2665,9 +2904,19 @@ class BuilderOrchestrator:
                             "tool_hints (array of short keywords: web, knowledge, calc, "
                             "email, gmail, calendar, AND any SaaS app the user named — "
                             "e.g. notion, slack, stripe, airtable, hubspot, shopify, "
-                            "google sheets, linear, jira, github, zoom…), "
+                            "google sheets, linear, jira, github, zoom, canva…), "
                             "extra_rules (array of 0-3 short rules), "
                             "starter_prompts (array of 2-3 example user prompts). "
+                            "CRITICAL tool accuracy rules:\n"
+                            "- Canva (design presentations) ≠ Canvas (Instructure LMS) ≠ GoCanvas.\n"
+                            "- If the user says Canva / présentation Canva / design Canva, "
+                            "tool_hints MUST include exactly \"canva\" — never canvas or gocanvas.\n"
+                            "- Preserve every existing third-party app unless the user "
+                            "explicitly asks to remove it.\n"
+                            "- On a small fix (wrong tool / logo / photo), only change that "
+                            "tool in tool_hints and keep the others.\n"
+                            "- If several apps could match a name, prefer the brand the user "
+                            "named and do not invent near-homophones.\n"
                             "Always include every third-party app the user mentioned; "
                             "the builder resolves tools via Pipedream Connect (3000+ apps). "
                             "Keep tool_hints short (max 8)."
@@ -3114,6 +3363,35 @@ class BuilderOrchestrator:
             limit=5,
         )
         lesson_block = format_lessons_for_prompt(lessons)
+        try:
+            from agent_service.integrations.pipedream.knowledge import (
+                builder_guidance_block,
+                load_connect_knowledge_markdown,
+            )
+            from agent_service.learning.playbooks import (
+                format_playbooks_for_prompt,
+                playbooks_for_tool,
+            )
+
+            pd_repair = builder_guidance_block(tool_ids=[t.tool_id for t in spec.tools])
+            for t in spec.tools[:6]:
+                pbs = await playbooks_for_tool(tool_id=t.tool_id, limit=3)
+                pb_block = format_playbooks_for_prompt(pbs)
+                if pb_block:
+                    pd_repair = (pd_repair + "\n" + pb_block).strip()
+                    break
+            # Keep repair prompts short — only hard rules from knowledge, not full doc.
+            if report.error_code in {"PIPEDREAM_ACTION_FAILED", "LIVE_TOOL_MISCONFIGURED"}:
+                kd = load_connect_knowledge_markdown()
+                hard = "\n".join(
+                    line for line in kd.splitlines() if line.startswith(("1.", "2.", "3.", "4.", "5.", "|"))
+                )[:900]
+                if hard:
+                    pd_repair = (pd_repair + "\n" + hard).strip()
+            if pd_repair:
+                lesson_block = (lesson_block + "\n\n" + pd_repair).strip()[:2800]
+        except Exception:  # noqa: BLE001
+            logger.debug("pipedream_repair_knowledge_failed", exc_info=True)
 
         data = spec.model_dump()
         patches = report.suggested_patches or [

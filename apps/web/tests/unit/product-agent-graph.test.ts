@@ -72,10 +72,21 @@ describe("app-grouping", () => {
       ]),
       boundToolIds: new Set(["gmail_list"]),
       boundProviders: new Set(["google"]),
+      boundAppIds: new Set(["gmail"]),
     });
     const gmail = graph.nodes.find((n) => n.id === "app:gmail");
     const calendar = graph.nodes.find((n) => n.id === "app:google_calendar");
     expect(gmail?.configurationStatus).toBe("ready");
+    expect(calendar?.configurationStatus).toBe("setup_required");
+  });
+
+  it("requires the product app id — tool bindings alone are not enough", () => {
+    const graph = buildProductAgentGraph({
+      definition: baseSpec([{ tool: "calendar_list", enabled: true }]),
+      boundToolIds: new Set(["calendar_list"]),
+      boundProviders: new Set(["google", "pipedream"]),
+    });
+    const calendar = graph.nodes.find((n) => n.id === "app:google_calendar");
     expect(calendar?.configurationStatus).toBe("setup_required");
   });
 

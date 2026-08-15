@@ -34,16 +34,17 @@ export const GENERIC_PROVIDER_APP_IDS = new Set([
 ]);
 
 const NATIVE_APP_PREFIXES: Array<{ prefix: string; appKey: AppKey; appName: string; provider: string }> = [
-  { prefix: "gmail_", appKey: "gmail", appName: "Gmail", provider: "google" },
-  { prefix: "gmail", appKey: "gmail", appName: "Gmail", provider: "google" },
-  { prefix: "calendar_", appKey: "google_calendar", appName: "Google Calendar", provider: "google" },
-  { prefix: "google_docs", appKey: "google_docs", appName: "Google Docs", provider: "google" },
-  { prefix: "google-docs", appKey: "google_docs", appName: "Google Docs", provider: "google" },
-  { prefix: "google_sheets", appKey: "google_sheets", appName: "Google Sheets", provider: "google" },
-  { prefix: "google-sheets", appKey: "google_sheets", appName: "Google Sheets", provider: "google" },
-  { prefix: "google_drive", appKey: "google_drive", appName: "Google Drive", provider: "google" },
-  { prefix: "google-drive", appKey: "google_drive", appName: "Google Drive", provider: "google" },
-  { prefix: "google_slides", appKey: "google_slides", appName: "Google Slides", provider: "google" },
+  // Google product apps connect via Pipedream (per-app accounts).
+  { prefix: "gmail_", appKey: "gmail", appName: "Gmail", provider: "pipedream" },
+  { prefix: "gmail", appKey: "gmail", appName: "Gmail", provider: "pipedream" },
+  { prefix: "calendar_", appKey: "google_calendar", appName: "Google Calendar", provider: "pipedream" },
+  { prefix: "google_docs", appKey: "google_docs", appName: "Google Docs", provider: "pipedream" },
+  { prefix: "google-docs", appKey: "google_docs", appName: "Google Docs", provider: "pipedream" },
+  { prefix: "google_sheets", appKey: "google_sheets", appName: "Google Sheets", provider: "pipedream" },
+  { prefix: "google-sheets", appKey: "google_sheets", appName: "Google Sheets", provider: "pipedream" },
+  { prefix: "google_drive", appKey: "google_drive", appName: "Google Drive", provider: "pipedream" },
+  { prefix: "google-drive", appKey: "google_drive", appName: "Google Drive", provider: "pipedream" },
+  { prefix: "google_slides", appKey: "google_slides", appName: "Google Slides", provider: "pipedream" },
   { prefix: "microsoft_outlook", appKey: "microsoft_outlook", appName: "Outlook", provider: "microsoft" },
   { prefix: "outlook", appKey: "microsoft_outlook", appName: "Outlook", provider: "microsoft" },
 ];
@@ -64,6 +65,9 @@ const APP_DISPLAY_NAMES: Record<string, string> = {
   pipedrive: "Pipedrive",
   slack: "Slack",
   slack_v2: "Slack",
+  canva: "Canva",
+  canvas: "Canvas",
+  gocanvas: "GoCanvas",
   notion: "Notion",
   stripe: "Stripe",
 };

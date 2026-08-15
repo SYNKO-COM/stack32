@@ -129,7 +129,7 @@
   },
   "steps": {
     "understanding": "Compréhension de votre objectif",
-    "capabilities": "Choix des capacités",
+    "capabilities": "Choix des déclencheurs",
     "building": "Construction de l'agent",
     "testing": "Petit test",
     "repairing": "Correction"
@@ -240,26 +240,21 @@
     }
   },
   "capabilities": {
-    "prompt": "Presque prêt. Dites-moi comment cet agent doit travailler :\n\n• se souvenir de cette discussion ?\n• garder une mémoire long terme ?\n• utiliser vos documents ?\n• tourner sur un planning ?\n\nCochez ce que vous voulez ci-dessous, ajoutez une note si besoin, puis lancez la construction.",
-    "promptAfterSecret": "Clé enregistrée — merci.\n\nMaintenant, comment cet agent doit-il travailler ?\n\n• se souvenir de cette discussion ?\n• garder une mémoire long terme ?\n• utiliser vos documents ?\n• tourner sur un planning ?\n\nCochez vos choix ci-dessous, puis construisez l'agent.",
-    "saved": "C'est noté.\n\nJe construis maintenant la première version avec ces réglages. Ça peut prendre un moment.",
-    "memoryConversation": "Se souvenir de cette discussion",
-    "memoryConversationHint": "Garde la conversation cohérente au fil des messages.",
-    "memorySemantic": "Mémoire long terme",
-    "memorySemanticHint": "Retient des faits importants entre les sessions (vous restez maître).",
-    "knowledge": "Documents (base de connaissances)",
-    "knowledgeHint": "Permet à l'agent de chercher dans les fichiers que vous ajouterez.",
-    "scheduleHourly": "Déclencher toutes les heures",
-    "scheduleHourlyHint": "Prépare un passage automatique (disponible bientôt). On l'enregistre déjà dans la config.",
-    "contextNotes": "Autre chose à savoir ?",
-    "contextNotesPlaceholder": "ex. réponses courtes, niveau scolaire, outils à connecter plus tard…",
-    "appsComingSoon": "Les connexions d'apps (email, Slack, Drive) arrivent ensuite. Laissez une note si vous les voulez.",
+    "prompt": "Comment cet agent doit-il démarrer ?\n\nLe chat est toujours activé. Vous pouvez aussi ajouter un passage automatique toutes les heures.",
+    "promptAfterSecret": "Clé enregistrée — merci.\n\nComment cet agent doit-il démarrer ?\n\nLe chat est toujours activé. Ajoutez éventuellement un planning horaire ci-dessous.",
+    "hint": "Choisissez comment déclencher cet agent. Le chat ne peut pas être désactivé.",
+    "saved": "C'est noté.\n\nJe construis maintenant la première version. Ça peut prendre un moment.",
+    "triggerChat": "Messages du chat",
+    "triggerChatHint": "On peut parler à l’agent dans Live. Toujours inclus.",
+    "required": "Obligatoire",
+    "scheduleHourly": "Aussi toutes les heures",
+    "scheduleHourlyHint": "Ajoute un passage automatique toutes les heures quand le planning est disponible.",
     "continue": "Construire mon agent",
     "submitting": "Construction…",
-    "formClosed": "Réglages enregistrés. Construction en cours."
+    "formClosed": "Déclencheurs enregistrés. Construction en cours."
   },
   "providers": {
-    "prompt": "Quelles applications exactes cet agent doit-il utiliser ? Indiquez le service e-mail et le CRM (ou autres outils) — sans connexion de compte pour l'instant.",
+    "prompt": "Plusieurs outils se ressemblent (ex. Canva vs Canvas). Indiquez l’application exacte — vous pouvez aussi coller le lien du site. Pas de connexion de compte pour l’instant.",
     "saved": "Compris — j'intègre ces apps dans la définition de l'agent."
   },
   "questions": {
@@ -274,21 +269,51 @@
       "goal_details": "Que doit accomplir cet agent ?",
       "knowledge_scope": "Quels documents ou sujets doit-il connaître ?",
       "connection_intent": "A-t-il besoin d’un compte externe (email, agenda…) ?",
-      "audience": "Qui utilisera cet agent ?"
+      "audience": "Qui utilisera cet agent ?",
+      "email_service": "Quel service e-mail ?",
+      "crm": "Quel CRM ?",
+      "tool_website": "Lien du site de l’outil (optionnel)",
+      "app_canva": "Quel outil design voulez-vous ?"
     },
     "placeholders": {
       "goal_details": "Décrivez la mission principale en une ou deux phrases…",
       "knowledge_scope": "ex. docs produit, PDF tarifaire…",
-      "audience": "ex. équipe commerciale, fondateurs…"
+      "audience": "ex. équipe commerciale, fondateurs…",
+      "tool_website": "ex. https://www.canva.com"
     },
     "options": {
       "none": "Pas de compte pour l’instant",
       "google": "Oui — Google (Gmail / Agenda)",
       "later": "Plus tard — rappel-moi",
+      "gmail": "Gmail (Google)",
+      "microsoft_outlook": "Outlook",
+      "hubspot": "HubSpot",
+      "salesforce": "Salesforce",
+      "pipedrive": "Pipedrive",
+      "zoho_crm": "Zoho CRM",
+      "canva": "Canva (création de designs)",
+      "canvas": "Canvas (Instructure LMS)",
+      "gocanvas": "GoCanvas",
+      "notion": "Notion",
       "connection_intent": {
         "none": "Pas de compte pour l’instant",
         "google": "Oui — Google (Gmail / Agenda)",
         "later": "Plus tard — rappel-moi"
+      },
+      "email_service": {
+        "gmail": "Gmail (Google)",
+        "microsoft_outlook": "Outlook"
+      },
+      "crm": {
+        "hubspot": "HubSpot",
+        "salesforce": "Salesforce",
+        "pipedrive": "Pipedrive",
+        "zoho_crm": "Zoho CRM"
+      },
+      "app_canva": {
+        "canva": "Canva (création de designs)",
+        "canvas": "Canvas (Instructure LMS)",
+        "gocanvas": "GoCanvas"
       }
     }
   },
@@ -361,8 +386,8 @@
     "identity": "Confirmation de l'identité",
     "identityDone": "Identité confirmée",
     "secret": "Connexion du cerveau (LLM)",
-    "capabilities": "Réglage mémoire et documents",
-    "capabilitiesDone": "Réglages enregistrés",
+    "capabilities": "Choix des déclencheurs",
+    "capabilitiesDone": "Déclencheurs enregistrés",
     "architecture": "Conception de la structure",
     "spec": "Rédaction des instructions",
     "graph": "Assemblage des pièces",

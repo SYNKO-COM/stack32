@@ -46,6 +46,24 @@ export function useClearLiveThread(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => getLiveRepository().clearThread(agentId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["live", agentId] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
+      void queryClient.removeQueries({ queryKey: ["live-execution"] });
+      void queryClient.removeQueries({ queryKey: ["active-live-run", agentId] });
+    },
+  });
+}
+
+export function useCancelLiveRun(agentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (runId?: string | null) => {
+      const { cancelLiveRun } = await import("@/lib/actions/live");
+      return cancelLiveRun({ agentId, runId });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
+      void queryClient.invalidateQueries({ queryKey: ["live-execution"] });
+    },
   });
 }

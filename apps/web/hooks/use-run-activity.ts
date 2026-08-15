@@ -27,7 +27,8 @@ export function useRunActivity(runId: string | null | undefined, enabled: boolea
   return useQuery({
     queryKey: ["run-activity", runId],
     enabled: Boolean(runId) && enabled,
-    refetchInterval: enabled ? 600 : false,
+    refetchInterval: enabled ? 1400 : false,
+    staleTime: 700,
     // Never blank the feed while a refetch is in flight.
     placeholderData: (prev) => prev,
     queryFn: async (): Promise<RunActivityEvent[]> => {

@@ -120,10 +120,12 @@ def infer_side_effect(
 
 
 def approval_mode_for_risk(risk: str, *, side_effect: bool = False) -> str:
-    if risk == "high" or side_effect:
-        return "always"
-    if risk == "medium":
-        return "conditional"
+    """Runtime approval is opt-in.
+
+    Connecting an account (OAuth / Pipedream) is the user's authorization to act.
+    Only an explicit ``always`` binding should pause a live run for Approve/Deny.
+    """
+    del risk, side_effect
     return "never"
 
 

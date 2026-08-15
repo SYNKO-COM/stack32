@@ -488,6 +488,10 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
             : undefined,
         retentionDays:
           typeof memory.retention_days === "number" ? memory.retention_days : undefined,
+        provider:
+          memory.provider === "external_postgres" || memory.provider === "stack32"
+            ? memory.provider
+            : "stack32",
       },
       rules,
       output: {
@@ -830,6 +834,12 @@ export function mapLiveMessage(row: LiveMessageRow): LiveMessage | null {
   if (row.role !== "user" && row.role !== "assistant") return null;
   const meta = asRecord(row.metadata);
   const uiRaw = meta.ui_component ?? meta.uiComponent;
+  const uiComponent = uiRaw ? mapUiComponent(uiRaw) : undefined;
+  const runId =
+    (typeof row.run_id === "string" && row.run_id) ||
+    (typeof meta.run_id === "string" ? meta.run_id : undefined) ||
+    (typeof meta.runId === "string" ? meta.runId : undefined) ||
+    undefined;
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -843,7 +853,8 @@ export function mapLiveMessage(row: LiveMessageRow): LiveMessage | null {
       : undefined,
     pending: meta.pending === true,
     statusKey: typeof meta.statusKey === "string" ? meta.statusKey : undefined,
-    uiComponent: uiRaw ? mapUiComponent(uiRaw) : undefined,
+    runId,
+    uiComponent,
     attachments: parseMessageAttachments(meta.attachments),
     createdAt: row.created_at,
   };

@@ -14,7 +14,22 @@
     "searching": "Recherche sur le web…",
     "reading": "Lecture de vos documents…",
     "analyzing": "Analyse…",
-    "preparing": "Préparation de la réponse…"
+    "preparing": "Préparation de la réponse…",
+    "started": "Démarrage…",
+    "input": "Message reçu…",
+    "model": "Réflexion avec le modèle…",
+    "tool": "Utilisation d’un outil…",
+    "knowledge": "Recherche dans les documents…",
+    "memory": "Lecture de la mémoire…",
+    "memoryDone": "Mémoire mise à jour…",
+    "memoryError": "Erreur de mémoire…",
+    "approval": "En attente de votre approbation…",
+    "connection": "En attente d’une connexion de compte…",
+    "output": "Mise en forme de la réponse…",
+    "done": "Finalisation…",
+    "completed": "Terminé",
+    "failed": "Une erreur est survenue…",
+    "canceled": "Arrêté"
   },
   "execution": {
     "disabled": "L'exécution des agents est momentanément indisponible. Votre message a été enregistré et les conversations précédentes restent accessibles."
@@ -35,6 +50,7 @@
     "markdown": "Document"
   },
   "errors": {
+    "canceled": "Exécution arrêtée.",
     "missingUserLlmKey": "Pour discuter avec cet agent, connectez un cerveau (LLM) avec votre clé API ci-dessous. Elle est stockée de façon sécurisée.",
     "runFailed": "Un problème est survenu pendant l’exécution. Réessayez.",
     "budgetExceeded": "Cette conversation a utilisé trop d’appels au modèle. Essayez une demande plus courte.",
@@ -44,5 +60,15 @@
   "agentLabel": "Agent",
   "a11y": {
     "conversation": "Conversation avec votre agent"
+  },
+  "approval": {
+    "title": "Approbation requise",
+    "defaultAction": "Autoriser cette action à continuer.",
+    "approve": "Approuver",
+    "deny": "Refuser",
+    "approved": "Approuvé — reprise…",
+    "denied": "Refusé — l’agent n’exécutera pas cette action.",
+    "missing": "Les détails d’approbation manquent. Renvoyez votre demande.",
+    "error": "Impossible d’enregistrer votre décision. Réessayez."
   }
 }

@@ -27,7 +27,7 @@ function composerToMessageAttachments(
   }));
 }
 
-/** True while the (mock) builder is still producing progressive updates. */
+/** True while the builder is still producing progressive updates. */
 function isThreadActive(thread: BuilderThread | undefined): boolean {
   if (!thread) return false;
   const last = thread.messages[thread.messages.length - 1];
@@ -51,9 +51,12 @@ export function useBuilderThread(agentId: string, opts?: { forcePoll?: boolean }
     queryKey: ["builder", agentId],
     queryFn: () => getBuilderRepository().getThread(agentId),
     enabled: Boolean(agentId),
-    // Poll while a build is in flight so persisted step updates stream into the UI.
+    // Keep prior messages painted while a poll is in flight (avoids blank flashes).
+    placeholderData: (previous) => previous,
+    // Slower cadence = fewer layout jumps; still responsive for build progress.
     refetchInterval: (query) =>
-      opts?.forcePoll || isThreadActive(query.state.data) ? 700 : false,
+      opts?.forcePoll || isThreadActive(query.state.data) ? 1600 : false,
+    staleTime: 800,
   });
 }
 
@@ -106,8 +109,9 @@ export function useSendBuilderMessage(agentId: string) {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
-      queryClient.invalidateQueries({ queryKey: ["agents"] });
+      // Soft refresh — avoid wiping the agents list on every turn (sidebar flicker).
+      void queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
+      void queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
     },
   });
 }

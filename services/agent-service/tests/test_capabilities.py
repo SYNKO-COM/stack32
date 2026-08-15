@@ -53,7 +53,7 @@ async def test_resolve_google_docs_tools():
     ids = {t.tool_id for t in tools}
     assert "google_docs_create" in ids
     assert "google_docs_append" in ids
-    assert any(r.provider == "google" for r in reqs)
+    assert any(r.provider == "pipedream" for r in reqs)
 
 
 def test_extract_slack():
@@ -84,7 +84,7 @@ async def test_resolve_email_prefers_draft_over_send():
     assert "gmail_create_draft" in ids
     assert "gmail_list" in ids or "gmail_read" in ids
     assert all(t.provider == "native" for t in tools if t.tool_id.startswith("gmail_"))
-    assert any(r.provider == "google" for r in reqs)
+    assert any(r.provider == "pipedream" for r in reqs)
 
 
 @pytest.mark.asyncio
@@ -232,3 +232,154 @@ async def test_explicit_gmail_and_hubspot_skips_clarification():
         preferred_apps=["gmail", "hubspot"],
     )
     assert not any(a.get("group") == "email" for a in ambiguous)
+
+
+def test_extract_canva_not_canvas():
+    apps = extract_external_app_queries(
+        "crée une présentation Canva en format paysage avec les infos de la boîte"
+    )
+    assert "canva" in apps
+    assert "canvas" not in apps
+    assert "gocanvas" not in apps
+
+
+def test_pick_pipedream_app_prefers_exact_canva():
+    from agent_service.builder.capabilities import pick_pipedream_app
+
+    apps = [
+        {"app_id": "canvas", "name": "Canvas"},
+        {"app_id": "gocanvas", "name": "GoCanvas"},
+        {"app_id": "canva", "name": "Canva"},
+    ]
+    chosen, _cands, reason = pick_pipedream_app("canva", apps)
+    assert chosen == "canva"
+    assert reason is None
+
+
+def test_pick_pipedream_app_ambiguous_without_exact_canva():
+    from agent_service.builder.capabilities import pick_pipedream_app
+
+    apps = [
+        {"app_id": "canvas", "name": "Canvas"},
+        {"app_id": "gocanvas", "name": "GoCanvas"},
+    ]
+    chosen, cands, reason = pick_pipedream_app("canva", apps)
+    assert chosen is None
+    assert reason == "ambiguous_app"
+    slugs = {str(c.get("app_id")) for c in cands}
+    assert "canvas" in slugs or "gocanvas" in slugs
+
+
+def test_pick_pipedream_app_never_autobinds_first_hit():
+    from agent_service.builder.capabilities import pick_pipedream_app
+
+    apps = [
+        {"app_id": "canvas", "name": "Canvas by Instructure"},
+        {"app_id": "gocanvas", "name": "GoCanvas"},
+    ]
+    chosen, _cands, reason = pick_pipedream_app("canva", apps)
+    assert chosen is None
+    assert reason == "ambiguous_app"
+
+
+def test_merge_tools_on_edit_preserves_notion():
+    from agent_service.builder.capabilities import merge_tools_on_edit
+    from agent_service.models.agent_spec import ToolBinding
+
+    current = [
+        ToolBinding(tool_id="current_datetime", provider="native"),
+        ToolBinding(tool_id="web_search", provider="native"),
+        ToolBinding(tool_id="calendar_create_event", provider="native", app_id="google_calendar"),
+        ToolBinding(tool_id="pd:notion-create-page", provider="pipedream", app_id="notion"),
+        ToolBinding(tool_id="pd:canvas-create", provider="pipedream", app_id="canvas"),
+        ToolBinding(tool_id="pd:gocanvas-submit", provider="pipedream", app_id="gocanvas"),
+    ]
+    incoming = [
+        ToolBinding(tool_id="current_datetime", provider="native"),
+        ToolBinding(tool_id="pd:canva-create-design", provider="pipedream", app_id="canva"),
+    ]
+    merged = merge_tools_on_edit(
+        current,
+        incoming,
+        edit_prompt="Tu t'es trompé d'outils canva je veux celui pour faire des design juste cet outil",
+    )
+    ids = {t.tool_id for t in merged}
+    apps = {t.app_id for t in merged if t.app_id}
+    assert "pd:notion-create-page" in ids
+    assert "calendar_create_event" in ids
+    assert "web_search" in ids
+    assert "pd:canva-create-design" in ids
+    assert "canva" in apps
+    assert "canvas" not in apps
+    assert "gocanvas" not in apps
+
+
+def test_is_surgical_tool_edit_detects_fix_canva():
+    from agent_service.builder.capabilities import is_surgical_tool_edit
+
+    assert is_surgical_tool_edit(
+        "Tu t'es trompé d'outils canva je veux celui que je t'ai envoyé en photo",
+        current_tool_count=5,
+    )
+
+
+def test_slug_from_website_canva():
+    from agent_service.builder.capabilities import slug_from_website
+
+    assert slug_from_website("https://www.canva.com/") == "canva"
+    assert slug_from_website("notion.so") == "notion"
+
+
+def test_blocking_ambiguities_respects_preferred_canva():
+    from agent_service.builder.capabilities import blocking_ambiguities
+
+    ambiguous = [
+        {
+            "reason": "ambiguous_app",
+            "app_query": "canva",
+            "choices": [
+                {"tool_id": "canva"},
+                {"tool_id": "canvas"},
+                {"tool_id": "gocanvas"},
+            ],
+        }
+    ]
+    assert blocking_ambiguities(ambiguous, preferred_apps=["canva"]) == []
+    assert len(blocking_ambiguities(ambiguous, preferred_apps=None)) == 1
+
+
+def test_tool_belongs_to_canva_rejects_canvas_and_gocanvas():
+    from agent_service.builder.capabilities import _tool_belongs_to_app
+    from types import SimpleNamespace
+
+    assert _tool_belongs_to_app(
+        SimpleNamespace(tool_id="pd:canva-create-design", provider_app_id=None), "canva"
+    )
+    assert _tool_belongs_to_app(
+        SimpleNamespace(tool_id="pd:canva-export-design", provider_app_id="canva"), "canva"
+    )
+    assert not _tool_belongs_to_app(
+        SimpleNamespace(tool_id="pd:canvas-list-account-id-options", provider_app_id=None),
+        "canva",
+    )
+    assert not _tool_belongs_to_app(
+        SimpleNamespace(tool_id="pd:gocanvas-list-form-options", provider_app_id=None),
+        "canva",
+    )
+    assert not _tool_belongs_to_app(
+        SimpleNamespace(tool_id="pd:canvas-list-account-id-options", provider_app_id="canvas"),
+        "canva",
+    )
+
+
+def test_envoie_infos_does_not_mean_email():
+    caps = extract_capabilities(
+        "quand je lui envoie les infos d'une boîte et une présentation Canva"
+    )
+    ids = {c.id for c in caps}
+    assert "email" not in ids
+    apps = extract_external_app_queries(
+        "quand je lui envoie les infos d'une boîte et une présentation Canva"
+    )
+    assert "canva" in apps
+    assert "canvas" not in apps

@@ -18,6 +18,8 @@ export interface BuildProductGraphInput {
   graph?: GraphSpec | null;
   boundToolIds?: Set<string>;
   boundProviders?: Set<string>;
+  /** Pipedream / native app keys with an active user connection (notion, canva, google, …). */
+  boundAppIds?: Set<string>;
   modelStatus?: ConfigurationStatus | "needs_setup" | "needs_attention";
   memoryStatus?: ConfigurationStatus | "needs_setup" | "needs_attention";
   toolStatuses?: Record<string, string>;
@@ -90,13 +92,17 @@ function buildIntegrationNode(
   group: ReturnType<typeof groupToolsByApp>[number],
   bindings: Map<string, ToolBinding>,
   boundToolIds: Set<string>,
+  boundAppIds: Set<string>,
+  boundProviders: Set<string>,
   toolStatuses?: Record<string, string>,
 ): ProductNode {
   const needsConnection = group.toolIds.some((tid) =>
     toolNeedsConnection(tid, group.provider, bindings.get(tid)),
   );
-  const toolBound = group.toolIds.some((tid) => boundToolIds.has(tid));
-  const connected = !needsConnection || toolBound;
+  // App must be connected for THIS product app key — tool bindings alone
+  // (e.g. suite Google covering Calendar) must not mark the node ready.
+  const appConnected = boundAppIds.has(group.appKey);
+  const connected = !needsConnection || appConnected;
 
   let configurationStatus: ConfigurationStatus = connected ? "ready" : "setup_required";
   for (const tid of group.toolIds) {
@@ -133,7 +139,7 @@ function buildIntegrationNode(
 
 /** Build the product-facing agent structure graph from definition + installation hints. */
 export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAgentGraph {
-  const { definition, graph, boundToolIds = new Set() } = input;
+  const { definition, graph, boundToolIds = new Set(), boundAppIds = new Set(), boundProviders = new Set() } = input;
   const bindings = bindingLookup(definition);
   const nodes: ProductNode[] = [];
   const edges: ProductEdge[] = [];
@@ -252,6 +258,8 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
       group,
       bindings,
       boundToolIds,
+      boundAppIds,
+      boundProviders,
       input.toolStatuses,
     );
     nodes.push(node);

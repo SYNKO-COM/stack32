@@ -129,6 +129,15 @@ export class SupabaseLiveRepository implements LiveRepository {
   }
 
   async clearThread(agentId: string): Promise<void> {
+    // Stop any in-flight / waiting live run so Structure returns to idle and
+    // the agent cannot keep writing into a deleted conversation.
+    try {
+      const { cancelLiveRun } = await import("@/lib/actions/live");
+      await cancelLiveRun({ agentId, silent: true });
+    } catch {
+      // Best-effort: still delete the thread even if cancel fails.
+    }
+
     const supabase = requireSupabaseBrowserClient();
     const { data: existing } = await supabase
       .from("live_threads")

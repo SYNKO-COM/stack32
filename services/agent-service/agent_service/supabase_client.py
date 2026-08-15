@@ -243,18 +243,22 @@ class Persistence(SupabaseRepository):
         content: str,
         metadata: dict[str, Any] | None = None,
         table: str = "builder_messages",
+        run_id: str | None = None,
     ) -> str | None:
         async with get_supabase_admin_client() as client:
+            body: dict[str, Any] = {
+                "thread_id": thread_id,
+                "agent_id": agent_id,
+                "user_id": user_id,
+                "role": "assistant",
+                "content": content,
+                "metadata": redact_obj(metadata or {}),
+            }
+            if run_id and table == "live_messages":
+                body["run_id"] = run_id
             response = await client.post(
                 f"/{table}",
-                json={
-                    "thread_id": thread_id,
-                    "agent_id": agent_id,
-                    "user_id": user_id,
-                    "role": "assistant",
-                    "content": content,
-                    "metadata": redact_obj(metadata or {}),
-                },
+                json=body,
                 headers={"Prefer": "return=representation"},
             )
         if response.status_code >= 400:
@@ -410,6 +414,59 @@ class Persistence(SupabaseRepository):
             },
         )
         return rows[0] if rows else None
+
+    async def get_latest_active_live_run(
+        self, *, agent_id: str, user_id: str
+    ) -> dict[str, Any] | None:
+        """Latest live run still in flight (includes pauses waiting for user input)."""
+        rows = await self._select(
+            "runs",
+            {
+                "agent_id": f"eq.{agent_id}",
+                "user_id": f"eq.{user_id}",
+                "run_type": "eq.live",
+                "status": "in.(queued,running,waiting_for_input)",
+                "select": "*",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+        return rows[0] if rows else None
+
+    async def list_active_live_runs(
+        self, *, agent_id: str, user_id: str
+    ) -> list[dict[str, Any]]:
+        """All non-terminal live runs for an agent (for clear-conversation cancel)."""
+        rows = await self._select(
+            "runs",
+            {
+                "agent_id": f"eq.{agent_id}",
+                "user_id": f"eq.{user_id}",
+                "run_type": "eq.live",
+                "status": "in.(queued,running,waiting_for_input)",
+                "select": "id,status,created_at",
+                "order": "created_at.desc",
+                "limit": "20",
+            },
+        )
+        return rows if isinstance(rows, list) else []
+
+    async def find_pending_live_message(self, *, run_id: str) -> dict[str, Any] | None:
+        rows = await self._select(
+            "live_messages",
+            {
+                "run_id": f"eq.{run_id}",
+                "role": "eq.assistant",
+                "select": "id,metadata,content",
+                "order": "created_at.desc",
+                "limit": "5",
+            },
+        )
+        for row in rows or []:
+            meta = row.get("metadata") or {}
+            if isinstance(meta, dict) and meta.get("pending") is True:
+                return row
+        return None
 
     async def update_agent_status(self, agent_id: str, user_id: str, status: str) -> None:
         async with get_supabase_admin_client() as client:

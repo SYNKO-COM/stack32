@@ -43,7 +43,11 @@ async def _agent_bound_coverage(
     *,
     installation_id: str | None = None,
 ) -> tuple[set[str], set[str], dict[str, set[str]]]:
-    """Return (providers, app_ids, tool_id -> providers) from installation/agent bindings."""
+    """Return (providers, app_ids, tool_id -> providers) from installation/agent bindings.
+
+    Also includes active user-level connection apps (Google / Pipedream) so Setup
+    needed clears once the account exists — runtime will auto-bind on first use.
+    """
     providers: set[str] = set()
     app_ids: set[str] = set()
     tool_coverage: dict[str, set[str]] = {}
@@ -56,20 +60,19 @@ async def _agent_bound_coverage(
         )
         connections = await mgr.list_connections(user_id=user_id)
         by_id = {str(c.get("id")): c for c in connections or []}
-        for binding in bindings or []:
-            if not isinstance(binding, dict) or not binding.get("enabled", True):
-                continue
-            conn = by_id.get(str(binding.get("connection_id")))
-            if not conn:
-                continue
+
+        def _ingest_conn(conn: dict[str, Any]) -> None:
             status = str(conn.get("status") or "active").lower()
             if status not in {"active", "connected", "ok"}:
-                continue
+                return
             provider = str(conn.get("provider") or "")
             if not provider:
-                continue
+                return
             providers.add(provider)
             meta = conn.get("provider_metadata") or {}
+            if provider == "google":
+                app_ids.add("google")
+                return
             app = None
             if isinstance(meta, dict):
                 app = meta.get("app_id")
@@ -80,8 +83,22 @@ async def _agent_bound_coverage(
                 for item in extra_apps:
                     if item:
                         app_ids.add(str(item))
+
+        for binding in bindings or []:
+            if not isinstance(binding, dict) or not binding.get("enabled", True):
+                continue
+            conn = by_id.get(str(binding.get("connection_id")))
+            if not conn:
+                continue
+            _ingest_conn(conn)
+            provider = str(conn.get("provider") or "")
             for tid in binding.get("tool_ids") or []:
                 tool_coverage.setdefault(str(tid), set()).add(provider)
+
+        # Owner convenience: active accounts on the user also satisfy readiness.
+        for conn in connections or []:
+            if isinstance(conn, dict):
+                _ingest_conn(conn)
     except Exception:  # noqa: BLE001
         logger.exception("readiness_bindings_lookup_failed")
     return providers, app_ids, tool_coverage
@@ -271,9 +288,15 @@ async def evaluate_agent_readiness(
 
         for binding, tool in connection_required_tools:
             provider = getattr(tool, "provider", None) or binding.provider or "native"
-            if provider == "native":
-                provider = "google"
             app_id = getattr(tool, "provider_app_id", None) or binding.app_id or provider
+            if provider == "native":
+                from agent_service.integrations.app_keys import (
+                    app_key_from_tool_id,
+                    oauth_provider_for_app,
+                )
+
+                app_id = app_key_from_tool_id(binding.tool_id, app_id=app_id)
+                provider = oauth_provider_for_app(app_id)
             key = f"{provider}:{app_id}"
             needed.setdefault(
                 key,
@@ -292,25 +315,28 @@ async def evaluate_agent_readiness(
             tool_ids = list(req.get("tool_ids") or [])
             covered = False
             if provider == "pipedream":
-                if app_id in bound_apps or provider in bound_providers:
-                    if not tool_ids:
-                        covered = provider in bound_providers and (
-                            not app_id or app_id in bound_apps or app_id == provider
-                        )
-                    else:
-                        covered = all(
-                            provider in tool_coverage.get(tid, set())
-                            or "pipedream" in tool_coverage.get(tid, set())
-                            for tid in tool_ids
-                        )
+                # Per-app only — a Notion/Canva Pipedream account must never
+                # cover Google Calendar (or any other app).
+                covered = bool(app_id and app_id in bound_apps)
             else:
                 if tool_ids:
                     covered = all(
                         provider in tool_coverage.get(tid, set()) or tid in tool_coverage
                         for tid in tool_ids
                     )
+                    if not covered and provider in bound_providers:
+                        covered = True
                 else:
-                    covered = app_id in bound_apps
+                    covered = app_id in bound_apps or provider in bound_providers
+                # Pipedream per-app accounts cover former native Google product apps
+                # (Calendar / Gmail / Docs) so users never need Stack32's Google OAuth app.
+                if (
+                    not covered
+                    and provider == "google"
+                    and app_id
+                    and app_id in bound_apps
+                ):
+                    covered = True
             if not covered:
                 missing_connections.append(req)
 
@@ -463,29 +489,23 @@ async def evaluate_agent_readiness(
     if not brain_ok and require_brain and include_installation_checks:
         missing_config.append({"type": "brain", "message": brain_msg})
 
-    # Trigger P0 — at least one enabled Chat or Schedule trigger.
+    # Trigger — Chat is the built-in entrypoint from agent creation (Structure UI and
+    # normalize_triggers default to Chat when the list is empty). Schedule is optional.
+    # Never a setup gate: Live Chat works without an explicit trigger row.
     active_triggers = [
         t for t in parsed.triggers if t.enabled and t.kind in ("chat", "schedule")
     ]
-    trigger_ok = bool(active_triggers)
-    if include_installation_checks:
-        trigger_severity = "info" if trigger_ok else ("error" if require_brain else "warn")
-    else:
-        # Definition: missing trigger is advisory — Builder usually adds chat by default.
-        trigger_severity = "info"
-        trigger_ok = True if not parsed.triggers else trigger_ok or True
-        # Prefer true when any trigger present; empty triggers still OK for portable template.
-        trigger_ok = True
+    trigger_ok = True
     checks.append(
         ReadinessCheck(
             key="trigger",
             ok=trigger_ok,
             message=(
                 "At least one Chat or Schedule trigger is enabled."
-                if trigger_ok
-                else "Enable a Chat or Schedule trigger."
+                if active_triggers
+                else "Chat is available by default."
             ),
-            severity=trigger_severity,
+            severity="info",
         )
     )
 
@@ -562,9 +582,10 @@ async def evaluate_agent_readiness(
     errors = [c for c in checks if not c.ok and c.severity == "error"]
     warns = [c for c in checks if not c.ok and c.severity == "warn"]
 
-    # Setup-type gaps (user picks a model / enables a trigger / connects an app) are
-    # needs_setup, distinct from a broken build/tools which is needs_attention.
-    setup_errors = {"brain", "trigger", "connections", "tool_config"}
+    # Setup-type gaps (user picks a model / connects an app) are needs_setup,
+    # distinct from a broken build/tools which is needs_attention.
+    # Trigger is never a setup gate — Chat ships enabled by default.
+    setup_errors = {"brain", "connections", "tool_config"}
     setup_error_present = any(
         not c.ok and c.severity == "error" and c.key in setup_errors for c in checks
     )

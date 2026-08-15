@@ -1,0 +1,415 @@
+{
+  "_meta": {
+    "purpose": "Static hints for Structure tool-config UI and Stack32 Builder when wiring Pipedream apps. Not exhaustive — learning playbooks override when present. User-facing UI must NOT display summary/builder_guidance text.",
+    "updated": "2026-08-15"
+  },
+  "apps": {
+    "notion": {
+      "auth_prop_guess": "notion",
+      "summary": "Notion Connect actions usually operate on an existing page/database — creation of arbitrary pages is limited; prefer update/append/comment on a configured page.",
+      "required_static_hints": [
+        {"keys": ["pageId", "page_id", "parentPageId"], "label": "Target page", "why": "Most write tools need a page (or database) the connected workspace can edit."},
+        {"keys": ["databaseId", "database_id"], "label": "Database", "why": "Query/create-row style actions need a database id."}
+      ],
+      "builder_guidance": "When adding Notion tools, ask the user to pick a page or database in Structure after Connect. Do not assume blank-workspace page creation works for every action."
+    },
+    "slack": {
+      "auth_prop_guess": "slack",
+      "summary": "Messaging requires a channel (or user) destination in addition to account connection.",
+      "required_static_hints": [
+        {"keys": ["channel", "channelId", "conversation"], "label": "Channel", "why": "Send-message actions need a channel ID or name the bot can post to."}
+      ],
+      "builder_guidance": "After Slack Connect, prompt for default channel in tool config. Prefer remoteOptions for channel pickers."
+    },
+    "slack_v2": {
+      "auth_prop_guess": "slack",
+      "summary": "Slack v2 app slug — same channel requirements as slack.",
+      "required_static_hints": [
+        {"keys": ["channel", "channelId", "conversation"], "label": "Channel", "why": "Channel required for posts."}
+      ],
+      "builder_guidance": "Treat like slack; bind channel in tool_config."
+    },
+    "discord": {
+      "auth_prop_guess": "discord",
+      "summary": "Bot posts need a guild channel; invite the bot with correct permissions.",
+      "required_static_hints": [
+        {"keys": ["channelId", "channel", "channel_id"], "label": "Channel", "why": "Message actions require a channel the bot can access."}
+      ],
+      "builder_guidance": "Surface channel picker after Connect; warn about missing bot permissions."
+    },
+    "google_calendar": {
+      "auth_prop_guess": "googleCalendar",
+      "summary": "Create-event expects eventStartDate/eventEndDate strings (or quick-add text), not Google API start/end objects, when using Pipedream actions.",
+      "required_static_hints": [
+        {"keys": ["calendarId"], "label": "Calendar", "why": "Defaults to primary; allow override when the user has multiple calendars."}
+      ],
+      "builder_guidance": "Prefer native calendar_* tools with Pipedream OAuth fallback. Never use slug google_calendar as the auth prop key."
+    },
+    "gmail": {
+      "auth_prop_guess": "gmail",
+      "summary": "Send/draft need recipients; list/search need query scope awareness.",
+      "required_static_hints": [],
+      "builder_guidance": "Keep approval/dry-run semantics for send; drafts are safer defaults for new agents."
+    },
+    "canva": {
+      "auth_prop_guess": "canva",
+      "summary": "canva-create-design uses reloadProps: designType preset|custom then dynamic name/width/height. Must reload props and pass dynamic_props_id.",
+      "required_static_hints": [
+        {"keys": ["designType"], "label": "Design type", "why": "preset vs custom unlocks name vs width/height."},
+        {"keys": ["name"], "label": "Preset name", "why": "When designType=preset: doc|presentation|whiteboard|email."}
+      ],
+      "builder_guidance": "Default designType=preset and name=doc if the model omits them; always reload dynamic props before run."
+    },
+    "stripe": {
+      "auth_prop_guess": "stripe",
+      "summary": "Many Stripe actions are account-scoped; Connect accounts / Stripe Connect platforms may need account or customer ids.",
+      "required_static_hints": [
+        {"keys": ["customer", "customerId", "account", "stripeAccount"], "label": "Customer / connected account", "why": "Charges, invoices, and Connect operations often need a customer or connected account id."}
+      ],
+      "builder_guidance": "After Stripe Connect, inspect the action schema for customer/account props and mark them static when the agent always uses one account."
+    },
+    "hubspot": {
+      "auth_prop_guess": "hubspot",
+      "summary": "CRM writes need object type + properties; association ids often required.",
+      "required_static_hints": [],
+      "builder_guidance": "Prefer remoteOptions for owners/pipelines; keep property maps in tool_config when stable."
+    },
+    "airtable": {
+      "auth_prop_guess": "airtable",
+      "summary": "Base + table (+ optional view) are almost always required before row ops.",
+      "required_static_hints": [
+        {"keys": ["baseId", "base"], "label": "Base", "why": "Airtable bases are the top-level container."},
+        {"keys": ["tableId", "table"], "label": "Table", "why": "Row create/update need a table."}
+      ],
+      "builder_guidance": "Chain remoteOptions: base → table → fields. Treat as reloadProps-heavy."
+    },
+    "google_sheets": {
+      "auth_prop_guess": "googleSheets",
+      "summary": "Classic dynamic-props example: spreadsheet then worksheet then headers/columns; requires dynamic_props_id.",
+      "required_static_hints": [
+        {"keys": ["sheetId", "spreadsheetId"], "label": "Spreadsheet", "why": "First selection before worksheet/columns."}
+      ],
+      "builder_guidance": "Always reload props after sheetId; never drop dynamic_props_id."
+    },
+    "google_docs": {
+      "auth_prop_guess": "googleDocs",
+      "summary": "Create/append usually need a document id after creation; prefer native google_docs_* tools.",
+      "required_static_hints": [
+        {"keys": ["documentId", "docId"], "label": "Document", "why": "Append/update ops need an existing doc."}
+      ],
+      "builder_guidance": "Prefer native google_docs_create/append; auth prop camelCase if using Pipedream actions."
+    },
+    "google_drive": {
+      "auth_prop_guess": "googleDrive",
+      "summary": "File ops need folder/file ids; downloads may require stash_id.",
+      "required_static_hints": [
+        {"keys": ["folderId", "fileId", "driveId"], "label": "Folder / file", "why": "Drive actions need a target folder or file."}
+      ],
+      "builder_guidance": "Use stash_id when downloading files to /tmp for File Stash."
+    },
+    "github": {
+      "auth_prop_guess": "github",
+      "summary": "Issues/PRs need owner + repo; often remoteOptions.",
+      "required_static_hints": [
+        {"keys": ["owner", "repo", "repository"], "label": "Repository", "why": "Almost all GitHub actions are repo-scoped."}
+      ],
+      "builder_guidance": "Bind default owner/repo in tool_config for agent-scoped repos."
+    },
+    "gitlab": {
+      "auth_prop_guess": "gitlab",
+      "summary": "Project ID is usually required; self-hosted needs base URL custom field.",
+      "required_static_hints": [
+        {"keys": ["projectId", "project_id"], "label": "Project", "why": "GitLab actions are project-scoped."}
+      ],
+      "builder_guidance": "Use remoteOptions for projectId; relative proxy paths for self-hosted."
+    },
+    "linear": {
+      "auth_prop_guess": "linear",
+      "summary": "Issues need team id; optional project/state.",
+      "required_static_hints": [
+        {"keys": ["teamId", "team"], "label": "Team", "why": "Linear issues belong to a team."}
+      ],
+      "builder_guidance": "Pick default team after Connect."
+    },
+    "jira": {
+      "auth_prop_guess": "jira",
+      "summary": "Issues need cloud project key / id.",
+      "required_static_hints": [
+        {"keys": ["projectKey", "projectId", "project"], "label": "Project", "why": "Jira create/update is project-scoped."}
+      ],
+      "builder_guidance": "Bind project key in static config."
+    },
+    "asana": {
+      "auth_prop_guess": "asana",
+      "summary": "Tasks need workspace/project.",
+      "required_static_hints": [
+        {"keys": ["workspace", "project", "projectId"], "label": "Workspace / project", "why": "Asana tasks live under a project."}
+      ],
+      "builder_guidance": "Chain workspace → project remoteOptions."
+    },
+    "trello": {
+      "auth_prop_guess": "trello",
+      "summary": "Cards need board + list.",
+      "required_static_hints": [
+        {"keys": ["board", "boardId", "list", "listId"], "label": "Board / list", "why": "Cards are created in a list on a board."}
+      ],
+      "builder_guidance": "Bind default board/list."
+    },
+    "clickup": {
+      "auth_prop_guess": "clickup",
+      "summary": "Tasks need list id in a space/folder hierarchy.",
+      "required_static_hints": [
+        {"keys": ["listId", "list"], "label": "List", "why": "ClickUp tasks belong to a list."}
+      ],
+      "builder_guidance": "RemoteOptions for space → folder → list."
+    },
+    "monday": {
+      "auth_prop_guess": "monday",
+      "summary": "Items need board id.",
+      "required_static_hints": [
+        {"keys": ["boardId", "board"], "label": "Board", "why": "Monday items are board-scoped."}
+      ],
+      "builder_guidance": "Bind board after Connect."
+    },
+    "zendesk": {
+      "auth_prop_guess": "zendesk",
+      "summary": "Tickets for a subdomain account; use relative proxy paths.",
+      "required_static_hints": [],
+      "builder_guidance": "Dynamic domain — prefer relative API paths via Connect proxy."
+    },
+    "intercom": {
+      "auth_prop_guess": "intercom",
+      "summary": "Conversations/contacts scoped to workspace.",
+      "required_static_hints": [],
+      "builder_guidance": "Prefer drafts over auto-send for replies."
+    },
+    "freshdesk": {
+      "auth_prop_guess": "freshdesk",
+      "summary": "Tickets for a domain; may need group/agent ids.",
+      "required_static_hints": [],
+      "builder_guidance": "Inspect schema for group_id after Connect."
+    },
+    "salesforce": {
+      "auth_prop_guess": "salesforce",
+      "summary": "Objects need type + field maps; sandbox vs prod accounts.",
+      "required_static_hints": [],
+      "builder_guidance": "Keep object field maps in tool_config when stable."
+    },
+    "pipedrive": {
+      "auth_prop_guess": "pipedrive",
+      "summary": "Deals/persons need pipeline/stage awareness.",
+      "required_static_hints": [],
+      "builder_guidance": "RemoteOptions for pipelines/stages."
+    },
+    "shopify": {
+      "auth_prop_guess": "shopify",
+      "summary": "Shop-scoped; products/orders need ids.",
+      "required_static_hints": [],
+      "builder_guidance": "Premium app — confirm Connect plan; bind shop context."
+    },
+    "woocommerce": {
+      "auth_prop_guess": "woocommerce",
+      "summary": "Store URL + keys via Connect; product/order ids for writes.",
+      "required_static_hints": [],
+      "builder_guidance": "Confirm store connection health before Live."
+    },
+    "mailchimp": {
+      "auth_prop_guess": "mailchimp",
+      "summary": "Audience/list id required for campaigns/subscribers.",
+      "required_static_hints": [
+        {"keys": ["listId", "audienceId", "list"], "label": "Audience", "why": "Mailchimp ops are list-scoped."}
+      ],
+      "builder_guidance": "Bind default audience."
+    },
+    "klaviyo": {
+      "auth_prop_guess": "klaviyo",
+      "summary": "Lists/flows need list or flow ids.",
+      "required_static_hints": [
+        {"keys": ["listId", "flowId"], "label": "List / flow", "why": "Klaviyo actions target lists or flows."}
+      ],
+      "builder_guidance": "Bind list/flow after Connect."
+    },
+    "sendgrid": {
+      "auth_prop_guess": "sendgrid",
+      "summary": "From address / template ids often required.",
+      "required_static_hints": [
+        {"keys": ["from", "fromEmail", "templateId"], "label": "From / template", "why": "Transactional send needs verified sender."}
+      ],
+      "builder_guidance": "Prefer templates; keep from-address in static config."
+    },
+    "twitter": {
+      "auth_prop_guess": "twitter",
+      "summary": "Posting needs text; media may need upload + stash.",
+      "required_static_hints": [],
+      "builder_guidance": "Approval recommended before posting."
+    },
+    "linkedin": {
+      "auth_prop_guess": "linkedin",
+      "summary": "Org vs personal author urn may be required.",
+      "required_static_hints": [
+        {"keys": ["author", "organization", "person"], "label": "Author", "why": "Posts need an author URN."}
+      ],
+      "builder_guidance": "Bind author after Connect; approval before publish."
+    },
+    "instagram": {
+      "auth_prop_guess": "instagram",
+      "summary": "Publishing needs media container + IG business account.",
+      "required_static_hints": [],
+      "builder_guidance": "Caption-only agents may not need publish tools."
+    },
+    "youtube": {
+      "auth_prop_guess": "youtube",
+      "summary": "Uploads need channel; metadata optional.",
+      "required_static_hints": [],
+      "builder_guidance": "Script drafting may not need upload scopes."
+    },
+    "facebook": {
+      "auth_prop_guess": "facebook",
+      "summary": "Page id often required for posts.",
+      "required_static_hints": [
+        {"keys": ["pageId", "page"], "label": "Page", "why": "Page posts need a Page id."}
+      ],
+      "builder_guidance": "Bind page after Connect."
+    },
+    "figma": {
+      "auth_prop_guess": "figma",
+      "summary": "File key required for comments/nodes.",
+      "required_static_hints": [
+        {"keys": ["fileKey", "file_key", "fileId"], "label": "File", "why": "Figma APIs are file-scoped."}
+      ],
+      "builder_guidance": "Bind default file key."
+    },
+    "dropbox": {
+      "auth_prop_guess": "dropbox",
+      "summary": "Path required for upload/download; stash for cross-action files.",
+      "required_static_hints": [
+        {"keys": ["path", "pathDisplay"], "label": "Path", "why": "Dropbox ops need a folder/file path."}
+      ],
+      "builder_guidance": "Reuse stashId across download→upload flows."
+    },
+    "box": {
+      "auth_prop_guess": "box",
+      "summary": "Folder/file ids required.",
+      "required_static_hints": [
+        {"keys": ["folderId", "fileId"], "label": "Folder / file", "why": "Box items are id-scoped."}
+      ],
+      "builder_guidance": "Bind default folder."
+    },
+    "microsoft_onedrive": {
+      "auth_prop_guess": "microsoftOneDrive",
+      "summary": "Drive item paths/ids required.",
+      "required_static_hints": [
+        {"keys": ["itemId", "path", "folderId"], "label": "Item / path", "why": "OneDrive ops need a target item."}
+      ],
+      "builder_guidance": "Auth prop name from component definition."
+    },
+    "microsoft_teams": {
+      "auth_prop_guess": "microsoftTeams",
+      "summary": "Team + channel ids required for posts.",
+      "required_static_hints": [
+        {"keys": ["teamId", "channelId", "team", "channel"], "label": "Team / channel", "why": "Teams messages are channel-scoped."}
+      ],
+      "builder_guidance": "Bind team+channel after Connect."
+    },
+    "microsoft_outlook": {
+      "auth_prop_guess": "microsoftOutlook",
+      "summary": "Mail folders/recipients; prefer drafts.",
+      "required_static_hints": [],
+      "builder_guidance": "Draft-first; approval for send."
+    },
+    "microsoft_excel": {
+      "auth_prop_guess": "microsoftExcel",
+      "summary": "Workbook + worksheet often required (reloadProps).",
+      "required_static_hints": [
+        {"keys": ["workbook", "worksheet", "itemId"], "label": "Workbook / sheet", "why": "Excel actions are workbook-scoped."}
+      ],
+      "builder_guidance": "Expect dynamic_props_id after workbook selection."
+    },
+    "twilio": {
+      "auth_prop_guess": "twilio",
+      "summary": "From/to phone numbers required for SMS.",
+      "required_static_hints": [
+        {"keys": ["from", "to", "fromNumber"], "label": "From / to", "why": "SMS needs E.164 numbers."}
+      ],
+      "builder_guidance": "Bind verified from-number in static config."
+    },
+    "telegram": {
+      "auth_prop_guess": "telegram_bot_api",
+      "summary": "Chat id required for bot messages.",
+      "required_static_hints": [
+        {"keys": ["chatId", "chat_id"], "label": "Chat", "why": "Bot messages need a chat id."}
+      ],
+      "builder_guidance": "Bind default chat after Connect."
+    },
+    "whatsapp": {
+      "auth_prop_guess": "whatsapp_business",
+      "summary": "Business phone + template/recipient required.",
+      "required_static_hints": [
+        {"keys": ["to", "phoneNumberId", "template"], "label": "Recipient / template", "why": "WhatsApp Business sends need recipient + often a template."}
+      ],
+      "builder_guidance": "Prefer approved templates; bind phone number id."
+    },
+    "zoom": {
+      "auth_prop_guess": "zoom",
+      "summary": "Meetings need topic/time; user id sometimes required.",
+      "required_static_hints": [],
+      "builder_guidance": "Admin Zoom may be premium; check account type."
+    },
+    "supabase": {
+      "auth_prop_guess": "supabase",
+      "summary": "Project URL + table for row ops.",
+      "required_static_hints": [
+        {"keys": ["table", "tableName"], "label": "Table", "why": "Row ops need a table name."}
+      ],
+      "builder_guidance": "Prefer read-only queries for agents unless approved."
+    },
+    "postgresql": {
+      "auth_prop_guess": "postgresql",
+      "summary": "SQL prop type with prepared statements; schema via configure.",
+      "required_static_hints": [],
+      "builder_guidance": "Use sql prop + params; never interpolate user input into SQL."
+    },
+    "mysql": {
+      "auth_prop_guess": "mysql",
+      "summary": "SQL prop with ? placeholders.",
+      "required_static_hints": [],
+      "builder_guidance": "Prepared statements only."
+    },
+    "mongodb": {
+      "auth_prop_guess": "mongodb",
+      "summary": "Database + collection required.",
+      "required_static_hints": [
+        {"keys": ["database", "collection"], "label": "DB / collection", "why": "Mongo ops are collection-scoped."}
+      ],
+      "builder_guidance": "Bind database+collection."
+    },
+    "snowflake": {
+      "auth_prop_guess": "snowflake",
+      "summary": "Warehouse/database/schema + SQL prop.",
+      "required_static_hints": [],
+      "builder_guidance": "Premium app; use prepared SQL patterns."
+    },
+    "aws": {
+      "auth_prop_guess": "aws",
+      "summary": "S3 bucket + key for object ops; region awareness.",
+      "required_static_hints": [
+        {"keys": ["bucket", "key", "region"], "label": "Bucket / key", "why": "S3 ops need bucket and object key."}
+      ],
+      "builder_guidance": "Premium app; bind default bucket."
+    },
+    "close": {
+      "auth_prop_guess": "close",
+      "summary": "CRM leads/opportunities; often needs lead/opportunity ids.",
+      "required_static_hints": [],
+      "builder_guidance": "Inspect schema after Connect for lead/opportunity props."
+    },
+    "pagerduty": {
+      "auth_prop_guess": "pagerduty",
+      "summary": "Incidents need service id; escalation policies optional.",
+      "required_static_hints": [
+        {"keys": ["serviceId", "service", "from"], "label": "Service", "why": "Incidents are service-scoped."}
+      ],
+      "builder_guidance": "Bind default service for on-call agents."
+    }
+  }
+}

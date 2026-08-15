@@ -77,7 +77,9 @@ export function DynamicQuestionsForm({
       {uiComponent.fields.map((field) => (
         <label key={field.key} className="block space-y-1.5">
           <span className="text-sm font-medium text-foreground/90">
-            {fieldLabel(t, field.key, field.label)}
+            {field.label && !field.label.includes("_")
+              ? field.label
+              : fieldLabel(t, field.key, field.label)}
             {field.required ? " *" : ""}
           </span>
           {field.type === "textarea" ? (

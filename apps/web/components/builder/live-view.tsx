@@ -6,8 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { AgentIcon } from "@/components/builder/agent-icon";
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
+import { LiveApprovalCard } from "@/components/builder/live-approval-card";
 import { SecretForm } from "@/components/builder/secret-form";
-import { ToolSetupCard } from "@/components/builder/tool-setup-card";
 import { Markdown } from "@/components/shared/markdown";
 import { MessageAttachmentPreviews } from "@/components/shared/message-attachment-previews";
 import { PromptComposer } from "@/components/shared/prompt-composer";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAgent, useAgentSpec } from "@/hooks/use-agents";
 import { useCurrentUser } from "@/hooks/use-auth";
-import { useClearLiveThread, useLiveThread, useSendLiveMessage } from "@/hooks/use-live";
+import { useClearLiveThread, useCancelLiveRun, useLiveThread, useSendLiveMessage } from "@/hooks/use-live";
 import { useTranslation } from "@/hooks/use-translation";
 import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
 import type { LiveMessage } from "@/lib/domain/types";
@@ -43,6 +43,9 @@ function LiveBubble({
   }).format(new Date(message.createdAt));
 
   if (message.pending) {
+    const statusLabel = message.statusKey
+      ? t(`status.${message.statusKey}`, { defaultValue: t("status.preparing") })
+      : t("status.preparing");
     return (
       <div className="flex gap-3">
         <AgentIcon icon={agentIcon} className="mt-1 size-7 rounded-full" />
@@ -52,7 +55,7 @@ function LiveBubble({
           aria-live="polite"
         >
           <Loader2 className="size-4 animate-spin text-brand" aria-hidden="true" />
-          {message.statusKey ? t(`status.${message.statusKey}`) : t("status.preparing")}
+          {statusLabel}
         </div>
       </div>
     );
@@ -71,7 +74,7 @@ function LiveBubble({
         <AgentIcon icon={agentIcon} className="mt-1 size-7 rounded-full" />
       )}
 
-      <div className={cn("max-w-[85%] sm:max-w-[75%]", isUser && "text-right")}>
+      <div className={cn("min-w-0 max-w-[85%] sm:max-w-[75%]", isUser && "text-right")}>
         <p className="mb-1 font-mono text-[11px] text-muted-foreground/60">{time}</p>
         {isUser ? (
           <MessageAttachmentPreviews attachments={message.attachments} align="right" />
@@ -91,7 +94,7 @@ function LiveBubble({
           return (
         <div
           className={cn(
-            "rounded-3xl px-4 py-3 text-left text-sm leading-relaxed",
+            "min-w-0 overflow-hidden rounded-3xl px-4 py-3 text-left text-sm leading-relaxed",
             isUser ? "bg-brand/15" : "glass",
           )}
         >
@@ -129,14 +132,11 @@ function LiveBubble({
           ) : null}
 
           {message.uiComponent?.type === "approval_form" ? (
-            <div className="mt-3">
-              <ToolSetupCard
-                agentId={agentId}
-                uiComponent={message.uiComponent}
-                connectionStatus="needs_setup"
-                onConnected={onSecretSubmitted}
-              />
-            </div>
+            <LiveApprovalCard
+              agentId={agentId}
+              uiComponent={message.uiComponent}
+              onDecided={onSecretSubmitted}
+            />
           ) : null}
 
           {message.artifacts && message.artifacts.length > 0 ? (
@@ -182,7 +182,14 @@ function LiveBubble({
   );
 }
 
-export function LiveView({ agentId }: { agentId: string }) {
+export function LiveView({
+  agentId,
+  activeRunId,
+}: {
+  agentId: string;
+  /** Latest live run id from the parent (structure animation + stop). */
+  activeRunId?: string | null;
+}) {
   const { t } = useTranslation(["live", "builder"]);
   const queryClient = useQueryClient();
   const { data: agent } = useAgent(agentId);
@@ -190,15 +197,31 @@ export function LiveView({ agentId }: { agentId: string }) {
   const { data: thread } = useLiveThread(agentId);
   const sendMessage = useSendLiveMessage(agentId);
   const clearThread = useClearLiveThread(agentId);
+  const cancelRun = useCancelLiveRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const messages = thread?.messages ?? [];
-  const busy = messages.some((m) => m.pending);
+  const pendingBusy = messages.some((m) => m.pending);
+  const awaitingApproval = messages.some(
+    (m) => m.role === "assistant" && m.uiComponent?.type === "approval_form",
+  );
+  const awaitingReply =
+    messages.length > 0 && messages[messages.length - 1]?.role === "user";
+  const busy =
+    pendingBusy ||
+    awaitingReply ||
+    awaitingApproval ||
+    sendMessage.isPending ||
+    cancelRun.isPending;
+  const runId =
+    activeRunId ||
+    [...messages].reverse().find((m) => m.runId)?.runId ||
+    null;
   const agentName = agent?.name || t("builder:sidebar.untitledAgent");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, busy]);
+  }, [messages.length, busy, messages[messages.length - 1]?.statusKey]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -276,6 +299,8 @@ export function LiveView({ agentId }: { agentId: string }) {
                 agentIcon={agent?.icon ?? "bot"}
                 onSecretSubmitted={() => {
                   void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
+                  void queryClient.invalidateQueries({ queryKey: ["live-execution"] });
+                  void queryClient.invalidateQueries({ queryKey: ["active-live-run", agentId] });
                 }}
               />
             ))
@@ -288,10 +313,16 @@ export function LiveView({ agentId }: { agentId: string }) {
         <PromptComposer
           className="mx-auto max-w-3xl"
           placeholder={t("live:composer.placeholder")}
-          onSubmit={(value, attachments) =>
-            void sendMessage.mutateAsync({ content: value, attachments })
-          }
-          busy={busy}
+          onSubmit={(value, attachments) => {
+            if (busy) return;
+            void sendMessage.mutateAsync({ content: value, attachments });
+          }}
+          onStop={() => {
+            void cancelRun.mutateAsync(runId);
+          }}
+          busy={busy && !awaitingApproval}
+          paused={awaitingApproval}
+          disabled={busy && !runId && !pendingBusy}
         />
       </div>
     </div>

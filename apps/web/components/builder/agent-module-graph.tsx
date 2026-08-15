@@ -76,6 +76,9 @@ export interface AgentConnectionInfo {
   provider: string;
   status: string;
   account_email?: string;
+  /** Pipedream app slug (notion, canva, …) when known. */
+  app_id?: string | null;
+  provider_metadata?: Record<string, unknown> | null;
 }
 
 export interface AgentBindingInfo {

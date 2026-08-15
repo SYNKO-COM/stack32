@@ -145,6 +145,25 @@ async def approved_tool_ids_for_run(*, user_id: str, run_id: str) -> list[str]:
         return []
 
 
+async def denied_tool_ids_for_run(*, user_id: str, run_id: str) -> list[str]:
+    """Return tool_ids denied for this run (status=denied)."""
+    try:
+        async with get_supabase_admin_client() as client:
+            resp = await client.get(
+                "/agent_approval_requests",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "run_id": f"eq.{run_id}",
+                    "status": "eq.denied",
+                    "select": "tool_id",
+                },
+            )
+            rows = resp.json() if resp.status_code < 400 else []
+            return list({r["tool_id"] for r in rows if r.get("tool_id")})
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def requires_approval(tool_id: str) -> bool:
     return tool_id in SIDE_EFFECT_TOOLS
 
@@ -154,4 +173,10 @@ def summarize_action(tool_id: str, arguments: dict[str, Any]) -> str:
         to = str(arguments.get("to", ""))[:80]
         subject = str(arguments.get("subject", ""))[:80]
         return f"Send email to {to}" + (f" — {subject}" if subject else "")
+    if tool_id == "calendar_create_event":
+        summary = str(arguments.get("summary") or arguments.get("title") or "event")[:80]
+        start = str(arguments.get("start") or arguments.get("start_time") or "")[:40]
+        return f"Create calendar event “{summary}”" + (f" at {start}" if start else "")
+    if tool_id.startswith("pd:"):
+        return f"Run external action {tool_id}"
     return f"Execute {tool_id}"

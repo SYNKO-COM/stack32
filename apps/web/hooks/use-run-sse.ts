@@ -57,8 +57,14 @@ export function useRunEventStream(opts: {
               await queryClient.invalidateQueries({
                 queryKey: ["live-execution", opts.runId],
               });
+              await queryClient.invalidateQueries({
+                queryKey: ["live", opts.agentId],
+              });
               if (payload.type === "stream.end") {
                 await queryClient.invalidateQueries({ queryKey: ["builder", opts.agentId] });
+                await queryClient.invalidateQueries({
+                  queryKey: ["active-live-run", opts.agentId],
+                });
                 return;
               }
               await queryClient.invalidateQueries({ queryKey: ["builder", opts.agentId] });

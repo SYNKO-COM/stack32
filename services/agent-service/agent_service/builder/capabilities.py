@@ -78,6 +78,11 @@ _PIPEDREAM_APP_ALIASES: dict[str, str] = {
     "anthropic": "anthropic",
     "figma": "figma",
     "canva": "canva",
+    # Design-tool phrasing (FR/EN) → real Canva, never Canvas LMS / GoCanvas.
+    "canva design": "canva",
+    "canva presentation": "canva",
+    "présentation canva": "canva",
+    "presentation canva": "canva",
     "typeform": "typeform",
     "calendly": "calendly",
     "pipedrive": "pipedrive",
@@ -117,6 +122,22 @@ _PIPEDREAM_APP_ALIASES: dict[str, str] = {
     "chatgpt": "openai",
 }
 
+# Near-homophones / catalog collisions. Never auto-bind a wrong neighbor.
+# Key = user query (normalized slug); value = slugs that must not win by default.
+_CONFUSABLE_APP_NEIGHBORS: dict[str, set[str]] = {
+    "canva": {"canvas", "gocanvas", "go_canvas", "go-canvas", "instructure_canvas"},
+    "canvas": {"canva", "gocanvas", "go_canvas"},
+    "gocanvas": {"canva", "canvas"},
+    "notion": {"notione", "notion_mail"},
+    "linear": {"linear_app"},
+    "stripe": {"stripes"},
+}
+
+# Blocking ambiguity reasons that must stop the build and ask the user.
+BLOCKING_AMBIGUITY_REASONS = frozenset(
+    {"ambiguous_app", "ambiguous_provider", "no_match"}
+)
+
 # Capability id → search / preferred native tool ids
 _CAPABILITY_CATALOG: dict[str, dict[str, Any]] = {
     "email": {
@@ -125,13 +146,17 @@ _CAPABILITY_CATALOG: dict[str, dict[str, Any]] = {
         "keywords": [
             "email",
             "gmail",
-            "mail",
             "inbox",
             "courriel",
             "e-mail",
-            "envoie",
-            "envoyer",
             "courrier",
+            # Do NOT use bare "envoie"/"envoyer"/"mail" — "quand je lui envoie les infos"
+            # and substrings must not imply Gmail.
+            "send email",
+            "envoyer un email",
+            "envoyer un mail",
+            "envoie un email",
+            "envoie un mail",
         ],
     },
     "calendar": {
@@ -320,7 +345,8 @@ def build_capability_plan(
                 provider_pref = "pipedream"
             elif mentions_gmail:
                 preferred = "gmail"
-                provider_pref = "native"
+                # Connect via Pipedream; runtime keeps first-party Gmail tools.
+                provider_pref = "pipedream"
             if re.search(r"\b(send|envoie|envoyer)\b", lower) and not re.search(
                 r"\b(draft|brouillon)\b", lower
             ):
@@ -335,7 +361,8 @@ def build_capability_plan(
             intent = "send" if re.search(r"\b(send|post|message)\b", lower) else "write"
         elif cap.id == "calendar":
             preferred = "google_calendar"
-            provider_pref = "native"
+            # Connect via Pipedream (per-app Google account); keep native Calendar tools.
+            provider_pref = "pipedream"
             intent = (
                 "create"
                 if re.search(r"\b(create|book|schedule|ajouter|créer|creer)\b", lower)
@@ -343,7 +370,7 @@ def build_capability_plan(
             )
         elif cap.id == "google_docs":
             preferred = "google_docs"
-            provider_pref = "native"
+            provider_pref = "pipedream"
             intent = "write"
         planned.append(
             PlannedCapability(
@@ -598,8 +625,8 @@ def extract_external_app_queries(
 def _intent_verbs(prompt_lower: str) -> list[str]:
     verbs: list[str] = []
     mapping = [
+        (r"\b(create|créer|creer|crée|cree|add|ajouter|new|génér|gener|présentation|presentation|design|slide)\b", "create"),
         (r"\b(send|envoie|envoyer|post|message|notify)\b", "send"),
-        (r"\b(create|créer|creer|add|ajouter|new)\b", "create"),
         (r"\b(update|mettre à jour|append|edit|modify)\b", "update"),
         (r"\b(list|lire|read|get|fetch|search|find)\b", "list"),
         (r"\b(delete|remove|supprimer)\b", "delete"),
@@ -607,7 +634,440 @@ def _intent_verbs(prompt_lower: str) -> list[str]:
     for pattern, verb in mapping:
         if re.search(pattern, prompt_lower):
             verbs.append(verb)
-    return verbs or ["create", "send", "list"]
+    # Prefer create for design/docs apps when nothing matched.
+    return verbs or ["create", "list", "send"]
+
+
+def _app_slug_from_tool_id(tool_id: str | None) -> str | None:
+    """Derive Pipedream app slug from tool id like pd:canva-create-design → canva."""
+    tid = str(tool_id or "").strip().lower()
+    if not tid:
+        return None
+    tid = tid.removeprefix("pd:").removeprefix("pipedream:")
+    if not tid:
+        return None
+    # Component keys are typically `{app}-{action-words}`.
+    slug = tid.split("-")[0].strip()
+    return slug or None
+
+
+def _tool_belongs_to_app(tool: Any, app_id: str) -> bool:
+    """Strict membership: exact provider_app_id OR exact pd:{app}-* tool id prefix.
+
+    Never treat empty provider_app_id as a match — that caused Canva→Canvas/GoCanvas.
+    Never accept confusable neighbor slugs (canvas/gocanvas for canva).
+    """
+    app = _normalize_app_slug(app_id)
+    if not app:
+        return False
+    neighbors = set(_CONFUSABLE_APP_NEIGHBORS.get(app, set()))
+    pid = _normalize_app_slug(str(getattr(tool, "provider_app_id", None) or ""))
+    tid = str(getattr(tool, "tool_id", None) or "").lower()
+    derived = _app_slug_from_tool_id(tid)
+
+    if pid and pid in neighbors:
+        return False
+    if derived and derived in neighbors:
+        return False
+    if pid == app:
+        return True
+    if derived == app:
+        return True
+    if tid.startswith(f"pd:{app}-") or tid.startswith(f"pipedream:{app}-"):
+        return True
+    return False
+
+
+def _filter_actions_for_app(tools: list[Any], app_id: str) -> list[Any]:
+    return [m for m in tools if _tool_belongs_to_app(m, app_id)]
+
+
+def _prefer_action_tools(tools: list[Any], prompt_lower: str) -> list[Any]:
+    """Rank create/design actions first when the user wants a presentation/page."""
+    if not tools:
+        return tools
+    wants_create = bool(
+        re.search(
+            r"\b(create|créer|creer|crée|cree|design|présentation|presentation|slide|page|génér|gener)\b",
+            prompt_lower,
+        )
+    )
+    if not wants_create:
+        return tools
+
+    def _score(tool: Any) -> int:
+        tid = str(getattr(tool, "tool_id", None) or "").lower()
+        name = str(getattr(tool, "name", None) or "").lower()
+        hay = f"{tid} {name}"
+        score = 0
+        if "create" in hay or "design" in hay:
+            score += 50
+        if "export" in hay or "upload" in hay:
+            score += 20
+        if "list" in hay or "option" in hay:
+            score -= 30
+        if "update" in hay:
+            score += 10
+        return score
+
+    return sorted(tools, key=_score, reverse=True)
+
+
+def _normalize_app_slug(value: str) -> str:
+    return re.sub(r"[\s\-]+", "_", (value or "").strip().lower())
+
+
+def slug_from_website(url: str) -> str | None:
+    """Map a tool website (canva.com) to a Pipedream app slug hint."""
+    from urllib.parse import urlparse
+
+    raw = (url or "").strip()
+    if not raw:
+        return None
+    if not re.match(r"^https?://", raw, re.I):
+        raw = "https://" + raw
+    try:
+        host = (urlparse(raw).hostname or "").lower()
+    except Exception:  # noqa: BLE001
+        return None
+    host = host.removeprefix("www.")
+    if not host:
+        return None
+    root = host.split(".")[0]
+    if not root or len(root) < 3:
+        return None
+    if root in _PIPEDREAM_APP_ALIASES:
+        return _PIPEDREAM_APP_ALIASES[root]
+    alias_values = set(_PIPEDREAM_APP_ALIASES.values())
+    if root in alias_values:
+        return root
+    return root
+
+
+def _app_choice_row(row: dict[str, Any]) -> dict[str, str]:
+    slug = str(row.get("app_id") or row.get("name") or "").strip()
+    name = str(row.get("name") or slug).strip()
+    return {"tool_id": slug, "app_id": slug, "name": name or slug}
+
+
+def _score_pipedream_app(query: str, row: dict[str, Any]) -> int:
+    """Higher is better. Exact slug/name wins; confusable neighbors are penalized."""
+    q = _normalize_app_slug(query)
+    q_raw = (query or "").strip().lower()
+    alias_target = _PIPEDREAM_APP_ALIASES.get(q_raw) or _PIPEDREAM_APP_ALIASES.get(
+        q.replace("_", " ")
+    )
+    preferred = {q, q_raw.replace(" ", "_")}
+    if alias_target:
+        preferred.add(alias_target)
+    if q in {"slack", "slack_v2"}:
+        preferred.update({"slack", "slack_v2"})
+
+    slug = _normalize_app_slug(str(row.get("app_id") or ""))
+    name = str(row.get("name") or "").strip().lower()
+    neighbors = set()
+    for key in preferred:
+        neighbors |= _CONFUSABLE_APP_NEIGHBORS.get(key, set())
+
+    if slug in neighbors:
+        return -100
+    if slug in preferred or name == q_raw or name.replace(" ", "_") in preferred:
+        return 100
+    if alias_target and slug == alias_target:
+        return 100
+    if slug.startswith(q + "_") or slug.startswith(q + "-"):
+        return 40
+    if q and q in slug and slug != q:
+        # "canva" ⊂ "canvas" / "gocanvas" — treat as collision, not match.
+        if slug in neighbors or any(n in slug for n in neighbors):
+            return -80
+        return 10
+    if q_raw and q_raw in name and name != q_raw:
+        if any(n.replace("_", " ") in name for n in neighbors):
+            return -80
+        return 5
+    return 0
+
+
+def pick_pipedream_app(
+    query: str, apps: list[dict[str, Any]]
+) -> tuple[str | None, list[dict[str, Any]], str | None]:
+    """Choose a Pipedream app or signal ambiguity.
+
+    Returns (app_id | None, candidate_rows, reason | None).
+    Never returns a low-confidence first-hit guess.
+    """
+    if not apps:
+        return None, [], "no_match"
+
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for row in apps:
+        scored.append((_score_pipedream_app(query, row), row))
+    scored.sort(key=lambda item: item[0], reverse=True)
+
+    best_score, best = scored[0]
+    positive = [(s, r) for s, r in scored if s >= 40]
+    near = [(s, r) for s, r in scored if s > 0]
+
+    q = _normalize_app_slug(query)
+    neighbors = _CONFUSABLE_APP_NEIGHBORS.get(q, set())
+    neighbor_hits = [
+        r
+        for s, r in scored
+        if s < 40 and _normalize_app_slug(str(r.get("app_id") or "")) in neighbors
+    ]
+
+    # Exact / alias hit — bind only that app.
+    if best_score >= 100:
+        app_id = str(best.get("app_id") or best.get("name") or "") or None
+        # Slack: prefer workspace app over bot when both exact-ish.
+        if q in {"slack", "slack_v2"}:
+            for _s, row in scored:
+                if _normalize_app_slug(str(row.get("app_id") or "")) == "slack_v2":
+                    return "slack_v2", [row], None
+        return app_id, [best], None
+
+    # Confusable neighbors present and no exact match → ask the user.
+    if neighbor_hits or (near and best_score < 40):
+        # Include best positive candidates + neighbors for the form.
+        pool: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for _s, row in scored:
+            slug = _normalize_app_slug(str(row.get("app_id") or row.get("name") or ""))
+            if not slug or slug in seen:
+                continue
+            if _s >= 40 or slug in neighbors or _s > 0:
+                seen.add(slug)
+                pool.append(row)
+            if len(pool) >= 6:
+                break
+        if not pool:
+            pool = [r for _s, r in scored[:5]]
+        return None, pool, "ambiguous_app"
+
+    if positive:
+        app_id = str(positive[0][1].get("app_id") or positive[0][1].get("name") or "") or None
+        return app_id, [positive[0][1]], None
+
+    # No confident match — do NOT take apps[0].
+    return None, [r for _s, r in scored[:5]], "ambiguous_app"
+
+
+def is_surgical_tool_edit(edit_prompt: str, *, current_tool_count: int = 0) -> bool:
+    """True when the user is fixing/replacing a tool, not rewriting the whole agent."""
+    text = (edit_prompt or "").strip()
+    if not text:
+        return False
+    lower = text.lower()
+    fix_markers = (
+        "fix",
+        "corrige",
+        "wrong",
+        "trompé",
+        "trompe",
+        "remplace",
+        "replace",
+        "pas le bon",
+        "not the right",
+        "change tool",
+        "change l'outil",
+        "change loutil",
+        "only this",
+        "juste cet",
+        "juste cet outil",
+        "photo",
+        "logo",
+    )
+    if any(m in lower for m in fix_markers):
+        return True
+    apps = extract_external_app_queries(text)
+    if len(text) < 700 and 1 <= len(apps) <= 2 and current_tool_count >= 2:
+        return True
+    return False
+
+
+def merge_tools_on_edit(
+    current_tools: list[ToolBinding],
+    incoming_tools: list[ToolBinding],
+    *,
+    edit_prompt: str,
+) -> list[ToolBinding]:
+    """Keep unrelated tools on MODIFY; replace only apps targeted by the edit."""
+    if not current_tools:
+        return incoming_tools
+
+    apps = extract_external_app_queries(edit_prompt)
+    targets: set[str] = set()
+    for app in apps:
+        slug = _normalize_app_slug(app)
+        targets.add(slug)
+        targets |= set(_CONFUSABLE_APP_NEIGHBORS.get(slug, set()))
+        # If user asked for canva, also purge canvas/gocanvas bindings.
+        for known, neighbors in _CONFUSABLE_APP_NEIGHBORS.items():
+            if slug == known or slug in neighbors:
+                targets.add(known)
+                targets |= set(neighbors)
+
+    if not targets:
+        return incoming_tools
+
+    def _app_key(binding: ToolBinding) -> str:
+        return _normalize_app_slug(binding.app_id or "")
+
+    preserved = [t for t in current_tools if _app_key(t) not in targets]
+    # Also drop legacy wrong bindings whose tool_id embeds a confusable slug
+    # (e.g. pd:canvas-...) even if app_id was missing.
+    def _tool_hits_target(tool_id: str) -> bool:
+        slug = _normalize_app_slug(tool_id)
+        for n in targets:
+            if len(n) < 4:
+                continue
+            if slug == n or slug.startswith(n + "_") or f"_{n}_" in f"_{slug}_":
+                return True
+            # Avoid "canva" matching inside "canvas": require non-extension.
+            if n in slug and not any(
+                other != n and n in other and other in slug for other in targets
+            ):
+                # e.g. query target canva must not match tool ...canvas...
+                neighbors = _CONFUSABLE_APP_NEIGHBORS.get(n, set())
+                if any(neigh in slug for neigh in neighbors):
+                    return False
+                if re.search(rf"(^|_|:|-){re.escape(n)}($|_|:|-)", slug):
+                    return True
+        return False
+
+    preserved = [t for t in preserved if not _tool_hits_target(t.tool_id)]
+    replacements = [t for t in incoming_tools if _app_key(t) in targets]
+    builtins = [t for t in incoming_tools if t.tool_id in _BUILTIN_TOOL_IDS]
+
+    merged: list[ToolBinding] = []
+    seen: set[str] = set()
+    for binding in builtins + preserved + replacements:
+        if binding.tool_id in seen:
+            continue
+        seen.add(binding.tool_id)
+        merged.append(binding)
+    return merged[:20]
+
+
+def blocking_ambiguities(
+    ambiguous: list[dict[str, Any]],
+    *,
+    preferred_apps: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Ambiguities that must interrupt the build until the user clarifies."""
+    preferred = {_normalize_app_slug(a) for a in (preferred_apps or []) if a}
+    out: list[dict[str, Any]] = []
+    for item in ambiguous:
+        reason = str(item.get("reason") or "")
+        if reason not in BLOCKING_AMBIGUITY_REASONS:
+            continue
+        query = _normalize_app_slug(
+            str(item.get("app_query") or item.get("app_id") or item.get("capability") or "")
+            .replace("ext:", "")
+        )
+        if query and query in preferred:
+            continue
+        choice_ids = {
+            _normalize_app_slug(str(c.get("tool_id") or c.get("app_id") or ""))
+            for c in (item.get("choices") or [])
+            if isinstance(c, dict)
+        }
+        if preferred & choice_ids:
+            continue
+        group = str(item.get("group") or "")
+        if group and any(
+            p in preferred
+            for p in (
+                ({"gmail", "microsoft_outlook"} if group == "email" else set())
+                | (
+                    {"hubspot", "salesforce", "pipedrive", "zoho_crm"}
+                    if group == "crm"
+                    else set()
+                )
+            )
+        ):
+            continue
+        out.append(item)
+    return out
+
+
+async def build_connection_requirements(
+    selected: list[ToolBinding],
+    *,
+    registry: Any | None = None,
+) -> list[ConnectionRequirement]:
+    """Derive OAuth/connection requirements from resolved tool bindings."""
+    from agent_service.integrations.registry import get_provider_registry
+
+    reg = registry or get_provider_registry()
+    by_key: dict[str, ConnectionRequirement] = {}
+    for binding in selected:
+        tool = await reg.get_tool(binding.tool_id)
+        needs_conn = False
+        provider_name = binding.provider or "native"
+        app_slug = binding.app_id
+        if tool is not None:
+            needs_conn = bool(tool.connection_required)
+            provider_name = tool.provider or provider_name
+            app_slug = tool.provider_app_id or app_slug
+        elif provider_name == "pipedream" or str(binding.tool_id).startswith("pd:"):
+            needs_conn = True
+        if not needs_conn:
+            continue
+
+        if provider_name == "pipedream" or str(binding.tool_id).startswith("pd:"):
+            conn_provider = "pipedream"
+            derived = _app_slug_from_tool_id(binding.tool_id)
+            app_key = app_slug or derived or "pipedream"
+            if app_key in {"pipedream", "pd"} and derived:
+                app_key = derived
+        else:
+            from agent_service.integrations.app_keys import (
+                SUITE_APP_IDS,
+                app_key_from_tool_id,
+                oauth_provider_for_app,
+            )
+
+            app_key = app_key_from_tool_id(binding.tool_id, app_id=app_slug)
+            conn_provider = oauth_provider_for_app(app_key)
+            if app_key in SUITE_APP_IDS:
+                app_key = app_key_from_tool_id(binding.tool_id)
+                conn_provider = oauth_provider_for_app(app_key)
+
+        key = f"{conn_provider}:{app_key}"
+        if key not in by_key:
+            req_id = f"req_{uuid.uuid4().hex[:10]}"
+            by_key[key] = ConnectionRequirement(
+                id=req_id,
+                provider=conn_provider,
+                app_id=app_key,
+                auth_type="oauth2",
+                tool_ids=[binding.tool_id],
+                required_for=[binding.tool_id],
+                required=True,
+            )
+        else:
+            req = by_key[key]
+            if binding.tool_id not in req.tool_ids:
+                req.tool_ids.append(binding.tool_id)
+                req.required_for.append(binding.tool_id)
+        binding.connection_requirement_id = by_key[key].id
+        if not binding.app_id or binding.app_id in {
+            "google",
+            "microsoft",
+            "microsoft_365",
+            "microsoft365",
+        }:
+            binding.app_id = app_key
+        # Only mark the tool itself as Pipedream when it actually is a PD tool.
+        # Native Gmail/Calendar helpers keep provider=native but still require a
+        # Pipedream Connect account for that product app (per-app Google login).
+        if conn_provider == "pipedream" and (
+            provider_name == "pipedream" or str(binding.tool_id).startswith("pd:")
+        ):
+            binding.provider = "pipedream"
+    return list(by_key.values())
 
 
 async def resolve_pipedream_app(
@@ -620,7 +1080,12 @@ async def resolve_pipedream_app(
     ambiguous: list[dict[str, Any]],
     max_actions: int = 2,
 ) -> str | None:
-    """JIT-resolve a Pipedream app + top actions. Returns resolved app_id or None."""
+    """JIT-resolve a Pipedream app + top actions. Returns resolved app_id or None.
+
+    Never auto-binds the first arbitrary search hit when the catalog is ambiguous
+    (e.g. Canva vs Canvas vs GoCanvas). Those cases are pushed to `ambiguous`
+    for a Builder interrupt form.
+    """
     from agent_service.integrations.pipedream import PipedreamToolProvider
 
     pd = registry.get_provider("pipedream") if hasattr(registry, "get_provider") else None
@@ -629,42 +1094,59 @@ async def resolve_pipedream_app(
 
     apps: list[dict[str, Any]] = []
     try:
-        apps = await pd.search_apps(app_query, limit=5)
+        apps = await pd.search_apps(app_query, limit=8)
     except Exception:  # noqa: BLE001
         logger.exception("pipedream_search_apps_failed query=%s", app_query)
 
-    app_id: str | None = None
-    if apps:
-        # Prefer exact slug / name match.
-        q = app_query.lower().replace(" ", "_")
-        aliases = {
-            "slack": {"slack_v2", "slack"},
-            "slack_v2": {"slack_v2"},
-        }
-        preferred = aliases.get(q, {q})
-        for row in apps:
-            slug = str(row.get("app_id") or "").lower()
-            name = str(row.get("name") or "").lower()
-            if slug in preferred or slug == q or slug == app_query.lower() or name == app_query.lower():
-                # Prefer non-bot Slack workspace app when several match.
-                if "slack" in preferred and slug == "slack_bot" and any(
-                    str(r.get("app_id") or "").lower() == "slack_v2" for r in apps
-                ):
-                    continue
-                app_id = str(row.get("app_id") or slug)
-                break
-        if not app_id:
-            # Prefer slack_v2 over slack_bot for generic slack queries.
-            if q in {"slack", "slack_v2"}:
-                for row in apps:
-                    if str(row.get("app_id") or "").lower() == "slack_v2":
-                        app_id = "slack_v2"
-                        break
-            if not app_id:
-                app_id = str(apps[0].get("app_id") or apps[0].get("name") or "") or None
+    app_id, candidates, reason = pick_pipedream_app(app_query, apps)
+    alias = _PIPEDREAM_APP_ALIASES.get(app_query.lower().strip()) or _PIPEDREAM_APP_ALIASES.get(
+        _normalize_app_slug(app_query).replace("_", " ")
+    )
+    # Known-good aliases (canva, notion, …): prefer exact slug actions over a
+    # fuzzy apps[0] neighbor, even when search_apps ranks Canvas/GoCanvas first.
+    if reason in {"ambiguous_app", "no_match"} and alias:
+        forced = await search(alias, limit=10)
+        forced_pd = [
+            m
+            for m in forced
+            if getattr(m, "provider", None) == "pipedream"
+            and str(getattr(m, "provider_app_id", None) or "").lower() == alias
+        ]
+        if forced_pd:
+            app_id = alias
+            reason = None
+            candidates = [{"app_id": alias, "name": alias.title()}]
+            logger.info(
+                "pipedream_app_forced_alias query=%s chosen=%s via_actions=%s",
+                app_query,
+                alias,
+                len(forced_pd),
+            )
+
+    if reason in {"ambiguous_app", "no_match"}:
+        choices = [_app_choice_row(r) for r in candidates]
+        # Always offer the alias target when we know it (Canva) even if absent
+        # from the current search page — user can still confirm / paste URL.
+        if alias and alias not in {c["tool_id"].lower() for c in choices}:
+            choices.insert(0, {"tool_id": alias, "app_id": alias, "name": alias.title()})
+        ambiguous.append(
+            {
+                "capability": f"ext:{app_query}",
+                "reason": reason,
+                "choices": choices[:8],
+                "app_query": app_query,
+            }
+        )
+        logger.info(
+            "pipedream_app_ambiguous query=%s reason=%s candidates=%s",
+            app_query,
+            reason,
+            [c.get("tool_id") for c in choices[:6]],
+        )
+        return None
 
     if not app_id:
-        # Fall back to action search with the raw query.
+        # Action-search fallback only when a single Pipedream app is present.
         matches = await search(app_query, limit=8)
         pd_matches = [m for m in matches if getattr(m, "provider", None) == "pipedream"]
         if not pd_matches:
@@ -677,42 +1159,116 @@ async def resolve_pipedream_app(
                 }
             )
             return None
-        for tool in pd_matches[:max_actions]:
-            add_binding(_binding_from_catalog(tool))
-        return getattr(pd_matches[0], "provider_app_id", None)
+        app_ids = {
+            str(getattr(m, "provider_app_id", None) or "").lower()
+            for m in pd_matches
+            if getattr(m, "provider_app_id", None)
+        }
+        app_ids.discard("")
+        if len(app_ids) != 1:
+            ambiguous.append(
+                {
+                    "capability": f"ext:{app_query}",
+                    "reason": "ambiguous_app",
+                    "choices": [
+                        {
+                            "tool_id": aid,
+                            "app_id": aid,
+                            "name": aid,
+                        }
+                        for aid in sorted(app_ids)[:8]
+                    ]
+                    or [],
+                    "app_query": app_query,
+                }
+            )
+            return None
+        app_id = next(iter(app_ids))
+        neighbors = _CONFUSABLE_APP_NEIGHBORS.get(_normalize_app_slug(app_query), set())
+        if app_id in neighbors:
+            ambiguous.append(
+                {
+                    "capability": f"ext:{app_query}",
+                    "reason": "ambiguous_app",
+                    "choices": [{"tool_id": app_id, "app_id": app_id, "name": app_id}],
+                    "app_query": app_query,
+                }
+            )
+            return None
 
-    verbs = _intent_verbs((prompt or "").lower())
-    action_query = f"{app_id} {verbs[0]}"
-    matches = await search(action_query, limit=10)
-    pd_matches = [
-        m
-        for m in matches
-        if getattr(m, "provider", None) == "pipedream"
-        and (
-            not getattr(m, "provider_app_id", None)
-            or str(m.provider_app_id).lower() in {app_id.lower(), app_query.lower()}
+    assert app_id is not None
+    logger.info("pipedream_app_resolved query=%s chosen=%s", app_query, app_id)
+
+    prompt_lower = (prompt or "").lower()
+    verbs = _intent_verbs(prompt_lower)
+    # Try several action queries — wrong first verb (e.g. "send" from "envoie les infos")
+    # previously returned only Gmail natives, then a loose canva search bound Canvas.
+    query_attempts: list[str] = []
+    for candidate in (f"{app_id} {verbs[0]}", app_id, f"{app_id} create", f"{app_id} design"):
+        if candidate not in query_attempts:
+            query_attempts.append(candidate)
+
+    pd_matches: list[Any] = []
+    matches: list[Any] = []
+    action_query = query_attempts[0]
+    for action_query in query_attempts:
+        matches = await search(action_query, limit=15)
+        pd_raw = [m for m in matches if getattr(m, "provider", None) == "pipedream"]
+        pd_matches = _prefer_action_tools(
+            _filter_actions_for_app(pd_raw, app_id), prompt_lower
         )
-    ]
-    if not pd_matches:
-        # Broader search
-        matches = await search(app_id, limit=10)
-        pd_matches = [m for m in matches if getattr(m, "provider", None) == "pipedream"]
+        if pd_matches:
+            break
 
     if not pd_matches:
+        # Surface near-misses so the Builder can ask the user instead of binding Canvas.
+        near = [
+            m
+            for m in matches
+            if getattr(m, "provider", None) == "pipedream"
+        ][:8]
+        ambiguous.append(
+            {
+                "capability": f"ext:{app_id}",
+                "reason": "ambiguous_app" if near else "no_actions",
+                "choices": [
+                    {
+                        "tool_id": _app_slug_from_tool_id(getattr(m, "tool_id", None))
+                        or app_id,
+                        "app_id": _app_slug_from_tool_id(getattr(m, "tool_id", None))
+                        or app_id,
+                        "name": str(getattr(m, "name", None) or getattr(m, "tool_id", "")),
+                    }
+                    for m in near
+                ]
+                or [{"tool_id": app_id, "app_id": app_id, "name": app_id.title()}],
+                "app_id": app_id,
+                "app_query": app_query,
+            }
+        )
+        return None
+
+    bound_count = 0
+    for tool in pd_matches[:max_actions]:
+        if not _tool_belongs_to_app(tool, app_id):
+            continue
+        binding = _binding_from_catalog(tool)
+        # Force the resolved app slug onto the binding for Structure grouping.
+        binding.app_id = app_id
+        binding.provider = "pipedream"
+        add_binding(binding)
+        bound_count += 1
+    if not bound_count:
         ambiguous.append(
             {
                 "capability": f"ext:{app_id}",
                 "reason": "no_actions",
-                "choices": [],
+                "choices": [{"tool_id": app_id, "app_id": app_id, "name": app_id.title()}],
                 "app_id": app_id,
+                "app_query": app_query,
             }
         )
-        # Still emit a connection requirement via a synthetic binding placeholder?
-        return app_id
-
-    # Auto-bind top actions (clear intent); keep extras in ambiguous for UI.
-    for tool in pd_matches[:max_actions]:
-        add_binding(_binding_from_catalog(tool))
+        return None
     if len(pd_matches) > max_actions:
         ambiguous.append(
             {
@@ -726,9 +1282,8 @@ async def resolve_pipedream_app(
 
 
 def _binding_from_catalog(tool: Any) -> ToolBinding:
-    approval = getattr(tool, "approval_mode", None) or "never"
-    if approval not in ("never", "always", "conditional"):
-        approval = "conditional" if getattr(tool, "side_effect", False) else "never"
+    # Connection/OAuth is the user's authorization — do not require per-action
+    # Approve/Deny prompts at runtime by default.
     return ToolBinding(
         tool_id=tool.tool_id,
         provider=getattr(tool, "provider", None) or "native",
@@ -736,7 +1291,7 @@ def _binding_from_catalog(tool: Any) -> ToolBinding:
         external_action_id=getattr(tool, "provider_tool_id", None),
         version=getattr(tool, "version", None),
         enabled=True,
-        approval_mode=approval,
+        approval_mode="never",
     )
 
 
@@ -890,7 +1445,8 @@ async def resolve_tools_for_capabilities(
         await _resolve_preferred(["calculator"])
 
     # Long-tail: any SaaS via Pipedream (Slack, Notion, Stripe, Sheets, … + 3000 apps).
-    # Prefer first-party Google Gmail/Calendar/Docs when those caps already resolved.
+    # Gmail / Calendar / Docs use first-party tools but Connect via Pipedream
+    # (see oauth_provider_for_app) — skip duplicate PD catalog bindings for those apps.
     skip_pd = set()
     if "email" in cap_ids and not prefer_outlook:
         skip_pd.update({"gmail", "email", "mail"})
@@ -924,64 +1480,5 @@ async def resolve_tools_for_capabilities(
         )
 
     # Build connection requirements for OAuth / connection_required tools.
-    by_key: dict[str, ConnectionRequirement] = {}
-    for binding in selected:
-        tool = await reg.get_tool(binding.tool_id)
-        needs_conn = False
-        provider_name = binding.provider or "native"
-        app_slug = binding.app_id
-        if tool is not None:
-            needs_conn = bool(tool.connection_required)
-            provider_name = tool.provider or provider_name
-            app_slug = tool.provider_app_id or app_slug
-        elif provider_name == "pipedream" or str(binding.tool_id).startswith("pd:"):
-            needs_conn = True
-        if not needs_conn:
-            continue
-
-        if provider_name == "pipedream" or str(binding.tool_id).startswith("pd:"):
-            conn_provider = "pipedream"
-            app_key = app_slug or "pipedream"
-        else:
-            from agent_service.integrations.app_keys import (
-                SUITE_APP_IDS,
-                app_key_from_tool_id,
-                oauth_provider_for_app,
-            )
-
-            app_key = app_key_from_tool_id(binding.tool_id, app_id=app_slug)
-            conn_provider = oauth_provider_for_app(app_key)
-            if app_key in SUITE_APP_IDS:
-                app_key = app_key_from_tool_id(binding.tool_id)
-                conn_provider = oauth_provider_for_app(app_key)
-
-        key = f"{conn_provider}:{app_key}"
-        if key not in by_key:
-            req_id = f"req_{uuid.uuid4().hex[:10]}"
-            by_key[key] = ConnectionRequirement(
-                id=req_id,
-                provider=conn_provider,
-                app_id=app_key,
-                auth_type="oauth2",
-                tool_ids=[binding.tool_id],
-                required_for=[binding.tool_id],
-                required=True,
-            )
-        else:
-            req = by_key[key]
-            if binding.tool_id not in req.tool_ids:
-                req.tool_ids.append(binding.tool_id)
-                req.required_for.append(binding.tool_id)
-        binding.connection_requirement_id = by_key[key].id
-        if not binding.app_id or binding.app_id in {
-            "google",
-            "microsoft",
-            "microsoft_365",
-            "microsoft365",
-        }:
-            binding.app_id = app_key
-        if conn_provider == "pipedream":
-            binding.provider = "pipedream"
-
-    requirements = list(by_key.values())
+    requirements = await build_connection_requirements(selected, registry=reg)
     return selected[:20], requirements, ambiguous

@@ -67,3 +67,79 @@ export async function executeLiveTurn(input: {
     images: input.images,
   });
 }
+
+/** Stop the in-flight live run (composer Stop button). */
+export async function cancelLiveRun(input: {
+  agentId: string;
+  runId?: string | null;
+  /** When true, cancel without inserting a "canceled" chat message. */
+  silent?: boolean;
+}): Promise<{ status?: string }> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { status: "noop" };
+  }
+
+  const { agentServiceFetch, requireAccessToken } = await import(
+    "@/lib/ai/agent-service-client"
+  );
+  const accessToken = await requireAccessToken();
+  const silentQs = input.silent ? "?silent=1" : "";
+  if (input.runId) {
+    return agentServiceFetch(`/v1/runs/${input.runId}/cancel${silentQs}`, {
+      method: "POST",
+      accessToken,
+      body: {},
+    });
+  }
+  return agentServiceFetch(`/v1/agents/${input.agentId}/live/cancel${silentQs}`, {
+    method: "POST",
+    accessToken,
+    body: {},
+  });
+}
+
+/** Approve or deny a live side-effect, then resume the paused run. */
+export async function decideLiveApproval(input: {
+  agentId: string;
+  approvalId: string;
+  runId?: string | null;
+  decision: "approved" | "denied";
+}): Promise<{ ok: boolean }> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("approvals_unavailable");
+  }
+
+  const { agentServiceFetch, requireAccessToken } = await import(
+    "@/lib/ai/agent-service-client"
+  );
+  const accessToken = await requireAccessToken();
+
+  await agentServiceFetch(`/v1/approvals/${input.approvalId}/decide`, {
+    method: "POST",
+    accessToken,
+    body: { decision: input.decision },
+  });
+
+  if (input.runId) {
+    await agentServiceFetch(`/v1/live/runs/${input.runId}/resume`, {
+      method: "POST",
+      accessToken,
+      body: {},
+    });
+  }
+
+  return { ok: true };
+}
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Check, ChevronDown, FileText, ImageIcon, Mic, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, FileText, ImageIcon, Mic, Pause, Paperclip, Square, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,8 @@ interface PromptComposerProps {
   animatedPlaceholders?: string[];
   disabled?: boolean;
   busy?: boolean;
+  /** Waiting for user (approval / connection) — show pause instead of stop/send. */
+  paused?: boolean;
   autoFocus?: boolean;
   size?: "hero" | "compact";
   className?: string;
@@ -186,6 +188,7 @@ export function PromptComposer({
   animatedPlaceholders,
   disabled = false,
   busy = false,
+  paused = false,
   autoFocus = false,
   size = "compact",
   className,
@@ -556,7 +559,20 @@ export function PromptComposer({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {busy && onStop && !recording && !transcribing ? (
+            {paused && !recording && !transcribing ? (
+              <Button
+                type="button"
+                size={size === "hero" ? "icon" : "icon-sm"}
+                variant="secondary"
+                onClick={onStop}
+                disabled={!onStop}
+                className="rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                aria-label={t("composer.paused", { defaultValue: "Waiting for your response" })}
+                title={t("composer.paused", { defaultValue: "Waiting for your response" })}
+              >
+                <Pause className="size-3.5 fill-current" aria-hidden="true" />
+              </Button>
+            ) : busy && onStop && !recording && !transcribing ? (
               <Button
                 type="button"
                 size={size === "hero" ? "icon" : "icon-sm"}

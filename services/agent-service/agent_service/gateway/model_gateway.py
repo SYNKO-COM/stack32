@@ -17,6 +17,23 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+def _model_omits_temperature(model_lower: str) -> bool:
+    """True when the provider rejects non-default temperature for this model."""
+    # gpt-5 / gpt-5.x, o1/o3/o4 reasoning, and Codex only accept the default.
+    if "codex" in model_lower:
+        return True
+    if "/o1" in model_lower or model_lower.startswith("o1") or "/o1-" in model_lower:
+        return True
+    if "/o3" in model_lower or model_lower.startswith("o3") or "/o3-" in model_lower:
+        return True
+    if "/o4" in model_lower or model_lower.startswith("o4") or "/o4-" in model_lower:
+        return True
+    # Match gpt-5, gpt-5.5, gpt-5-mini, openai/gpt-5.5, etc.
+    if "gpt-5" in model_lower:
+        return True
+    return False
+
+
 class ModelProfile(StrEnum):
     FAST = "fast"
     BALANCED = "balanced"
@@ -165,6 +182,7 @@ class ModelGateway:
         api_key: str | None = None,
         provider: str | None = None,
         tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
     ) -> ModelCallResult | T:
         import asyncio
 
@@ -190,6 +208,7 @@ class ModelGateway:
                     api_key=api_key,
                     provider=provider,
                     tools=tools,
+                    model=model,
                 ),
                 timeout=timeout,
             )
@@ -220,6 +239,7 @@ class ModelGateway:
         api_key: str | None,
         provider: str | None,
         tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
     ) -> ModelCallResult | T:
         settings = get_settings()
         if settings.AI_EXECUTION_MODE == "mock":
@@ -230,12 +250,12 @@ class ModelGateway:
 
         # BYOK path: force a specific provider + user key (Live agents).
         if api_key and provider:
-            model = self._model_for_provider_profile(provider, profile)
-            if not model:
+            route = (model or "").strip() or self._model_for_provider_profile(provider, profile)
+            if not route:
                 raise RuntimeError("MODEL_PROVIDER_UNAVAILABLE")
             try:
                 result = await self._litellm_complete(
-                    model=model,
+                    model=route,
                     messages=redact_obj(messages),
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -243,10 +263,10 @@ class ModelGateway:
                     api_key=api_key,
                     tools=tools,
                 )
-                self._breaker.record_success(model)
+                self._breaker.record_success(route)
                 return result
             except Exception as exc:  # noqa: BLE001
-                self._breaker.record_failure(model)
+                self._breaker.record_failure(route)
                 raise RuntimeError("MODEL_PROVIDER_UNAVAILABLE") from exc
 
         if not settings.has_any_llm_provider:
@@ -362,14 +382,16 @@ class ModelGateway:
         from litellm import acompletion
 
         started = time.perf_counter()
-        # Codex / some GPT-5 models reject temperature or need Responses API.
-        is_codex = "codex" in model.lower()
+        model_l = model.lower()
+        # Codex / GPT-5 / o-series often reject custom temperature (only default 1).
+        is_codex = "codex" in model_l
+        omit_temperature = _model_omits_temperature(model_l)
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
         }
-        if not is_codex:
+        if not omit_temperature:
             kwargs["temperature"] = temperature
         if api_key:
             kwargs["api_key"] = api_key
@@ -382,16 +404,27 @@ class ModelGateway:
         try:
             response = await acompletion(**kwargs)
         except Exception as chat_exc:  # noqa: BLE001
-            if not is_codex or tools:
+            # Retry once without temperature if the provider rejects it.
+            err_text = str(chat_exc).lower()
+            if "temperature" in kwargs and "temperature" in err_text:
+                kwargs.pop("temperature", None)
+                logger.info(
+                    "Retrying without temperature model=%s err=%s",
+                    model,
+                    type(chat_exc).__name__,
+                )
+                response = await acompletion(**kwargs)
+            elif not is_codex or tools:
                 raise
-            # Fallback: OpenAI Codex often requires the Responses API.
-            logger.info("Codex chat failed (%s); trying Responses API", type(chat_exc).__name__)
-            response = await self._litellm_responses(
-                model=model,
-                messages=messages,
-                max_tokens=max_tokens,
-                api_key=api_key,
-            )
+            else:
+                # Fallback: OpenAI Codex often requires the Responses API.
+                logger.info("Codex chat failed (%s); trying Responses API", type(chat_exc).__name__)
+                response = await self._litellm_responses(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    api_key=api_key,
+                )
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         choice = response.choices[0]

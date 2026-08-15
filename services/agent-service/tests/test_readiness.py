@@ -179,12 +179,28 @@ async def test_readiness_verification_passed_is_ready(monkeypatch):
     assert any(c.key == "verification" and c.ok for c in result.checks)
 
 
-async def test_readiness_unresolved_tool():
+async def test_readiness_empty_triggers_not_setup_gate(monkeypatch):
+    """Chat is built-in — empty triggers must not force needs_setup."""
+
+    async def _no_conns(*, user_id: str):
+        return []
+
+    from agent_service.connections import manager as mgr_mod
+
+    monkeypatch.setattr(mgr_mod.ConnectionManager, "list_connections", _no_conns)
     result = await evaluate_agent_readiness(
         agent_id="a1",
         user_id="u1",
-        spec=_spec("totally_unknown_tool_xyz"),
+        spec=_spec(
+            "calculator",
+            model={"provider": "openai", "model_id": "gpt-4o-mini"},
+        ),
         build_ok=True,
+        require_brain=True,
+        llm_status="valid",
     )
-    assert result.status == "needs_attention"
-    assert any(c.key == "tools_resolve" and not c.ok for c in result.checks)
+    assert result.status == "ready"
+    trigger = next(c for c in result.checks if c.key == "trigger")
+    assert trigger.ok is True
+    assert trigger.severity == "info"
+
