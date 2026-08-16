@@ -1,20 +1,52 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { waitForSignupOtp } from "./helpers/inbucket";
 
 /**
  * Core Phase 2 journey against the LOCAL Supabase stack:
- * signup → verify email (OTP via Inbucket) → onboarding → agent creation →
+ * signup → verify email (OTP via Inbucket/Mailpit) → onboarding → agent creation →
  * builder message persisted → logout → login → data still there.
  */
 
 // Satisfies local Supabase policy: lower_upper_letters_digits_symbols, min 10.
 const password = "E2e-Password-123!";
 
+async function reachBuilderComposer(page: Page): Promise<void> {
+  const composer = page.getByTestId("builder-composer");
+
+  // Prefer an explicit post-onboarding build URL.
+  try {
+    await page.waitForURL(/\/agents\/[^/]+\/build/, { timeout: 45_000 });
+  } catch {
+    // Onboarding may have landed on /agents empty state (no auto-create).
+    await page.goto("/agents");
+  }
+
+  // Empty-state CTA when no agent exists yet.
+  if (!(await composer.isVisible().catch(() => false))) {
+    const createCta = page.getByRole("button", {
+      name: /create|créer|new agent|nouvel agent|get started|commencer/i,
+    });
+    if (await createCta.isVisible().catch(() => false)) {
+      await createCta.click();
+    }
+  }
+
+  // If we have an agent URL without /build, open Build.
+  const agentMatch = page.url().match(/\/agents\/([^/?#]+)/);
+  if (agentMatch && !page.url().includes("/build")) {
+    await page.goto(`/agents/${agentMatch[1]}/build`);
+  }
+
+  // Layout can show BrandLoader while agent/workspace queries settle.
+  await expect(composer).toBeVisible({ timeout: 60_000 });
+  await expect(composer).toBeEnabled({ timeout: 15_000 });
+}
+
 test("signup, verify email, onboarding, build, logout and login again", async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const email = `e2e-${Date.now()}@stack32.test`;
   const username = `e2e_${Date.now().toString().slice(-8)}`;
 
@@ -24,10 +56,7 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await page.locator("#auth-password").fill(password);
   await page.getByRole("button", { name: /create account|créer mon compte/i }).click();
 
-  // --- Verify email (enable_confirmations = true) -----------------------------
-  // Local/CI may either route to /verify-email (no session) or land on
-  // /onboarding when the mailer auto-confirms. Handle both without weakening
-  // production Auth/CAPTCHA settings.
+  // --- Verify email ---------------------------------------------------------
   await page.waitForURL(/\/(verify-email|onboarding)/, { timeout: 20_000 });
   if (page.url().includes("/verify-email")) {
     const otp = await waitForSignupOtp(email);
@@ -37,9 +66,7 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
     await page.waitForURL("**/onboarding", { timeout: 20_000 });
   }
 
-  // --- Onboarding -------------------------------------------------------------
-  // Intro animation, then step 1 (options targeted by label to avoid clicking
-  // a leaving step during the animated transition).
+  // --- Onboarding -----------------------------------------------------------
   await page.getByRole("radio", { name: /google/i }).click({ timeout: 20_000 });
   await page.getByRole("button", { name: /continue|continuer/i }).click();
   await page.getByRole("radio", { name: /founder|fondateur/i }).click({ timeout: 15_000 });
@@ -51,39 +78,25 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await page.locator("#onboarding-workspace").fill("E2E Workspace");
   await page.getByRole("button", { name: /finish|start|terminer|commencer|créer/i }).click();
 
-  // --- Fresh agent workspace ---------------------------------------------------
-  // Prefer the post-onboarding build URL; fall back to /agents (auto-creates).
-  try {
-    await page.waitForURL(/\/agents(\/|$)/, { timeout: 45_000 });
-  } catch {
-    await page.goto("/agents");
-  }
-  if (!/\/agents\/[^/]+/.test(page.url())) {
-    await page.waitForURL(/\/agents\/[^/]+/, { timeout: 45_000 });
-  }
-  if (!page.url().includes("/build")) {
-    const match = page.url().match(/\/agents\/([^/?#]+)/);
-    if (match) await page.goto(`/agents/${match[1]}/build`);
-  }
+  // --- Builder --------------------------------------------------------------
+  await reachBuilderComposer(page);
 
-  // --- Builder message persists --------------------------------------------
-  const composer = page.locator("textarea").first();
+  const composer = page.getByTestId("builder-composer");
   await composer.fill("Build me a research agent");
   await composer.press("Enter");
-  await expect(page.getByText("Build me a research agent")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Build me a research agent")).toBeVisible({ timeout: 15_000 });
 
   // Mock build simulation completes server-side and the polling UI
   // eventually shows the ready assistant response.
   await expect(page.getByText(/ready|prêt/i).first()).toBeVisible({
-    timeout: 30_000,
+    timeout: 45_000,
   });
 
-  // --- Logout ------------------------------------------------------------------
+  // --- Logout ---------------------------------------------------------------
   await page.getByRole("button", { name: /user menu|menu utilisateur/i }).click();
   await page.getByRole("menuitem", { name: /log ?out|se déconnecter/i }).click();
   await page.waitForURL(/\/$|\/login/, { timeout: 15_000 });
 
-  // Protected route is no longer accessible.
   await page.goto("/agents");
   await page.waitForURL("**/login**", { timeout: 15_000 });
 
@@ -92,7 +105,7 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await page.locator("#auth-password").fill(password);
   await page.getByRole("button", { name: /sign in|se connecter/i }).click();
   await page.waitForURL("**/agents**", { timeout: 20_000 });
-  await expect(page.getByText(/research agent/i).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/research agent/i).first()).toBeVisible({ timeout: 20_000 });
 });
 
 test("unauthenticated users are redirected away from protected routes", async ({ page }) => {

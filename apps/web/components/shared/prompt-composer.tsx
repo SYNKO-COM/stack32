@@ -465,6 +465,7 @@ export function PromptComposer({
         </label>
         <textarea
           id={inputId}
+          data-testid="builder-composer"
           ref={textareaRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
