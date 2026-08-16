@@ -150,7 +150,9 @@ Comment vérifier :
 | Tavily | Recherche web | `WEB_SEARCH_API_KEY` |
 | Cloud Armor / hardening réseau | Sécurité avancée | Console GCP |
 
-Hors scope pour l’instant : marketplace, usage anonyme, paiement / pricing, triggers externes type « nouvel e-mail Gmail ».
+Hors scope pour l’instant : marketplace, usage anonyme, triggers externes type « nouvel e-mail Gmail ».
+
+Whop : voir `docs/WHOP_SETUP.md` (produits Starter/Pro/Scale, webhook `/api/webhooks/whop`, `BILLING_MODE=whop`).
 
 ---
 

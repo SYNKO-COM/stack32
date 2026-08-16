@@ -85,7 +85,7 @@
       },
       {
         "title": "6. Subscriptions, immediate performance and non-refundability",
-        "body": "Some features require a paid subscription. Prices, billing, withdrawal rights and cancellation are described in the Subscription & Sales Terms and the Refund Policy. By subscribing, you request immediate performance of the digital service (Pro access, credits, agent-building capacity). Under articles L221-18 and L221-28 of the French Consumer Code, you expressly waive your withdrawal right once performance has begun with your prior consent. Started periods are non-refundable, unless mandatory law provides otherwise."
+        "body": "Some features require a paid subscription. Prices, billing, withdrawal rights and cancellation are described in the Subscription & Sales Terms and the Refund Policy. By subscribing and ticking the mandatory checkout boxes, you request immediate performance of the digital service (subscription activation, servers, Builder credits, agent-building capacity) and expressly waive your withdrawal right (French Consumer Code arts. L221-18 and L221-28; Directive 2011/83/EU art. 16). Started periods are non-refundable, unless mandatory law provides otherwise."
       },
       {
         "title": "7. Availability",
@@ -175,7 +175,7 @@
     "sections": [
       {
         "title": "1. Offer and nature of the service",
-        "body": "Stack32 is offered as a subscription giving immediate access to a digital service (digital content / electronically supplied service): Pro features, possible allocation of usage credits, and the ability to create and run agents as soon as payment is confirmed. Features and limits of each plan are described at purchase and on the pricing page."
+        "body": "Stack32 is offered as a subscription giving immediate access to a digital service (digital content / electronically supplied service): subscription activation, provisioning of the required server resources, possible allocation of usage (Builder) credits, and the ability to create and run agents as soon as payment is confirmed. These elements are consumed or provisioned immediately and cannot be “restocked” like a physical good. Features and limits of each plan are described at purchase and on the pricing page."
       },
       {
         "title": "2. Price and payment",
@@ -183,15 +183,19 @@
       },
       {
         "title": "3. Immediate performance",
-        "body": "As soon as payment is confirmed, {{companyName}} immediately performs the service: subscription activation, unlocking of paid features, and where applicable immediate crediting of your usage balance. You may use the service without waiting for the legal withdrawal period to expire."
+        "body": "As soon as payment is confirmed, {{companyName}} immediately performs the service: subscription activation, provisioning / unlocking of servers and paid features, and where applicable immediate crediting of your usage balance. You may use the service without waiting for the legal withdrawal period to expire. This immediate performance is why no refund is available once the period has started."
       },
       {
         "title": "4. Right of withdrawal — express waiver (French Consumer Code)",
-        "body": "Under articles L221-18 et seq. of the French Consumer Code, consumers generally have fourteen (14) days to withdraw from a distance contract. However, article L221-28 provides in particular that the withdrawal right cannot be exercised for: (i) the supply of digital content not supplied on a tangible medium where performance has begun with the consumer's prior express consent and express waiver of the withdrawal right; (ii) service contracts fully performed before the end of the withdrawal period where performance began with the consumer's prior express consent and express waiver. By ticking the checkout box and confirming your order, you (a) expressly request that performance begin immediately, (b) acknowledge that the service (access, credits, agent-building capacity) is provided without delay, and (c) expressly waive your withdrawal right. Accordingly, no refund is due under withdrawal for the started period."
+        "body": "Under articles L221-18 et seq. of the French Consumer Code, consumers generally have fourteen (14) days to withdraw from a distance contract. However, article L221-28 provides in particular that the withdrawal right cannot be exercised for: (i) the supply of digital content not supplied on a tangible medium where performance has begun with the consumer's prior express consent and express waiver of the withdrawal right; (ii) service contracts fully performed before the end of the withdrawal period where performance began with the consumer's prior express consent and express waiver. These rules transpose Directive 2011/83/EU (art. 16). By ticking the checkout box and confirming your order, you (a) expressly request that performance begin immediately, (b) acknowledge that the service (access, servers, credits, agent-building capacity) is provided without delay, and (c) expressly waive your withdrawal right. Accordingly, no refund is due under withdrawal for the started period."
       },
       {
         "title": "5. No refunds for started periods",
         "body": "Unless mandatory law provides otherwise, {{companyName}} will not refund amounts already paid for a started subscription period, including early cancellation, non-use, change of mind, or partial use of credits. The Refund Policy details this principle and the very limited exceptions (billing error, major failure attributable to Stack32)."
+      },
+      {
+        "title": "5 bis. International and United States law",
+        "body": "For customers outside France / the EU, Stack32 is likewise sold as a digital service performed immediately. In the United States, the FTC Cooling-Off Rule (16 C.F.R. Part 429) generally does not apply to online distance sales of software / digital services of this kind; unless mandatory local law provides otherwise, started subscription periods are non-refundable. You accept these terms by ticking the mandatory checkboxes at checkout."
       },
       {
         "title": "6. Cancellation",
@@ -217,15 +221,19 @@
     "sections": [
       {
         "title": "1. Principle: no refunds",
-        "body": "Stack32 subscriptions are digital services performed immediately. Upon payment, Pro access is activated, usage credits may be granted, and you can create and use agents without delay. Therefore, unless mandatory law provides otherwise, no amount already paid for a started period is refundable — including if you did not use the service, changed your mind, cancel mid-period, or used only part of your credits."
+        "body": "Stack32 subscriptions are digital services performed immediately. Upon payment, the subscription is activated, the required servers / resources are provisioned, usage credits may be granted, and you can create and use agents without delay. These services cannot be undone afterwards like an unopened physical good. Therefore, unless mandatory law provides otherwise, no amount already paid for a started period is refundable — including if you did not use the service, changed your mind, cancel mid-period, or used only part of your credits."
       },
       {
-        "title": "2. Legal basis (French law)",
-        "body": "Under articles L221-18 and L221-28 of the French Consumer Code, the 14-day withdrawal right does not apply when you have expressly requested immediate performance of digital content / an electronically supplied service and expressly waived that right before performance began. These consents are collected via mandatory checkboxes in the checkout flow. As Stack32 is a digital service not supplied on a tangible medium, the waiver is enforceable under the conditions set by law."
+        "title": "2. Legal basis (French and EU law)",
+        "body": "Under articles L221-18 and L221-28 of the French Consumer Code (transposing Directive 2011/83/EU, art. 16), the 14-day withdrawal right does not apply when you have expressly requested immediate performance of digital content / an electronically supplied service and expressly waived that right before performance began. These consents are collected via mandatory checkboxes in the checkout flow. As Stack32 is a digital service not supplied on a tangible medium, the waiver is enforceable under the conditions set by law."
+      },
+      {
+        "title": "2 bis. United States and other jurisdictions",
+        "body": "In the United States, the FTC federal cooling-off rule generally does not cover this type of online SaaS subscription. Unless mandatory local law provides otherwise, started periods are non-refundable. In all jurisdictions, payment constitutes acceptance of immediate performance and of the absence of refunds for the started period, subject to mandatory statutory rights."
       },
       {
         "title": "3. What payment covers",
-        "body": "Your payment covers immediate access to the service for the subscribed period: Pro features, capacity to build and run agents, and where applicable the immediate crediting of your usage balance. These elements constitute performance of the service as soon as payment is confirmed."
+        "body": "Your payment covers immediate access to the service for the subscribed period: plan features, server provisioning, capacity to build and run agents, and where applicable the immediate crediting of your usage balance. These elements constitute performance of the service as soon as payment is confirmed and explain why refunds are not available."
       },
       {
         "title": "4. Cancellation ≠ refund",

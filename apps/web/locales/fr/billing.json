@@ -11,7 +11,22 @@
     "inactive": "Inactif",
     "renewsOn": "Renouvellement le {{date}}",
     "manage": "Gérer l'abonnement",
-    "mockNotice": "Mode démo : ceci simule un abonnement Pro actif. La facturation réelle (Whop) sera connectée dans une phase ultérieure."
+    "mockNotice": "Mode aperçu : les plans peuvent s’activer sans Whop. Passez BILLING_MODE=whop et renseignez les secrets Whop pour les paiements réels."
+  },
+  "checkout": {
+    "title": "Finaliser votre abonnement",
+    "subtitle": "{{plan}} · {{credits}} crédits/mois · {{amount}} {{period}}",
+    "perMonth": "/ mois",
+    "perYear": "facturé annuellement",
+    "loading": "Préparation du paiement sécurisé…",
+    "errorTitle": "Paiement indisponible",
+    "backToPricing": "Retour aux tarifs",
+    "continueToPayment": "Continuer vers le paiement — {{amount}}",
+    "consents": {
+      "terms": "J’ai lu et j’accepte les <terms>conditions générales d’utilisation</terms>, les <sales>conditions d’abonnement et de vente</sales> et la <refunds>politique de remboursement</refunds>.",
+      "immediate": "J’accepte l’exécution immédiate du service et renonce expressément à mon droit de rétractation.",
+      "legalNote": "Le paiement active immédiatement votre abonnement, les serveurs et les crédits Builder. Les périodes entamées ne sont pas remboursables (Code de la consommation, art. L221-28)."
+    }
   },
   "upgrade": {
     "title": "Passer à Pro",
@@ -24,8 +39,8 @@
       "Support prioritaire"
     ],
     "consents": {
-      "terms": "J'ai lu et j'accepte les <terms>Conditions Générales d'Utilisation</terms>, les <sales>Conditions d'abonnement</sales> et la <refunds>Politique de remboursement</refunds>.",
-      "immediate": "J'accepte l'exécution immédiate de la prestation (accès Pro, crédits, création d'agents) et renonce expressément à mon droit de rétractation, conformément au Code de la consommation. Je comprends que la période entamée n'est pas remboursable."
+      "terms": "J’ai lu et j’accepte les <terms>conditions générales d’utilisation</terms>, les <sales>conditions d’abonnement et de vente</sales> et la <refunds>politique de remboursement</refunds>.",
+      "immediate": "J’accepte l’exécution immédiate du service et renonce expressément à mon droit de rétractation."
     },
     "cta": "Passer à Pro",
     "processing": "Redirection vers le paiement…"

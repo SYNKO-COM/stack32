@@ -27,5 +27,8 @@
     "supabase:types": "supabase gen types typescript --local --schema public > apps/web/lib/supabase/database.types.ts",
     "supabase:lint": "supabase db lint --local --level warning",
     "supabase:test": "supabase test db"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.12"
   }
 }

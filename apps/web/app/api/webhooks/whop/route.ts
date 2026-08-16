@@ -1,23 +1,19 @@
+import { waitUntil } from "@vercel/functions";
 import { NextResponse, type NextRequest } from "next/server";
 
+import {
+  deactivateMembershipFromWhop,
+  fulfillMembershipFromWhop,
+} from "@/lib/billing/whop-fulfillment";
+import { getWhopSdk } from "@/lib/billing/whop-sdk";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
 
+export const runtime = "nodejs";
+
 /**
- * Whop webhook endpoint — Phase 2 scaffold.
- *
- * Events are persisted idempotently in the server-only `webhook_events`
- * table so nothing is lost before the real integration lands.
- *
- * TODO(phase-7):
- * 1. Verify the webhook signature using WHOP_WEBHOOK_SECRET, following the
- *    official Whop documentation (do not invent a signature scheme).
- * 2. Process pending events and sync the `subscriptions` table from
- *    membership events.
- *
- * Until signature verification exists, events are stored with status
- * "skipped" and never processed, so unverified payloads can't affect
- * subscriptions.
+ * Whop webhooks — verify (Standard Webhooks via SDK), persist, fulfill.
+ * @see https://docs.whop.com/developer/guides/webhooks
  */
 export async function POST(request: NextRequest) {
   const admin = createSupabaseAdminClient();
@@ -28,52 +24,98 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let payload: Record<string, unknown>;
+  const whop = getWhopSdk();
+  const rawBody = await request.text();
+  const headers = Object.fromEntries(request.headers);
+
+  let event: { id?: string; type?: string; data?: unknown };
   try {
-    payload = (await request.json()) as Record<string, unknown>;
-  } catch {
+    if (!whop || !process.env.WHOP_WEBHOOK_SECRET?.trim()) {
+      return NextResponse.json(
+        { error: { code: "not_configured", message: "Whop webhook secret missing." } },
+        { status: 503 },
+      );
+    }
+    event = whop.webhooks.unwrap(rawBody, { headers }) as {
+      id?: string;
+      type?: string;
+      data?: unknown;
+    };
+  } catch (err) {
+    console.error("[whop webhook] signature verification failed", err);
     return NextResponse.json(
-      { error: { code: "invalid_payload", message: "Body must be JSON." } },
-      { status: 400 },
+      { error: { code: "invalid_signature", message: "Invalid webhook signature." } },
+      { status: 401 },
     );
   }
 
   const providerEventId =
-    (typeof payload.id === "string" && payload.id) ||
-    (typeof payload.event_id === "string" && payload.event_id) ||
-    null;
-  const eventType =
-    (typeof payload.event === "string" && payload.event) ||
-    (typeof payload.type === "string" && payload.type) ||
-    "unknown";
+    (typeof event.id === "string" && event.id) ||
+    `whop_${Date.now()}`;
+  const eventType = typeof event.type === "string" ? event.type : "unknown";
 
-  if (!providerEventId) {
-    return NextResponse.json(
-      { error: { code: "missing_event_id", message: "Event id is required." } },
-      { status: 400 },
-    );
-  }
-
-  // Idempotent persistence: replayed events are ignored.
-  const { error } = await admin.from("webhook_events").upsert(
+  const { error: persistError } = await admin.from("webhook_events").upsert(
     {
       provider: "whop",
       provider_event_id: providerEventId,
       event_type: eventType,
-      payload: payload as Json,
-      status: "skipped",
-      last_error: "Signature verification not implemented (Phase 7); event stored, not processed.",
+      payload: event as unknown as Json,
+      status: "processing",
     },
     { onConflict: "provider,provider_event_id", ignoreDuplicates: true },
   );
 
-  if (error) {
-    return NextResponse.json(
-      { error: { code: "persistence_failed", message: "Could not store the event." } },
-      { status: 500 },
-    );
+  if (persistError) {
+    // Likely duplicate — still return 200 so Whop does not retry forever.
+    console.warn("[whop webhook] persist", persistError.message);
+    return new Response("OK", { status: 200 });
   }
 
-  // 200 so the provider does not retry forever; processing happens in Phase 7.
-  return NextResponse.json({ received: true, processed: false });
+  waitUntil(
+    (async () => {
+      try {
+        const isMembershipActivate =
+          eventType === "membership.activated" ||
+          eventType === "membership.went_valid";
+        const isMembershipDeactivate =
+          eventType === "membership.deactivated" ||
+          eventType === "membership.went_invalid";
+
+        if (isMembershipActivate || eventType === "payment.succeeded") {
+          const data = event.data;
+          // payment.succeeded may nest membership; membership.* events are the membership
+          const membership = isMembershipActivate
+            ? data
+            : ((data as { membership?: unknown } | null)?.membership ?? data);
+          if (membership) {
+            await fulfillMembershipFromWhop(membership);
+          }
+        }
+
+        if (isMembershipDeactivate) {
+          await deactivateMembershipFromWhop(event.data);
+        }
+
+        await admin
+          .from("webhook_events")
+          .update({
+            status: "processed",
+            processed_at: new Date().toISOString(),
+            last_error: null,
+          })
+          .eq("provider", "whop")
+          .eq("provider_event_id", providerEventId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "fulfillment_failed";
+        console.error("[whop webhook] fulfillment failed", message);
+        await admin
+          .from("webhook_events")
+          .update({ status: "failed", last_error: message })
+          .eq("provider", "whop")
+          .eq("provider_event_id", providerEventId);
+      }
+    })(),
+  );
+
+  return new Response("OK", { status: 200 });
 }

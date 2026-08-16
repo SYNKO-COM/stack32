@@ -14,6 +14,19 @@ import { getBillingMode } from "@/lib/env.server";
 import { mapSubscription } from "@/lib/domain/mappers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  buildCheckoutMetadata,
+  getWhopBasePlanId,
+  isBaseCreditTier,
+  planCheckoutTitle,
+  requireWhopProductId,
+  whopBillingPeriodDays,
+} from "@/lib/billing/whop-catalog";
+import {
+  isWhopLiveConfigured,
+  requireWhopCompanyId,
+  requireWhopSdk,
+} from "@/lib/billing/whop-sdk";
 
 function planDisplayName(planKey: PlanKey): string {
   return PLANS[planKey].key === "free"
@@ -194,29 +207,38 @@ export async function activatePlanAction(
 }
 
 /**
- * Checkout placeholder. Mock mode activates the plan immediately then redirects.
- * Real Whop sessions land in a later phase.
+ * Create a Whop checkout session (embedded) or mock-activate when BILLING_MODE=mock.
  */
 export async function createCheckoutAction(
   planId: string,
   options?: { interval?: BillingInterval; creditsMonthly?: number },
-): Promise<{ url: string }> {
+): Promise<{ url: string; sessionId?: string; planIdWhop?: string }> {
   const [planKeyRaw, ...rest] = planId.split(":");
   const planKey = isPlanKey(planKeyRaw) ? planKeyRaw : "starter";
   const interval =
     options?.interval ??
     (rest.includes("annual") ? "annual" : "monthly");
-  const creditsMonthly =
+  const creditsMonthly = clampCreditsForPlan(
+    planKey,
     options?.creditsMonthly ??
-    Number(rest.find((p) => /^\d+$/.test(p)) ?? PLANS[planKey].baseCredits);
+      Number(rest.find((p) => /^\d+$/.test(p)) ?? PLANS[planKey].baseCredits),
+  );
 
-  if (getBillingMode() === "mock") {
+  if (planKey === "free") {
+    const result = await activatePlanAction({
+      planKey: "free",
+      interval: "monthly",
+      creditsMonthly: PLANS.free.baseCredits,
+    });
+    if (!result.ok) throw new Error(result.error);
+    return { url: "/agents" };
+  }
+
+  if (getBillingMode() === "mock" || !isWhopLiveConfigured()) {
     const result = await activatePlanAction({
       planKey,
       interval,
-      creditsMonthly: Number.isFinite(creditsMonthly)
-        ? creditsMonthly
-        : PLANS[planKey].baseCredits,
+      creditsMonthly,
     });
     if (!result.ok) throw new Error(result.error);
     return {
@@ -224,18 +246,105 @@ export async function createCheckoutAction(
     };
   }
 
-  // Whop not wired yet — still persist intent for logged-in users in soft mode.
-  const soft = await activatePlanAction({
-    planKey,
+  const session = await createWhopCheckoutSession({
+    planKey: planKey as Exclude<PlanKey, "free">,
     interval,
-    creditsMonthly: Number.isFinite(creditsMonthly)
-      ? creditsMonthly
-      : PLANS[planKey].baseCredits,
+    creditsMonthly,
   });
-  if (soft.ok) {
-    return {
-      url: `/billing/success?plan=${planKey}&credits=${creditsMonthly}&interval=${interval}`,
-    };
-  }
-  throw new Error("NOT_IMPLEMENTED");
+  return {
+    url: session.purchaseUrl || `/billing/checkout?session=${session.sessionId}`,
+    sessionId: session.sessionId,
+    planIdWhop: session.planId ?? undefined,
+  };
+}
+
+export type WhopCheckoutSessionResult = {
+  sessionId: string;
+  planId: string | null;
+  purchaseUrl: string | null;
+  amountUsd: number;
+  planKey: Exclude<PlanKey, "free">;
+  interval: BillingInterval;
+  creditsMonthly: number;
+};
+
+export async function createWhopCheckoutSession(input: {
+  planKey: Exclude<PlanKey, "free">;
+  interval: BillingInterval;
+  creditsMonthly: number;
+}): Promise<WhopCheckoutSessionResult> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("UNAUTHENTICATED");
+  if (!isWhopLiveConfigured()) throw new Error("WHOP_NOT_CONFIGURED");
+
+  const creditsMonthly = clampCreditsForPlan(input.planKey, input.creditsMonthly);
+  const priced = pricePlanSelection(input.planKey, input.interval, creditsMonthly);
+  const productId = requireWhopProductId(input.planKey);
+  const companyId = requireWhopCompanyId();
+  const site =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+    "http://localhost:3000";
+
+  const metadata = buildCheckoutMetadata({
+    userId: user.id,
+    planKey: input.planKey,
+    interval: input.interval,
+    creditsMonthly,
+  });
+
+  const whop = requireWhopSdk();
+
+  // Prefer a fixed base plan when the user picked the default credit tier.
+  const basePlanId =
+    isBaseCreditTier(input.planKey, creditsMonthly)
+      ? getWhopBasePlanId(input.planKey, input.interval)
+      : null;
+
+  const checkout = basePlanId
+    ? await whop.checkoutConfigurations.create({
+        account_id: companyId,
+        plan_id: basePlanId,
+        metadata,
+        redirect_url: `${site}/billing/success`,
+      })
+    : await whop.checkoutConfigurations.create({
+        account_id: companyId,
+        metadata,
+        redirect_url: `${site}/billing/success`,
+        plan: {
+          account_id: companyId,
+          product_id: productId,
+          plan_type: "renewal",
+          currency: "usd",
+          billing_period: whopBillingPeriodDays(input.interval),
+          initial_price: priced.chargeUsd,
+          renewal_price: priced.chargeUsd,
+          title: planCheckoutTitle(input.planKey, input.interval, creditsMonthly),
+          visibility: "hidden",
+          unlimited_stock: true,
+          force_create_new_plan: false,
+          metadata,
+        },
+      });
+
+  const planId =
+    typeof checkout.plan === "object" && checkout.plan && "id" in checkout.plan
+      ? String((checkout.plan as { id?: string }).id ?? "")
+      : null;
+
+  const purchaseUrl =
+    typeof (checkout as { purchase_url?: string }).purchase_url === "string"
+      ? (checkout as { purchase_url?: string }).purchase_url!
+      : null;
+
+  return {
+    sessionId: checkout.id,
+    planId,
+    purchaseUrl,
+    amountUsd: priced.chargeUsd,
+    planKey: input.planKey,
+    interval: input.interval,
+    creditsMonthly,
+  };
 }

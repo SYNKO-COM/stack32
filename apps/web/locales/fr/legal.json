@@ -85,7 +85,7 @@
       },
       {
         "title": "6. Abonnements, exécution immédiate et non-remboursement",
-        "body": "Certaines fonctionnalités nécessitent un abonnement payant. Les prix, la facturation, le droit de rétractation et la résiliation sont décrits dans les Conditions d'abonnement et de vente et la Politique de remboursement. En souscrivant, vous demandez l'exécution immédiate du service numérique (accès Pro, crédits, capacité de création d'agents). Conformément aux articles L221-18 et L221-28 du Code de la consommation, vous renoncez expressément à votre droit de rétractation dès lors que l'exécution a commencé avec votre accord préalable. Les périodes entamées ne sont pas remboursables, sauf disposition légale impérative contraire."
+        "body": "Certaines fonctionnalités nécessitent un abonnement payant. Les prix, la facturation, le droit de rétractation et la résiliation sont décrits dans les Conditions d'abonnement et de vente et la Politique de remboursement. En souscrivant et en cochant les cases obligatoires au paiement, vous demandez l'exécution immédiate du service numérique (activation de l'abonnement, serveurs, crédits Builder, capacité de création d'agents) et renoncez expressément à votre droit de rétractation (Code de la consommation, art. L221-18 et L221-28 ; directive 2011/83/UE art. 16). Les périodes entamées ne sont pas remboursables, sauf disposition légale impérative contraire."
       },
       {
         "title": "7. Disponibilité",
@@ -175,7 +175,7 @@
     "sections": [
       {
         "title": "1. Offre et nature du service",
-        "body": "Stack32 est proposé sous forme d'abonnement donnant accès immédiat à un service numérique (contenu numérique / prestation de service fournie par voie électronique) : accès aux fonctionnalités Pro, attribution éventuelle de crédits d'usage, et capacité de créer et d'exécuter des agents dès validation du paiement. Les fonctionnalités et limites de chaque plan sont décrites au moment de l'achat et sur la page tarifs."
+        "body": "Stack32 est proposé sous forme d'abonnement donnant accès immédiat à un service numérique (contenu numérique / prestation de service fournie par voie électronique) : activation de l'abonnement, provisionnement des ressources serveur nécessaires, attribution éventuelle de crédits d'usage (Builder), et capacité de créer et d'exécuter des agents dès validation du paiement. Ces éléments sont consommés ou provisionnés immédiatement et ne peuvent pas être « remis en stock » comme un bien matériel. Les fonctionnalités et limites de chaque plan sont décrites au moment de l'achat et sur la page tarifs."
       },
       {
         "title": "2. Prix et paiement",
@@ -183,15 +183,19 @@
       },
       {
         "title": "3. Exécution immédiate",
-        "body": "Dès confirmation du paiement, {{companyName}} exécute immédiatement la prestation : activation de l'abonnement, déblocage des fonctionnalités payantes, et le cas échéant crédit immédiat de votre solde d'usage. Vous pouvez utiliser le service sans attendre l'expiration du délai légal de rétractation."
+        "body": "Dès confirmation du paiement, {{companyName}} exécute immédiatement la prestation : activation de l'abonnement, provisionnement / déblocage des serveurs et des fonctionnalités payantes, et le cas échéant crédit immédiat de votre solde d'usage. Vous pouvez utiliser le service sans attendre l'expiration du délai légal de rétractation. Cette exécution immédiate est la raison pour laquelle aucun remboursement n'est possible une fois la période commencée."
       },
       {
         "title": "4. Droit de rétractation — renonciation expresse (Code de la consommation)",
-        "body": "Conformément aux articles L221-18 et suivants du Code de la consommation, le consommateur dispose en principe d'un délai de quatorze (14) jours pour se rétracter d'un contrat conclu à distance. Toutefois, l'article L221-28 prévoit notamment que le droit de rétractation ne peut être exercé pour : (i) la fourniture d'un contenu numérique non fourni sur un support matériel dont l'exécution a commencé après accord préalable exprès du consommateur et renonciation expresse à son droit de rétractation ; (ii) les contrats de prestation de services pleinement exécutés avant la fin du délai de rétractation et dont l'exécution a commencé après accord préalable exprès du consommateur et renonciation expresse. En cochant la case prévue lors du paiement et en validant votre commande, vous (a) demandez expressément que l'exécution commence immédiatement, (b) reconnaissez que le service (accès, crédits, capacité de création d'agents) vous est fourni sans délai, et (c) renoncez expressément à votre droit de rétractation. En conséquence, aucun remboursement n'est dû au titre de la rétractation pour la période entamée."
+        "body": "Conformément aux articles L221-18 et suivants du Code de la consommation, le consommateur dispose en principe d'un délai de quatorze (14) jours pour se rétracter d'un contrat conclu à distance. Toutefois, l'article L221-28 prévoit notamment que le droit de rétractation ne peut être exercé pour : (i) la fourniture d'un contenu numérique non fourni sur un support matériel dont l'exécution a commencé après accord préalable exprès du consommateur et renonciation expresse à son droit de rétractation ; (ii) les contrats de prestation de services pleinement exécutés avant la fin du délai de rétractation et dont l'exécution a commencé après accord préalable exprès du consommateur et renonciation expresse. Ces règles transposent notamment la directive 2011/83/UE (art. 16). En cochant la case prévue lors du paiement et en validant votre commande, vous (a) demandez expressément que l'exécution commence immédiatement, (b) reconnaissez que le service (accès, serveurs, crédits, capacité de création d'agents) vous est fourni sans délai, et (c) renoncez expressément à votre droit de rétractation. En conséquence, aucun remboursement n'est dû au titre de la rétractation pour la période entamée."
       },
       {
         "title": "5. Absence de remboursement des périodes entamées",
         "body": "Sauf disposition légale impérative contraire, {{companyName}} ne procède à aucun remboursement des sommes déjà versées pour une période d'abonnement commencée, y compris en cas de résiliation anticipée, de non-utilisation, de changement d'avis, ou d'usage partiel des crédits. La Politique de remboursement détaille ce principe et les exceptions très limitées (erreur de facturation, défaillance majeure imputable à Stack32)."
+      },
+      {
+        "title": "5 bis. Droit international et États-Unis",
+        "body": "Pour les clients situés hors de France / de l'UE, Stack32 est également vendu comme service numérique à exécution immédiate. Aux États-Unis, la règle fédérale de « cooling-off » de la FTC (16 C.F.R. Part 429) ne s'applique en principe pas aux ventes à distance de logiciels / services numériques en ligne de ce type ; sauf droit local impératif contraire, les abonnements commencés ne sont pas remboursables. Vous acceptez ces conditions en cochant les cases obligatoires au paiement."
       },
       {
         "title": "6. Résiliation",
@@ -217,15 +221,19 @@
     "sections": [
       {
         "title": "1. Principe : pas de remboursement",
-        "body": "Les abonnements Stack32 sont des services numériques à exécution immédiate. Dès le paiement, l'accès Pro est activé, des crédits d'usage peuvent être attribués, et vous pouvez créer et utiliser des agents sans délai. En conséquence, et sauf disposition légale impérative contraire, aucune somme déjà versée pour une période entamée n'est remboursable — y compris si vous n'avez pas utilisé le service, si vous changez d'avis, si vous résiliez en cours de période, ou si vous avez consommé seulement une partie de vos crédits."
+        "body": "Les abonnements Stack32 sont des services numériques à exécution immédiate. Dès le paiement, l'abonnement est activé, les serveurs / ressources nécessaires sont provisionnés, des crédits d'usage peuvent être attribués, et vous pouvez créer et utiliser des agents sans délai. Ces prestations ne peuvent pas être annulées a posteriori comme un bien non ouvert. En conséquence, et sauf disposition légale impérative contraire, aucune somme déjà versée pour une période entamée n'est remboursable — y compris si vous n'avez pas utilisé le service, si vous changez d'avis, si vous résiliez en cours de période, ou si vous avez consommé seulement une partie de vos crédits."
       },
       {
-        "title": "2. Fondement légal (droit français)",
-        "body": "En application des articles L221-18 et L221-28 du Code de la consommation, le droit de rétractation de 14 jours ne s'applique pas lorsque vous avez expressément demandé l'exécution immédiate d'un contenu numérique / d'une prestation de service fournie par voie électronique et que vous avez renoncé expressément à ce droit avant le début de l'exécution. Ces consentements sont recueillis via les cases à cocher obligatoires du parcours de paiement. Stack32 étant un service numérique non fourni sur support matériel, la renonciation est opposable dans les conditions prévues par la loi."
+        "title": "2. Fondement légal (droit français et UE)",
+        "body": "En application des articles L221-18 et L221-28 du Code de la consommation (transposition de la directive 2011/83/UE, art. 16), le droit de rétractation de 14 jours ne s'applique pas lorsque vous avez expressément demandé l'exécution immédiate d'un contenu numérique / d'une prestation de service fournie par voie électronique et que vous avez renoncé expressément à ce droit avant le début de l'exécution. Ces consentements sont recueillis via les cases à cocher obligatoires du parcours de paiement. Stack32 étant un service numérique non fourni sur support matériel, la renonciation est opposable dans les conditions prévues par la loi."
+      },
+      {
+        "title": "2 bis. États-Unis et autres juridictions",
+        "body": "Aux États-Unis, la règle fédérale de cooling-off de la FTC ne vise en principe pas ce type d'abonnement SaaS en ligne. Sauf droit local impératif contraire, les périodes commencées ne sont pas remboursables. Dans toutes les juridictions, le paiement vaut acceptation de l'exécution immédiate et de l'absence de remboursement pour la période entamée, sous réserve des droits légaux impératifs."
       },
       {
         "title": "3. Ce que couvre le paiement",
-        "body": "Votre paiement couvre l'accès immédiat au service pour la période souscrite : fonctionnalités Pro, capacité de construction et d'exécution d'agents, et le cas échéant le crédit immédiat de votre solde d'usage. Ces éléments constituent l'exécution de la prestation dès la confirmation du paiement."
+        "body": "Votre paiement couvre l'accès immédiat au service pour la période souscrite : fonctionnalités du plan, provisionnement des serveurs, capacité de construction et d'exécution d'agents, et le cas échéant le crédit immédiat de votre solde d'usage. Ces éléments constituent l'exécution de la prestation dès la confirmation du paiement et expliquent l'absence de remboursement."
       },
       {
         "title": "4. Résiliation ≠ remboursement",

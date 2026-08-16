@@ -7,7 +7,7 @@ import { Check } from "lucide-react";
 import { CreditSelect } from "@/components/billing/credit-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useActivatePlan, useCreateCheckout } from "@/hooks/use-billing";
+import { useActivatePlan } from "@/hooks/use-billing";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import {
@@ -40,7 +40,6 @@ export default function PricingPage() {
   const openDialog = useUiStore((s) => s.openDialog);
   const router = useRouter();
   const { data: user } = useCurrentUser();
-  const checkout = useCreateCheckout();
   const activate = useActivatePlan();
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [creditByPlan, setCreditByPlan] = useState<Record<PlanKey, number>>({
@@ -112,12 +111,13 @@ export default function PricingPage() {
       return;
     }
 
-    const { url } = await checkout.mutateAsync({
-      planId: planKey,
+    const credits = creditByPlan[planKey];
+    const qs = new URLSearchParams({
+      plan: planKey,
       interval,
-      creditsMonthly: creditByPlan[planKey],
+      credits: String(credits),
     });
-    router.push(url);
+    router.push(`/billing/checkout?${qs.toString()}`);
   };
 
   return (
@@ -240,7 +240,7 @@ export default function PricingPage() {
             <Button
               className="mt-8 w-full rounded-full"
               variant={plan.popular ? "default" : "outline"}
-              disabled={checkout.isPending || activate.isPending}
+              disabled={activate.isPending}
               onClick={() => void handleCta(plan.id)}
             >
               {plan.cta}
