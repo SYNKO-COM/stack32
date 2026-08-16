@@ -29,6 +29,7 @@ Tu peux ouvrir [https://stack32.com](https://stack32.com), créer un compte, et 
 | Paiements Whop (clés sur Vercel) | ✅ Fait (`BILLING_MODE=whop`) |
 | Recherche web (Tavily) | ✅ Fait |
 | Anti-spam inscription (**hCaptcha** invisible / passif) | ✅ Fait |
+| E-mails SMTP (IONOS `hello@stack32.com`) | ✅ Fait (notifications runs planifiés) |
 
 **Liens utiles**
 
@@ -51,31 +52,17 @@ Tu peux ouvrir [https://stack32.com](https://stack32.com), créer un compte, et 
 
 Si une étape plante : envoie-moi **la page URL + une capture d’écran + le message d’erreur**. Je corrige.
 
-### 2. Optionnel — e-mails des runs planifiés (SMTP)
+---
 
-Aujourd’hui : les agents tournent, mais les **e-mails de notification** des schedules ne partent pas encore (pas de boîte mail SMTP configurée).
+## E-mails (déjà branché)
 
-Si tu veux ça, envoie-moi :
+| Type | Qui envoie |
+| --- | --- |
+| Confirmation / reset Auth | **Supabase** (pas SMTP IONOS) |
+| Reçu / abonnement Whop | **Whop** (pas besoin qu’on double) |
+| Notification fin de run planifié | **Nous** via SMTP IONOS (`hello@stack32.com`) |
 
-- serveur SMTP (ex. `smtp.gmail.com` ou ton hébergeur)
-- port (souvent `465` ou `587`)
-- e-mail + mot de passe (ou “app password”)
-- l’adresse “From” souhaitée (ex. `no_reply@stack32.com`)
-
-→ Je configure ça automatiquement sur Cloud Run.
-
-### 3. Optionnel — connexion Google (Gmail / Calendar natif)
-
-Seulement si tu veux le bouton “Connect Google” first-party (hors Pipedream).
-
-Envoie-moi :
-
-- **Client ID** Google
-- **Client Secret** Google  
-
-(créés dans Google Cloud → APIs & Services → Credentials → OAuth client)
-
-→ Je branche les variables.
+Intégrations Google / Gmail / Calendar : **uniquement via Pipedream** (pas de Google OAuth natif).
 
 ---
 
