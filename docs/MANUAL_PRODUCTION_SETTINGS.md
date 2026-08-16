@@ -4,7 +4,7 @@
 
 - `BILLING_MODE=whop` and `AI_EXECUTION_MODE=agent-service` on Vercel Production
 - `CRON_SECRET` created on Vercel Production
-- Vercel Cron every 15 min → `/api/billing/reconcile` (via `apps/web/vercel.json`)
+- Vercel Cron **daily at 04:00 UTC** → `/api/billing/reconcile` (Hobby plan limit; upgrade to Pro for every-15-min)
 - Repo pins **Node 22.x** (`package.json` engines + `.nvmrc`) so Vercel should stop using 24.x after the next deploy
 
 ## You only need to click these in the Vercel dashboard
