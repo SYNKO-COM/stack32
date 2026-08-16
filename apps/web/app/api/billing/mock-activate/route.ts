@@ -11,11 +11,11 @@ import { getBillingMode } from "@/lib/env.server";
 
 /**
  * Dev/preview helper when BILLING_MODE=mock.
- * Disabled when BILLING_MODE=whop (never free-activates in production mode).
+ * Hard 404 outside mock — never usable in production (BILLING_MODE=whop).
  */
 export async function GET(request: NextRequest) {
-  if (getBillingMode() === "whop") {
-    return NextResponse.redirect(new URL("/pricing", request.url));
+  if (getBillingMode() !== "mock") {
+    return new NextResponse(null, { status: 404 });
   }
 
   const planRaw = request.nextUrl.searchParams.get("plan") ?? "starter";

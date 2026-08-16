@@ -4,7 +4,6 @@ import {
   clampCreditsForPlan,
   PLANS,
   type BillingInterval,
-  type PlanKey,
 } from "@/lib/billing/plans";
 import { parseCheckoutMetadata } from "@/lib/billing/whop-catalog";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -31,6 +30,28 @@ function pickIsoDate(...values: unknown[]): string | null {
   return null;
 }
 
+async function restoreAgentsAfterBilling(userId: string): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+  const { error } = await admin.rpc("restore_agents_after_billing", {
+    p_user_id: userId,
+  });
+  if (error) {
+    console.error("[whop] restore_agents_after_billing", error.message);
+  }
+}
+
+async function suspendAgentsForBilling(userId: string): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return;
+  const { error } = await admin.rpc("suspend_agents_for_billing", {
+    p_user_id: userId,
+  });
+  if (error) {
+    console.error("[whop] suspend_agents_for_billing", error.message);
+  }
+}
+
 export async function fulfillMembershipFromWhop(payload: unknown): Promise<void> {
   const admin = createSupabaseAdminClient();
   if (!admin) throw new Error("Supabase admin client unavailable");
@@ -40,13 +61,17 @@ export async function fulfillMembershipFromWhop(payload: unknown): Promise<void>
     data.metadata ?? asRecord(data.checkout_configuration).metadata ?? data.meta,
   );
 
-  const membershipId =
-    pickString(data.id, data.membership_id, asRecord(data.membership).id) ??
-    `unknown_${Date.now()}`;
+  const membershipId = pickString(
+    data.id,
+    data.membership_id,
+    asRecord(data.membership).id,
+  );
+  if (!membershipId) {
+    throw new Error("whop_membership_id_missing");
+  }
 
   const userId = metadata.stack32_user_id;
   if (!userId || !metadata.plan_key) {
-    // Cannot map to Stack32 user/plan — store nothing entitling.
     console.warn("[whop] membership missing stack32 metadata", {
       membershipId,
       metadata,
@@ -98,12 +123,15 @@ export async function fulfillMembershipFromWhop(payload: unknown): Promise<void>
       current_period_start: periodStart,
       current_period_end: periodEnd,
       cancel_at_period_end: Boolean(data.cancel_at_period_end),
+      canceled_at: null,
       raw_payload: data as Json,
     },
     { onConflict: "user_id" },
   );
 
   if (error) throw error;
+
+  await restoreAgentsAfterBilling(userId);
 }
 
 export async function deactivateMembershipFromWhop(payload: unknown): Promise<void> {
@@ -113,8 +141,6 @@ export async function deactivateMembershipFromWhop(payload: unknown): Promise<vo
   const data = asRecord(payload);
   const membershipId = pickString(data.id, data.membership_id, asRecord(data.membership).id);
 
-  // Always scope cancellation to the membership id so a delayed webhook for an
-  // older membership cannot cancel a newer active subscription for the same user.
   if (!membershipId) {
     console.warn("[whop] deactivation missing membership id", {
       metadata: parseCheckoutMetadata(data.metadata),
@@ -122,15 +148,58 @@ export async function deactivateMembershipFromWhop(payload: unknown): Promise<vo
     return;
   }
 
+  const { data: sub, error: findError } = await admin
+    .from("subscriptions")
+    .select("user_id")
+    .eq("provider", "whop")
+    .eq("provider_membership_id", membershipId)
+    .maybeSingle();
+  if (findError) throw findError;
+
   const { error } = await admin
     .from("subscriptions")
     .update({
       status: "canceled",
+      plan_key: "free",
+      credits_monthly: PLANS.free.baseCredits,
       canceled_at: new Date().toISOString(),
       raw_payload: data as Json,
     })
     .eq("provider", "whop")
     .eq("provider_membership_id", membershipId);
+
+  if (error) throw error;
+
+  if (sub?.user_id) {
+    await suspendAgentsForBilling(sub.user_id);
+  }
+}
+
+/**
+ * Mark subscription past_due without suspending yet (Whop may still retry).
+ * Suspension happens only on membership went_invalid / deactivated.
+ */
+export async function markMembershipPastDueFromWhop(payload: unknown): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new Error("Supabase admin client unavailable");
+
+  const data = asRecord(payload);
+  const membershipId = pickString(
+    data.membership_id,
+    asRecord(data.membership).id,
+    data.id,
+  );
+  if (!membershipId) return;
+
+  const { error } = await admin
+    .from("subscriptions")
+    .update({
+      status: "past_due",
+      raw_payload: data as Json,
+    })
+    .eq("provider", "whop")
+    .eq("provider_membership_id", membershipId)
+    .eq("status", "active");
 
   if (error) throw error;
 }

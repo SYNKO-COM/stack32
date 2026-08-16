@@ -89,7 +89,27 @@ select is(
   1, 'initial prompt stored as first builder user message'
 );
 
--- Slug uniqueness: same name yields a suffixed slug.
+-- Slug uniqueness: same name yields a suffixed slug (requires plan > free).
+reset role;
+insert into public.subscriptions (
+  user_id, provider, provider_plan_id, plan_key, billing_interval,
+  credits_monthly, status
+) values (
+  '22222222-2222-2222-2222-222222222222',
+  'whop', 'plan_starter_test', 'starter', 'monthly', 100, 'active'
+)
+on conflict (user_id) do update
+set plan_key = excluded.plan_key,
+    credits_monthly = excluded.credits_monthly,
+    status = 'active';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}',
+  true
+);
+
 select lives_ok(
   $$select public.create_agent_workspace('Support Agent', null)$$,
   'second agent with same name succeeds'

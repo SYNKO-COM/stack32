@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   deactivateMembershipFromWhop,
   fulfillMembershipFromWhop,
+  markMembershipPastDueFromWhop,
 } from "@/lib/billing/whop-fulfillment";
 import { getWhopSdk } from "@/lib/billing/whop-sdk";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -30,7 +31,6 @@ async function fulfillWhopEvent(
 
     if (isMembershipActivate || eventType === "payment.succeeded") {
       const data = event.data;
-      // payment.succeeded may nest membership; membership.* events are the membership
       const membership = isMembershipActivate
         ? data
         : ((data as { membership?: unknown } | null)?.membership ?? data);
@@ -41,6 +41,11 @@ async function fulfillWhopEvent(
 
     if (isMembershipDeactivate) {
       await deactivateMembershipFromWhop(event.data);
+    }
+
+    if (eventType === "payment.failed") {
+      // Do not suspend yet — Whop may still consider the membership active.
+      await markMembershipPastDueFromWhop(event.data);
     }
 
     await admin
@@ -54,7 +59,11 @@ async function fulfillWhopEvent(
       .eq("provider_event_id", providerEventId);
   } catch (err) {
     const message = err instanceof Error ? err.message : "fulfillment_failed";
-    console.error("[whop webhook] fulfillment failed", message);
+    console.error("[whop webhook] fulfillment failed", {
+      providerEventId,
+      eventType,
+      message,
+    });
     await admin
       .from("webhook_events")
       .update({ status: "failed", last_error: message })
@@ -97,8 +106,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const providerEventId =
-    (typeof event.id === "string" && event.id) || `whop_${Date.now()}`;
+  const providerEventId = typeof event.id === "string" ? event.id.trim() : "";
+  if (!providerEventId) {
+    console.error("[whop webhook] missing stable event id");
+    return NextResponse.json(
+      { error: { code: "invalid_event", message: "Webhook event id required." } },
+      { status: 400 },
+    );
+  }
   const eventType = typeof event.type === "string" ? event.type : "unknown";
 
   const { error: persistError } = await admin.from("webhook_events").insert({
@@ -121,27 +136,29 @@ export async function POST(request: NextRequest) {
         .eq("provider_event_id", providerEventId)
         .maybeSingle();
 
-      // Only skip when a prior delivery already finished successfully.
-      // If insert succeeded but fulfillment failed / never ran, Whop retries must
-      // re-run fulfillment — otherwise paid memberships stay inactive.
       if (existing?.status === "processed") {
+        return new Response("OK", { status: 200 });
+      }
+
+      const { data: claimed } = await admin.rpc("claim_webhook_event", {
+        p_provider: "whop",
+        p_provider_event_id: providerEventId,
+      });
+
+      if (!claimed) {
+        // Another worker holds the claim — acknowledge so Whop stops hammering.
         return new Response("OK", { status: 200 });
       }
 
       await admin
         .from("webhook_events")
-        .update({
-          status: "processing",
-          last_error: null,
-          payload: event as unknown as Json,
-        })
+        .update({ payload: event as unknown as Json })
         .eq("provider", "whop")
         .eq("provider_event_id", providerEventId);
 
       waitUntil(fulfillWhopEvent(admin, event, providerEventId, eventType));
       return new Response("OK", { status: 200 });
     }
-    // Non-duplicate DB failure: ask Whop to retry so we do not drop paid events.
     console.error("[whop webhook] persist failed", persistError.message);
     return NextResponse.json(
       { error: { code: "persist_failed", message: "Failed to persist webhook event." } },

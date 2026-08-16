@@ -134,7 +134,7 @@ resource "google_cloud_run_v2_service" "agent_api" {
   location = var.region
 
   template {
-    service_account = google_service_account.agent_api.email
+    service_account                  = google_service_account.agent_api.email
     max_instance_request_concurrency = var.container_concurrency
     containers {
       image = var.image

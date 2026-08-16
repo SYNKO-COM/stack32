@@ -3,20 +3,12 @@
  *
  * Required env:
  *   TARGET_URL       — base URL of the Agent API (e.g. https://….run.app)
- *   TEST_AUTH_TOKEN  — Bearer JWT for an authenticated smoke user (staging only)
  *
  * Optional:
- *   VUS              — virtual users (default 10)
- *   DURATION         — test duration (default 30s)
- *   SMOKE_PATH       — path under TARGET_URL (default /health — unauthenticated)
- *   AUTH_SMOKE_PATH  — authenticated path (default /v1/agents) — only hit when token set
+ *   TEST_AUTH_TOKEN, VUS, DURATION, SMOKE_PATH, AUTH_SMOKE_PATH
+ *   ALLOW_PRODUCTION_LOAD_TEST=true — required to hit production hosts
  *
- * NEVER point TARGET_URL at production. This script refuses hostnames that look
- * like production unless ALLOW_PRODUCTION_LOAD=1 is set (operator override).
- *
- * Examples (staging):
- *   TARGET_URL=https://staging.example.run.app VUS=50 DURATION=1m k6 run scripts/load/k6-smoke.js
- *   TARGET_URL=https://staging.example.run.app TEST_AUTH_TOKEN=$JWT VUS=100 DURATION=2m k6 run scripts/load/k6-smoke.js
+ * NEVER point TARGET_URL at production without explicit override.
  */
 
 import http from "k6/http";
@@ -28,7 +20,9 @@ const vus = Number(__ENV.VUS || 10);
 const duration = __ENV.DURATION || "30s";
 const smokePath = __ENV.SMOKE_PATH || "/health";
 const authPath = __ENV.AUTH_SMOKE_PATH || "/v1/agents";
-const allowProduction = __ENV.ALLOW_PRODUCTION_LOAD === "1";
+const allowProduction =
+  __ENV.ALLOW_PRODUCTION_LOAD_TEST === "true" ||
+  __ENV.ALLOW_PRODUCTION_LOAD === "1";
 
 if (!targetUrl) {
   throw new Error("TARGET_URL is required (staging Agent API base URL)");
@@ -36,14 +30,17 @@ if (!targetUrl) {
 
 const lower = targetUrl.toLowerCase();
 const looksProduction =
+  lower.includes("stack32.com") ||
+  lower.includes("www.stack32") ||
+  lower.includes("732339494633") ||
   lower.includes("production") ||
   lower.includes("/prod") ||
   lower.includes("-prod.") ||
   lower.includes("prod.");
 if (looksProduction && !allowProduction) {
   throw new Error(
-    "Refusing to load-test a URL that looks like production. " +
-      "Use staging, or set ALLOW_PRODUCTION_LOAD=1 only with explicit operator approval."
+    "Refusing to load-test a production URL. " +
+      "Use staging/localhost, or set ALLOW_PRODUCTION_LOAD_TEST=true with explicit operator approval.",
   );
 }
 

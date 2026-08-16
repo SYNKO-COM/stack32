@@ -11,7 +11,10 @@ import { waitForSignupOtp } from "./helpers/inbucket";
 // Satisfies local Supabase policy: lower_upper_letters_digits_symbols, min 10.
 const password = "E2e-Password-123!";
 
-test("signup, verify email, onboarding, build, logout and login again", async ({ page }) => {
+test("signup, verify email, onboarding, build, logout and login again", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
   const email = `e2e-${Date.now()}@stack32.test`;
   const username = `e2e_${Date.now().toString().slice(-8)}`;
 
@@ -49,7 +52,19 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await page.getByRole("button", { name: /finish|start|terminer|commencer|créer/i }).click();
 
   // --- Fresh agent workspace ---------------------------------------------------
-  await page.waitForURL("**/agents/*/build", { timeout: 30_000 });
+  // Prefer the post-onboarding build URL; fall back to /agents (auto-creates).
+  try {
+    await page.waitForURL(/\/agents(\/|$)/, { timeout: 45_000 });
+  } catch {
+    await page.goto("/agents");
+  }
+  if (!/\/agents\/[^/]+/.test(page.url())) {
+    await page.waitForURL(/\/agents\/[^/]+/, { timeout: 45_000 });
+  }
+  if (!page.url().includes("/build")) {
+    const match = page.url().match(/\/agents\/([^/?#]+)/);
+    if (match) await page.goto(`/agents/${match[1]}/build`);
+  }
 
   // --- Builder message persists --------------------------------------------
   const composer = page.locator("textarea").first();

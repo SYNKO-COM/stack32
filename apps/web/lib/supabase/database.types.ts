@@ -913,6 +913,7 @@ export type Database = {
           id: string
           last_opened_at: string | null
           name: string
+          pre_suspension_status: string | null
           published_version_id: string | null
           slug: string
           status: string
@@ -931,6 +932,7 @@ export type Database = {
           id?: string
           last_opened_at?: string | null
           name: string
+          pre_suspension_status?: string | null
           published_version_id?: string | null
           slug: string
           status?: string
@@ -949,6 +951,7 @@ export type Database = {
           id?: string
           last_opened_at?: string | null
           name?: string
+          pre_suspension_status?: string | null
           published_version_id?: string | null
           slug?: string
           status?: string
@@ -2455,6 +2458,54 @@ export type Database = {
         }
         Relationships: []
       }
+      tool_config_playbooks: {
+        Row: {
+          action_id: string
+          app_id: string | null
+          config_shape: Json
+          created_at: string
+          id: string
+          last_succeeded_at: string | null
+          notes: string
+          signature: string
+          status: string
+          times_failed: number
+          times_succeeded: number
+          tool_id: string
+          updated_at: string
+        }
+        Insert: {
+          action_id: string
+          app_id?: string | null
+          config_shape?: Json
+          created_at?: string
+          id?: string
+          last_succeeded_at?: string | null
+          notes?: string
+          signature: string
+          status?: string
+          times_failed?: number
+          times_succeeded?: number
+          tool_id: string
+          updated_at?: string
+        }
+        Update: {
+          action_id?: string
+          app_id?: string | null
+          config_shape?: Json
+          created_at?: string
+          id?: string
+          last_succeeded_at?: string | null
+          notes?: string
+          signature?: string
+          status?: string
+          times_failed?: number
+          times_succeeded?: number
+          tool_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tool_definitions: {
         Row: {
           approval_mode: string
@@ -2856,6 +2907,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      assert_period_budget_available: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       check_username_availability: {
         Args: { p_username: string }
         Returns: Json
@@ -2887,6 +2942,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_webhook_event: {
+        Args: { p_provider: string; p_provider_event_id: string }
+        Returns: boolean
       }
       complete_onboarding: {
         Args: {
@@ -2957,6 +3016,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_my_credit_usage: { Args: never; Returns: Json }
       heartbeat_run_queue_job: {
         Args: { p_lease_seconds?: number; p_owner: string; p_run_id: string }
         Returns: boolean
@@ -3021,6 +3081,22 @@ export type Database = {
         Args: { p_agent_slug: string; p_username: string }
         Returns: Json
       }
+      resolve_user_entitlements: {
+        Args: { p_user_id: string }
+        Returns: {
+          billing_interval: string
+          budget_usd: number
+          credits_monthly: number
+          period_credits: number
+          period_end: string
+          period_start: string
+          plan_key: string
+        }[]
+      }
+      restore_agents_after_billing: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       set_username: {
         Args: { p_username: string }
         Returns: {
@@ -3045,22 +3121,13 @@ export type Database = {
         }
       }
       soft_delete_agent: { Args: { p_agent_id: string }; Returns: undefined }
-      user_monthly_usage_usd: { Args: { p_user_id: string }; Returns: number }
-      user_period_usage_usd: { Args: { p_user_id: string }; Returns: number }
-      user_period_budget_status: { Args: { p_user_id: string }; Returns: Json }
-      get_my_credit_usage: { Args: Record<string, never>; Returns: Json }
-      resolve_user_entitlements: {
+      suspend_agents_for_billing: {
         Args: { p_user_id: string }
-        Returns: {
-          plan_key: string
-          billing_interval: string
-          credits_monthly: number
-          period_start: string
-          period_end: string
-          budget_usd: number
-          period_credits: number
-        }[]
+        Returns: number
       }
+      user_monthly_usage_usd: { Args: { p_user_id: string }; Returns: number }
+      user_period_budget_status: { Args: { p_user_id: string }; Returns: Json }
+      user_period_usage_usd: { Args: { p_user_id: string }; Returns: number }
       validate_username: { Args: { p_username: string }; Returns: boolean }
     }
     Enums: {

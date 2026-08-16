@@ -75,6 +75,7 @@
     "ready": "Prêt",
     "needsAttention": "Attention requise",
     "published": "Publié",
+    "suspendedBilling": "Suspendu (facturation)",
     "waitingForInput": "En attente d'entrée",
     "needsSetup": "Configuration requise",
     "archived": "Archivé"

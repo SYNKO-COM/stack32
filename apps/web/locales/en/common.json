@@ -75,6 +75,7 @@
     "ready": "Ready",
     "needsAttention": "Needs attention",
     "published": "Published",
+    "suspendedBilling": "Suspended (billing)",
     "waitingForInput": "Waiting for input",
     "needsSetup": "Needs setup",
     "archived": "Archived"

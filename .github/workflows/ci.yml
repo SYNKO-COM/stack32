@@ -93,3 +93,25 @@ jobs:
       - run: pytest
       - run: bandit -r agent_service -ll
         continue-on-error: false
+
+  terraform:
+    name: Terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [staging, production]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: fmt
+        working-directory: infra/terraform/environments/${{ matrix.env }}
+        run: terraform fmt -check -recursive
+      - name: init + validate
+        working-directory: infra/terraform/environments/${{ matrix.env }}
+        run: |
+          terraform init -backend=false
+          terraform validate
+        env:
+          TF_VAR_project_id: stack32-ci-validate

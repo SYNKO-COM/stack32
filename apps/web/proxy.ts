@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
+/**
+ * Next.js 16 proxy (replaces deprecated middleware.ts convention).
+ * Preserves auth session refresh + Google OAuth rewrite semantics.
+ */
+export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   // Stack32 Google OAuth client allows http://localhost:3000/ — rewrite to API callback.
   if (

@@ -183,6 +183,12 @@ export async function activatePlanAction(
     return { ok: true };
   }
 
+  // Paid plans: local activation only in explicit mock mode. Production Whop
+  // entitlements come exclusively from verified webhooks / reconcile.
+  if (getBillingMode() !== "mock") {
+    return { ok: false, error: "BILLING_REQUIRES_CHECKOUT" };
+  }
+
   const { error } = await service.from("subscriptions").upsert(
     {
       user_id: user.id,

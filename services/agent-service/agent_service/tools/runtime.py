@@ -70,7 +70,7 @@ class CalendarCreateEventInput(BaseModel):
     dry_run: bool = True
 
     @classmethod
-    def model_validate(cls, obj: Any, **kwargs: Any) -> "CalendarCreateEventInput":  # type: ignore[override]
+    def model_validate(cls, obj: Any, **kwargs: Any) -> CalendarCreateEventInput:  # type: ignore[override]
         if isinstance(obj, dict):
             data = dict(obj)
             if not data.get("title") and data.get("summary"):

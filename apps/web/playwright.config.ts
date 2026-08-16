@@ -37,6 +37,9 @@ export default defineConfig({
       SUPABASE_SERVICE_ROLE_KEY: LOCAL_SECRET_KEY,
       AI_EXECUTION_MODE: "mock",
       BILLING_MODE: "mock",
+      // Force-disable hCaptcha in E2E (local Supabase captcha is off; localhost
+      // tokens from a real sitekey fail and block signup).
+      NEXT_PUBLIC_HCAPTCHA_SITEKEY: "",
     },
   },
 });

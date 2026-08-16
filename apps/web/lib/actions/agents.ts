@@ -1,5 +1,6 @@
 "use server";
 
+import { PLANS, isPlanKey } from "@/lib/billing/plans";
 import {
   agentServiceFetch,
   requireAccessToken,
@@ -109,6 +110,22 @@ export async function publishAgentAction(agentId: string): Promise<PublishResult
     .eq("id", agentId)
     .maybeSingle();
   if (!owned) throw new Error("agent_not_found");
+
+  // Server-side publish gate — do not rely on UI alone.
+  const { data: ent } = await supabase.rpc("resolve_user_entitlements", {
+    p_user_id: user.id,
+  });
+  const entRow = Array.isArray(ent) ? ent[0] : ent;
+  const planKey =
+    entRow && typeof entRow === "object" && "plan_key" in entRow
+      ? String((entRow as { plan_key: string }).plan_key)
+      : "free";
+  const plan = isPlanKey(planKey) ? PLANS[planKey] : PLANS.free;
+  if (!plan.canPublish) {
+    throw Object.assign(new Error("PLAN_PUBLISH_REQUIRED"), {
+      code: "PLAN_PUBLISH_REQUIRED",
+    });
+  }
 
   let publicPath: string | undefined;
 

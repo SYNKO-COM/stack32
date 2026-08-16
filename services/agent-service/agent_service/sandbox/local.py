@@ -152,6 +152,22 @@ class LocalSandbox:
         if not command or not isinstance(command, list):
             raise SandboxSecurityError("Command must be a non-empty argv list", code="SANDBOX_CMD")
         cfg = self._configs.get(handle.workspace_id, SandboxConfig())
+        binary = command[0].rsplit("/", 1)[-1]
+        if not cfg.allow_network and binary in {
+            "curl",
+            "wget",
+            "nc",
+            "ncat",
+            "netcat",
+            "ssh",
+            "scp",
+            "ftp",
+            "telnet",
+        }:
+            raise SandboxSecurityError(
+                "Network tools are disabled in this sandbox",
+                code="SANDBOX_NETWORK",
+            )
         timeout = min(timeout_seconds or cfg.command_timeout_seconds, cfg.wall_clock_seconds)
         workdir = self._host_path(handle, cwd)
         if not workdir.is_dir():

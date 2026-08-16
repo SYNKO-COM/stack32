@@ -37,6 +37,25 @@ export function getServerEnv(): ServerEnv {
     const fields = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
     throw new Error(`[stack32] Invalid server environment variables: ${fields}`);
   }
+
+  // Production runtime must never silently fall back to mock billing / mock AI.
+  // Use VERCEL_ENV / ENVIRONMENT — not NODE_ENV — so `next build` in CI still works.
+  const isProductionRuntime =
+    process.env.VERCEL_ENV === "production" ||
+    process.env.ENVIRONMENT === "production";
+  if (isProductionRuntime) {
+    if (parsed.data.BILLING_MODE !== "whop") {
+      throw new Error(
+        "[stack32] BILLING_MODE must be \"whop\" in production (mock billing is forbidden).",
+      );
+    }
+    if (parsed.data.AI_EXECUTION_MODE === "mock") {
+      throw new Error(
+        "[stack32] AI_EXECUTION_MODE=mock is forbidden in production.",
+      );
+    }
+  }
+
   cached = parsed.data;
   return cached;
 }

@@ -61,11 +61,11 @@ def test_select_scoped_connection_partial_overlap_best_effort():
         {"id": "none", "scopes": ["openid"]},
         {"id": "partial", "scopes": scopes_for_tools(["gmail_list"])},
     ]
-    # No connection fully covers send; pick the one with most overlap.
+    # No connection fully covers send — refuse partial tokens (avoids opaque 403s).
     chosen = ConnectionManager._select_scoped_connection(
         rows, provider="google", tool_id="gmail_send_message"
     )
-    assert chosen["id"] == "partial"
+    assert chosen is None
 
 
 class _FakeResponse:

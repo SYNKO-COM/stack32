@@ -2,7 +2,10 @@
 
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { ToolConfigForm } from "@/components/builder/tool-config-form";
-import { MemoryConfigForm } from "@/components/builder/agent-structure/drawers/memory-config-form";
+import {
+  MemoryConfigForm,
+  memoryFormResetKey,
+} from "@/components/builder/agent-structure/drawers/memory-config-form";
 import { ModelConfigForm } from "@/components/builder/agent-structure/drawers/model-config-form";
 import { ModuleErrorBanner } from "@/components/builder/agent-structure/drawers/module-error-banner";
 import type { ExecutionErrorInfo } from "@/lib/domain/execution-state";
@@ -175,7 +178,6 @@ export function IntegrationDrawer({
   executionError?: ExecutionErrorInfo | null;
 }) {
   const { t } = useTranslation(["structure", "builder"]);
-  const integration = node?.integration ?? null;
   const { connection, toolIds } = resolveConnection(
     node,
     connections,
@@ -488,7 +490,12 @@ export function GenericDrawer({
       {isModel ? (
         <ModelConfigForm agentId={agentId} node={node} onSaved={onSaved} />
       ) : isMemory ? (
-        <MemoryConfigForm agentId={agentId} memory={spec?.memory} onSaved={onSaved} />
+        <MemoryConfigForm
+          key={memoryFormResetKey(spec?.memory)}
+          agentId={agentId}
+          memory={spec?.memory}
+          onSaved={onSaved}
+        />
       ) : isOutput ? (
         <div className="space-y-4">
           <DetailBlock title={t("panel.outputRole")}>

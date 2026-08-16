@@ -18,6 +18,7 @@ export type AgentStatus =
   | "ready"
   | "needs_attention"
   | "published"
+  | "suspended_billing"
   | "waiting_for_input"
   | "needs_setup"
   | "archived";

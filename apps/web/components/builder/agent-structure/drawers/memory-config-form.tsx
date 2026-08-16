@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { updateAgentMemorySettings } from "@/lib/actions/builder";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,17 @@ import type { AgentSpec } from "@/lib/domain/types";
 
 type MemoryProvider = "stack32" | "external_postgres";
 type WritePolicy = "never" | "explicit" | "automatic";
+
+/** Stable key so the parent remounts this form when server memory changes. */
+export function memoryFormResetKey(memory: AgentSpec["memory"] | undefined): string {
+  return [
+    memory?.conversationEnabled !== false ? "1" : "0",
+    memory?.semanticEnabled ? "1" : "0",
+    memory?.provider ?? "stack32",
+    memory?.writePolicy ?? "explicit",
+    String(memory?.conversationWindow ?? 12),
+  ].join(":");
+}
 
 export function MemoryConfigForm({
   agentId,
@@ -34,15 +45,6 @@ export function MemoryConfigForm({
     memory?.writePolicy ?? "explicit",
   );
   const [windowSize, setWindowSize] = useState(memory?.conversationWindow ?? 12);
-
-  useEffect(() => {
-    setConversationEnabled(memory?.conversationEnabled !== false);
-    setSemanticEnabled(Boolean(memory?.semanticEnabled));
-    setProvider(memory?.provider ?? "stack32");
-    setWritePolicy(memory?.writePolicy ?? "explicit");
-    setWindowSize(memory?.conversationWindow ?? 12);
-    setSaved(false);
-  }, [memory]);
 
   return (
     <form

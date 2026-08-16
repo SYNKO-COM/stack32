@@ -47,3 +47,4 @@ rightful-uncomplaining-picturesque_-_CLI_Quickstart-oauth-credentials.txt
 !**/*.tfvars.example
 **/tfplan
 **/*.tfplan
+apps/web/test-results/

@@ -111,19 +111,23 @@ export function IntegrationConnectionCard({
   const parentConnected =
     status === "connected" ||
     Boolean(accountEmail && status !== "error" && status !== "disconnected");
+
+  // Adjust optimistic override during render when the parent has caught up
+  // (React-recommended alternative to syncing props → state in an effect).
+  const [prevParentConnected, setPrevParentConnected] = useState(parentConnected);
+  if (parentConnected !== prevParentConnected) {
+    setPrevParentConnected(parentConnected);
+    if (localOverride === "disconnected" && !parentConnected) {
+      setLocalOverride(null);
+    }
+  }
+
   const connected =
     localOverride === "disconnected"
       ? false
       : localOverride === "connected"
         ? true
         : parentConnected;
-
-  // Clear optimistic disconnect only once the parent agrees we're disconnected.
-  useEffect(() => {
-    if (localOverride === "disconnected" && !parentConnected) {
-      setLocalOverride(null);
-    }
-  }, [parentConnected, localOverride]);
 
   const title = useMemo(() => {
     if (appId) return humanizeAppSlug(appId);
@@ -278,23 +282,21 @@ export function IntegrationConnectionCard({
     setLocalOverride("disconnected");
     startTransition(async () => {
       try {
-        let result: { disconnected?: boolean; revoked?: string[] } | null = null;
         if (appId) {
-          result = await disconnectAgentApp({
+          await disconnectAgentApp({
             agentId,
             appId,
             toolIds,
             connectionId,
           });
         } else if (connectionId) {
-          const revoked = await revokeConnection(connectionId);
-          result = { disconnected: Boolean(revoked?.revoked), revoked: [connectionId] };
+          await revokeConnection(connectionId);
         } else {
           throw new Error("missing_app_and_connection");
         }
 
         onChanged?.();
-      } catch (err) {
+      } catch {
         setLocalOverride(null);
         setError(
           t("connections.disconnectError", {

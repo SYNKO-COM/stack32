@@ -295,14 +295,8 @@ async def resolve_pipedream_auth_for_tool(
             continue
         return await _autobind(conn, "agent-bound app connection")
 
-    # 3) User-level Pipedream connection for this app only
-    for conn in connections or []:
-        if not _conn_ok(conn):
-            continue
-        if not _app_matches(conn):
-            continue
-        return await _autobind(conn, "user-level app connection")
-
+    # Do not fall back to unbound user-level accounts — that would let Agent A
+    # silently use an account never bound to it.
     return None
 
 

@@ -349,8 +349,9 @@ def test_blocking_ambiguities_respects_preferred_canva():
 
 
 def test_tool_belongs_to_canva_rejects_canvas_and_gocanvas():
-    from agent_service.builder.capabilities import _tool_belongs_to_app
     from types import SimpleNamespace
+
+    from agent_service.builder.capabilities import _tool_belongs_to_app
 
     assert _tool_belongs_to_app(
         SimpleNamespace(tool_id="pd:canva-create-design", provider_app_id=None), "canva"

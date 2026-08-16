@@ -36,6 +36,9 @@ class E2BSandbox:
     """Isolated cloud sandbox backed by E2B."""
 
     name = "e2b"
+    _NETWORK_BINARIES = frozenset(
+        {"curl", "wget", "nc", "ncat", "netcat", "ssh", "scp", "ftp", "telnet", "dig", "nslookup"}
+    )
 
     def __init__(self, *, api_key: str, template: str = "base") -> None:
         if not api_key:
@@ -43,6 +46,7 @@ class E2BSandbox:
         self._api_key = api_key
         self._template = template
         self._live: dict[str, object] = {}
+        self._configs: dict[str, SandboxConfig] = {}
 
     def _load_sdk(self):  # pragma: no cover - thin import shim
         try:
@@ -62,6 +66,7 @@ class E2BSandbox:
         )
         wsid = getattr(sbx, "sandbox_id", None) or f"e2b-{uuid.uuid4().hex[:12]}"
         self._live[wsid] = sbx
+        self._configs[wsid] = config
         await sbx.files.make_dir(_ROOT)  # type: ignore[attr-defined]
         return WorkspaceHandle(provider=self.name, workspace_id=wsid, root=_ROOT)
 
@@ -95,8 +100,8 @@ class E2BSandbox:
         return await sbx.files.read(abs_path)  # type: ignore[attr-defined]
 
     async def write_file(self, handle: WorkspaceHandle, path: str, content: str) -> None:
-        cfg_cap = 2_000_000
-        if len(content.encode("utf-8")) > cfg_cap:
+        cfg = self._configs.get(handle.workspace_id) or SandboxConfig()
+        if len(content.encode("utf-8")) > cfg.max_file_bytes:
             raise SandboxSecurityError("File exceeds size cap", code="SANDBOX_SIZE")
         sbx = await self._get(handle)
         abs_path = _rel(handle, path)
@@ -135,9 +140,16 @@ class E2BSandbox:
     ) -> CommandResult:
         if not command or not isinstance(command, list):
             raise SandboxSecurityError("Command must be a non-empty argv list", code="SANDBOX_CMD")
+        cfg = self._configs.get(handle.workspace_id) or SandboxConfig()
+        binary = command[0].rsplit("/", 1)[-1]
+        if not cfg.allow_network and binary in self._NETWORK_BINARIES:
+            raise SandboxSecurityError(
+                "Network tools are disabled in this sandbox",
+                code="SANDBOX_NETWORK",
+            )
         sbx = await self._get(handle)
         workdir = _rel(handle, cwd)
-        timeout = timeout_seconds or 120
+        timeout = min(timeout_seconds or cfg.command_timeout_seconds, cfg.wall_clock_seconds)
         # Prefer argv arrays; E2B commands.run accepts a string, so join safely.
         import shlex
 
@@ -153,7 +165,7 @@ class E2BSandbox:
                 raise SandboxTimeoutError(f"Command timed out: {command[0]}") from exc
             raise SandboxError(f"E2B command failed: {exc}", code="SANDBOX_EXEC") from exc
         duration_ms = int((time.monotonic() - start) * 1000)
-        cap = 200_000
+        cap = cfg.max_output_bytes
         stdout = str(getattr(res, "stdout", "") or "")
         stderr = str(getattr(res, "stderr", "") or "")
         exit_code = int(getattr(res, "exit_code", 0) or 0)

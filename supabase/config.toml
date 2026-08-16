@@ -3,7 +3,7 @@
 project_id = "stack32"
 
 [api]
-enabled = false
+enabled = true
 port = 54321
 schemas = ["public", "storage", "graphql_public"]
 
@@ -12,11 +12,11 @@ port = 54322
 major_version = 17
 
 [studio]
-enabled = false
+enabled = true
 port = 54323
 
 [auth]
-enabled = false
+enabled = true
 site_url = "https://stack32.com"
 additional_redirect_urls = [
   "http://localhost:3000/auth/callback",
@@ -72,7 +72,7 @@ subject = "Reset your password"
 content_path = "./supabase/templates/recovery.html"
 
 [storage]
-enabled = false
+enabled = true
 
 # Disabled locally: the analytics container needs to mount the Docker socket,
 # which is not supported by colima on macOS.
