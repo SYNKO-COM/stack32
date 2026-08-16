@@ -166,6 +166,34 @@
     }
   }
 
+  @keyframes auth-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes auth-pulse {
+    0%,
+    100% {
+      transform: translateX(-50%) scale(1);
+      filter: brightness(1);
+    }
+    50% {
+      transform: translateX(-50%) scale(1.03);
+      filter: brightness(1.08);
+    }
+  }
+
+  @keyframes auth-dash {
+    to {
+      stroke-dashoffset: -80;
+    }
+  }
+
   @keyframes pulseGlow {
     0%,
     100% {

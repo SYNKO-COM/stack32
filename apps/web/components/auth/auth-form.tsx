@@ -64,10 +64,15 @@ async function defaultDestination(preferredNext?: string | null): Promise<string
 }
 
 function rememberAuthNext(preferredNext?: string | null) {
+  if (typeof window === "undefined") return;
   const safe = safeNextPath(preferredNext);
-  if (!safe || typeof window === "undefined") return;
   try {
-    sessionStorage.setItem("stack32_auth_next", safe);
+    if (safe) {
+      sessionStorage.setItem("stack32_auth_next", safe);
+    } else {
+      // Clear stale checkout/onboarding redirects from a prior auth entry point.
+      sessionStorage.removeItem("stack32_auth_next");
+    }
   } catch {
     /* ignore */
   }

@@ -111,30 +111,26 @@ export async function deactivateMembershipFromWhop(payload: unknown): Promise<vo
   if (!admin) throw new Error("Supabase admin client unavailable");
 
   const data = asRecord(payload);
-  const metadata = parseCheckoutMetadata(data.metadata);
-  const membershipId = pickString(data.id, data.membership_id);
-  const userId = metadata.stack32_user_id;
+  const membershipId = pickString(data.id, data.membership_id, asRecord(data.membership).id);
 
-  if (userId) {
-    await admin
-      .from("subscriptions")
-      .update({
-        status: "canceled",
-        canceled_at: new Date().toISOString(),
-        raw_payload: data as Json,
-      })
-      .eq("user_id", userId);
+  // Always scope cancellation to the membership id so a delayed webhook for an
+  // older membership cannot cancel a newer active subscription for the same user.
+  if (!membershipId) {
+    console.warn("[whop] deactivation missing membership id", {
+      metadata: parseCheckoutMetadata(data.metadata),
+    });
     return;
   }
 
-  if (membershipId) {
-    await admin
-      .from("subscriptions")
-      .update({
-        status: "canceled",
-        canceled_at: new Date().toISOString(),
-        raw_payload: data as Json,
-      })
-      .eq("provider_membership_id", membershipId);
-  }
+  const { error } = await admin
+    .from("subscriptions")
+    .update({
+      status: "canceled",
+      canceled_at: new Date().toISOString(),
+      raw_payload: data as Json,
+    })
+    .eq("provider", "whop")
+    .eq("provider_membership_id", membershipId);
+
+  if (error) throw error;
 }

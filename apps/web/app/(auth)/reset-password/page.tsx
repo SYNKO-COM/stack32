@@ -14,6 +14,7 @@ import {
   isPasswordValid,
   passwordIssueErrorKey,
 } from "@/lib/auth/password";
+import { AuthCompactCard } from "@/components/auth/auth-compact-card";
 
 export default function ResetPasswordPage() {
   const { t } = useTranslation(["auth", "errors"]);
@@ -24,7 +25,7 @@ export default function ResetPasswordPage() {
   const update = useUpdatePassword();
 
   return (
-    <div>
+    <AuthCompactCard>
       <h1 className="text-2xl font-semibold tracking-tight">{t("auth:reset.title")}</h1>
       <p className="mt-1.5 mb-2 text-sm text-muted-foreground">{t("auth:reset.subtitle")}</p>
       <p className="mb-6 text-xs text-muted-foreground/80">{t("auth:password.requirements")}</p>
@@ -100,6 +101,6 @@ export default function ResetPasswordPage() {
           </Button>
         </form>
       )}
-    </div>
+    </AuthCompactCard>
   );
 }

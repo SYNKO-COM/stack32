@@ -13,9 +13,14 @@ interface UiState {
   activeDialog: ActiveDialog;
   /** Auth modal starts on this tab. */
   authDialogMode: "login" | "signup";
+  /** Optional post-auth destination (e.g. checkout) preserved through onboarding. */
+  authPreferredNext: string | null;
   setSidebarOpen: (open: boolean) => void;
   setMobileSidebarOpen: (open: boolean) => void;
-  openDialog: (dialog: Exclude<ActiveDialog, null>, options?: { authMode?: "login" | "signup" }) => void;
+  openDialog: (
+    dialog: Exclude<ActiveDialog, null>,
+    options?: { authMode?: "login" | "signup"; preferredNext?: string | null },
+  ) => void;
   closeDialog: () => void;
 }
 
@@ -24,12 +29,16 @@ export const useUiStore = create<UiState>((set) => ({
   mobileSidebarOpen: false,
   activeDialog: null,
   authDialogMode: "signup",
+  authPreferredNext: null,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
   openDialog: (dialog, options) =>
     set((state) => ({
       activeDialog: dialog,
       authDialogMode: options?.authMode ?? state.authDialogMode,
+      // Opening auth without preferredNext clears any stale checkout path.
+      authPreferredNext:
+        dialog === "auth" ? (options?.preferredNext ?? null) : state.authPreferredNext,
     })),
-  closeDialog: () => set({ activeDialog: null }),
+  closeDialog: () => set({ activeDialog: null, authPreferredNext: null }),
 }));

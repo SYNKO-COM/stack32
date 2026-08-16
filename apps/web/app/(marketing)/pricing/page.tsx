@@ -106,18 +106,20 @@ export default function PricingPage() {
       return;
     }
 
-    if (!user) {
-      openDialog("auth", { authMode: "signup" });
-      return;
-    }
-
     const credits = creditByPlan[planKey];
     const qs = new URLSearchParams({
       plan: planKey,
       interval,
       credits: String(credits),
     });
-    router.push(`/billing/checkout?${qs.toString()}`);
+    const checkoutPath = `/billing/checkout?${qs.toString()}`;
+
+    if (!user) {
+      openDialog("auth", { authMode: "signup", preferredNext: checkoutPath });
+      return;
+    }
+
+    router.push(checkoutPath);
   };
 
   return (

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 import { AuthForm } from "@/components/auth/auth-form";
+import { AuthWindow } from "@/components/auth/auth-window";
 import { useTranslation } from "@/hooks/use-translation";
 
 function LoginContent() {
@@ -11,11 +12,14 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const next = searchParams.get("next");
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">{t("login.title")}</h1>
-      <p className="mt-1.5 mb-6 text-sm text-muted-foreground">{t("login.subtitle")}</p>
+    <AuthWindow
+      mode="login"
+      title={t("login.title")}
+      subtitle={t("login.subtitle")}
+    >
       {error === "link_expired" ? (
         <p role="alert" className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {t("errors.linkExpired")}
@@ -28,13 +32,13 @@ function LoginContent() {
       ) : null}
       <AuthForm
         mode="login"
+        preferredNext={next}
         onModeChange={(mode) => {
-          const next = searchParams.get("next");
           const qs = next ? `?next=${encodeURIComponent(next)}` : "";
           router.push(mode === "signup" ? `/signup${qs}` : `/login${qs}`);
         }}
       />
-    </div>
+    </AuthWindow>
   );
 }
 

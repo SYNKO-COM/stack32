@@ -4,26 +4,30 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 import { AuthForm } from "@/components/auth/auth-form";
+import { AuthWindow } from "@/components/auth/auth-window";
 import { useTranslation } from "@/hooks/use-translation";
 
 function SignupContent() {
   const { t } = useTranslation("auth");
   const router = useRouter();
   const searchParams = useSearchParams();
+  const next = searchParams.get("next");
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">{t("signup.title")}</h1>
-      <p className="mt-1.5 mb-6 text-sm text-muted-foreground">{t("signup.subtitle")}</p>
+    <AuthWindow
+      mode="signup"
+      title={t("signup.title")}
+      subtitle={t("signup.subtitle")}
+    >
       <AuthForm
         mode="signup"
+        preferredNext={next}
         onModeChange={(mode) => {
-          const next = searchParams.get("next");
           const qs = next ? `?next=${encodeURIComponent(next)}` : "";
           router.push(mode === "signup" ? `/signup${qs}` : `/login${qs}`);
         }}
       />
-    </div>
+    </AuthWindow>
   );
 }
 

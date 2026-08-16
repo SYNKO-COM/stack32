@@ -207,7 +207,9 @@ export async function activatePlanAction(
 }
 
 /**
- * Create a Whop checkout session (embedded) or mock-activate when BILLING_MODE=mock.
+ * Start checkout: mock-activate when BILLING_MODE=mock; otherwise send the user
+ * to /billing/checkout (Whop embed + legal consents). Never free-activates when
+ * BILLING_MODE=whop, even if secrets are missing.
  */
 export async function createCheckoutAction(
   planId: string,
@@ -234,7 +236,9 @@ export async function createCheckoutAction(
     return { url: "/agents" };
   }
 
-  if (getBillingMode() === "mock" || !isWhopLiveConfigured()) {
+  // Free local activation only in explicit mock mode — never when BILLING_MODE=whop,
+  // even if Whop secrets are incomplete (would grant paid plans without payment).
+  if (getBillingMode() === "mock") {
     const result = await activatePlanAction({
       planKey,
       interval,
@@ -246,15 +250,20 @@ export async function createCheckoutAction(
     };
   }
 
-  const session = await createWhopCheckoutSession({
-    planKey: planKey as Exclude<PlanKey, "free">,
+  if (!isWhopLiveConfigured()) {
+    throw new Error("WHOP_NOT_CONFIGURED");
+  }
+
+  // Route through the consent + embed page with the selected plan. Session is
+  // created after checkboxes so callers (upgrade dialog, etc.) never land on a
+  // bare `?session=` URL the checkout page does not understand.
+  const qs = new URLSearchParams({
+    plan: planKey,
     interval,
-    creditsMonthly,
+    credits: String(creditsMonthly),
   });
   return {
-    url: session.purchaseUrl || `/billing/checkout?session=${session.sessionId}`,
-    sessionId: session.sessionId,
-    planIdWhop: session.planId ?? undefined,
+    url: `/billing/checkout?${qs.toString()}`,
   };
 }
 

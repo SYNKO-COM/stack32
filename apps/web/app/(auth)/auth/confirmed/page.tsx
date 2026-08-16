@@ -8,6 +8,7 @@ import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import { resolvePostAuthPath } from "@/lib/auth/post-auth";
+import { AuthCompactCard } from "@/components/auth/auth-compact-card";
 
 const AUTO_REDIRECT_MS = 5000;
 
@@ -43,7 +44,7 @@ function ConfirmedContent() {
   }, [destination, router]);
 
   return (
-    <div className="text-center">
+    <AuthCompactCard className="text-center">
       <span className="mx-auto mb-5 flex size-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500">
         <CheckCircle2 className="size-7" aria-hidden="true" />
       </span>
@@ -60,7 +61,7 @@ function ConfirmedContent() {
           {t("confirmed.home")}
         </Link>
       </p>
-    </div>
+    </AuthCompactCard>
   );
 }
 

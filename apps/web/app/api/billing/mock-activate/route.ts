@@ -10,8 +10,8 @@ import {
 import { getBillingMode } from "@/lib/env.server";
 
 /**
- * Dev/preview helper when Whop secrets are not configured.
- * Disabled when BILLING_MODE=whop and Whop is live.
+ * Dev/preview helper when BILLING_MODE=mock.
+ * Disabled when BILLING_MODE=whop (never free-activates in production mode).
  */
 export async function GET(request: NextRequest) {
   if (getBillingMode() === "whop") {
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   const intervalRaw = request.nextUrl.searchParams.get("interval") ?? "monthly";
   const creditsRaw = Number(request.nextUrl.searchParams.get("credits") ?? "");
 
-  if (!isPlanKey(planRaw)) {
+  if (!isPlanKey(planRaw) || planRaw === "free") {
     return NextResponse.redirect(new URL("/pricing", request.url));
   }
 
@@ -32,11 +32,23 @@ export async function GET(request: NextRequest) {
     Number.isFinite(creditsRaw) ? creditsRaw : PLANS[planRaw].baseCredits,
   );
 
-  await activatePlanAction({
+  const result = await activatePlanAction({
     planKey: planRaw,
     interval,
     creditsMonthly,
   });
+
+  if (!result.ok) {
+    const loginNext = encodeURIComponent(
+      `/billing/checkout?plan=${planRaw}&interval=${interval}&credits=${creditsMonthly}`,
+    );
+    if (result.error === "UNAUTHENTICATED") {
+      return NextResponse.redirect(new URL(`/login?next=${loginNext}`, request.url));
+    }
+    return NextResponse.redirect(
+      new URL(`/pricing?billing_error=${encodeURIComponent(result.error)}`, request.url),
+    );
+  }
 
   return NextResponse.redirect(
     new URL(

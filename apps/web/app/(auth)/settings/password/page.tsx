@@ -15,6 +15,7 @@ import {
   isPasswordValid,
   passwordIssueErrorKey,
 } from "@/lib/auth/password";
+import { AuthCompactCard } from "@/components/auth/auth-compact-card";
 
 export default function ChangePasswordPage() {
   const { t } = useTranslation(["auth", "errors"]);
@@ -33,7 +34,7 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <div>
+    <AuthCompactCard>
       <h1 className="text-2xl font-semibold tracking-tight">{t("auth:changePassword.title")}</h1>
       <p className="mt-1.5 mb-2 text-sm text-muted-foreground">
         {t("auth:changePassword.subtitle")}
@@ -111,6 +112,6 @@ export default function ChangePasswordPage() {
           </Button>
         </form>
       )}
-    </div>
+    </AuthCompactCard>
   );
 }

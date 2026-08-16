@@ -18,14 +18,20 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function checkoutPath(plan: string, interval: string, credits: number): string {
+  const qs = new URLSearchParams({
+    plan,
+    interval,
+    credits: String(credits),
+  });
+  return `/billing/checkout?${qs.toString()}`;
+}
+
 export default async function BillingCheckoutPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login?next=/billing/checkout");
-
   const params = await searchParams;
   const planRaw = first(params.plan) ?? "starter";
   const intervalRaw = first(params.interval) ?? "monthly";
@@ -42,11 +48,20 @@ export default async function BillingCheckoutPage({
     Number.isFinite(creditsRaw) ? creditsRaw : PLANS[planKey].baseCredits,
   );
 
-  // Mock / missing Whop secrets → activate locally then success.
-  if (getBillingMode() === "mock" || !isWhopLiveConfigured()) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect(`/login?next=${encodeURIComponent(checkoutPath(planKey, interval, creditsMonthly))}`);
+  }
+
+  // Explicit mock mode only — never free-activate when BILLING_MODE=whop.
+  if (getBillingMode() === "mock") {
     redirect(
       `/api/billing/mock-activate?plan=${planKey}&interval=${interval}&credits=${creditsMonthly}`,
     );
+  }
+
+  if (!isWhopLiveConfigured()) {
+    redirect("/pricing?billing_error=WHOP_NOT_CONFIGURED");
   }
 
   // Session is created client-side only after mandatory legal consents.
