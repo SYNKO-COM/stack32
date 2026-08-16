@@ -12,13 +12,15 @@ Ce document répond à une seule question : **qu’est-ce qui est déjà fait, e
 | --- | --- |
 | Code hardening sur GitHub `main` | **Fait** |
 | Migrations Supabase hébergées (usernames, favorites, activation atomique, agent public) | **Fait** |
-| Front Vercel branché sur `main` | À vérifier / finaliser chez toi |
-| Variables d’env Vercel (Supabase, URL app, agent-service) | À configurer / vérifier |
-| Auth Supabase (redirects + CAPTCHA prod) | À vérifier / finaliser |
-| Agent API hébergé (Cloud Run + file d’attente GCP) | **Pas encore provisionné** |
-| E2B / LLM / SMTP / Pipedream | À configurer selon ce que tu actives |
+| Front Vercel branché sur `main` | **Fait** (`stack32` → `main`) |
+| Variables d’env Vercel (Supabase, URL app, agent-service) | **Fait** (branché sur Cloud Run) |
+| Auth Supabase (redirects) | **Fait** (`site_url` = `https://stack32.com`) |
+| Agent API hébergé (Cloud Run + file d’attente GCP) | **Fait** — `https://stack32-agent-api-732339494633.europe-west1.run.app` (`/ready` OK) |
+| Domaine `stack32.com` sur Vercel | **Ajouté** — DNS IONOS encore à pointer vers Vercel (`A` → `76.76.21.21`) |
+| E2B / LLM | **Fait** (clés en Secret Manager) |
+| SMTP / Pipedream / CAPTCHA prod | Optionnel / selon activation |
 
-En bref : **la base Supabase et le code sont prêts**. Il te reste surtout le front (Vercel + Auth) pour un site utilisable, puis GCP + secrets pour le vrai runtime agents en production.
+En bref : **front + agent-service GCP sont en prod**. Il reste surtout le DNS `stack32.com` chez IONOS si ce n’est pas encore fait.
 
 ---
 

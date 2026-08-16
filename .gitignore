@@ -38,3 +38,10 @@ docs/pipedream/live_stress_report.json
 
 rightful-uncomplaining-picturesque_-_CLI_Quickstart-oauth-credentials.txt
 .vercel
+
+# Terraform local state / plugins (never commit secrets in state)
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+!**/*.tfvars.example
