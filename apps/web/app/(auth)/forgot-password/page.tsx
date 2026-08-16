@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { AuthCompactCard } from "@/components/auth/auth-compact-card";
+import { HCaptchaGate, type HCaptchaGateHandle } from "@/components/auth/hcaptcha-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,9 +19,10 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reset = useSendPasswordReset();
+  const captchaRef = useRef<HCaptchaGateHandle>(null);
 
   return (
-    <div>
+    <AuthCompactCard>
       <h1 className="text-2xl font-semibold tracking-tight">{t("auth:forgot.title")}</h1>
       <p className="mt-1.5 mb-2 text-sm text-muted-foreground">{t("auth:forgot.subtitle")}</p>
       <p className="mb-6 text-xs text-muted-foreground/80">
@@ -40,9 +43,12 @@ export default function ForgotPasswordPage() {
             e.preventDefault();
             setError(null);
             try {
-              await reset.mutateAsync(email);
+              const captchaToken = await captchaRef.current?.getToken();
+              await reset.mutateAsync({ email, captchaToken });
+              captchaRef.current?.reset();
               setSent(true);
             } catch (err) {
+              captchaRef.current?.reset();
               setError(t(authErrorKey(err)));
             }
           }}
@@ -63,6 +69,7 @@ export default function ForgotPasswordPage() {
               {error}
             </p>
           ) : null}
+          <HCaptchaGate ref={captchaRef} />
           <Button type="submit" className="w-full rounded-xl" disabled={reset.isPending}>
             {reset.isPending ? t("auth:forgot.submitting") : t("auth:forgot.submit")}
           </Button>
@@ -74,6 +81,6 @@ export default function ForgotPasswordPage() {
           {t("auth:forgot.backToLogin")}
         </Link>
       </p>
-    </div>
+    </AuthCompactCard>
   );
 }

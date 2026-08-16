@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
+import { AuthCompactCard } from "@/components/auth/auth-compact-card";
+import { HCaptchaGate, type HCaptchaGateHandle } from "@/components/auth/hcaptcha-gate";
 import { OtpInput } from "@/components/auth/otp-input";
 import { Button } from "@/components/ui/button";
 import { useResendSignupOtp, useVerifySignupOtp } from "@/hooks/use-auth";
@@ -26,6 +28,7 @@ function VerifyEmailForm() {
 
   const verify = useVerifySignupOtp();
   const resend = useResendSignupOtp();
+  const captchaRef = useRef<HCaptchaGateHandle>(null);
   const busy = verify.isPending || resend.isPending;
 
   useEffect(() => {
@@ -48,7 +51,7 @@ function VerifyEmailForm() {
   };
 
   return (
-    <div>
+    <AuthCompactCard>
       <h1 className="text-2xl font-semibold tracking-tight">{t("auth:verifyEmail.title")}</h1>
       <p className="mt-1.5 mb-2 text-sm text-muted-foreground">
         {t("auth:verifyEmail.subtitle", { email })}
@@ -96,6 +99,8 @@ function VerifyEmailForm() {
         </Button>
       </form>
 
+      <HCaptchaGate ref={captchaRef} />
+
       <div className="mt-6 space-y-3 text-center text-sm">
         <button
           type="button"
@@ -104,9 +109,12 @@ function VerifyEmailForm() {
           onClick={async () => {
             setError(null);
             try {
-              await resend.mutateAsync(email);
+              const captchaToken = await captchaRef.current?.getToken();
+              await resend.mutateAsync({ email, captchaToken });
+              captchaRef.current?.reset();
               setResent(true);
             } catch (err) {
+              captchaRef.current?.reset();
               setError(t(authErrorKey(err)));
             }
           }}
@@ -125,7 +133,7 @@ function VerifyEmailForm() {
           {t("auth:verifyEmail.mockHint")}
         </p>
       ) : null}
-    </div>
+    </AuthCompactCard>
   );
 }
 

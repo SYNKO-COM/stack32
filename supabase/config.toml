@@ -3,7 +3,7 @@
 project_id = "stack32"
 
 [api]
-enabled = true
+enabled = false
 port = 54321
 schemas = ["public", "storage", "graphql_public"]
 
@@ -12,11 +12,11 @@ port = 54322
 major_version = 17
 
 [studio]
-enabled = true
+enabled = false
 port = 54323
 
 [auth]
-enabled = true
+enabled = false
 site_url = "https://stack32.com"
 additional_redirect_urls = [
   "http://localhost:3000/auth/callback",
@@ -44,14 +44,15 @@ additional_redirect_urls = [
 minimum_password_length = 10
 password_requirements = "lower_upper_letters_digits_symbols"
 
-# Captcha (hCaptcha / Turnstile): intentionally disabled for local + CI so E2E
-# and developer auth flows work without a site key. Production enables captcha
-# only via the Supabase Auth dashboard (no app-level bypass or mock unlock).
-# Do not add captcha secret/site-key env vars to this repo for local use.
+# Captcha: local/CI leave disabled. Hosted project enabled separately.
+[auth.captcha]
+enabled = false
+provider = "hcaptcha"
+
 
 [auth.mfa.totp]
-enroll_enabled = true
-verify_enabled = true
+enroll_enabled = false
+verify_enabled = false
 
 [auth.email]
 enable_signup = true
@@ -71,7 +72,7 @@ subject = "Reset your password"
 content_path = "./supabase/templates/recovery.html"
 
 [storage]
-enabled = true
+enabled = false
 
 # Disabled locally: the analytics container needs to mount the Docker socket,
 # which is not supported by colima on macOS.

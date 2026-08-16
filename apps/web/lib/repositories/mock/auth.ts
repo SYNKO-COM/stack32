@@ -42,7 +42,11 @@ export class MockAuthRepository implements AuthRepository {
     return readState().user;
   }
 
-  async signInWithPassword(email: string, _password: string): Promise<User> {
+  async signInWithPassword(
+    email: string,
+    _password: string,
+    _options?: import("@/lib/repositories/interfaces").AuthCaptchaOptions,
+  ): Promise<User> {
     await delay(500);
     const user = makeUser(email);
     const previous = readState();
@@ -54,7 +58,11 @@ export class MockAuthRepository implements AuthRepository {
     return user;
   }
 
-  async signUpWithPassword(email: string, _password: string): Promise<SignUpResult> {
+  async signUpWithPassword(
+    email: string,
+    _password: string,
+    _options?: import("@/lib/repositories/interfaces").AuthCaptchaOptions,
+  ): Promise<SignUpResult> {
     await delay(600);
     // Mirror production: email signup requires OTP before a session exists.
     writeState({ user: null, profile: makeProfile("user_mock") });
@@ -76,7 +84,10 @@ export class MockAuthRepository implements AuthRepository {
     return user;
   }
 
-  async resendSignupOtp(_email: string): Promise<void> {
+  async resendSignupOtp(
+    _email: string,
+    _options?: import("@/lib/repositories/interfaces").AuthCaptchaOptions,
+  ): Promise<void> {
     await delay(400);
   }
 
@@ -96,7 +107,10 @@ export class MockAuthRepository implements AuthRepository {
     return user;
   }
 
-  async sendPasswordReset(_email: string): Promise<void> {
+  async sendPasswordReset(
+    _email: string,
+    _options?: import("@/lib/repositories/interfaces").AuthCaptchaOptions,
+  ): Promise<void> {
     await delay(500);
   }
 

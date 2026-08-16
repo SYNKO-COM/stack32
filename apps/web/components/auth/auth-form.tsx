@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Trans } from "react-i18next";
 
+import { HCaptchaGate, type HCaptchaGateHandle } from "@/components/auth/hcaptcha-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +22,7 @@ import {
   isPasswordValid,
   passwordIssueErrorKey,
 } from "@/lib/auth/password";
-import { resolvePostAuthPath } from "@/lib/auth/post-auth";
+import { resolvePostAuthPath, safeNextPath } from "@/lib/auth/post-auth";
 import { USE_MOCK_DATA } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -46,19 +49,37 @@ interface AuthFormProps {
   mode: "login" | "signup";
   onModeChange?: (mode: "login" | "signup") => void;
   onSuccess?: () => void;
+  /** Preferred post-auth path (checkout, etc.). Also stored for OAuth redirects. */
+  preferredNext?: string | null;
   className?: string;
 }
 
 /** Where a successful auth should lead when no onSuccess override is given. */
-async function defaultDestination(): Promise<string> {
-  const next =
+async function defaultDestination(preferredNext?: string | null): Promise<string> {
+  const fromUrl =
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("next")
       : null;
-  return resolvePostAuthPath(next);
+  return resolvePostAuthPath(preferredNext ?? fromUrl);
 }
 
-export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormProps) {
+function rememberAuthNext(preferredNext?: string | null) {
+  const safe = safeNextPath(preferredNext);
+  if (!safe || typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem("stack32_auth_next", safe);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function AuthForm({
+  mode,
+  onModeChange,
+  onSuccess,
+  preferredNext,
+  className,
+}: AuthFormProps) {
   const { t } = useTranslation(["auth", "errors"]);
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -69,16 +90,21 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
   const signUp = useSignUp();
   const google = useSignInWithGoogle();
   const github = useSignInWithGithub();
+  const captchaRef = useRef<HCaptchaGateHandle>(null);
 
   const busy =
     signIn.isPending || signUp.isPending || google.isPending || github.isPending;
   const ns = mode === "login" ? "login" : "signup";
 
+  useEffect(() => {
+    rememberAuthNext(preferredNext);
+  }, [preferredNext]);
+
   const finish = async () => {
     if (onSuccess) {
       onSuccess();
     } else {
-      router.push(await defaultDestination());
+      router.push(await defaultDestination(preferredNext));
     }
   };
 
@@ -100,30 +126,41 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
       return;
     }
     try {
+      const captchaToken = await captchaRef.current?.getToken();
       if (mode === "login") {
-        await signIn.mutateAsync({ email, password });
+        await signIn.mutateAsync({ email, password, captchaToken });
+        captchaRef.current?.reset();
         await finish();
         return;
       }
 
-      const result = await signUp.mutateAsync({ email, password });
+      const result = await signUp.mutateAsync({ email, password, captchaToken });
+      captchaRef.current?.reset();
       if (result.requiresEmailConfirmation) {
         const next =
-          typeof window !== "undefined"
+          safeNextPath(preferredNext) ??
+          (typeof window !== "undefined"
             ? new URLSearchParams(window.location.search).get("next")
-            : null;
+            : null);
         const nextQs = next ? `&next=${encodeURIComponent(next)}` : "";
         router.push(`/verify-email?email=${encodeURIComponent(email)}${nextQs}`);
         return;
       }
       await finish();
     } catch (err) {
+      captchaRef.current?.reset();
       setError(t(authErrorKey(err)));
     }
   };
 
   const handleOAuth = async (provider: "google" | "github") => {
     setError(null);
+    rememberAuthNext(
+      preferredNext ??
+        (typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("next")
+          : null),
+    );
     try {
       const mutation = provider === "google" ? google : github;
       const user = await mutation.mutateAsync();
@@ -199,6 +236,8 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
           </p>
         ) : null}
 
+        <HCaptchaGate ref={captchaRef} />
+
         <Button type="submit" className="w-full rounded-xl" disabled={busy}>
           {busy ? t(`auth:${ns}.submitting`) : t(`auth:${ns}.submit`)}
         </Button>
@@ -241,7 +280,15 @@ export function AuthForm({ mode, onModeChange, onSuccess, className }: AuthFormP
       </div>
 
       {mode === "signup" ? (
-        <p className="text-xs text-muted-foreground/70">{t("auth:signup.terms")}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground/70 [&_a]:font-medium [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-2">
+          <Trans
+            i18nKey="auth:signup.terms"
+            components={{
+              terms: <Link href="/legal/terms" target="_blank" rel="noreferrer" />,
+              privacy: <Link href="/legal/privacy" target="_blank" rel="noreferrer" />,
+            }}
+          />
+        </p>
       ) : null}
     </div>
   );

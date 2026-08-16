@@ -15,6 +15,8 @@ const publicEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   NEXT_PUBLIC_DATA_MODE: z.enum(["mock", "supabase"]).default("mock"),
   NEXT_PUBLIC_DEFAULT_LOCALE: z.enum(["en", "fr"]).default("en"),
+  /** Public hCaptcha sitekey (optional). Secret lives only in Supabase Auth. */
+  NEXT_PUBLIC_HCAPTCHA_SITEKEY: z.string().optional(),
 });
 
 function readPublicEnv() {
@@ -31,6 +33,8 @@ function readPublicEnv() {
       process.env.NEXT_PUBLIC_DATA_MODE ??
       (process.env.NEXT_PUBLIC_USE_MOCK_DATA === "false" ? "supabase" : undefined),
     NEXT_PUBLIC_DEFAULT_LOCALE: process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
+    NEXT_PUBLIC_HCAPTCHA_SITEKEY:
+      process.env.NEXT_PUBLIC_HCAPTCHA_SITEKEY || undefined,
   };
   const parsed = publicEnvSchema.safeParse(raw);
   if (!parsed.success) {

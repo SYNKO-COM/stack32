@@ -28,6 +28,7 @@ Tu peux ouvrir [https://stack32.com](https://stack32.com), créer un compte, et 
 | Intégrations Pipedream | ✅ Fait (branché sur Cloud Run) |
 | Paiements Whop (clés sur Vercel) | ✅ Fait (`BILLING_MODE=whop`) |
 | Recherche web (Tavily) | ✅ Fait |
+| Anti-spam inscription (**hCaptcha** invisible / passif) | ✅ Fait |
 
 **Liens utiles**
 
@@ -50,17 +51,7 @@ Tu peux ouvrir [https://stack32.com](https://stack32.com), créer un compte, et 
 
 Si une étape plante : envoie-moi **la page URL + une capture d’écran + le message d’erreur**. Je corrige.
 
-### 2. Optionnel — anti-spam à l’inscription (CAPTCHA)
-
-Utile si tu as peur des faux comptes. **Pas obligatoire** pour être en prod.
-
-1. Va sur [https://supabase.com/dashboard/project/mhwzxpscyvuavpfqxfgm/auth/url-configuration](https://supabase.com/dashboard/project/mhwzxpscyvuavpfqxfgm/auth/url-configuration) (ou Auth → Attack Protection)
-2. Active **CAPTCHA** (hCaptcha ou Turnstile)
-3. Colle les clés dans le dashboard Supabase
-
-Si tu as les clés et que tu préfères que je le fasse : **envoie-moi les 2 clés** (site key + secret), je te guide / configure ce qui est possible.
-
-### 3. Optionnel — e-mails des runs planifiés (SMTP)
+### 2. Optionnel — e-mails des runs planifiés (SMTP)
 
 Aujourd’hui : les agents tournent, mais les **e-mails de notification** des schedules ne partent pas encore (pas de boîte mail SMTP configurée).
 
@@ -73,7 +64,7 @@ Si tu veux ça, envoie-moi :
 
 → Je configure ça automatiquement sur Cloud Run.
 
-### 4. Optionnel — connexion Google (Gmail / Calendar natif)
+### 3. Optionnel — connexion Google (Gmail / Calendar natif)
 
 Seulement si tu veux le bouton “Connect Google” first-party (hors Pipedream).
 
@@ -85,6 +76,16 @@ Envoie-moi :
 (créés dans Google Cloud → APIs & Services → Credentials → OAuth client)
 
 → Je branche les variables.
+
+---
+
+## hCaptcha (déjà branché)
+
+- **Sitekey** (public) : sur Vercel + front (mode **invisible** → les gens ne voient en général pas de case à cocher)
+- **Secret** : uniquement dans **Supabase Auth** (jamais dans le code / front)
+- Dans le dashboard hCaptcha → **Sites** : ajoute les domaines `stack32.com`, `www.stack32.com`, `stack32.vercel.app` (et `localhost` si tu testes en local)
+
+Le CAPTCHA n’est **pas** requis en local/mock tant que `NEXT_PUBLIC_HCAPTCHA_SITEKEY` est vide.
 
 ---
 

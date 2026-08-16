@@ -17,6 +17,9 @@ importers:
       '@dagrejs/dagre':
         specifier: ^3.1.0
         version: 3.1.0
+      '@hcaptcha/react-hcaptcha':
+        specifier: ^2.1.0
+        version: 2.1.0
       '@pipedream/sdk':
         specifier: ^3.1.2
         version: 3.1.2
@@ -451,6 +454,9 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+
+  '@hcaptcha/react-hcaptcha@2.1.0':
+    resolution: {integrity: sha512-ztc4s7Pr8+MUYamgmgGAY7eLOThYAP4QIwKqAzj4fpymMPDlm66yo1516e68JR9VN0kmwAAJ0XrNS3NOh0BNLg==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -4304,6 +4310,8 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
 
   '@floating-ui/utils@0.2.12': {}
+
+  '@hcaptcha/react-hcaptcha@2.1.0': {}
 
   '@humanfs/core@0.19.2':
     dependencies:

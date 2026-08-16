@@ -30,10 +30,23 @@ export interface SignUpResult {
   requiresEmailConfirmation: boolean;
 }
 
+/** Optional hCaptcha token for Supabase Auth bot protection. */
+export type AuthCaptchaOptions = {
+  captchaToken?: string;
+};
+
 export interface AuthRepository {
   getCurrentUser(): Promise<User | null>;
-  signInWithPassword(email: string, password: string): Promise<User>;
-  signUpWithPassword(email: string, password: string): Promise<SignUpResult>;
+  signInWithPassword(
+    email: string,
+    password: string,
+    options?: AuthCaptchaOptions,
+  ): Promise<User>;
+  signUpWithPassword(
+    email: string,
+    password: string,
+    options?: AuthCaptchaOptions,
+  ): Promise<SignUpResult>;
   /** Returns null when an OAuth redirect is in progress. */
   signInWithGoogle(): Promise<User | null>;
   /** Returns null when an OAuth redirect is in progress. */
@@ -41,8 +54,8 @@ export interface AuthRepository {
   /** Verify the 6-digit email OTP sent after signup. */
   verifySignupOtp(email: string, token: string): Promise<User>;
   /** Resend the signup confirmation email / OTP. */
-  resendSignupOtp(email: string): Promise<void>;
-  sendPasswordReset(email: string): Promise<void>;
+  resendSignupOtp(email: string, options?: AuthCaptchaOptions): Promise<void>;
+  sendPasswordReset(email: string, options?: AuthCaptchaOptions): Promise<void>;
   updatePassword(newPassword: string): Promise<void>;
   signOut(): Promise<void>;
   getProfile(): Promise<Profile | null>;

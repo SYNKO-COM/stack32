@@ -33,8 +33,15 @@ export function useProfile() {
 export function useSignIn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) =>
-      getAuthRepository().signInWithPassword(email, password),
+    mutationFn: ({
+      email,
+      password,
+      captchaToken,
+    }: {
+      email: string;
+      password: string;
+      captchaToken?: string;
+    }) => getAuthRepository().signInWithPassword(email, password, { captchaToken }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
   });
 }
@@ -42,8 +49,15 @@ export function useSignIn() {
 export function useSignUp() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) =>
-      getAuthRepository().signUpWithPassword(email, password),
+    mutationFn: ({
+      email,
+      password,
+      captchaToken,
+    }: {
+      email: string;
+      password: string;
+      captchaToken?: string;
+    }) => getAuthRepository().signUpWithPassword(email, password, { captchaToken }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
   });
 }
@@ -75,7 +89,13 @@ export function useSignOut() {
 
 export function useSendPasswordReset() {
   return useMutation({
-    mutationFn: (email: string) => getAuthRepository().sendPasswordReset(email),
+    mutationFn: ({
+      email,
+      captchaToken,
+    }: {
+      email: string;
+      captchaToken?: string;
+    }) => getAuthRepository().sendPasswordReset(email, { captchaToken }),
   });
 }
 
@@ -90,7 +110,13 @@ export function useVerifySignupOtp() {
 
 export function useResendSignupOtp() {
   return useMutation({
-    mutationFn: (email: string) => getAuthRepository().resendSignupOtp(email),
+    mutationFn: ({
+      email,
+      captchaToken,
+    }: {
+      email: string;
+      captchaToken?: string;
+    }) => getAuthRepository().resendSignupOtp(email, { captchaToken }),
   });
 }
 

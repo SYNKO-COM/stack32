@@ -3,7 +3,11 @@ import { AuthUiError } from "@/lib/auth/errors";
 import { mapProfile, mapSupabaseUser } from "@/lib/domain/mappers";
 import { publicEnv } from "@/lib/env";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { AuthRepository, SignUpResult } from "@/lib/repositories/interfaces";
+import type {
+  AuthCaptchaOptions,
+  AuthRepository,
+  SignUpResult,
+} from "@/lib/repositories/interfaces";
 
 function appOrigin(): string {
   if (typeof window !== "undefined") return window.location.origin;
@@ -19,14 +23,28 @@ export class SupabaseAuthRepository implements AuthRepository {
     return user ? mapSupabaseUser(user) : null;
   }
 
-  async signInWithPassword(email: string, password: string): Promise<User> {
+  async signInWithPassword(
+    email: string,
+    password: string,
+    options?: AuthCaptchaOptions,
+  ): Promise<User> {
     const supabase = requireSupabaseBrowserClient();
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: options?.captchaToken
+        ? { captchaToken: options.captchaToken }
+        : undefined,
+    });
     if (error) throw error;
     return mapSupabaseUser(data.user);
   }
 
-  async signUpWithPassword(email: string, password: string): Promise<SignUpResult> {
+  async signUpWithPassword(
+    email: string,
+    password: string,
+    options?: AuthCaptchaOptions,
+  ): Promise<SignUpResult> {
     const supabase = requireSupabaseBrowserClient();
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -34,6 +52,9 @@ export class SupabaseAuthRepository implements AuthRepository {
       options: {
         // Link fallback → success page; primary UX is the 6-digit OTP page.
         emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/auth/confirmed")}`,
+        ...(options?.captchaToken
+          ? { captchaToken: options.captchaToken }
+          : {}),
       },
     });
     if (error) throw error;
@@ -65,13 +86,19 @@ export class SupabaseAuthRepository implements AuthRepository {
     return mapSupabaseUser(result.data.user);
   }
 
-  async resendSignupOtp(email: string): Promise<void> {
+  async resendSignupOtp(
+    email: string,
+    options?: AuthCaptchaOptions,
+  ): Promise<void> {
     const supabase = requireSupabaseBrowserClient();
     const { error } = await supabase.auth.resend({
       type: "signup",
       email,
       options: {
         emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/auth/confirmed")}`,
+        ...(options?.captchaToken
+          ? { captchaToken: options.captchaToken }
+          : {}),
       },
     });
     if (error) throw error;
@@ -93,8 +120,18 @@ export class SupabaseAuthRepository implements AuthRepository {
       typeof window !== "undefined"
         ? new URLSearchParams(window.location.search).get("next")
         : null;
-    const nextParam = next
-      ? `?next=${encodeURIComponent(next)}`
+    let stored: string | null = null;
+    try {
+      stored =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("stack32_auth_next")
+          : null;
+    } catch {
+      stored = null;
+    }
+    const resolved = next || stored;
+    const nextParam = resolved
+      ? `?next=${encodeURIComponent(resolved)}`
       : "?next=/agents";
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -107,10 +144,16 @@ export class SupabaseAuthRepository implements AuthRepository {
     return null;
   }
 
-  async sendPasswordReset(email: string): Promise<void> {
+  async sendPasswordReset(
+    email: string,
+    options?: AuthCaptchaOptions,
+  ): Promise<void> {
     const supabase = requireSupabaseBrowserClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/reset-password")}`,
+      ...(options?.captchaToken
+        ? { captchaToken: options.captchaToken }
+        : {}),
     });
     if (error) throw error;
   }
