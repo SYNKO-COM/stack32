@@ -311,28 +311,29 @@ export async function searchIntegrationApps(
       };
     })
     .filter((app) => Boolean(app.appId));
-  // #region agent log
-  fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "faa28e" },
-    body: JSON.stringify({
-      sessionId: "faa28e",
-      runId: "pre-verify",
-      hypothesisId: "A,D",
-      location: "integrations.ts:searchIntegrationApps",
-      message: "server app search payload",
-      data: {
-        q,
-        count: apps.length,
-        ids: apps.slice(0, 10).map((a) => a.appId),
-        names: apps.slice(0, 10).map((a) => a.name),
-        providers: (result.apps ?? []).slice(0, 10).map((row) => asRecord(row).provider ?? null),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   return { query: result.query, apps };
+}
+
+/** Resolve exact Pipedream logo URLs for Structure nodes (app id → img_src). */
+export async function lookupIntegrationAppIcons(
+  appIds: string[],
+): Promise<Record<string, string>> {
+  const unique = [
+    ...new Set(appIds.map((id) => id.trim().toLowerCase()).filter(Boolean)),
+  ].slice(0, 24);
+  const { pickExactAppIcon } = await import("@/lib/integrations/rank-apps");
+  const entries = await Promise.all(
+    unique.map(async (appId) => {
+      const { apps } = await searchIntegrationApps(appId, 20);
+      const src = pickExactAppIcon(appId, apps);
+      return [appId, src] as const;
+    }),
+  );
+  const out: Record<string, string> = {};
+  for (const [id, src] of entries) {
+    if (src) out[id] = src;
+  }
+  return out;
 }
 
 export async function getProvidersHealth(): Promise<{

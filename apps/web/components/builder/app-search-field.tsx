@@ -30,7 +30,7 @@ function AppMark({ src, name }: { src?: string; name: string }) {
       alt=""
       width={24}
       height={24}
-      className="size-6 shrink-0 rounded-md object-contain"
+      className="size-6 shrink-0 rounded-md bg-transparent object-contain"
       onError={() => setFailed(true)}
     />
   );
@@ -71,9 +71,6 @@ export function AppSearchField({
         .then((result) => {
           if (cancelled) return;
           const ranked = rankIntegrationApps(q, result.apps);
-          // #region agent log
-          fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',runId:'pre-verify',hypothesisId:'A,C,D',location:'app-search-field.tsx:search',message:'app search ranked',data:{q,rawIds:result.apps.slice(0,8).map((a)=>a.appId),rawNames:result.apps.slice(0,8).map((a)=>a.name),rankedIds:ranked.slice(0,8).map((a)=>a.appId),rankedNames:ranked.slice(0,8).map((a)=>a.name),rawCount:result.apps.length,rankedCount:ranked.length,googleInRaw:result.apps.some((a)=>a.appId==='google'),gmailInRaw:result.apps.some((a)=>a.appId==='gmail'),gmailFirst:ranked[0]?.appId==='gmail'},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           setApps(ranked);
           for (const app of ranked) {
             if (app.imgSrc) cacheIntegrationIcon(app.appId, app.imgSrc);
@@ -105,20 +102,6 @@ export function AppSearchField({
       });
     };
     update();
-    // #region agent log
-    const rect = rootRef.current?.getBoundingClientRect();
-    let bubbleOverflow: string | null = null;
-    let node: HTMLElement | null = rootRef.current;
-    while (node) {
-      const ov = window.getComputedStyle(node).overflow;
-      if (ov && ov !== "visible") {
-        bubbleOverflow = `${node.className?.toString().slice(0, 80)}:${ov}`;
-        break;
-      }
-      node = node.parentElement;
-    }
-    fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',runId:'pre-verify',hypothesisId:'B,E',location:'app-search-field.tsx:portal',message:'autocomplete portal layout',data:{open,usingPortal:true,hasMenuBox:true,top:rect?rect.bottom+6:null,width:rect?.width??null,clippingAncestor:bubbleOverflow,listParent:'document.body'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {

@@ -18,6 +18,7 @@ export interface ProductNodeData extends Record<string, unknown> {
   productNode: ProductNode;
   executionStatus?: string;
   selected?: boolean;
+  imgSrc?: string | null;
 }
 
 export function AgentNode({ data }: NodeProps<Node<ProductNodeData>>) {

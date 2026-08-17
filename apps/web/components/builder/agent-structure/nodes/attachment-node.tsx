@@ -9,6 +9,7 @@ import {
 } from "@/components/builder/agent-structure/node-styles";
 import type { ProductNodeData } from "@/components/builder/agent-structure/nodes/agent-node";
 import { StructureCircleNode } from "@/components/builder/agent-structure/structure-icon";
+import { integrationIconUrl } from "@/lib/integrations/icon-resolver";
 
 export function AttachmentNode({ data }: NodeProps<Node<ProductNodeData>>) {
   const node = data.productNode;
@@ -22,6 +23,7 @@ export function AttachmentNode({ data }: NodeProps<Node<ProductNodeData>>) {
         status={status}
         label={node.label}
         selected={data.selected}
+        logoSrc={node.kind === "model" ? integrationIconUrl(node.icon) : null}
       />
     </NodeFrame>
   );

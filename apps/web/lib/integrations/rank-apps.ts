@@ -46,3 +46,16 @@ export function rankIntegrationApps(
   const matched = scored.filter((row) => row.score > 0).map((row) => row.app);
   return matched.length > 0 ? matched : apps;
 }
+
+/** Exact Pipedream app id only — never borrow another app's logo. */
+export function pickExactAppIcon(
+  appId: string,
+  apps: IntegrationAppHit[],
+): string | undefined {
+  const id = appId.trim().toLowerCase();
+  if (!id) return undefined;
+  const hit = apps.find(
+    (app) => app.appId.toLowerCase() === id && Boolean(app.imgSrc?.trim()),
+  );
+  return hit?.imgSrc?.trim();
+}

@@ -22,6 +22,7 @@ export function IntegrationNode({ data }: NodeProps<Node<ProductNodeData>>) {
       <StructureAppIcon
         appKey={appKey}
         status={status}
+        imgSrc={typeof data.imgSrc === "string" ? data.imgSrc : null}
         className={cn(data.selected && "rounded-full ring-2 ring-brand/45")}
       />
       <p className="mt-1.5 max-w-[112px] truncate text-xs font-medium leading-tight">

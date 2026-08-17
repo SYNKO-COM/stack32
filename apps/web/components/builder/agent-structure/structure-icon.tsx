@@ -1,8 +1,9 @@
 "use client";
 
 import { Check, Loader2, Pause, Send, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { getCachedIntegrationIcon } from "@/lib/integrations/icon-resolver";
 import { cn } from "@/lib/utils";
 
 /** Visual tone for structure nodes (idle = orange, not green). */
@@ -75,66 +76,12 @@ const KIND_SLOT: Record<string, string> = {
   output: "output",
 };
 
-const APP_BRAND: Record<string, { slug?: string; domain?: string }> = {
-  gmail: { slug: "gmail", domain: "gmail.com" },
-  google_calendar: { slug: "googlecalendar", domain: "calendar.google.com" },
-  calendar: { slug: "googlecalendar", domain: "calendar.google.com" },
-  google_docs: { slug: "googledocs", domain: "docs.google.com" },
-  google_doc: { slug: "googledocs", domain: "docs.google.com" },
-  google_sheets: { slug: "googlesheets", domain: "sheets.google.com" },
-  google_drive: { slug: "googledrive", domain: "drive.google.com" },
-  google_slides: { slug: "googleslides", domain: "slides.google.com" },
-  slack: { slug: "slack", domain: "slack.com" },
-  slack_v2: { slug: "slack", domain: "slack.com" },
-  notion: { slug: "notion", domain: "notion.so" },
-  hubspot: { slug: "hubspot", domain: "hubspot.com" },
-  stripe: { slug: "stripe", domain: "stripe.com" },
-  salesforce: { slug: "salesforce", domain: "salesforce.com" },
-  pipedrive: { slug: "pipedrive", domain: "pipedrive.com" },
-  box: { slug: "box", domain: "box.com" },
-  mural: { slug: "mural", domain: "mural.co" },
-  "1crm": { domain: "1crm.com" },
-  microsoft_outlook: { slug: "microsoftoutlook", domain: "outlook.com" },
-  outlook: { slug: "microsoftoutlook", domain: "outlook.com" },
-  microsoft_teams: { slug: "microsoftteams", domain: "teams.microsoft.com" },
-  onedrive: { slug: "microsoftonedrive", domain: "onedrive.live.com" },
-  github: { slug: "github", domain: "github.com" },
-  gitlab: { slug: "gitlab", domain: "gitlab.com" },
-  linear: { slug: "linear", domain: "linear.app" },
-  asana: { slug: "asana", domain: "asana.com" },
-  trello: { slug: "trello", domain: "trello.com" },
-  jira: { slug: "jira", domain: "atlassian.com" },
-  zendesk: { slug: "zendesk", domain: "zendesk.com" },
-  intercom: { slug: "intercom", domain: "intercom.com" },
-  dropbox: { slug: "dropbox", domain: "dropbox.com" },
-  airtable: { slug: "airtable", domain: "airtable.com" },
-  shopify: { slug: "shopify", domain: "shopify.com" },
-  discord: { slug: "discord", domain: "discord.com" },
-  telegram: { slug: "telegram", domain: "telegram.org" },
-  whatsapp: { slug: "whatsapp", domain: "whatsapp.com" },
-};
-
 function kindIconSrc(tone: StructureTone, slot: string): string {
   return `/structure-icons/${tone}/${slot}.png`;
 }
 
 function ringSrc(tone: StructureTone): string {
   return `/structure-icons/rings/${tone}.png`;
-}
-
-function brandLogoCandidates(appKey: string): string[] {
-  const key = appKey.toLowerCase();
-  const meta = APP_BRAND[key];
-  const out: string[] = [];
-  if (meta?.slug) out.push(`https://cdn.simpleicons.org/${meta.slug}`);
-  if (meta?.domain) {
-    out.push(`https://www.google.com/s2/favicons?domain=${meta.domain}&sz=128`);
-  }
-  // Generic favicon guess from app key
-  if (!meta?.domain && key.length > 1) {
-    out.push(`https://www.google.com/s2/favicons?domain=${key.replaceAll("_", "")}.com&sz=128`);
-  }
-  return out;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -215,21 +162,27 @@ export function StructureKindIcon({
 }
 
 /**
- * Tool / integration icon: empty colored ring + brand logo (logos keep brand colors).
+ * Tool / integration icon: Pipedream catalog logo only (transparent PNG/SVG).
+ * If Pipedream has no logo, keep the node and show initials — never invent a mark.
  */
 export function StructureAppIcon({
   appKey,
   status,
   className,
+  imgSrc,
 }: {
   appKey: string;
   status: string;
   className?: string;
+  imgSrc?: string | null;
 }) {
   const tone = statusToTone(status);
-  const candidates = brandLogoCandidates(appKey);
-  const [logoIndex, setLogoIndex] = useState(0);
-  const logoSrc = candidates[logoIndex];
+  const [failed, setFailed] = useState(false);
+  const logoSrc = failed ? null : (imgSrc ?? getCachedIntegrationIcon(appKey) ?? null);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [appKey, imgSrc]);
 
   return (
     <span
@@ -261,8 +214,8 @@ export function StructureAppIcon({
             src={logoSrc}
             alt=""
             draggable={false}
-            className="relative z-[1] size-7 object-contain"
-            onError={() => setLogoIndex((i) => i + 1)}
+            className="relative z-[1] size-7 bg-transparent object-contain"
+            onError={() => setFailed(true)}
           />
         ) : (
           <span className="relative z-[1] text-[11px] font-bold uppercase tracking-wide text-foreground/70">
@@ -282,14 +235,17 @@ export function StructureCircleNode({
   label,
   selected,
   className,
+  logoSrc,
 }: {
   kind: string;
   status: string;
   label?: string;
   selected?: boolean;
   className?: string;
+  logoSrc?: string | null;
 }) {
   const tone = statusToTone(status);
+  const showProviderLogo = kind === "model" && Boolean(logoSrc);
   return (
     <div className={cn("flex flex-col items-center text-center", className)}>
       <span className="relative inline-flex">
@@ -308,7 +264,25 @@ export function StructureCircleNode({
           )}
           style={{ border: `2px solid ${toneBorderColor(tone, status)}` }}
         >
-          <StructureKindIcon kind={kind} status={status} className="size-[72px]" />
+          {showProviderLogo ? (
+            <span className="relative flex size-[72px] items-center justify-center">
+              <img
+                src={ringSrc(tone)}
+                alt=""
+                draggable={false}
+                className="pointer-events-none absolute inset-0 size-full object-contain"
+              />
+              <img
+                src={logoSrc!}
+                alt=""
+                draggable={false}
+                className="relative z-[1] size-[38%] bg-transparent object-contain"
+              />
+              <StatusBadge status={status} />
+            </span>
+          ) : (
+            <StructureKindIcon kind={kind} status={status} className="size-[72px]" />
+          )}
         </span>
       </span>
       {label ? (

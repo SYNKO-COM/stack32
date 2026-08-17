@@ -35,10 +35,12 @@ import { IntegrationNode } from "@/components/builder/agent-structure/nodes/inte
 import { OutputNode } from "@/components/builder/agent-structure/nodes/output-node";
 import { TriggerNode } from "@/components/builder/agent-structure/nodes/trigger-node";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/hooks/use-translation";
+import { lookupIntegrationAppIcons } from "@/lib/actions/integrations";
 import type { ExecutionVisualState } from "@/lib/domain/execution-state";
 import type { ProductNode } from "@/lib/domain/product-agent-graph";
 import type { AgentSpec, ApprovalMode, GraphSpec } from "@/lib/domain/types";
-import { useTranslation } from "@/hooks/use-translation";
+import { cacheIntegrationIcon } from "@/lib/integrations/icon-resolver";
 
 const nodeTypes = {
   trigger: TriggerNode,
@@ -138,6 +140,7 @@ function ProductAgentGraphCanvas({
           .join("|") || "success"
       : null;
   const [fadedKeys, setFadedKeys] = useState(() => new Set<string>());
+  const [pipedreamIcons, setPipedreamIcons] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!successKey) return;
@@ -182,6 +185,33 @@ function ProductAgentGraphCanvas({
     [productGraph.nodes],
   );
 
+  const integrationAppKeySignature = useMemo(
+    () =>
+      productGraph.nodes
+        .filter((n) => n.kind === "integration")
+        .map((n) => n.integration?.appKey)
+        .filter((key): key is string => Boolean(key))
+        .sort()
+        .join("|"),
+    [productGraph.nodes],
+  );
+
+  useEffect(() => {
+    if (!integrationAppKeySignature) return;
+    const keys = integrationAppKeySignature.split("|");
+    let cancelled = false;
+    void lookupIntegrationAppIcons(keys).then((icons) => {
+      if (cancelled) return;
+      for (const [appKey, src] of Object.entries(icons)) {
+        cacheIntegrationIcon(appKey, src);
+      }
+      setPipedreamIcons(icons);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [integrationAppKeySignature]);
+
   const needsSetup = useMemo(
     () =>
       productGraph.nodes.filter(
@@ -211,6 +241,7 @@ function ProductAgentGraphCanvas({
             productNode,
             executionStatus: mapExecStatus(rawExec),
             selected: selected?.id === productNode.id,
+            imgSrc: pipedreamIcons[productNode.integration?.appKey ?? ""] ?? null,
           },
         };
       }),
@@ -235,7 +266,7 @@ function ProductAgentGraphCanvas({
         },
       })),
     );
-  }, [productGraph, executionVisual, selected?.id, setEdges, setNodes, mapExecStatus]);
+  }, [productGraph, executionVisual, selected?.id, setEdges, setNodes, mapExecStatus, pipedreamIcons]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<Node>[]) => {

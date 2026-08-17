@@ -100,6 +100,24 @@ describe("app-grouping", () => {
     const groups = groupToolsByApp([...bindings.keys()], bindings);
     expect(groups.map((g) => g.appKey).sort()).toEqual(["hubspot", "slack"]);
   });
+
+  it("labels google_maps_platform as Google Maps", () => {
+    const bindings = new Map([
+      [
+        "pd:google_maps_platform-search-places",
+        {
+          toolId: "pd:google_maps_platform-search-places",
+          provider: "pipedream",
+          appId: "google_maps_platform",
+          enabled: true,
+        },
+      ],
+    ]);
+    const groups = groupToolsByApp([...bindings.keys()], bindings);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.appKey).toBe("google_maps_platform");
+    expect(groups[0]?.appName).toBe("Google Maps");
+  });
 });
 
 describe("graph-adapter", () => {

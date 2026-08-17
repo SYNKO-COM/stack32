@@ -80,13 +80,7 @@ export function useBuilderThread(agentId: string, opts?: { forcePoll?: boolean }
     placeholderData: (previous) => previous,
     refetchInterval: (query) => {
       const data = query.state.data;
-      const last = data?.messages[data.messages.length - 1];
       const active = Boolean(opts?.forcePoll) || isThreadActive(data);
-      // #region agent log
-      if (typeof window !== "undefined" && window.location.hostname === "localhost") {
-        fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',hypothesisId:'E',location:'use-builder.ts:refetchInterval',message:'builder poll decision',data:{active,forcePoll:Boolean(opts?.forcePoll),lastRole:last?.role,lastCard:last?.card ?? null,lastContent:(last?.content ?? '').slice(0,80),hasUi:Boolean(last?.uiComponent),msgCount:data?.messages.length ?? 0},timestamp:Date.now()})}).catch(()=>{});
-      }
-      // #endregion
       return active ? 2800 : false;
     },
     // Keep polling after a form submit even if the user switches tabs — otherwise
