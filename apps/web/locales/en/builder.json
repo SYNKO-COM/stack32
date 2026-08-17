@@ -254,7 +254,8 @@
     "formClosed": "Triggers saved. Building now."
   },
   "providers": {
-    "prompt": "I found more than one matching app for a tool you mentioned. Pick the exact one below — you can also paste the website URL. No account linking yet.",
+    "prompt": "I found more than one matching app for a tool you mentioned. Search and pick the exact one — you can also paste the website URL. No account linking yet.",
+    "searchPlaceholder": "Start typing to search apps…",
     "saved": "Got it — I'll wire those apps into your agent definition."
   },
   "questions": {

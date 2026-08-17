@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
+import { DaSelect } from "@/components/ui/da-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +13,6 @@ import { submitBuilderIdentity } from "@/lib/actions/builder";
 import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import type { BuilderUiComponent } from "@/lib/domain/types";
 import { useTranslation } from "@/hooks/use-translation";
-import { cn } from "@/lib/utils";
 
 const TONE_OPTIONS = ["professional", "friendly", "concise", "formal"] as const;
 
@@ -101,22 +101,16 @@ export function AgentIdentityForm({ uiComponent, runId, onSubmitted }: AgentIden
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="identity-tone">{t("builder:identity.tone")}</Label>
-        <select
+        <DaSelect
           id="identity-tone"
           value={tone}
-          onChange={(e) => setTone(e.target.value)}
           disabled={submitting}
-          className={cn(
-            "flex h-9 w-full rounded-xl border border-input bg-background/40 px-3 py-1 text-sm",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          )}
-        >
-          {TONE_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {t(`builder:identity.toneOptions.${option}`)}
-            </option>
-          ))}
-        </select>
+          options={TONE_OPTIONS.map((option) => ({
+            value: option,
+            label: t(`builder:identity.toneOptions.${option}`),
+          }))}
+          onChange={setTone}
+        />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="identity-description">{t("builder:identity.description")}</Label>

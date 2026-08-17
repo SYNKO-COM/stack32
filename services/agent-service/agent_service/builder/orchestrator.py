@@ -953,11 +953,10 @@ class BuilderOrchestrator:
             fields.append(
                 {
                     "key": "email_service",
-                    "type": "select",
+                    "type": "text",
                     "required": True,
                     "label": "Email service",
-                    "options": ["gmail", "microsoft_outlook"],
-                    "suggested_value": "gmail",
+                    "suggested_value": "",
                 }
             )
         if "crm_provider" in plan.ambiguities and not any(
@@ -967,11 +966,10 @@ class BuilderOrchestrator:
             fields.append(
                 {
                     "key": "crm",
-                    "type": "select",
+                    "type": "text",
                     "required": True,
                     "label": "CRM",
-                    "options": ["hubspot", "salesforce", "pipedrive", "zoho_crm"],
-                    "suggested_value": "hubspot",
+                    "suggested_value": "",
                 }
             )
         if not fields:

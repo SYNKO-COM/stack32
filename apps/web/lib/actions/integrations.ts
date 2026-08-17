@@ -268,6 +268,52 @@ export async function searchIntegrationTools(
   };
 }
 
+export interface IntegrationAppHit {
+  appId: string;
+  name: string;
+  imgSrc?: string;
+  summary?: string;
+}
+
+export async function searchIntegrationApps(
+  q: string,
+  limit = 20,
+): Promise<{ query: string; apps: IntegrationAppHit[] }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { query: q, apps: [] };
+  }
+  const accessToken = await requireAccessToken();
+  const params = new URLSearchParams({
+    q: q.slice(0, 200),
+    limit: String(Math.min(Math.max(limit, 1), 50)),
+  });
+  const result = await agentServiceFetch<{
+    query: string;
+    apps: Array<Record<string, unknown>>;
+  }>(`/v1/integrations/apps/search?${params.toString()}`, {
+    method: "GET",
+    accessToken,
+  });
+  return {
+    query: result.query,
+    apps: (result.apps ?? []).map((row) => {
+      const rec = asRecord(row);
+      const appId = String(rec.app_id ?? rec.appId ?? rec.name_slug ?? rec.id ?? "");
+      return {
+        appId,
+        name: typeof rec.name === "string" && rec.name ? rec.name : appId,
+        imgSrc:
+          typeof rec.img_src === "string"
+            ? rec.img_src
+            : typeof rec.imgSrc === "string"
+              ? rec.imgSrc
+              : undefined,
+        summary: typeof rec.summary === "string" ? rec.summary : undefined,
+      };
+    }).filter((app) => Boolean(app.appId)),
+  };
+}
+
 export async function getProvidersHealth(): Promise<{
   providers: Array<Record<string, unknown>>;
   llm: Array<Record<string, unknown>>;

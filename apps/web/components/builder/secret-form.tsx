@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
+import { DaSelect } from "@/components/ui/da-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -14,7 +15,6 @@ import {
 import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import type { BuilderUiComponent } from "@/lib/domain/types";
 import { useTranslation } from "@/hooks/use-translation";
-import { cn } from "@/lib/utils";
 
 const FALLBACK_PROVIDERS = [
   "openai",
@@ -99,22 +99,16 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
 
       <div className="space-y-1.5">
         <Label htmlFor="secret-provider">{t("builder:secrets.provider")}</Label>
-        <select
+        <DaSelect
           id="secret-provider"
           value={provider}
-          onChange={(e) => setProvider(e.target.value)}
           disabled={submitting}
-          className={cn(
-            "flex h-9 w-full rounded-xl border border-input bg-background/40 px-3 py-1 text-sm",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          )}
-        >
-          {FALLBACK_PROVIDERS.map((option) => (
-            <option key={option} value={option}>
-              {t(`builder:secrets.providers.${option}`, { defaultValue: option })}
-            </option>
-          ))}
-        </select>
+          options={FALLBACK_PROVIDERS.map((option) => ({
+            value: option,
+            label: t(`builder:secrets.providers.${option}`, { defaultValue: option }),
+          }))}
+          onChange={setProvider}
+        />
       </div>
 
       <div className="space-y-1.5">
