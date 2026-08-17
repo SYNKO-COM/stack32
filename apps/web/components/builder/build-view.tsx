@@ -29,6 +29,9 @@ import {
   useSendBuilderMessage,
 } from "@/hooks/use-builder";
 import { summarizeActivity, useRunActivity } from "@/hooks/use-run-activity";
+import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-button";
+import { gatherSupportDiagnostic } from "@/lib/actions/support-diagnostic";
+import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
 import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
 import { useTranslation } from "@/hooks/use-translation";
 import { playAgentReadyChime } from "@/lib/audio/agent-ready-chime";
@@ -194,6 +197,16 @@ function MessageActions({
   );
 }
 
+function promptBeforeMessage(messages: BuilderMessage[], messageId: string): string | undefined {
+  const idx = messages.findIndex((m) => m.id === messageId);
+  if (idx <= 0) return undefined;
+  for (let i = idx - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m?.role === "user" && m.content.trim()) return m.content.trim();
+  }
+  return undefined;
+}
+
 function BuilderBubble({
   message,
   agentId,
@@ -206,6 +219,7 @@ function BuilderBubble({
   animateNow,
   onRevealDone,
   activityLines,
+  userPrompt,
 }: {
   message: BuilderMessage;
   agentId: string;
@@ -224,6 +238,7 @@ function BuilderBubble({
   animateNow: boolean;
   onRevealDone?: () => void;
   activityLines?: { id: string; text: string; active?: boolean }[];
+  userPrompt?: string;
 }) {
   const { t, i18n } = useTranslation(["builder", "common"]);
   const { data: user } = useCurrentUser();
@@ -290,7 +305,16 @@ function BuilderBubble({
     (message.identitySummary && message.content.startsWith("builder:identity.confirmed"));
   const showBuildProgress =
     message.card === "build_progress" || Boolean(message.buildBoard);
-  const showThinking = message.card === "thinking";
+  const isStaleThinking =
+    message.card === "thinking" &&
+    !message.content &&
+    isStaleInflightMessage(message.createdAt);
+  const isBackendFailure =
+    isFailureMessageKey(message.content) ||
+    message.tone === "warning" ||
+    message.tone === "error" ||
+    isStaleThinking;
+  const showThinking = message.card === "thinking" && !isBackendFailure;
   const showReady = message.card === "ready";
 
   const animateWrite =
@@ -299,7 +323,8 @@ function BuilderBubble({
     !isUser &&
     !showThinking &&
     !showBuildProgress &&
-    !isCancelNotice;
+    !isCancelNotice &&
+    !isBackendFailure;
 
   const hasTypeableBody = showIdentityConfirmed || showReady || Boolean(content);
   const [typedDone, setTypedDone] = useState(!animateWrite || !hasTypeableBody);
@@ -323,6 +348,10 @@ function BuilderBubble({
         <BuilderWorkingPanel activityLines={activityLines} />
       </MessageEntrance>
     );
+  }
+
+  if (isStaleThinking && !contentKey) {
+    content = t("errors:agentService");
   }
 
   const showForms = !formHidden && typedDone;
@@ -376,16 +405,51 @@ function BuilderBubble({
                 (showReady || showForms) &&
                 "rounded-2xl border border-border/40 bg-foreground/[0.03] px-4 py-3",
               message.tone === "error" && !isCancelNotice && "text-destructive",
+              isBackendFailure && !isCancelNotice && "text-amber-800 dark:text-amber-200",
               isUser && !content.trim() && "hidden",
             )}
           >
-            {message.tone === "error" && !showReady && !isCancelNotice ? (
+            {isBackendFailure && !showReady && !isCancelNotice ? (
+              <div className="mb-2 space-y-2">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="size-3.5" aria-hidden="true" />
+                  {t("common:status.needsAttention")}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CopySupportLogsButton
+                    onCopy={() =>
+                      gatherSupportDiagnostic({
+                        agentId,
+                        surface: "builder",
+                        messageId: message.id,
+                        threadId: message.threadId,
+                        runId: message.interruptRunId,
+                        errorKey:
+                          contentKey ??
+                          (isStaleThinking ? "builder:errors.serviceUnavailable" : undefined),
+                        errorSummary: content,
+                        staleTimeout: isStaleThinking,
+                        userPrompt,
+                        pageUrl: typeof window !== "undefined" ? window.location.href : undefined,
+                        locale: i18n.language,
+                        userAgent:
+                          typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+                      })
+                    }
+                  />
+                  <span className="text-[11px] text-muted-foreground">
+                    {t("common:support.copyHint")}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            {message.tone === "error" && !showReady && !isCancelNotice && !isBackendFailure ? (
               <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-destructive">
                 <CircleX className="size-3.5" aria-hidden="true" />
                 {t("common:status.needsAttention")}
               </p>
             ) : null}
-            {message.tone === "warning" && !showReady && !isCancelNotice ? (
+            {message.tone === "warning" && !showReady && !isCancelNotice && !isBackendFailure ? (
               <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="size-3.5" aria-hidden="true" />
                 {t("common:status.needsAttention")}
@@ -1042,7 +1106,7 @@ export function BuildView({ agentId }: { agentId: string }) {
               <span className="glass mb-6 flex size-14 items-center justify-center rounded-3xl">
                 <LogoMark className="size-7" />
               </span>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl md:text-3xl">
                 {t("builder:empty.title")}
               </h1>
               <p className="mt-3 max-w-md text-sm text-muted-foreground">
@@ -1079,6 +1143,7 @@ export function BuildView({ agentId }: { agentId: string }) {
                     key={message.id}
                     message={message}
                     agentId={agentId}
+                    userPrompt={promptBeforeMessage(messages, message.id)}
                     resolvedFormIds={resolvedFormIds}
                     formSuperseded={isFormSuperseded(message)}
                     fixResolved={fixedMessageIds.has(message.id)}

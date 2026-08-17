@@ -17,6 +17,16 @@ const publicEnvSchema = z.object({
   NEXT_PUBLIC_DEFAULT_LOCALE: z.enum(["en", "fr"]).default("en"),
   /** Public hCaptcha sitekey (optional). Secret lives only in Supabase Auth. */
   NEXT_PUBLIC_HCAPTCHA_SITEKEY: z.string().optional(),
+  /** PostHog project API key (official Next.js name). Empty = SDK never loads. */
+  NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: z.string().optional(),
+  /** Alias kept so older env files still work. */
+  NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
+  /** PostHog ingest host. Must match the project cloud (US or EU). */
+  NEXT_PUBLIC_POSTHOG_HOST: z.string().url().optional(),
+  /** Meta (Facebook) Pixel ID. Empty = pixel never loads. */
+  NEXT_PUBLIC_META_PIXEL_ID: z.string().optional(),
+  /** TikTok Pixel ID. Empty = pixel never loads. */
+  NEXT_PUBLIC_TIKTOK_PIXEL_ID: z.string().optional(),
 });
 
 function readPublicEnv() {
@@ -35,6 +45,13 @@ function readPublicEnv() {
     NEXT_PUBLIC_DEFAULT_LOCALE: process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
     NEXT_PUBLIC_HCAPTCHA_SITEKEY:
       process.env.NEXT_PUBLIC_HCAPTCHA_SITEKEY || undefined,
+    NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN:
+      process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN || undefined,
+    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY || undefined,
+    NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST || undefined,
+    NEXT_PUBLIC_META_PIXEL_ID: process.env.NEXT_PUBLIC_META_PIXEL_ID || undefined,
+    NEXT_PUBLIC_TIKTOK_PIXEL_ID:
+      process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID || undefined,
   };
   const parsed = publicEnvSchema.safeParse(raw);
   if (!parsed.success) {

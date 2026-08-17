@@ -23,11 +23,11 @@ export function Hero() {
         };
 
   return (
-    <section className="relative flex min-h-[100svh] flex-col items-center justify-center px-5 pt-28 pb-20 sm:px-6">
+    <section className="relative flex min-h-[100svh] flex-col items-center justify-center px-4 pt-24 pb-14 sm:px-5 sm:pt-28 sm:pb-20 md:px-6">
       <div className="mx-auto w-full max-w-4xl text-center">
         <motion.h1
           {...fadeUp(0.05)}
-          className="text-5xl font-semibold tracking-tight text-balance sm:text-6xl md:text-[4.75rem] md:leading-[1.1]"
+          className="text-[2rem] leading-[1.12] font-semibold tracking-tight text-balance sm:text-5xl sm:leading-[1.08] md:text-6xl md:leading-[1.1] lg:text-[4.75rem]"
         >
           {t("hero.titleLine1")}
           <br />
@@ -36,17 +36,17 @@ export function Hero() {
 
         <motion.p
           {...fadeUp(0.18)}
-          className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground sm:mt-10 sm:text-xl"
+          className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:mt-8 sm:text-lg md:mt-10 md:text-xl"
         >
           {t("hero.subtitle")}
         </motion.p>
 
-        <motion.div {...fadeUp(0.32)} className="mt-12 sm:mt-14">
+        <motion.div {...fadeUp(0.32)} className="mt-8 w-full sm:mt-12 md:mt-14">
           <PromptComposer
             size="hero"
             animatedPlaceholders={examples}
             onSubmit={(value) => void startFromPrompt(value)}
-            className="mx-auto max-w-2xl text-left sm:max-w-3xl"
+            className="mx-auto w-full max-w-2xl text-left sm:max-w-3xl"
           />
         </motion.div>
       </div>

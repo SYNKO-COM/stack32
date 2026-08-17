@@ -7,6 +7,7 @@ import enLive from "@/locales/en/live.json";
 import enStructure from "@/locales/en/structure.json";
 import enBilling from "@/locales/en/billing.json";
 import enLegal from "@/locales/en/legal.json";
+import enConsent from "@/locales/en/consent.json";
 import enErrors from "@/locales/en/errors.json";
 import enMemory from "@/locales/en/memory.json";
 
@@ -19,6 +20,7 @@ import frLive from "@/locales/fr/live.json";
 import frStructure from "@/locales/fr/structure.json";
 import frBilling from "@/locales/fr/billing.json";
 import frLegal from "@/locales/fr/legal.json";
+import frConsent from "@/locales/fr/consent.json";
 import frErrors from "@/locales/fr/errors.json";
 import frMemory from "@/locales/fr/memory.json";
 
@@ -32,6 +34,7 @@ export const NAMESPACES = [
   "structure",
   "billing",
   "legal",
+  "consent",
   "errors",
   "memory",
 ] as const;
@@ -49,6 +52,7 @@ export const resources = {
     structure: enStructure,
     billing: enBilling,
     legal: enLegal,
+    consent: enConsent,
     errors: enErrors,
     memory: enMemory,
   },
@@ -62,6 +66,7 @@ export const resources = {
     structure: frStructure,
     billing: frBilling,
     legal: frLegal,
+    consent: frConsent,
     errors: frErrors,
     memory: frMemory,
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Loader2, Table2, Trash2 } from "lucide-react";
+import { ExternalLink, AlertTriangle, Loader2, Table2, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -19,6 +19,9 @@ import { useCurrentUser } from "@/hooks/use-auth";
 import { useClearLiveThread, useCancelLiveRun, useLiveThread, useSendLiveMessage } from "@/hooks/use-live";
 import { useTranslation } from "@/hooks/use-translation";
 import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
+import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-button";
+import { gatherSupportDiagnostic } from "@/lib/actions/support-diagnostic";
+import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
 import type { LiveMessage } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
@@ -26,14 +29,16 @@ function LiveBubble({
   message,
   agentId,
   agentIcon,
+  userPrompt,
   onSecretSubmitted,
 }: {
   message: LiveMessage;
   agentId: string;
   agentIcon: string;
+  userPrompt?: string;
   onSecretSubmitted?: () => void;
 }) {
-  const { t, i18n } = useTranslation(["live", "builder"]);
+  const { t, i18n } = useTranslation(["live", "builder", "errors", "common"]);
   const { data: user } = useCurrentUser();
   const isUser = message.role === "user";
 
@@ -61,6 +66,22 @@ function LiveBubble({
     );
   }
 
+  const isBackendFailure =
+    isFailureMessageKey(message.content) ||
+    message.tone === "warning" ||
+    message.tone === "error";
+
+  const raw =
+    message.content.startsWith("live:") || message.content.startsWith("builder:")
+      ? t(message.content)
+      : stripAttachedPlaceholders(message.content);
+  const hasBody =
+    Boolean(raw.trim()) ||
+    Boolean(message.uiComponent) ||
+    Boolean(message.artifacts?.length) ||
+    Boolean(message.citations?.length) ||
+    isBackendFailure;
+
   return (
     <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}>
       {isUser ? (
@@ -79,26 +100,47 @@ function LiveBubble({
         {isUser ? (
           <MessageAttachmentPreviews attachments={message.attachments} align="right" />
         ) : null}
-        {(() => {
-          const raw = message.content.startsWith("live:")
-            ? t(message.content.replace(/^live:/, ""))
-            : message.content.startsWith("builder:")
-              ? t(message.content)
-              : stripAttachedPlaceholders(message.content);
-          const hasBody =
-            Boolean(raw.trim()) ||
-            Boolean(message.uiComponent) ||
-            Boolean(message.artifacts?.length) ||
-            Boolean(message.citations?.length);
-          if (!hasBody) return null;
-          return (
+        {hasBody ? (
         <div
           className={cn(
             "min-w-0 overflow-hidden rounded-3xl px-4 py-3 text-left text-sm leading-relaxed",
             isUser ? "bg-brand/15" : "glass",
+            isBackendFailure && !isUser && "text-amber-800 dark:text-amber-200",
           )}
         >
-          {/* Controlled notices (e.g. execution disabled) reference i18n keys. */}
+          {isBackendFailure && !isUser ? (
+            <div className="mb-2 space-y-2">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="size-3.5" aria-hidden="true" />
+                {t("common:status.needsAttention")}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <CopySupportLogsButton
+                  onCopy={() =>
+                    gatherSupportDiagnostic({
+                      agentId,
+                      surface: "live",
+                      messageId: message.id,
+                      threadId: message.threadId,
+                      runId: message.runId,
+                      errorKey: message.content.startsWith("live:")
+                        ? message.content
+                        : undefined,
+                      errorSummary: raw,
+                      userPrompt,
+                      pageUrl: typeof window !== "undefined" ? window.location.href : undefined,
+                      locale: i18n.language,
+                      userAgent:
+                        typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+                    })
+                  }
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  {t("common:support.copyHint")}
+                </span>
+              </div>
+            </div>
+          ) : null}
           {raw.trim() ? <Markdown content={raw} /> : null}
 
           {message.uiComponent?.type === "secret_form" ? (
@@ -175,20 +217,32 @@ function LiveBubble({
             </div>
           ) : null}
         </div>
-          );
-        })()}
+        ) : null}
       </div>
     </div>
   );
 }
 
+function promptBeforeLiveMessage(messages: LiveMessage[], messageId: string): string | undefined {
+  const idx = messages.findIndex((m) => m.id === messageId);
+  if (idx <= 0) return undefined;
+  for (let i = idx - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m?.role === "user" && m.content.trim()) return m.content.trim();
+  }
+  return undefined;
+}
+
 export function LiveView({
   agentId,
   activeRunId,
+  headerActions,
 }: {
   agentId: string;
   /** Latest live run id from the parent (structure animation + stop). */
   activeRunId?: string | null;
+  /** Extra controls in the header row (e.g. mobile modules sheet). */
+  headerActions?: React.ReactNode;
 }) {
   const { t } = useTranslation(["live", "builder"]);
   const queryClient = useQueryClient();
@@ -205,8 +259,10 @@ export function LiveView({
   const awaitingApproval = messages.some(
     (m) => m.role === "assistant" && m.uiComponent?.type === "approval_form",
   );
+  const lastLiveMessage = messages.at(-1);
   const awaitingReply =
-    messages.length > 0 && messages[messages.length - 1]?.role === "user";
+    lastLiveMessage?.role === "user" &&
+    !isStaleInflightMessage(lastLiveMessage.createdAt);
   const busy =
     pendingBusy ||
     awaitingReply ||
@@ -225,31 +281,34 @@ export function LiveView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-3">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 md:px-6">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
           {agent ? <AgentIcon icon={agent.icon} /> : null}
           <h1 className="truncate text-sm font-medium">{agentName}</h1>
           <Badge
             variant="outline"
             className={cn(
-              "border-border text-xs",
+              "hidden border-border text-xs sm:inline-flex",
               agent?.status === "published" ? "text-sky-300" : "text-zinc-300",
             )}
           >
             {agent?.status === "published" ? t("live:badge.published") : t("live:badge.draft")}
           </Badge>
         </div>
-        {messages.length > 0 ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-muted-foreground"
-            onClick={() => void clearThread.mutateAsync()}
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-            {t("live:actions.clear")}
-          </Button>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          {headerActions}
+          {messages.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 px-2 text-muted-foreground sm:px-3"
+              onClick={() => void clearThread.mutateAsync()}
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">{t("live:actions.clear")}</span>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div
@@ -264,7 +323,7 @@ export function LiveView({
               {agent ? (
                 <AgentIcon icon={agent.icon} className="mb-6 size-14 rounded-3xl" />
               ) : null}
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h2 className="text-xl font-semibold tracking-tight sm:text-2xl md:text-3xl">
                 {t("live:empty.title", { name: agentName })}
               </h2>
               <p className="mt-3 max-w-md text-sm text-muted-foreground">
@@ -296,6 +355,7 @@ export function LiveView({
                 key={message.id}
                 message={message}
                 agentId={agentId}
+                userPrompt={promptBeforeLiveMessage(messages, message.id)}
                 agentIcon={agent?.icon ?? "bot"}
                 onSecretSubmitted={() => {
                   void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
@@ -309,7 +369,7 @@ export function LiveView({
         </div>
       </div>
 
-      <div className="shrink-0 px-4 pb-5">
+      <div className="shrink-0 px-3 pb-4 sm:px-4 sm:pb-5">
         <PromptComposer
           className="mx-auto max-w-3xl"
           placeholder={t("live:composer.placeholder")}

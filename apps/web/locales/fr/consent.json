@@ -1,0 +1,33 @@
+{
+  "banner": {
+    "title": "Cookies et mesure d’audience",
+    "body": "Nous utilisons des cookies strictement nécessaires pour faire fonctionner Stack32. La mesure d’audience (y compris le replay de session) et les pixels publicitaires ne se chargent que si vous les acceptez. Vous pouvez changer d’avis à tout moment.",
+    "acceptAll": "Tout accepter",
+    "rejectAll": "Tout refuser",
+    "customize": "Personnaliser",
+    "privacy": "Politique de confidentialité",
+    "cookies": "Politique de cookies",
+    "doNotSell": "Ne pas vendre ni partager mes données"
+  },
+  "preferences": {
+    "title": "Préférences de cookies",
+    "description": "Choisissez les cookies optionnels que nous pouvons utiliser. Les cookies strictement nécessaires restent actifs, le site ne peut pas fonctionner sans eux. Votre choix est conservé 13 mois.",
+    "save": "Enregistrer mes choix",
+    "gpcNote": "Votre navigateur a envoyé un signal Global Privacy Control. Les cookies publicitaires / de « vente ou partage » restent désactivés.",
+    "necessary": {
+      "title": "Strictement nécessaires",
+      "description": "Authentification, sécurité, langue, thème, et mémorisation de ce choix. Toujours actifs."
+    },
+    "analytics": {
+      "title": "Mesure d’audience et amélioration du produit",
+      "description": "Mesure first-party via PostHog, y compris les pages vues et le replay de session avec les champs de formulaire masqués. Sert à comprendre l’usage du produit — pas à afficher de la publicité."
+    },
+    "marketing": {
+      "title": "Pixels publicitaires",
+      "description": "Pixels Meta (Facebook) et TikTok pour mesurer les campagnes et le reciblage. Ces partenaires peuvent traiter des données aux États-Unis."
+    }
+  },
+  "actions": {
+    "manage": "Paramètres des cookies"
+  }
+}

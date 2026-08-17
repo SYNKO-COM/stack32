@@ -120,7 +120,7 @@ export class SupabaseBuilderRepository implements BuilderRepository {
         ? "Please analyze the attached image(s) and help me build from them."
         : displayContent.trim() || "Hello");
 
-    void executeBuilderTurn({
+    await executeBuilderTurn({
       agentId,
       threadId,
       prompt: promptForModel,
@@ -131,6 +131,6 @@ export class SupabaseBuilderRepository implements BuilderRepository {
 
   async repairAgent(agentId: string): Promise<void> {
     const threadId = await this.getOrCreateThreadId(agentId);
-    void executeBuilderRepair({ agentId, threadId });
+    await executeBuilderRepair({ agentId, threadId });
   }
 }

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import Script from "next/script";
 
 import { Providers } from "@/components/providers/providers";
+import { CONSENT_COOKIE, parseConsentCookie } from "@/lib/consent";
 import { LOCALE_COOKIE, readLocaleCookie } from "@/lib/i18n/locales";
 import { SITE_URL } from "@/lib/site";
 import { readThemeCookie, THEME_COOKIE, themeInitScript } from "@/lib/theme";
@@ -65,6 +66,7 @@ export default async function RootLayout({
   const hasLocaleCookie = Boolean(localeCookie);
   const initialLocale = readLocaleCookie(localeCookie);
   const initialTheme = readThemeCookie(cookieStore.get(THEME_COOKIE)?.value);
+  const initialConsent = parseConsentCookie(cookieStore.get(CONSENT_COOKIE)?.value);
 
   return (
     <html
@@ -82,6 +84,7 @@ export default async function RootLayout({
           initialLocale={initialLocale}
           hasLocaleCookie={hasLocaleCookie}
           initialTheme={initialTheme}
+          initialConsent={initialConsent}
         >
           {children}
         </Providers>

@@ -275,8 +275,8 @@ export function OnboardingFlow() {
         router.push(preferred);
         return;
       }
-      const agent = await createAgent.mutateAsync({ workspaceId: workspace.id });
-      router.push(`/agents/${agent.id}/build`);
+      await createAgent.mutateAsync({ workspaceId: workspace.id });
+      router.push("/billing/plans");
     } catch {
       setFinishing(false);
     }

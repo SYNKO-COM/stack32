@@ -422,8 +422,10 @@ export function PromptComposer({
 
       <div
         className={cn(
-          "glass-strong shadow-glow-sm rounded-[28px] transition-shadow focus-within:shadow-glow",
-          size === "hero" ? "rounded-[32px] p-5 sm:p-6" : "p-3",
+          "glass-strong shadow-glow-sm transition-shadow focus-within:shadow-glow",
+          size === "hero"
+            ? "rounded-[24px] p-4 sm:rounded-[28px] sm:p-5 md:rounded-[32px] md:p-6"
+            : "rounded-[28px] p-3",
           recording && "ring-1 ring-brand/50",
         )}
       >
@@ -486,11 +488,11 @@ export function PromptComposer({
                   : placeholder
           }
           disabled={disabled || busy || recording || transcribing}
-          rows={size === "hero" ? 3 : 1}
+          rows={size === "hero" ? 2 : 1}
           className={cn(
             "w-full resize-none bg-transparent text-foreground placeholder:text-muted-foreground/70 focus:outline-none",
             size === "hero"
-              ? "min-h-20 px-2.5 pt-1.5 text-lg leading-relaxed"
+              ? "min-h-16 px-2 pt-1 text-base leading-relaxed sm:min-h-20 sm:px-2.5 sm:pt-1.5 sm:text-lg"
               : "min-h-10 px-2 pt-1 text-sm",
           )}
         />
@@ -501,8 +503,8 @@ export function PromptComposer({
 
         <div
           className={cn(
-            "flex items-center justify-between gap-2",
-            size === "hero" ? "mt-3" : "mt-1",
+            "flex flex-wrap items-center justify-between gap-2",
+            size === "hero" ? "mt-2.5 sm:mt-3" : "mt-1",
           )}
         >
           <div className="flex items-center gap-1">

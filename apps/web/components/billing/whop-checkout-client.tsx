@@ -1,17 +1,22 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { WhopCheckoutEmbed } from "@whop/checkout/react";
+import { Check, Lock } from "lucide-react";
 import { Trans } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { createWhopCheckoutSession } from "@/lib/actions/billing";
-import type { BillingInterval, PlanKey } from "@/lib/billing/plans";
-import { pricePlanSelection } from "@/lib/billing/plans";
+import { PLANS, pricePlanSelection, type BillingInterval, type PlanKey } from "@/lib/billing/plans";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
+
+const WhopCheckoutEmbed = dynamic(
+  () => import("@whop/checkout/react").then((mod) => mod.WhopCheckoutEmbed),
+  { ssr: false },
+);
 
 type Props = {
   planKey: Exclude<PlanKey, "free">;
@@ -55,11 +60,10 @@ export function WhopCheckoutClient({
   interval,
   creditsMonthly,
 }: Props) {
-  const { t, i18n } = useTranslation("billing");
+  const { t, i18n } = useTranslation(["billing", "marketing"]);
   const router = useRouter();
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedImmediate, setAcceptedImmediate] = useState(false);
-  const [consentsConfirmed, setConsentsConfirmed] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -71,9 +75,20 @@ export function WhopCheckoutClient({
     style: "currency",
     currency: "USD",
   }).format(priced.chargeUsd);
+  const monthlyLabel = new Intl.NumberFormat(locale.startsWith("fr") ? "fr-FR" : "en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(priced.displayMonthlyUsd);
+  const planName = t(`marketing:pricing.${planKey}.name`);
+  const featureItems = t(`marketing:pricing.${planKey}.features`, { returnObjects: true });
+  const features = [
+    ...(Array.isArray(featureItems) ? featureItems : []),
+    t(`marketing:pricing.${planKey}.${PLANS[planKey].integrationsLabelKey}`),
+  ];
 
   useEffect(() => {
-    if (!consentsConfirmed) return;
+    if (!canProceed) return;
+    if (sessionId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -96,90 +111,165 @@ export function WhopCheckoutClient({
     return () => {
       cancelled = true;
     };
-  }, [consentsConfirmed, planKey, interval, creditsMonthly]);
+  }, [canProceed, planKey, interval, creditsMonthly, sessionId]);
+
+  useEffect(() => {
+    if (!canProceed) return;
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
+    document
+      .getElementById("checkout-payment")
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [canProceed]);
 
   const site =
     typeof window !== "undefined" ? window.location.origin : "https://stack32.com";
 
+  const paymentReady = canProceed && Boolean(sessionId) && !error;
+
   return (
-    <div className="mx-auto w-full max-w-lg px-6 py-16">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight">{t("checkout.title")}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {t("checkout.subtitle", {
-            plan: planKey.charAt(0).toUpperCase() + planKey.slice(1),
-            credits: creditsMonthly,
-            amount: amountLabel,
-            period: interval === "annual" ? t("checkout.perYear") : t("checkout.perMonth"),
-          })}
-        </p>
-      </div>
-
-      <div className="mb-6 space-y-3 rounded-[24px] border border-border/70 bg-background/80 p-5 shadow-glow-sm">
-        <ConsentCheckbox
-          id="whop-checkout-accept-terms"
-          checked={acceptedTerms}
-          onCheckedChange={setAcceptedTerms}
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-3 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8">
+      <div className="flex min-h-[min(720px,calc(100dvh-5.5rem))] flex-1 flex-col overflow-hidden rounded-[20px] border border-border/70 bg-background/80 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] sm:rounded-[24px] lg:flex-row lg:rounded-[28px]">
+        <section
+          id="checkout-payment"
+          className="relative order-2 flex min-h-[320px] flex-1 flex-col lg:order-1 lg:min-h-0"
         >
-          <Trans
-            i18nKey="billing:checkout.consents.terms"
-            components={{
-              terms: <Link href="/legal/terms" target="_blank" rel="noreferrer" />,
-              sales: <Link href="/legal/sales" target="_blank" rel="noreferrer" />,
-              refunds: <Link href="/legal/refunds" target="_blank" rel="noreferrer" />,
-            }}
-          />
-        </ConsentCheckbox>
-        <ConsentCheckbox
-          id="whop-checkout-accept-immediate"
-          checked={acceptedImmediate}
-          onCheckedChange={setAcceptedImmediate}
-        >
-          {t("checkout.consents.immediate")}
-        </ConsentCheckbox>
+          <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 sm:px-5">
+            <h1 className="text-sm font-medium sm:text-base">{t("billing:checkout.paymentTitle")}</h1>
+            <p className="truncate text-xs text-muted-foreground sm:text-sm">
+              {planName} · {amountLabel}
+            </p>
+          </div>
 
-        {!consentsConfirmed ? (
-          <Button
-            className="mt-2 w-full rounded-full"
-            disabled={!canProceed}
-            onClick={() => setConsentsConfirmed(true)}
-          >
-            {t("checkout.continueToPayment", { amount: amountLabel })}
-          </Button>
-        ) : null}
+          <div className="relative min-h-0 flex-1">
+            {!canProceed ? (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 px-6 text-center backdrop-blur-md"
+                role="status"
+              >
+                <span className="flex size-11 items-center justify-center rounded-full border border-border/70 bg-muted/40">
+                  <Lock className="size-4 text-muted-foreground" aria-hidden="true" />
+                </span>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  {t("billing:checkout.unlockHint")}
+                </p>
+              </div>
+            ) : null}
 
-        <p className="text-[11px] leading-relaxed text-muted-foreground/80">
-          {t("checkout.consents.legalNote")}
-        </p>
+            {canProceed && loading ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+                <p className="text-sm text-muted-foreground">{t("billing:checkout.loading")}</p>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="flex h-full items-center p-4 sm:p-6">
+                <div className="w-full rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                  <p className="font-medium">{t("billing:checkout.errorTitle")}</p>
+                  <p className="mt-1 text-muted-foreground">{error}</p>
+                  <Button asChild className="mt-4 rounded-full" variant="outline">
+                    <Link href="/billing/plans">{t("billing:checkout.backToPricing")}</Link>
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {paymentReady && sessionId ? (
+              <div className="h-full min-h-[360px] overflow-y-auto">
+                <WhopCheckoutEmbed
+                  sessionId={sessionId}
+                  theme="system"
+                  returnUrl={`${site}/billing/success`}
+                  setupFutureUsage="off_session"
+                  onComplete={() => {
+                    router.push("/billing/success");
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <aside className="order-1 flex w-full shrink-0 flex-col border-b border-border/70 lg:order-2 lg:w-[min(100%,24.5rem)] lg:border-b-0 lg:border-l xl:w-[26.5rem]">
+          <div className="border-b border-border/60 px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-medium sm:text-base">{t("billing:checkout.summaryTitle")}</h2>
+          </div>
+
+          <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-5">
+            <div>
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {t("billing:checkout.planLabel")}
+              </p>
+              <p className="mt-1 text-xl font-semibold tracking-tight">{planName}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("billing:checkout.subtitle", {
+                  plan: planName,
+                  credits: creditsMonthly,
+                  amount: monthlyLabel,
+                  period: t("billing:checkout.perMonth"),
+                })}
+              </p>
+              {interval === "annual" ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("marketing:pricing.billedAnnually", { amount: amountLabel })}
+                </p>
+              ) : null}
+              <Link
+                href="/billing/plans"
+                className="mt-2 inline-block text-xs font-medium text-brand underline-offset-2 hover:underline"
+              >
+                {t("billing:checkout.changePlan")}
+              </Link>
+            </div>
+
+            <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {t("billing:checkout.dueToday")}
+              </p>
+              <p className="mt-1 text-2xl font-semibold tracking-tight">{amountLabel}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("marketing:pricing.creditsPerMonth", { count: creditsMonthly })}
+                {interval === "annual" ? ` · ${t("billing:checkout.perYear")}` : ""}
+              </p>
+            </div>
+
+            <ul className="space-y-2">
+              {features.slice(0, 6).map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-sm">
+                  <Check className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-auto space-y-3 rounded-2xl border border-border/70 bg-background/80 p-4">
+              <ConsentCheckbox
+                id="whop-checkout-accept-terms"
+                checked={acceptedTerms}
+                onCheckedChange={setAcceptedTerms}
+              >
+                <Trans
+                  i18nKey="billing:checkout.consents.terms"
+                  components={{
+                    terms: <Link href="/legal/terms" target="_blank" rel="noreferrer" />,
+                    sales: <Link href="/legal/sales" target="_blank" rel="noreferrer" />,
+                    refunds: <Link href="/legal/refunds" target="_blank" rel="noreferrer" />,
+                  }}
+                />
+              </ConsentCheckbox>
+              <ConsentCheckbox
+                id="whop-checkout-accept-immediate"
+                checked={acceptedImmediate}
+                onCheckedChange={setAcceptedImmediate}
+              >
+                {t("billing:checkout.consents.immediate")}
+              </ConsentCheckbox>
+              <p className="text-[11px] leading-relaxed text-muted-foreground/80">
+                {t("billing:checkout.consents.legalNote")}
+              </p>
+            </div>
+          </div>
+        </aside>
       </div>
-
-      {loading ? (
-        <p className="text-center text-sm text-muted-foreground">{t("checkout.loading")}</p>
-      ) : null}
-
-      {error ? (
-        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
-          <p className="font-medium">{t("checkout.errorTitle")}</p>
-          <p className="mt-1 text-muted-foreground">{error}</p>
-          <Button asChild className="mt-4 rounded-full" variant="outline">
-            <Link href="/pricing">{t("checkout.backToPricing")}</Link>
-          </Button>
-        </div>
-      ) : null}
-
-      {sessionId && consentsConfirmed ? (
-        <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background shadow-glow-sm">
-          <WhopCheckoutEmbed
-            sessionId={sessionId}
-            theme="system"
-            returnUrl={`${site}/billing/success`}
-            setupFutureUsage="off_session"
-            onComplete={() => {
-              router.push("/billing/success");
-            }}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

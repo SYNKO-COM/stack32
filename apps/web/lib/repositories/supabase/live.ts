@@ -120,7 +120,7 @@ export class SupabaseLiveRepository implements LiveRepository {
         ? "Please analyze the attached image(s)."
         : displayContent.trim() || "Hello");
 
-    void executeLiveTurn({
+    await executeLiveTurn({
       agentId,
       threadId,
       prompt: promptForModel,

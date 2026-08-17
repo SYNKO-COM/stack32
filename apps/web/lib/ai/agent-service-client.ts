@@ -57,7 +57,7 @@ export async function agentServiceFetch<T>(
     if (code === "ECONNREFUSED" || (err instanceof Error && /fetch failed/i.test(err.message))) {
       throw new AgentServiceError(
         "AGENT_SERVICE_UNAVAILABLE",
-        "Agent service is not reachable. Start it with pnpm dev:agent (port 8000).",
+        "Agent service is not reachable.",
         503,
       );
     }

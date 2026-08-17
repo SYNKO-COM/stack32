@@ -80,6 +80,11 @@
     "needsSetup": "Needs setup",
     "archived": "Archived"
   },
+  "support": {
+    "copyLogs": "Copy details for support",
+    "copied": "Copied",
+    "copyHint": "Includes context to help us diagnose the issue (no passwords or API keys)."
+  },
   "plan": {
     "free": "Free",
     "starter": "Starter",

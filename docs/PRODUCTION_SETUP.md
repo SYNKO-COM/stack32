@@ -9,8 +9,9 @@ Ce fichier répond à une seule question :
 
 ## En une phrase
 
-**Le site + l’API agents sont en production et opérationnels.**  
-Tu peux ouvrir [https://stack32.com](https://stack32.com), créer un compte, et utiliser le builder.
+**Le site + l’API agents sont en production.**  
+Tu n’as **pas** besoin de lancer `pnpm dev:web` / `pnpm dev:agent` pour tes clients : ça, c’est uniquement pour travailler en local.  
+En production, le site (Vercel) parle au serveur agents (Google Cloud Run).
 
 ---
 
@@ -73,6 +74,23 @@ Intégrations Google / Gmail / Calendar : **uniquement via Pipedream** (pas de G
 - Dans le dashboard hCaptcha → **Sites** : ajoute les domaines `stack32.com`, `www.stack32.com`, `stack32.vercel.app` (et `localhost` si tu testes en local)
 
 Le CAPTCHA n’est **pas** requis en local/mock tant que `NEXT_PUBLIC_HCAPTCHA_SITEKEY` est vide.
+
+---
+
+## Cookies et tracking (à brancher)
+
+Le bandeau cookies est **déjà dans le site** (accepter / refuser / personnaliser).  
+Les scripts PostHog / Meta / TikTok ne partent **pas** tant que tu n’as pas collé les clés et que le visiteur n’a pas accepté.
+
+Guide pas à pas : [`docs/COOKIES_AND_TRACKING.md`](./COOKIES_AND_TRACKING.md)
+
+Variables Vercel (Production), après création des comptes :
+
+- `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` + `NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com`
+- `NEXT_PUBLIC_META_PIXEL_ID`
+- `NEXT_PUBLIC_TIKTOK_PIXEL_ID`
+
+Puis **redéployer** (variables `NEXT_PUBLIC_*` = rebuild).
 
 ---
 

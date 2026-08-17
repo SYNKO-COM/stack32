@@ -391,6 +391,7 @@ export interface LiveMessage {
   /** Active live run id (for structure animation + stop). */
   runId?: string;
   uiComponent?: BuilderUiComponent;
+  tone?: "normal" | "warning" | "error";
   /** User-uploaded files / images shown as thumbnails above the bubble. */
   attachments?: MessageAttachment[];
   createdAt: string;

@@ -106,10 +106,49 @@ async def get_current_user(
     return AuthenticatedUser(user_id=str(sub))
 
 
+def _google_oidc_invoker_ok(authorization: str | None) -> bool:
+    """Accept Cloud Scheduler / Cloud Tasks OIDC tokens from the invoker SA."""
+    settings = get_settings()
+    expected_sa = (settings.CLOUD_TASKS_OIDC_SERVICE_ACCOUNT or "").strip().lower()
+    if not expected_sa or not authorization:
+        return False
+    if not authorization.lower().startswith("bearer "):
+        return False
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        return False
+    try:
+        from google.auth.transport import requests as google_requests
+        from google.oauth2 import id_token
+    except ImportError:
+        logger.warning("google-auth missing; OIDC internal auth unavailable")
+        return False
+    try:
+        claims = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            clock_skew_in_seconds=10,
+        )
+    except Exception:
+        return False
+    email = str(claims.get("email") or "").strip().lower()
+    if email != expected_sa:
+        return False
+    if claims.get("email_verified") is False:
+        return False
+    issuer = str(claims.get("iss") or "")
+    return issuer in {"accounts.google.com", "https://accounts.google.com"}
+
+
 async def require_internal_service(
     x_internal_token: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> None:
-    """Dependency for internal service-to-service endpoints."""
+    """Dependency for internal service-to-service endpoints.
+
+    Accepts ``X-Internal-Token`` (Cloud Tasks HTTP header) or a Google OIDC
+    Bearer token minted for ``CLOUD_TASKS_OIDC_SERVICE_ACCOUNT`` (Scheduler).
+    """
     settings = get_settings()
     expected = settings.INTERNAL_SERVICE_TOKEN
     if not expected:
@@ -121,11 +160,14 @@ async def require_internal_service(
             },
         )
     provided = x_internal_token or ""
-    if not hmac.compare_digest(provided, expected):
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "forbidden", "message": "Invalid internal service token."},
-        )
+    if provided and hmac.compare_digest(provided, expected):
+        return
+    if _google_oidc_invoker_ok(authorization):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail={"code": "forbidden", "message": "Invalid internal service token."},
+    )
 
 
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]

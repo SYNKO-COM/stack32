@@ -176,11 +176,11 @@ export function AuthForm({
   };
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("space-y-2.5 sm:space-y-3 md:space-y-4", className)}>
       <Button
         type="button"
         variant="outline"
-        className="w-full gap-2 rounded-xl"
+        className="h-10 w-full gap-2 rounded-xl text-sm sm:h-11"
         onClick={() => handleOAuth("google")}
         disabled={busy}
       >
@@ -190,7 +190,7 @@ export function AuthForm({
       <Button
         type="button"
         variant="outline"
-        className="w-full gap-2 rounded-xl"
+        className="h-10 w-full gap-2 rounded-xl text-sm sm:h-11"
         onClick={() => handleOAuth("github")}
         disabled={busy}
       >
@@ -204,7 +204,7 @@ export function AuthForm({
         <div className="h-px flex-1 bg-border" />
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-2.5 sm:space-y-3">
         <div className="space-y-1.5">
           <Label htmlFor="auth-email">{t(`auth:${ns}.email`)}</Label>
           <Input
@@ -243,7 +243,7 @@ export function AuthForm({
 
         <HCaptchaGate ref={captchaRef} />
 
-        <Button type="submit" className="w-full rounded-xl" disabled={busy}>
+        <Button type="submit" className="h-10 w-full rounded-xl sm:h-11" disabled={busy}>
           {busy ? t(`auth:${ns}.submitting`) : t(`auth:${ns}.submit`)}
         </Button>
       </form>
@@ -252,7 +252,7 @@ export function AuthForm({
         <p className="text-xs text-muted-foreground/70">{t("auth:mockNotice")}</p>
       ) : null}
 
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm">
         {mode === "login" ? (
           <>
             <button

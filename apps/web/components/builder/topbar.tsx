@@ -183,12 +183,19 @@ export function Topbar({ agentId }: { agentId: string }) {
 
         <Button
           size="sm"
-          className="gap-1.5 rounded-full"
+          className="gap-1.5 rounded-full px-2.5 sm:px-3"
           onClick={() => setPublishOpen(true)}
           disabled={publishAgent.isPending || agent?.status === "building"}
+          aria-label={
+            publishAgent.isPending
+              ? t("builder:topbar.publishing")
+              : t("builder:topbar.publish")
+          }
         >
           <Rocket className="size-3.5" aria-hidden="true" />
-          {publishAgent.isPending ? t("builder:topbar.publishing") : t("builder:topbar.publish")}
+          <span className="hidden sm:inline">
+            {publishAgent.isPending ? t("builder:topbar.publishing") : t("builder:topbar.publish")}
+          </span>
         </Button>
 
         <DropdownMenu>

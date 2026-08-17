@@ -1,0 +1,33 @@
+{
+  "banner": {
+    "title": "Cookies and tracking",
+    "body": "We use strictly necessary cookies to run Stack32. Analytics (including session replay) and advertising pixels only load if you accept them. You can change your mind at any time.",
+    "acceptAll": "Accept all",
+    "rejectAll": "Reject all",
+    "customize": "Customize",
+    "privacy": "Privacy policy",
+    "cookies": "Cookie policy",
+    "doNotSell": "Do not sell or share my data"
+  },
+  "preferences": {
+    "title": "Cookie preferences",
+    "description": "Choose which optional cookies we may use. Strictly necessary cookies are always on because the site cannot work without them. Your choice is stored for 13 months.",
+    "save": "Save choices",
+    "gpcNote": "Your browser sent a Global Privacy Control signal. Advertising / “sale or share” cookies stay off.",
+    "necessary": {
+      "title": "Strictly necessary",
+      "description": "Authentication, security, language, theme, and remembering this choice. Always on."
+    },
+    "analytics": {
+      "title": "Analytics & product improvement",
+      "description": "First-party measurement with PostHog, including page views and session replay with form fields masked. Used to understand how the product is used — not to show ads."
+    },
+    "marketing": {
+      "title": "Advertising pixels",
+      "description": "Meta (Facebook) and TikTok pixels to measure campaigns and retargeting. These partners may process data in the United States."
+    }
+  },
+  "actions": {
+    "manage": "Cookie settings"
+  }
+}

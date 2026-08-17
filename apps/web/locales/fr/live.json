@@ -53,6 +53,7 @@
     "canceled": "Exécution arrêtée.",
     "missingUserLlmKey": "Pour discuter avec cet agent, connectez un cerveau (LLM) avec votre clé API ci-dessous. Elle est stockée de façon sécurisée.",
     "runFailed": "Un problème est survenu pendant l’exécution. Réessayez.",
+    "serviceUnavailable": "Le service agent est momentanément indisponible. Réessayez dans un instant.",
     "budgetExceeded": "Cette conversation a utilisé trop d’appels au modèle. Essayez une demande plus courte.",
     "providerUnavailable": "Le modèle de langage est indisponible. Vérifiez votre clé API ou réessayez dans un instant.",
     "toolCallFormat": "L’agent a rencontré une erreur temporaire d’outil. Réessayez."

@@ -12,7 +12,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <ThemeToggle />
         <LanguageSwitcher />
       </div>
-      <main className="relative z-10 flex flex-1 items-center justify-center p-3 sm:p-4 md:p-5">
+      <main className="relative z-10 flex flex-1 items-center justify-center p-2 sm:p-4 md:p-5">
         {children}
       </main>
       <footer className="relative z-10 pb-4 text-center text-xs text-muted-foreground/60">

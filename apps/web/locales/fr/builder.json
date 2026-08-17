@@ -376,6 +376,7 @@
   "errors": {
     "buildFailed": "La construction s'est arrêtée.",
     "buildFailedDetail": "Je n'ai pas pu terminer cette construction. Vous pouvez réessayer, reformuler, ou me demander de corriger.",
+    "serviceUnavailable": "Le service de construction est momentanément indisponible. Réessayez dans un instant.",
     "validationFailed": "La configuration de l'agent n'est pas valide. Reformulez ou demandez une correction.",
     "canceled": "Arrêté.",
     "canceledDetail": "Arrêté. Dis-moi la prochaine modification quand tu veux."

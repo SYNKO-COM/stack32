@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { BuilderMessage, BuilderThread, MessageAttachment } from "@/lib/domain/types";
+import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
 import { cancelBuilderRun } from "@/lib/actions/builder";
 import { getBuilderRepository } from "@/lib/repositories/factory";
 
@@ -32,8 +33,17 @@ function isThreadActive(thread: BuilderThread | undefined): boolean {
   if (!thread) return false;
   const last = thread.messages[thread.messages.length - 1];
   if (!last) return false;
-  if (last.role === "user") return true;
-  if (last.card === "thinking") return true;
+  if (isFailureMessageKey(last.content) || last.tone === "warning" || last.tone === "error") {
+    return false;
+  }
+  if (last.role === "user") {
+    return !isStaleInflightMessage(last.createdAt);
+  }
+  if (last.card === "thinking") {
+    if (isFailureMessageKey(last.content)) return false;
+    if (isStaleInflightMessage(last.createdAt, { emptyContent: !last.content })) return false;
+    return true;
+  }
   // Steps may all be "done" while the final content is still being written.
   if (last.content === "") return true;
   if (last.card === "build_progress") {
@@ -103,10 +113,12 @@ export function useSendBuilderMessage(agentId: string) {
       }
       return { previous };
     },
-    onError: (_err, _content, ctx) => {
-      if (ctx?.previous) {
-        queryClient.setQueryData(["builder", agentId], ctx.previous);
-      }
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
+      void queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
     },
     onSuccess: () => {
       // Soft refresh — avoid wiping the agents list on every turn (sidebar flicker).

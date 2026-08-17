@@ -8,6 +8,12 @@ import { ProductAgentGraph } from "@/components/builder/agent-structure/product-
 import { buildProductAgentGraph } from "@/components/builder/agent-structure/graph-adapter";
 import { LiveView } from "@/components/builder/live-view";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useAgentGraph, useAgentSpec } from "@/hooks/use-agents";
 import { useLiveExecutionState } from "@/hooks/use-live-execution";
 import { useLiveThread } from "@/hooks/use-live";
@@ -23,6 +29,19 @@ import { cn } from "@/lib/utils";
 const DEFAULT_CHAT_PCT = 45;
 const MIN_CHAT_PCT = 28;
 const MAX_CHAT_PCT = 72;
+const LG_MEDIA = "(min-width: 1024px)";
+
+function useIsLgViewport(): boolean {
+  const [isLg, setIsLg] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(LG_MEDIA);
+    const onChange = () => setIsLg(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isLg;
+}
 
 /**
  * "Agent IA" workspace: chat with the agent on the left, its module canvas on
@@ -40,8 +59,10 @@ export function AgentIaView({
   const { data: graphResponse } = useAgentGraph(agentId);
   const { data: spec } = useAgentSpec(agentId);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [mobileModulesOpen, setMobileModulesOpen] = useState(false);
   const [chatPct, setChatPct] = useState(DEFAULT_CHAT_PCT);
   const [dragging, setDragging] = useState(false);
+  const isLg = useIsLgViewport();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshing, startRefresh] = useTransition();
   const [setupOpen, setSetupOpen] = useState(false);
@@ -277,13 +298,66 @@ export function AgentIaView({
     };
   }, [dragging]);
 
+  const modulesGraph = hasGraph && spec ? (
+    <ProductAgentGraph
+      agentId={agentId}
+      spec={spec}
+      graph={graphResponse?.graph}
+      connections={connectionsQuery.data?.connections ?? []}
+      bindings={connectionsQuery.data?.bindings ?? []}
+      toolApprovals={toolApprovals}
+      boundToolIds={boundToolIds}
+      boundProviders={boundProviders}
+      boundAppIds={boundAppIds}
+      modelStatus={modelStatus}
+      executionVisual={executionVisual}
+      readOnly={readOnly}
+      onConnectionsChanged={
+        readOnly
+          ? undefined
+          : () => {
+              void connectionsQuery.refetch();
+              void readinessQuery.refetch();
+            }
+      }
+      onConfigChanged={
+        readOnly
+          ? undefined
+          : () => {
+              void connectionsQuery.refetch();
+              void readinessQuery.refetch();
+            }
+      }
+    />
+  ) : (
+    <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+      {t("structure:graph.fallback")}
+    </p>
+  );
+
   return (
     <div ref={rootRef} className="flex h-full min-h-0">
       <div
-        className={cn("min-w-0", panelOpen ? "shrink-0" : "min-w-0 flex-1")}
-        style={panelOpen ? { width: `${chatPct}%` } : undefined}
+        className={cn("min-w-0 flex-1", panelOpen && isLg && "shrink-0")}
+        style={panelOpen && isLg ? { width: `${chatPct}%` } : undefined}
       >
-        <LiveView agentId={agentId} activeRunId={liveRunId} />
+        <LiveView
+          agentId={agentId}
+          activeRunId={liveRunId}
+          headerActions={
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              className="shrink-0 lg:hidden"
+              onClick={() => setMobileModulesOpen(true)}
+              aria-label={t("structure:modules.title")}
+              title={t("structure:modules.title")}
+            >
+              <Workflow className="size-4" aria-hidden="true" />
+            </Button>
+          }
+        />
       </div>
 
       <aside
@@ -437,46 +511,21 @@ export function AgentIaView({
         </div>
 
         {panelOpen ? (
-          <div className="min-h-0 flex-1">
-            {hasGraph && spec ? (
-              <ProductAgentGraph
-                agentId={agentId}
-                spec={spec}
-                graph={graphResponse?.graph}
-                connections={connectionsQuery.data?.connections ?? []}
-                bindings={connectionsQuery.data?.bindings ?? []}
-                toolApprovals={toolApprovals}
-                boundToolIds={boundToolIds}
-                boundProviders={boundProviders}
-                boundAppIds={boundAppIds}
-                modelStatus={modelStatus}
-                executionVisual={executionVisual}
-                readOnly={readOnly}
-                onConnectionsChanged={
-                  readOnly
-                    ? undefined
-                    : () => {
-                        void connectionsQuery.refetch();
-                        void readinessQuery.refetch();
-                      }
-                }
-                onConfigChanged={
-                  readOnly
-                    ? undefined
-                    : () => {
-                        void connectionsQuery.refetch();
-                        void readinessQuery.refetch();
-                      }
-                }
-              />
-            ) : (
-              <p className="px-6 py-10 text-center text-sm text-muted-foreground">
-                {t("structure:graph.fallback")}
-              </p>
-            )}
-          </div>
+          <div className="min-h-0 flex-1">{modulesGraph}</div>
         ) : null}
       </aside>
+
+      <Sheet open={mobileModulesOpen} onOpenChange={setMobileModulesOpen}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+          <SheetHeader className="border-b border-border px-4 py-3 text-left">
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <Workflow className="size-4 text-brand" aria-hidden="true" />
+              {t("structure:modules.title")}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-hidden">{modulesGraph}</div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

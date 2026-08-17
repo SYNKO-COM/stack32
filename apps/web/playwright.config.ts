@@ -21,6 +21,22 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3100",
     trace: "on-first-retry",
+    // Necessary-only consent so the cookie banner does not cover the composer.
+    storageState: {
+      cookies: [
+        {
+          name: "stack32_consent",
+          value: '{"v":1,"analytics":false,"marketing":false,"ts":4102444800000}',
+          domain: "localhost",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

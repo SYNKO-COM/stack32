@@ -376,6 +376,7 @@
   "errors": {
     "buildFailed": "Build stopped.",
     "buildFailedDetail": "I couldn't finish this build. You can retry, rephrase, or ask me to fix it.",
+    "serviceUnavailable": "The build service is temporarily unavailable. Please try again in a moment.",
     "validationFailed": "The agent configuration is invalid. Rephrase or ask for a fix.",
     "canceled": "Stopped.",
     "canceledDetail": "Stopped. Tell me what to change next whenever you're ready."

@@ -67,6 +67,7 @@ export default async function BillingCheckoutPage({
   // Session is created client-side only after mandatory legal consents.
   return (
     <WhopCheckoutClient
+      key={`${planKey}-${interval}-${creditsMonthly}`}
       planKey={planKey}
       interval={interval}
       creditsMonthly={creditsMonthly}

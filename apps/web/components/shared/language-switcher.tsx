@@ -3,7 +3,6 @@
 import { Check } from "lucide-react";
 
 import { LocaleFlag } from "@/components/shared/locale-flag";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,18 +33,22 @@ export function LanguageSwitcher({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size={large ? "icon" : "icon-sm"}
-          className={cn("text-muted-foreground", large && "rounded-full", className)}
+        <button
+          type="button"
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center rounded-full outline-none transition-colors",
+            "hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            large ? "size-10 p-2" : "size-8 p-1.5",
+            className,
+          )}
           aria-label={t("a11y.languageSelector")}
         >
           <LocaleFlag
             locale={current}
             title={LOCALE_LABELS[current]}
-            className={large ? "h-4 w-6" : undefined}
+            className={large ? "h-[18px] w-[27px]" : undefined}
           />
-        </Button>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">
         {SUPPORTED_LOCALES.map((locale) => (

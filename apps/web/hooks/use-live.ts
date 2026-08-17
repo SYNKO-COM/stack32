@@ -4,14 +4,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { LiveThread } from "@/lib/domain/types";
+import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
 import { getLiveRepository } from "@/lib/repositories/factory";
 
-/** True while the (mock) agent is still working on the latest reply. */
+/** True while a live run is still in flight. */
 function isThreadActive(thread: LiveThread | undefined): boolean {
   if (!thread) return false;
   const last = thread.messages[thread.messages.length - 1];
   if (!last) return false;
-  return last.role === "user" || last.pending === true;
+  if (last.pending) return true;
+  if (isFailureMessageKey(last.content) || last.tone === "warning" || last.tone === "error") {
+    return false;
+  }
+  if (last.role === "user") {
+    return !isStaleInflightMessage(last.createdAt);
+  }
+  return false;
 }
 
 export type SendLiveMessageInput = {
@@ -38,7 +46,12 @@ export function useSendLiveMessage(agentId: string) {
       const attachments = typeof input === "string" ? undefined : input.attachments;
       return getLiveRepository().sendMessage(agentId, content, attachments);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["live", agentId] }),
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
+    },
   });
 }
 

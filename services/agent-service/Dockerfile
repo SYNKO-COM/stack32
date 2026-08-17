@@ -16,9 +16,10 @@ COPY agent-service/pyproject.toml agent-service/README.md ./
 COPY agent-service/agent_service ./agent_service
 
 # Install runtime + service together so the local path satisfies the dep.
+# gcp = Cloud Tasks (production queue); sandbox = E2B builder coding agent.
 RUN pip install --no-cache-dir --prefix=/install \
       /tmp/stack32-agent-runtime \
-      .
+      ".[gcp,sandbox]"
 
 FROM python:3.12-slim
 

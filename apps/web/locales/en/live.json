@@ -53,6 +53,7 @@
     "canceled": "Run stopped.",
     "missingUserLlmKey": "To chat with this agent, connect a brain (LLM) with your API key below. It is stored securely.",
     "runFailed": "Something went wrong while running your agent. Please try again.",
+    "serviceUnavailable": "The agent service is temporarily unavailable. Please try again in a moment.",
     "budgetExceeded": "This run used too many model calls. Try a shorter request.",
     "providerUnavailable": "The language model could not be reached. Check your API key or try again in a moment.",
     "toolCallFormat": "The agent hit a temporary tool error. Please try again."

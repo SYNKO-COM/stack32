@@ -9,6 +9,9 @@ function resetEnv(vars: Record<string, string | undefined>) {
   delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  delete process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+  delete process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  delete process.env.NEXT_PUBLIC_POSTHOG_HOST;
   for (const [key, value] of Object.entries(vars)) {
     if (value !== undefined) process.env[key] = value;
   }
@@ -52,5 +55,17 @@ describe("public env validation", () => {
   it("fails fast when supabase mode lacks credentials", async () => {
     resetEnv({ NEXT_PUBLIC_DATA_MODE: "supabase" });
     await expect(import("@/lib/env")).rejects.toThrow(/NEXT_PUBLIC_SUPABASE_URL/);
+  });
+
+  it("prefers the official PostHog project token over the alias", async () => {
+    resetEnv({
+      NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: "phc_official",
+      NEXT_PUBLIC_POSTHOG_KEY: "phc_alias",
+      NEXT_PUBLIC_POSTHOG_HOST: "https://us.i.posthog.com",
+    });
+    const tracking = await import("@/lib/tracking");
+    expect(tracking.POSTHOG_KEY).toBe("phc_official");
+    expect(tracking.POSTHOG_HOST).toBe("https://us.i.posthog.com");
+    expect(tracking.isPostHogConfigured).toBe(true);
   });
 });

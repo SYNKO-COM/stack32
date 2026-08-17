@@ -853,6 +853,10 @@ export function mapLiveMessage(row: LiveMessageRow): LiveMessage | null {
       : undefined,
     pending: meta.pending === true,
     statusKey: typeof meta.statusKey === "string" ? meta.statusKey : undefined,
+    tone:
+      meta.tone === "warning" || meta.tone === "error"
+        ? meta.tone
+        : undefined,
     runId,
     uiComponent,
     attachments: parseMessageAttachments(meta.attachments),

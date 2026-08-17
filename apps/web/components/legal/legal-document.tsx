@@ -3,11 +3,12 @@
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
+import { CookiePreferencesButton } from "@/components/consent/cookie-preferences";
 import { useTranslation } from "@/hooks/use-translation";
 import { company, getIncompleteCompanyFields } from "@/lib/company";
 
 /** Single source for legal drafts' last revision date. */
-export const LEGAL_LAST_UPDATED = "2026-08-04";
+export const LEGAL_LAST_UPDATED = "2026-08-17";
 
 interface LegalSection {
   title: string;
@@ -129,6 +130,12 @@ export function LegalDocument({ docKey, withToc = true }: LegalDocumentProps) {
           </section>
         ))}
       </div>
+
+      {docKey === "cookies" ? (
+        <div className="mt-10">
+          <CookiePreferencesButton variant="outline" className="rounded-full" />
+        </div>
+      ) : null}
     </article>
   );
 }

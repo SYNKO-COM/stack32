@@ -119,7 +119,7 @@
       },
       {
         "title": "3. Finalités",
-        "body": "Fournir le service (créer et exécuter vos agents), sécuriser les comptes, améliorer le produit, assurer le support, gérer la facturation et respecter nos obligations légales. Les bases légales incluent l'exécution du contrat, l'intérêt légitime et les obligations légales."
+        "body": "Fournir le service (créer et exécuter vos agents), sécuriser les comptes, améliorer le produit, assurer le support, gérer la facturation et respecter nos obligations légales. Les bases légales incluent l'exécution du contrat, l'intérêt légitime, les obligations légales, et le consentement pour les cookies optionnels de mesure d’audience et de publicité."
       },
       {
         "title": "4. Traitement par l'IA",
@@ -127,7 +127,7 @@
       },
       {
         "title": "5. Partage",
-        "body": "Les données ne sont partagées qu'avec les sous-traitants nécessaires au fonctionnement du service (hébergement IONOS, base de données, fournisseurs de modèles d'IA, prestataire de paiement, mesure d'audience), dans le cadre d'accords de sous-traitance. Nous ne vendons pas de données personnelles."
+        "body": "Les données ne sont partagées qu'avec les sous-traitants nécessaires au fonctionnement du service (hébergement IONOS, base de données, fournisseurs de modèles d'IA, prestataire de paiement) et, si vous y consentez, la mesure d’audience (PostHog) ou des partenaires publicitaires (Meta, TikTok), dans le cadre d’accords de sous-traitance ou des conditions de ces plateformes. Nous ne vendons pas de données personnelles contre paiement. Les pixels publicitaires peuvent constituer un « partage » selon certaines lois américaines — voir la section 11."
       },
       {
         "title": "6. Durées de conservation",
@@ -144,28 +144,56 @@
       {
         "title": "9. Transferts hors UE",
         "body": "Certains sous-traitants peuvent être situés en dehors de l'Union européenne. Dans ce cas, les transferts sont encadrés par des garanties appropriées telles que les clauses contractuelles types de la Commission européenne."
+      },
+      {
+        "title": "10. Cookies et technologies similaires",
+        "body": "Les cookies strictement nécessaires (session, sécurité, langue, thème, enregistrement du consentement) fonctionnent sans consentement supplémentaire, le service ne pouvant pas marcher sans eux. La mesure d’audience (PostHog, y compris le replay de session avec champs de formulaire masqués) et les pixels publicitaires (Meta, TikTok) ne se chargent qu’après acceptation dans le bandeau. Vous pouvez tout accepter, tout refuser ou personnaliser les catégories, et changer d’avis à tout moment depuis le pied de page ou la politique de cookies. La liste complète figure dans la politique de cookies."
+      },
+      {
+        "title": "11. Droits aux États-Unis (CCPA/CPRA)",
+        "body": "Si vous résidez en Californie (et, le cas échéant, dans d’autres États américains disposant de lois similaires), vous pouvez demander l’accès, la correction, la suppression et des informations sur les données collectées. Nous ne vendons pas de données personnelles contre paiement. Les pixels publicitaires, si vous les activez, peuvent constituer un « partage » au sens de la publicité comportementale inter-contextes. Utilisez « Ne pas vendre ni partager mes données » dans le pied de page, ou refusez les cookies marketing, pour vous y opposer. Nous traitons le signal Global Privacy Control (GPC) comme un refus des cookies publicitaires. Pour les autres droits, contactez {{contactEmail}}."
+      },
+      {
+        "title": "12. Droits au Canada (LPRPDE et Loi 25 du Québec)",
+        "body": "Si vous êtes au Canada, vous pouvez demander l’accès, la correction et le retrait du consentement pour les traitements optionnels, et introduire une plainte auprès du Commissariat à la protection de la vie privée du Canada ou, au Québec, de la Commission d’accès à l’information. Les cookies optionnels de mesure et de publicité restent désactivés tant que vous n’avez pas opté pour leur activation. Pour exercer vos droits, contactez {{contactEmail}}."
       }
     ]
   },
   "cookies": {
     "title": "Politique de cookies",
-    "intro": "Cette politique décrit les cookies et technologies similaires utilisés par Stack32.",
+    "intro": "Cette politique décrit les cookies et technologies similaires utilisés par Stack32, comment les accepter, les refuser ou les personnaliser, et comment ce choix est conservé. Elle complète la politique de confidentialité.",
     "sections": [
       {
         "title": "1. Qu'est-ce qu'un cookie",
-        "body": "Les cookies sont de petits fichiers déposés sur votre appareil par votre navigateur. Ils peuvent être strictement nécessaires au fonctionnement du service, ou servir à la mesure d'audience et à la personnalisation."
+        "body": "Les cookies sont de petits fichiers déposés sur votre appareil par votre navigateur. Des technologies similaires incluent le stockage local, les pixels et les scripts qui lisent un identifiant d’appareil. Ils peuvent être strictement nécessaires au service, ou servir à la mesure d’audience et à la publicité — auquel cas nous demandons d’abord votre consentement."
       },
       {
-        "title": "2. Cookies utilisés",
-        "body": "Cookies strictement nécessaires : session d'authentification, sécurité, préférence de langue. Ils ne nécessitent pas de consentement. Cookies de mesure : si nous ajoutons une mesure d'audience respectueuse de la vie privée, cette politique sera mise à jour et le consentement demandé lorsque requis."
+        "title": "2. Vos choix (UE/France, Royaume-Uni, États-Unis, Canada)",
+        "body": "Un bandeau vous permet de tout accepter, tout refuser, ou de personnaliser les catégories. Accepter et refuser sont présentés de façon équivalente. Tant que vous n’avez pas choisi, la mesure d’audience et la publicité restent désactivées. Votre choix est conservé 13 mois (recommandation CNIL), puis nous redemandons. Vous pouvez rouvrir le panneau depuis « Paramètres des cookies » dans le pied de page, depuis cette page, ou via « Ne pas vendre ni partager mes données » (États-Unis). Un signal Global Privacy Control (GPC) est traité comme un refus des cookies publicitaires."
       },
       {
-        "title": "3. Stockage local",
-        "body": "Stack32 utilise le stockage local de votre navigateur pour mémoriser votre langue et, en mode développement, pour stocker des données de démonstration localement sur votre appareil."
+        "title": "3. Cookies strictement nécessaires",
+        "body": "Ils ne nécessitent pas de consentement : stack32.locale (langue, 12 mois), stack32.theme (apparence, 12 mois), stack32_consent (votre choix cookies, 13 mois), cookies d’authentification Supabase (session connectée et sécurité), et cookies techniques hCaptcha à l’inscription lorsque cette protection est active. Les bloquer peut empêcher la connexion ou les contrôles de sécurité."
       },
       {
-        "title": "4. Gérer les cookies",
-        "body": "Vous pouvez supprimer les cookies et le stockage local à tout moment dans les réglages de votre navigateur. Le blocage des cookies strictement nécessaires peut empêcher le service de fonctionner."
+        "title": "4. Cookies de mesure d’audience (optionnels)",
+        "body": "Si vous acceptez la mesure d’audience, nous chargeons PostHog (ingestion cloud US, us.i.posthog.com, sous-traitant avec accord de traitement / clauses contractuelles types) pour les pages vues, l’usage produit et le replay de session. Les champs de formulaire sont masqués dans le replay. Cookies typiques : identifiants ph_* / distinct_id, durée jusqu’à 12 mois. Ces scripts ne se chargent pas si vous refusez, si aucune clé PostHog n’est configurée, ou après retrait du consentement."
+      },
+      {
+        "title": "5. Cookies publicitaires (optionnels)",
+        "body": "Si vous acceptez le marketing, nous pouvons charger le pixel Meta (Facebook) et le pixel TikTok pour mesurer les campagnes et, lorsque ces plateformes le permettent, le reciblage. Cookies typiques : _fbp, _fbc (Meta, jusqu’à 90 jours) et _ttp / _tt_enable_cookie (TikTok, jusqu’à 13 mois). Ces partenaires peuvent traiter des données aux États-Unis. Ils ne se chargent pas si vous refusez le marketing, si aucun identifiant pixel n’est configuré, si votre navigateur envoie un signal GPC, ou après retrait du consentement."
+      },
+      {
+        "title": "6. Stockage local",
+        "body": "Stack32 utilise le stockage local du navigateur pour mémoriser la langue et le thème et, en mode développement/démo, pour stocker des données de démonstration sur votre appareil. PostHog peut aussi utiliser le stockage local si la mesure d’audience est acceptée."
+      },
+      {
+        "title": "7. Sous-traitants et transferts",
+        "body": "Hébergement et authentification nécessaires : IONOS et Supabase. Mesure d’audience optionnelle : PostHog (ingestion US). Publicité optionnelle : Meta Platforms et TikTok, uniquement si ces pixels sont configurés et que vous y consentez. Les transferts hors UE reposent sur des garanties appropriées telles que les clauses contractuelles types de la Commission européenne."
+      },
+      {
+        "title": "8. Modifier ou supprimer les cookies",
+        "body": "Utilisez les paramètres de cookies sur ce site pour modifier la mesure d’audience ou le marketing. Vous pouvez aussi supprimer les cookies et le stockage local dans votre navigateur. Le retrait du consentement arrête les nouvelles collectes ; il n’efface pas toujours les copies déjà détenues par une plateforme publicitaire — vous pouvez aussi vous opposer dans les réglages de votre compte Meta / TikTok. Contactez {{contactEmail}} pour une demande d’accès ou de suppression."
       }
     ]
   },

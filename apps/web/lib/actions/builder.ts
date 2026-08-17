@@ -16,6 +16,7 @@ import { LOCALE_COOKIE, readLocaleCookie } from "@/lib/i18n/locales";
 import { requireSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
+import { AgentServiceError } from "@/lib/ai/agent-service-errors";
 
 /** UI language chosen in settings — the assistant must always reply in it. */
 async function currentLocale(): Promise<string> {
@@ -83,28 +84,59 @@ export async function executeBuilderTurn(input: {
   // Immediate "thinking" bubble only — do NOT set status=building yet.
   // Setting building early made the Agent Service skip the identity form
   // (is_first became false while a default "Untitled agent" draft already exists).
-  await admin.from("builder_messages").insert({
-    thread_id: input.threadId,
-    agent_id: input.agentId,
-    user_id: userId,
-    role: "assistant",
-    content: "",
-    metadata: {
-      card: "thinking",
-      tone: "normal",
-      focus: "working.activities.reading",
-    } as unknown as Json,
-  });
+  const { data: thinking } = await admin
+    .from("builder_messages")
+    .insert({
+      thread_id: input.threadId,
+      agent_id: input.agentId,
+      user_id: userId,
+      role: "assistant",
+      content: "",
+      metadata: {
+        card: "thinking",
+        tone: "normal",
+        focus: "working.activities.reading",
+      } as unknown as Json,
+    })
+    .select("id")
+    .single();
 
-  await getAdapter().execute({
-    userId,
-    locale: await currentLocale(),
-    agentId: input.agentId,
-    threadId: input.threadId,
-    prompt: input.prompt,
-    images: input.images,
-    mode: input.mode ?? "build",
-  });
+  try {
+    await getAdapter().execute({
+      userId,
+      locale: await currentLocale(),
+      agentId: input.agentId,
+      threadId: input.threadId,
+      prompt: input.prompt,
+      images: input.images,
+      mode: input.mode ?? "build",
+    });
+  } catch (err) {
+    const contentKey =
+      err instanceof AgentServiceError && err.code === "AGENT_SERVICE_UNAVAILABLE"
+        ? "builder:errors.serviceUnavailable"
+        : "builder:errors.buildFailedDetail";
+    if (thinking?.id) {
+      await admin
+        .from("builder_messages")
+        .update({
+          content: contentKey,
+          metadata: { tone: "warning" } as unknown as Json,
+        })
+        .eq("id", thinking.id);
+    } else {
+      await admin.from("builder_messages").insert({
+        thread_id: input.threadId,
+        agent_id: input.agentId,
+        user_id: userId,
+        role: "assistant",
+        content: contentKey,
+        metadata: { tone: "warning" } as unknown as Json,
+      });
+    }
+    // Error is persisted — do not fail the client mutation (avoids reverting the thread).
+    return;
+  }
 }
 
 /** Automatic repair ("Fix automatically" action). */

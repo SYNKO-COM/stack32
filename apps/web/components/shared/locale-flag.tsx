@@ -1,7 +1,13 @@
+"use client";
+
+import { useId } from "react";
+
 import type { Locale } from "@/lib/i18n/locales";
 import { cn } from "@/lib/utils";
 
-/** Compact SVG flags — not emoji — for the language switcher. */
+const FLAG_VIEWBOX = "0 0 21 14";
+
+/** Compact SVG flags (not emoji) for the language switcher. */
 export function LocaleFlag({
   locale,
   className,
@@ -11,47 +17,81 @@ export function LocaleFlag({
   className?: string;
   title?: string;
 }) {
-  if (locale === "fr") {
-    return (
-      <svg
-        viewBox="0 0 24 16"
-        className={cn("h-3.5 w-[21px] shrink-0 rounded-[2px] shadow-sm ring-1 ring-black/10", className)}
-        aria-hidden={title ? undefined : true}
-        role={title ? "img" : undefined}
-      >
-        {title ? <title>{title}</title> : null}
-        <rect width="8" height="16" fill="#002395" />
-        <rect x="8" width="8" height="16" fill="#fff" />
-        <rect x="16" width="8" height="16" fill="#ED2939" />
-      </svg>
-    );
-  }
+  const clipId = useId();
 
   return (
     <svg
-      viewBox="0 0 24 16"
-      className={cn("h-3.5 w-[21px] shrink-0 rounded-[2px] shadow-sm ring-1 ring-black/10", className)}
+      viewBox={FLAG_VIEWBOX}
+      className={cn("h-[15px] w-[22px] shrink-0", className)}
       aria-hidden={title ? undefined : true}
       role={title ? "img" : undefined}
     >
       {title ? <title>{title}</title> : null}
-      <rect width="24" height="16" fill="#B22234" />
-      <g fill="#fff">
-        <rect y="1.23" width="24" height="1.23" />
-        <rect y="3.69" width="24" height="1.23" />
-        <rect y="6.15" width="24" height="1.23" />
-        <rect y="8.62" width="24" height="1.23" />
-        <rect y="11.08" width="24" height="1.23" />
-        <rect y="13.54" width="24" height="1.23" />
-      </g>
-      <rect width="9.6" height="8.62" fill="#3C3B6E" />
-      <g fill="#fff">
-        {[0.8, 2.4, 4, 5.6, 7.2].map((y) =>
-          [0.9, 2.5, 4.1, 5.7, 7.3, 8.9].map((x) => (
-            <circle key={`${x}-${y}`} cx={x} cy={y} r="0.35" />
-          )),
-        )}
+      <defs>
+        <clipPath id={clipId}>
+          <rect width="21" height="14" rx="3" ry="3" />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${clipId})`}>
+        {locale === "fr" ? <FrenchFlag /> : <UsFlag />}
       </g>
     </svg>
+  );
+}
+
+function FrenchFlag() {
+  return (
+    <>
+      <rect width="7" height="14" fill="#0055A4" />
+      <rect x="7" width="7" height="14" fill="#FFFFFF" />
+      <rect x="14" width="7" height="14" fill="#EF4135" />
+    </>
+  );
+}
+
+function UsFlag() {
+  const stripeHeight = 14 / 13;
+
+  return (
+    <>
+      <rect width="21" height="14" fill="#B22234" />
+      {Array.from({ length: 6 }, (_, index) => (
+        <rect
+          key={index}
+          y={(index * 2 + 1) * stripeHeight}
+          width="21"
+          height={stripeHeight}
+          fill="#FFFFFF"
+        />
+      ))}
+      <rect width="8.4" height={7.69} fill="#3C3B6E" />
+      {[
+        [1.05, 1.05],
+        [2.45, 1.05],
+        [3.85, 1.05],
+        [5.25, 1.05],
+        [6.65, 1.05],
+        [1.75, 2.45],
+        [3.15, 2.45],
+        [4.55, 2.45],
+        [5.95, 2.45],
+        [1.05, 3.85],
+        [2.45, 3.85],
+        [3.85, 3.85],
+        [5.25, 3.85],
+        [6.65, 3.85],
+        [1.75, 5.25],
+        [3.15, 5.25],
+        [4.55, 5.25],
+        [5.95, 5.25],
+        [1.05, 6.65],
+        [2.45, 6.65],
+        [3.85, 6.65],
+        [5.25, 6.65],
+        [6.65, 6.65],
+      ].map(([cx, cy]) => (
+        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="0.42" fill="#FFFFFF" />
+      ))}
+    </>
   );
 }

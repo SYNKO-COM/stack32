@@ -12,6 +12,7 @@ import { LOCALE_COOKIE, readLocaleCookie } from "@/lib/i18n/locales";
 import { requireSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
+import { AgentServiceError } from "@/lib/ai/agent-service-errors";
 
 function getAdapter(): LiveExecutionAdapter {
   const mode = currentAiExecutionMode();
@@ -58,14 +59,31 @@ export async function executeLiveTurn(input: {
 
   const store = await cookies();
   const locale = readLocaleCookie(store.get(LOCALE_COOKIE)?.value);
-  await getAdapter().execute({
-    userId: user.id,
-    locale,
-    agentId: input.agentId,
-    threadId: input.threadId,
-    prompt: input.prompt,
-    images: input.images,
-  });
+  try {
+    await getAdapter().execute({
+      userId: user.id,
+      locale,
+      agentId: input.agentId,
+      threadId: input.threadId,
+      prompt: input.prompt,
+      images: input.images,
+    });
+  } catch (err) {
+    const admin = requireSupabaseAdminClient();
+    const contentKey =
+      err instanceof AgentServiceError && err.code === "AGENT_SERVICE_UNAVAILABLE"
+        ? "live:errors.serviceUnavailable"
+        : "live:errors.runFailed";
+    await admin.from("live_messages").insert({
+      thread_id: input.threadId,
+      agent_id: input.agentId,
+      user_id: user.id,
+      role: "assistant",
+      content: contentKey,
+      metadata: { tone: "warning" } as unknown as Json,
+    });
+    return;
+  }
 }
 
 /** Stop the in-flight live run (composer Stop button). */

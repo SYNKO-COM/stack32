@@ -97,6 +97,26 @@ def test_internal_endpoint_requires_service_token(make_settings):
     assert allowed.json() == {"status": "ok"}
 
 
+def test_internal_endpoint_accepts_google_oidc_invoker(make_settings, monkeypatch):
+    make_settings(SUPABASE_JWT_SECRET=SECRET, INTERNAL_SERVICE_TOKEN="internal-token")
+    monkeypatch.setattr(
+        "agent_service.auth._google_oidc_invoker_ok",
+        lambda authorization: authorization == "Bearer oidc-ok",
+    )
+    client = TestClient(create_app(), raise_server_exceptions=False)
+
+    denied = client.post(
+        "/v1/webhooks/internal/ping", headers={"Authorization": "Bearer nope"}
+    )
+    assert denied.status_code == 403
+
+    allowed = client.post(
+        "/v1/webhooks/internal/ping", headers={"Authorization": "Bearer oidc-ok"}
+    )
+    assert allowed.status_code == 200
+    assert allowed.json() == {"status": "ok"}
+
+
 def test_production_requires_verification_config():
     import pytest
 

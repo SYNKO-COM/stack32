@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { CookiePreferencesButton, DoNotSellButton } from "@/components/consent/cookie-preferences";
 import { Logo } from "@/components/shared/logo";
 import { useTranslation } from "@/hooks/use-translation";
 import { company } from "@/lib/company";
@@ -75,6 +76,8 @@ export function Footer() {
               {l.label}
             </Link>
           ))}
+          <CookiePreferencesButton className="block h-auto p-0 text-sm" />
+          <DoNotSellButton className="block" />
         </nav>
       </div>
 

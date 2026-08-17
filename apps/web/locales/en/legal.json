@@ -119,7 +119,7 @@
       },
       {
         "title": "3. Why we process it",
-        "body": "To provide the service (create and run your agents), to secure accounts, to improve the product, to provide support, to handle billing, and to comply with legal obligations. Legal bases include contract performance, legitimate interest and legal obligations."
+        "body": "To provide the service (create and run your agents), to secure accounts, to improve the product, to provide support, to handle billing, and to comply with legal obligations. Legal bases include contract performance, legitimate interest, legal obligations, and consent for optional analytics and advertising cookies."
       },
       {
         "title": "4. AI processing",
@@ -127,7 +127,7 @@
       },
       {
         "title": "5. Sharing",
-        "body": "Data is shared only with processors necessary to run the service (IONOS hosting, database, AI model providers, payment provider, analytics), under data-processing agreements. We do not sell personal data."
+        "body": "Data is shared only with processors necessary to run the service (IONOS hosting, database, AI model providers, payment provider) and, if you consent, analytics (PostHog) or advertising partners (Meta, TikTok), under data-processing or platform terms. We do not sell personal data for money. Advertising pixels can count as “sharing” under some US laws — see section 11."
       },
       {
         "title": "6. Retention",
@@ -144,28 +144,56 @@
       {
         "title": "9. Transfers outside the EU",
         "body": "Some processors may be located outside the European Union. In that case, transfers are protected by appropriate safeguards such as the European Commission's standard contractual clauses."
+      },
+      {
+        "title": "10. Cookies and similar technologies",
+        "body": "Strictly necessary cookies (session, security, language, theme, consent record) run without extra consent because the service cannot work without them. Analytics (PostHog, including session replay with form fields masked) and advertising pixels (Meta, TikTok) load only after you accept them in the cookie banner. You can accept all, reject all, or customise categories, and change your mind at any time from the footer or the cookie policy. See the Cookie policy for the full list."
+      },
+      {
+        "title": "11. Rights in the United States (CCPA/CPRA)",
+        "body": "If you are a California resident (and, where applicable, a resident of other US states with similar laws), you may request access, correction, deletion, and information about data we collected. We do not sell personal information for money. Advertising pixels, if you enable them, can qualify as “sharing” for cross-context behavioural advertising. Use “Do not sell or share my data” in the footer, or reject marketing cookies, to opt out. We honour Global Privacy Control (GPC) as an opt-out of advertising cookies. To exercise other rights, contact {{contactEmail}}."
+      },
+      {
+        "title": "12. Rights in Canada (PIPEDA and Quebec Law 25)",
+        "body": "If you are in Canada, you may request access, correction, and withdrawal of consent for optional processing, and you may complain to the Office of the Privacy Commissioner of Canada or, in Quebec, the Commission d’accès à l’information. Optional analytics and advertising cookies are off until you opt in. To exercise your rights, contact {{contactEmail}}."
       }
     ]
   },
   "cookies": {
     "title": "Cookie policy",
-    "intro": "This policy describes the cookies and similar technologies used by Stack32.",
+    "intro": "This policy describes the cookies and similar technologies used by Stack32, how to accept, refuse or customise them, and how that choice is stored. It complements the Privacy policy.",
     "sections": [
       {
         "title": "1. What cookies are",
-        "body": "Cookies are small files stored on your device by your browser. They can be strictly necessary to run the service, or used for measurement and personalization."
+        "body": "Cookies are small files stored on your device by your browser. Similar technologies include local storage, pixels and scripts that read a device identifier. They can be strictly necessary to run the service, or used for measurement and advertising — in which case we ask for your consent first."
       },
       {
-        "title": "2. Cookies we use",
-        "body": "Strictly necessary cookies: authentication session, security, language preference. These do not require consent. Measurement cookies: if we add privacy-friendly analytics, this policy will be updated and consent requested where required."
+        "title": "2. Your choices (EU/France, UK, US, Canada)",
+        "body": "A banner lets you accept all optional cookies, reject all optional cookies, or customise categories. Accept and reject are equally available. Until you choose, analytics and advertising stay off. Your choice is stored for 13 months (CNIL), then we ask again. You can reopen the panel from “Cookie settings” in the footer, from this page, or via “Do not sell or share my data” (US). A Global Privacy Control (GPC) signal is treated as a refusal of advertising cookies."
       },
       {
-        "title": "3. Local storage",
-        "body": "Stack32 uses your browser's local storage to remember your language and, in development mode, to store demo data locally on your device."
+        "title": "3. Strictly necessary cookies",
+        "body": "These do not require consent: stack32.locale (language, 12 months), stack32.theme (appearance, 12 months), stack32_consent (your cookie choice, 13 months), Supabase authentication cookies (signed-in session and security), and technical cookies set by hCaptcha on sign-up when that protection is enabled. Blocking them may prevent login or security checks from working."
       },
       {
-        "title": "4. Managing cookies",
-        "body": "You can delete cookies and local storage at any time in your browser settings. Blocking strictly necessary cookies may prevent the service from working."
+        "title": "4. Analytics cookies (optional)",
+        "body": "If you accept analytics, we load PostHog (US cloud ingest at us.i.posthog.com, acting as our processor under a data-processing agreement / standard contractual clauses) to measure page views, product usage and session replay. Form fields are masked in replay. Typical cookies include ph_* / distinct_id identifiers, with a lifetime up to 12 months. These scripts do not load if you refuse analytics, if no PostHog key is configured, or after you withdraw consent."
+      },
+      {
+        "title": "5. Advertising cookies (optional)",
+        "body": "If you accept marketing, we may load the Meta (Facebook) Pixel and the TikTok Pixel to measure campaigns and, where those platforms allow, retargeting. Typical cookies include _fbp, _fbc (Meta, up to 90 days) and _ttp / _tt_enable_cookie (TikTok, up to 13 months). These partners may process data in the United States. They do not load if you refuse marketing, if no pixel ID is configured, if your browser sends GPC, or after you withdraw consent."
+      },
+      {
+        "title": "6. Local storage",
+        "body": "Stack32 uses your browser’s local storage to remember language and theme, and, in development/mock mode, to store demo data on your device. PostHog may also use local storage when analytics is accepted."
+      },
+      {
+        "title": "7. Processors and transfers",
+        "body": "Necessary hosting and authentication: IONOS and Supabase. Optional analytics: PostHog (US ingest). Optional advertising: Meta Platforms and TikTok, only if those pixels are configured and you consent. Transfers outside the EU rely on appropriate safeguards such as the European Commission’s standard contractual clauses."
+      },
+      {
+        "title": "8. How to change or delete cookies",
+        "body": "Use Cookie settings on this site to change analytics or marketing. You can also delete cookies and local storage in your browser. Withdrawing consent stops new collection; it does not always erase copies already held by an advertising platform — you can also opt out in your Meta / TikTok account settings. Contact {{contactEmail}} for access or deletion requests."
       }
     ]
   },

@@ -13,15 +13,26 @@
     "manage": "Manage subscription",
     "mockNotice": "Preview mode: plans can be activated without Whop. Set BILLING_MODE=whop and Whop secrets for live payments."
   },
+  "plans": {
+    "title": "Choose your plan",
+    "subtitle": "Three plans to publish and grow your agents. You can also start for free.",
+    "startFree": "Start for free"
+  },
   "checkout": {
     "title": "Complete your subscription",
     "subtitle": "{{plan}} · {{credits}} credits/mo · {{amount}} {{period}}",
+    "paymentTitle": "Payment",
+    "summaryTitle": "Your subscription",
+    "planLabel": "Plan",
+    "creditsLabel": "Builder credits",
+    "dueToday": "Due today",
+    "changePlan": "Change plan",
+    "unlockHint": "Check both boxes to reveal secure checkout.",
     "perMonth": "/ month",
     "perYear": "billed yearly",
     "loading": "Preparing secure checkout…",
     "errorTitle": "Checkout unavailable",
     "backToPricing": "Back to pricing",
-    "continueToPayment": "Continue to payment — {{amount}}",
     "consents": {
       "terms": "I have read and accept the <terms>Terms of Use</terms>, the <sales>Subscription & Sales Terms</sales> and the <refunds>Refund Policy</refunds>.",
       "immediate": "I accept the immediate performance of the service and expressly waive my right of withdrawal.",

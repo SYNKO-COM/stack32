@@ -184,6 +184,20 @@ resource "google_cloud_tasks_queue" "runs" {
   depends_on = [google_project_service.services]
 }
 
+resource "google_cloud_tasks_queue_iam_member" "agent_api_enqueuer" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_tasks_queue.runs.name
+  role     = "roles/cloudtasks.enqueuer"
+  member   = "serviceAccount:${google_service_account.agent_api.email}"
+}
+
+resource "google_service_account_iam_member" "agent_api_uses_invoker" {
+  service_account_id = google_service_account.task_invoker.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.agent_api.email}"
+}
+
 resource "google_cloud_scheduler_job" "schedules_tick" {
   count            = var.scheduler_tick_url == "" ? 0 : 1
   name             = "stack32-schedules-tick-production"

@@ -13,15 +13,26 @@
     "manage": "Gérer l'abonnement",
     "mockNotice": "Mode aperçu : les plans peuvent s’activer sans Whop. Passez BILLING_MODE=whop et renseignez les secrets Whop pour les paiements réels."
   },
+  "plans": {
+    "title": "Choisissez votre plan",
+    "subtitle": "Trois offres pour publier et faire grandir vos agents. Vous pourrez aussi commencer gratuitement.",
+    "startFree": "Commencer gratuitement"
+  },
   "checkout": {
     "title": "Finaliser votre abonnement",
     "subtitle": "{{plan}} · {{credits}} crédits/mois · {{amount}} {{period}}",
+    "paymentTitle": "Paiement",
+    "summaryTitle": "Votre abonnement",
+    "planLabel": "Plan",
+    "creditsLabel": "Crédits Builder",
+    "dueToday": "À régler aujourd’hui",
+    "changePlan": "Changer de plan",
+    "unlockHint": "Cochez les deux cases pour afficher le paiement sécurisé.",
     "perMonth": "/ mois",
     "perYear": "facturé annuellement",
     "loading": "Préparation du paiement sécurisé…",
     "errorTitle": "Paiement indisponible",
     "backToPricing": "Retour aux tarifs",
-    "continueToPayment": "Continuer vers le paiement — {{amount}}",
     "consents": {
       "terms": "J’ai lu et j’accepte les <terms>conditions générales d’utilisation</terms>, les <sales>conditions d’abonnement et de vente</sales> et la <refunds>politique de remboursement</refunds>.",
       "immediate": "J’accepte l’exécution immédiate du service et renonce expressément à mon droit de rétractation.",
