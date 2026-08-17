@@ -124,7 +124,62 @@ class ProviderRegistry:
                 row.setdefault("provider", provider.name)
                 out.append(row)
                 if len(out) >= limit:
+                    # region agent log
+                    try:
+                        import json
+                        from pathlib import Path
+
+                        Path("/Users/3van/Documents/Stack32/.cursor/debug-faa28e.log").open("a").write(
+                            json.dumps(
+                                {
+                                    "sessionId": "faa28e",
+                                    "runId": "pre-verify",
+                                    "hypothesisId": "D",
+                                    "location": "registry.py:search_apps:early-return",
+                                    "message": "app search hit limit",
+                                    "data": {
+                                        "q": query,
+                                        "limit": limit,
+                                        "count": len(out),
+                                        "ids": [str(a.get("app_id")) for a in out[:10]],
+                                        "providers": [str(a.get("provider")) for a in out[:10]],
+                                    },
+                                    "timestamp": int(__import__("time").time() * 1000),
+                                }
+                            )
+                            + "\n"
+                        )
+                    except Exception:
+                        pass
+                    # endregion
                     return out
+        # region agent log
+        try:
+            import json
+            from pathlib import Path
+
+            Path("/Users/3van/Documents/Stack32/.cursor/debug-faa28e.log").open("a").write(
+                json.dumps(
+                    {
+                        "sessionId": "faa28e",
+                        "runId": "pre-verify",
+                        "hypothesisId": "D",
+                        "location": "registry.py:search_apps",
+                        "message": "merged app search",
+                        "data": {
+                            "q": query,
+                            "count": len(out),
+                            "ids": [str(a.get("app_id")) for a in out[:10]],
+                            "providers": [str(a.get("provider")) for a in out[:10]],
+                        },
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        except Exception:
+            pass
+        # endregion
         return out
 
     async def health(self) -> list[dict[str, Any]]:

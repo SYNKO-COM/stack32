@@ -396,7 +396,8 @@ function BuilderBubble({
           ) : null}
           <div
             className={cn(
-              "min-w-0 overflow-hidden text-left text-sm leading-relaxed",
+              "min-w-0 text-left text-sm leading-relaxed",
+              showForms ? "overflow-visible" : "overflow-hidden",
               isUser
                 ? "rounded-3xl bg-brand/15 px-4 py-3 text-foreground"
                 : "px-0 py-0 text-foreground/90",

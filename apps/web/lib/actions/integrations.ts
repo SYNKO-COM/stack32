@@ -294,9 +294,8 @@ export async function searchIntegrationApps(
     method: "GET",
     accessToken,
   });
-  return {
-    query: result.query,
-    apps: (result.apps ?? []).map((row) => {
+  const apps = (result.apps ?? [])
+    .map((row) => {
       const rec = asRecord(row);
       const appId = String(rec.app_id ?? rec.appId ?? rec.name_slug ?? rec.id ?? "");
       return {
@@ -310,8 +309,30 @@ export async function searchIntegrationApps(
               : undefined,
         summary: typeof rec.summary === "string" ? rec.summary : undefined,
       };
-    }).filter((app) => Boolean(app.appId)),
-  };
+    })
+    .filter((app) => Boolean(app.appId));
+  // #region agent log
+  fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "faa28e" },
+    body: JSON.stringify({
+      sessionId: "faa28e",
+      runId: "pre-verify",
+      hypothesisId: "A,D",
+      location: "integrations.ts:searchIntegrationApps",
+      message: "server app search payload",
+      data: {
+        q,
+        count: apps.length,
+        ids: apps.slice(0, 10).map((a) => a.appId),
+        names: apps.slice(0, 10).map((a) => a.name),
+        providers: (result.apps ?? []).slice(0, 10).map((row) => asRecord(row).provider ?? null),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  return { query: result.query, apps };
 }
 
 export async function getProvidersHealth(): Promise<{
