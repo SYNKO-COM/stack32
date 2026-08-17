@@ -379,11 +379,41 @@ export async function submitBuilderProviders(input: {
     throw new Error("providers_require_agent_service");
   }
   const accessToken = await requireAccessToken();
-  await agentServiceFetch(`/v1/builder/runs/${input.runId}/providers`, {
+  // #region agent log
+  fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "faa28e" },
+    body: JSON.stringify({
+      sessionId: "faa28e",
+      runId: "post-fix",
+      hypothesisId: "F",
+      location: "builder.ts:submitBuilderProviders",
+      message: "providers action calling API",
+      data: { runId: input.runId, keys: Object.keys(input.answers) },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  const result = await agentServiceFetch(`/v1/builder/runs/${input.runId}/providers`, {
     method: "POST",
     accessToken,
     body: { answers: input.answers },
   });
+  // #region agent log
+  fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "faa28e" },
+    body: JSON.stringify({
+      sessionId: "faa28e",
+      runId: "post-fix",
+      hypothesisId: "F",
+      location: "builder.ts:submitBuilderProviders:done",
+      message: "providers action returned",
+      data: { runId: input.runId, status: (result as { status?: string } | null)?.status ?? null },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 }
 
 /** Stop the in-flight Builder run (square Stop button). */

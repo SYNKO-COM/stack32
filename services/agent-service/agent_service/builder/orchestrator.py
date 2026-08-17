@@ -322,6 +322,23 @@ class BuilderOrchestrator:
 
             await self.db.clear_thinking_messages(thread_id=thread_id)
 
+            run_row = await self.db.get_owned_run(run_id, user_id)
+            payload = (run_row or {}).get("input") or {}
+            stored_caps = (
+                payload.get("capabilities") if isinstance(payload.get("capabilities"), dict) else None
+            )
+            stored_ident = (
+                payload.get("identity") if isinstance(payload.get("identity"), dict) else None
+            )
+            resume_identity = None
+            if stored_ident and stored_ident.get("name"):
+                resume_identity = AgentIdentity(
+                    name=str(stored_ident.get("name") or "Agent")[:120],
+                    role=str(stored_ident.get("role") or "Assist the user")[:240],
+                    tone=str(stored_ident.get("tone") or "professional")[:64],
+                    description=str(stored_ident.get("description") or "")[:2000],
+                )
+
             # M3: BYOK is deferred to Live / Ready→Live — build uses platform keys.
             return await self._continue_build(
                 run_id=run_id,
@@ -329,9 +346,10 @@ class BuilderOrchestrator:
                 agent_id=agent_id,
                 thread_id=thread_id,
                 content=content,
-                identity=current_spec.identity if current_spec else None,
+                identity=resume_identity or (current_spec.identity if current_spec else None),
                 complexity=complexity,
                 current_spec=current_spec,
+                capabilities=stored_caps,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("builder failed run=%s", run_id)
@@ -597,15 +615,13 @@ class BuilderOrchestrator:
             metadata={"tone": "normal"},
         )
 
-        complexity = detect_complexity(prompt, is_first_build=True)
-        return await self._continue_build(
+        return await self._dispatch_continue_after_form(
             run_id=run_id,
             user_id=user_id,
             agent_id=agent_id,
             thread_id=thread_id,
             content=prompt,
             identity=identity,
-            complexity=complexity,
             current_spec=None,
             capabilities=caps,
         )
@@ -905,22 +921,91 @@ class BuilderOrchestrator:
         await self.db.update_run_status(run_id, "running")
         await self.db.update_agent_status(agent_id, user_id, "building")
 
-        complexity = detect_complexity(resume_prompt, is_first_build=True)
         current_spec = None
         try:
             current_spec = await self.db.load_draft_spec(agent_id, user_id)
         except Exception:  # noqa: BLE001
             current_spec = None
-        return await self._continue_build(
+        return await self._dispatch_continue_after_form(
             run_id=run_id,
             user_id=user_id,
             agent_id=agent_id,
             thread_id=thread_id,
             content=resume_prompt,
             identity=identity,
-            complexity=complexity,
             current_spec=current_spec,
             capabilities=caps,
+        )
+
+    async def _dispatch_continue_after_form(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        content: str,
+        identity: AgentIdentity,
+        current_spec: AgentSpec | None,
+        capabilities: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Ack the form immediately; compile on the queue in production."""
+        complexity = detect_complexity(content, is_first_build=True)
+        await self.db.merge_run_input(
+            run_id,
+            user_id,
+            {
+                "capabilities": capabilities or {},
+                "identity": identity.model_dump(),
+            },
+        )
+        # region agent log
+        logger.info(
+            "builder_resume_dispatch run=%s preferred=%s",
+            run_id,
+            (capabilities or {}).get("preferred_apps"),
+        )
+        try:
+            import json
+            from pathlib import Path
+
+            Path("/Users/3van/Documents/Stack32/.cursor/debug-faa28e.log").open("a").write(
+                json.dumps(
+                    {
+                        "sessionId": "faa28e",
+                        "runId": "post-fix",
+                        "hypothesisId": "F",
+                        "location": "orchestrator.py:_dispatch_continue_after_form",
+                        "message": "dispatch continue after form",
+                        "data": {
+                            "run_id": run_id,
+                            "preferred": (capabilities or {}).get("preferred_apps"),
+                        },
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        except Exception:
+            pass
+        # endregion
+        from agent_service.queue.dispatch import dispatch_run
+
+        return await dispatch_run(
+            db=self.db,
+            run_id=run_id,
+            user_id=user_id,
+            execute=lambda: self._continue_build(
+                run_id=run_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                thread_id=thread_id,
+                content=content,
+                identity=identity,
+                complexity=complexity,
+                current_spec=current_spec,
+                capabilities=capabilities,
+            ),
         )
 
     async def _maybe_interrupt_for_provider_clarification(

@@ -681,6 +681,20 @@ class Persistence(SupabaseRepository):
             "type": interrupt.get("type") or derived or "identity",
         }
 
+    async def merge_run_input(self, run_id: str, user_id: str, patch: dict[str, Any]) -> None:
+        """Shallow-merge keys into ``runs.input`` without dropping interrupt metadata."""
+        run = await self.get_owned_run(run_id, user_id)
+        if not run:
+            return
+        meta = dict(run.get("input") or {})
+        meta.update(patch)
+        async with get_supabase_admin_client() as client:
+            await client.patch(
+                "/runs",
+                params={"id": f"eq.{run_id}", "user_id": f"eq.{user_id}"},
+                json={"input": meta},
+            )
+
     async def clear_builder_interrupt(self, run_id: str, user_id: str) -> None:
         run = await self.get_owned_run(run_id, user_id)
         if not run:

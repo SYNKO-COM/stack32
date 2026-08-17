@@ -78,9 +78,39 @@ export function DynamicQuestionsForm({
     startTransition(async () => {
       try {
         onSubmitted?.();
+        // #region agent log
+        fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "faa28e" },
+          body: JSON.stringify({
+            sessionId: "faa28e",
+            runId: "post-fix",
+            hypothesisId: "F",
+            location: "dynamic-questions-form.tsx:submit",
+            message: "form submit started",
+            data: { variant, runId, keys: Object.keys(values), valuesPreview: Object.fromEntries(Object.entries(values).map(([k, v]) => [k, String(v).slice(0, 40)])) },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         await (variant === "providers"
           ? submitBuilderProviders({ runId, answers: values })
           : submitBuilderQuestions({ runId, answers: values }));
+        // #region agent log
+        fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "faa28e" },
+          body: JSON.stringify({
+            sessionId: "faa28e",
+            runId: "post-fix",
+            hypothesisId: "F",
+            location: "dynamic-questions-form.tsx:submit:done",
+            message: "form submit returned",
+            data: { variant, runId },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         void queryClient.invalidateQueries({ queryKey: ["builder"] });
         void queryClient.invalidateQueries({ queryKey: ["agents"] });
       } catch {
