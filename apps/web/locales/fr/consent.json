@@ -2,6 +2,7 @@
   "banner": {
     "title": "Cookies et mesure d’audience",
     "body": "Nous utilisons des cookies strictement nécessaires pour faire fonctionner Stack32. La mesure d’audience (y compris le replay de session) et les pixels publicitaires ne se chargent que si vous les acceptez. Vous pouvez changer d’avis à tout moment.",
+    "shortBody": "Les cookies nécessaires restent actifs. Audience et pub uniquement si vous acceptez. Vous pouvez changer d’avis.",
     "acceptAll": "Tout accepter",
     "rejectAll": "Tout refuser",
     "customize": "Personnaliser",

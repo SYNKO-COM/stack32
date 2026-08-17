@@ -2,6 +2,7 @@
   "banner": {
     "title": "Cookies and tracking",
     "body": "We use strictly necessary cookies to run Stack32. Analytics (including session replay) and advertising pixels only load if you accept them. You can change your mind at any time.",
+    "shortBody": "Necessary cookies stay on. Analytics and ads load only if you accept. You can change your mind anytime.",
     "acceptAll": "Accept all",
     "rejectAll": "Reject all",
     "customize": "Customize",
