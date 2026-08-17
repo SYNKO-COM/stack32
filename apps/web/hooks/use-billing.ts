@@ -22,7 +22,9 @@ export function useCreditUsage() {
   return useQuery({
     queryKey: ["billing", "credits"],
     queryFn: () => getCreditUsageAction(),
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+    staleTime: 20_000,
   });
 }
 

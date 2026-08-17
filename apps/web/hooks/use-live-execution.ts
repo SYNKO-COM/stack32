@@ -48,7 +48,12 @@ export function useLiveExecutionState(
   return useQuery({
     queryKey: ["live-execution", runId],
     enabled: Boolean(runId) && enabled,
-    refetchInterval: enabled ? 800 : false,
+    placeholderData: (previous) => previous,
+    refetchInterval: enabled ? 2200 : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    staleTime: 1500,
+    notifyOnChangeProps: ["data", "error"],
     queryFn: async (): Promise<ExecutionVisualState> => {
       if (!runId) {
         return { runStatus: "idle", nodes: {}, edges: {}, legacy: {}, error: null };

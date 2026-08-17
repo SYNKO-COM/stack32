@@ -34,7 +34,12 @@ export function useLiveThread(agentId: string) {
     enabled: Boolean(agentId),
     // Poll while a (mock) run is in flight so persisted status updates stream
     // into the UI. Realtime channels can replace this in Phase 3.
-    refetchInterval: (query) => (isThreadActive(query.state.data) ? 700 : false),
+    placeholderData: (previous) => previous,
+    refetchInterval: (query) => (isThreadActive(query.state.data) ? 2200 : false),
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: (query) => isThreadActive(query.state.data),
+    staleTime: 12_000,
+    notifyOnChangeProps: ["data", "error", "isPending"],
   });
 }
 

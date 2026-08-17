@@ -54,20 +54,18 @@ export function useRunEventStream(opts: {
               if (typeof payload.sequence === "number") {
                 lastSeq.current = Math.max(lastSeq.current, payload.sequence);
               }
-              await queryClient.invalidateQueries({
+              void queryClient.invalidateQueries({
                 queryKey: ["live-execution", opts.runId],
               });
-              await queryClient.invalidateQueries({
+              void queryClient.invalidateQueries({
                 queryKey: ["live", opts.agentId],
               });
               if (payload.type === "stream.end") {
-                await queryClient.invalidateQueries({ queryKey: ["builder", opts.agentId] });
-                await queryClient.invalidateQueries({
+                void queryClient.invalidateQueries({
                   queryKey: ["active-live-run", opts.agentId],
                 });
                 return;
               }
-              await queryClient.invalidateQueries({ queryKey: ["builder", opts.agentId] });
             } catch {
               // ignore malformed SSE frames
             }

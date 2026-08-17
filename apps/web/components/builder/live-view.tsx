@@ -277,7 +277,7 @@ export function LiveView({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, busy, messages[messages.length - 1]?.statusKey]);
+  }, [messages.length, busy]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -373,6 +373,7 @@ export function LiveView({
         <PromptComposer
           className="mx-auto max-w-3xl"
           placeholder={t("live:composer.placeholder")}
+          draftKey={`live:${agentId}`}
           onSubmit={(value, attachments) => {
             if (busy) return;
             void sendMessage.mutateAsync({ content: value, attachments });

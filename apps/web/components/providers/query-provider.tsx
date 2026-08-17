@@ -11,6 +11,9 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 30_000,
             retry: 1,
+            // Returning to the tab must not refetch everything (composer remounts, micro-lag).
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: true,
           },
         },
       }),

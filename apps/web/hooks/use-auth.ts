@@ -14,9 +14,9 @@ export function useCurrentUser() {
   return useQuery({
     queryKey: authKeys.user,
     queryFn: () => getAuthRepository().getCurrentUser(),
-    staleTime: 10_000,
+    staleTime: 5 * 60_000,
     retry: 2,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -24,9 +24,9 @@ export function useProfile() {
   return useQuery({
     queryKey: authKeys.profile,
     queryFn: () => getAuthRepository().getProfile(),
-    staleTime: 10_000,
+    staleTime: 5 * 60_000,
     retry: 2,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 }
 

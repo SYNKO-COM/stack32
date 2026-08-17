@@ -655,9 +655,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   const setInteractionMode = (next: BuilderInteractionMode) => {
     setModeOverride({ agentId, mode: next });
   };
-  const { data: thread } = useBuilderThread(agentId, {
-    forcePoll: busy || awaitingReply,
-  });
+  const { data: thread } = useBuilderThread(agentId);
   const sendMessage = useSendBuilderMessage(agentId);
   const cancelRun = useCancelBuilderRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -1203,7 +1201,6 @@ export function BuildView({ agentId }: { agentId: string }) {
 
       <div className="shrink-0 px-4 pb-5">
         <PromptComposer
-          key={prefill}
           className="mx-auto max-w-3xl"
           placeholder={
             waitingOnForm
@@ -1218,6 +1215,7 @@ export function BuildView({ agentId }: { agentId: string }) {
           disabled={waitingOnForm}
           autoFocus={messages.length === 0}
           initialValue={prefill}
+          draftKey={`builder:${agentId}`}
           showModeSelector
           mode={interactionMode}
           onModeChange={(next) => {

@@ -46,7 +46,7 @@ export function BuilderWorkingPanel({
     if (hasFeed || hasOps) return;
     const id = window.setInterval(() => {
       setIndex((prev) => (prev + 1) % FALLBACK_KEYS.length);
-    }, 1600);
+    }, 2800);
     return () => window.clearInterval(id);
   }, [hasFeed, hasOps]);
 

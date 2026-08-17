@@ -61,12 +61,13 @@ export function useBuilderThread(agentId: string, opts?: { forcePoll?: boolean }
     queryKey: ["builder", agentId],
     queryFn: () => getBuilderRepository().getThread(agentId),
     enabled: Boolean(agentId),
-    // Keep prior messages painted while a poll is in flight (avoids blank flashes).
     placeholderData: (previous) => previous,
-    // Slower cadence = fewer layout jumps; still responsive for build progress.
     refetchInterval: (query) =>
-      opts?.forcePoll || isThreadActive(query.state.data) ? 1600 : false,
-    staleTime: 800,
+      opts?.forcePoll || isThreadActive(query.state.data) ? 2800 : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: (query) => isThreadActive(query.state.data),
+    staleTime: 12_000,
+    notifyOnChangeProps: ["data", "error", "isPending"],
   });
 }
 

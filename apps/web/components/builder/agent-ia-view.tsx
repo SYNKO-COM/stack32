@@ -93,12 +93,16 @@ export function AgentIaView({
   const activeRunQuery = useQuery({
     queryKey: ["active-live-run", agentId],
     enabled: Boolean(agentId),
+    staleTime: 4000,
+    placeholderData: (previous) => previous,
+    refetchOnWindowFocus: false,
+    notifyOnChangeProps: ["data", "error"],
     refetchInterval: (q) => {
       const row = q.state.data as { id?: string; status?: string } | null | undefined;
-      if (row?.status === "queued" || row?.status === "running") return 800;
+      if (row?.status === "queued" || row?.status === "running") return 2200;
       const msgs = liveThread?.messages ?? [];
       const last = msgs[msgs.length - 1];
-      if (last?.role === "user" || last?.pending) return 800;
+      if (last?.role === "user" || last?.pending) return 2200;
       return false;
     },
     queryFn: async () => {

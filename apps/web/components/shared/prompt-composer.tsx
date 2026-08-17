@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTranslation } from "@/hooks/use-translation";
+import { readComposerDraft, writeComposerDraft } from "@/lib/chat/composer-draft";
 import { cn } from "@/lib/utils";
 
 const ACCEPTED =
@@ -62,6 +63,8 @@ interface PromptComposerProps {
   mode?: BuilderInteractionMode;
   defaultMode?: BuilderInteractionMode;
   onModeChange?: (mode: BuilderInteractionMode) => void;
+  /** Persist typed text in sessionStorage so tab switches don't wipe the draft. */
+  draftKey?: string;
 }
 
 function useTypewriter(examples: string[] | undefined, enabled: boolean): string {
@@ -198,9 +201,11 @@ export function PromptComposer({
   mode: controlledMode,
   defaultMode = "build",
   onModeChange,
+  draftKey,
 }: PromptComposerProps) {
   const { t } = useTranslation("common");
   const [value, setValue] = useState(initialValue);
+  const restoredRef = useRef(false);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [dragging, setDragging] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -225,6 +230,24 @@ export function PromptComposer({
   useEffect(() => {
     if (autoFocus) textareaRef.current?.focus();
   }, [autoFocus]);
+
+  useEffect(() => {
+    if (!initialValue) return;
+    setValue(initialValue);
+  }, [initialValue]);
+
+  useEffect(() => {
+    if (!draftKey || restoredRef.current || initialValue) return;
+    restoredRef.current = true;
+    const saved = readComposerDraft(draftKey);
+    if (saved) setValue((current) => current || saved);
+  }, [draftKey, initialValue]);
+
+  useEffect(() => {
+    if (!draftKey) return;
+    const timer = window.setTimeout(() => writeComposerDraft(draftKey, value), 280);
+    return () => window.clearTimeout(timer);
+  }, [draftKey, value]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -320,6 +343,7 @@ export function PromptComposer({
     onSubmit(payload, snapshot, showModeSelector ? { mode } : undefined);
     setValue("");
     setAttachments([]);
+    if (draftKey) writeComposerDraft(draftKey, "");
   };
 
   const stopTracks = () => {

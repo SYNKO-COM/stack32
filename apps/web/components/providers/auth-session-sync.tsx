@@ -20,12 +20,14 @@ export function AuthSessionSync() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Prefer an immediate cache write for the user so RequireAuth does not
-      // briefly treat a settling session as "send to onboarding".
-      if (session?.user) {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // TOKEN_REFRESHED fires often and used to invalidate the whole tree (micro-refresh).
+      if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") return;
+      if (session?.user && (event === "SIGNED_IN" || event === "USER_UPDATED")) {
         void queryClient.invalidateQueries({ queryKey: ["auth"] });
-      } else {
+        return;
+      }
+      if (!session?.user || event === "SIGNED_OUT") {
         queryClient.removeQueries({ queryKey: ["auth"] });
       }
     });
