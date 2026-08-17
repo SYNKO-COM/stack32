@@ -2817,6 +2817,47 @@ class BuilderOrchestrator:
             llm_hints=list(design.get("tool_hints") or []),
             preferred_apps=preferred_apps or None,
         )
+        named_apps = extract_external_app_queries(
+            tool_prompt,
+            llm_hints=list(design.get("tool_hints") or []) + preferred_apps,
+        )
+        builtins = {"current_datetime", "structured_output"}
+        selected_integrations = [t for t in tools if t.tool_id not in builtins]
+        # region agent log
+        logger.info(
+            "builder_generate_spec tools=%s named_apps=%s preferred=%s current_tools=%s",
+            [t.tool_id for t in tools][:12],
+            named_apps[:8],
+            preferred_apps[:8],
+            [t.tool_id for t in current.tools][:8] if current else [],
+        )
+        try:
+            import json
+            from pathlib import Path
+
+            Path("/Users/3van/Documents/Stack32/.cursor/debug-faa28e.log").open("a").write(
+                json.dumps(
+                    {
+                        "sessionId": "faa28e",
+                        "runId": "post-fix",
+                        "hypothesisId": "G",
+                        "location": "orchestrator.py:_generate_spec",
+                        "message": "spec tools before merge",
+                        "data": {
+                            "selected": [t.tool_id for t in tools][:12],
+                            "named_apps": named_apps[:8],
+                            "preferred": preferred_apps[:8],
+                            "current": [t.tool_id for t in current.tools][:8] if current else [],
+                            "integrations": [t.tool_id for t in selected_integrations][:12],
+                        },
+                        "timestamp": int(__import__("time").time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+        except Exception:
+            pass
+        # endregion
 
         surgical = bool(
             current is not None
@@ -2826,8 +2867,14 @@ class BuilderOrchestrator:
             tools = merge_tools_on_edit(current.tools, tools, edit_prompt=content)
             connection_requirements = await build_connection_requirements(tools)
             goal = original_goal
-        elif current is not None and not extract_external_app_queries(content):
-            # Soft edit with no new apps named — preserve prior tools + goal.
+        elif (
+            current is not None
+            and current.tools
+            and not named_apps
+            and not selected_integrations
+        ):
+            # Soft edit with no new apps — keep prior tools.
+            # Never replace a resolved catalog with an empty first-draft skeleton.
             tools = list(current.tools)
             connection_requirements = list(current.connection_requirements or [])
             goal = original_goal

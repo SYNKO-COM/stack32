@@ -384,3 +384,12 @@ def test_envoie_infos_does_not_mean_email():
     )
     assert "canva" in apps
     assert "canvas" not in apps
+
+
+def test_google_sheet_singular_maps_and_pappers_are_detected():
+    apps = extract_external_app_queries(
+        "Save to a Google Sheet, look up companies on Pappers.com, and search Google Maps"
+    )
+    assert "google_sheets" in apps
+    assert "pappers" in apps
+    assert "google_maps" in apps

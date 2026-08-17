@@ -197,6 +197,31 @@ export function AgentIaView({
     [spec, graphResponse?.graph, boundToolIds, boundProviders, boundAppIds, modelStatus],
   );
 
+  // #region agent log
+  useEffect(() => {
+    const integrations = productGraph.nodes.filter((n) => n.kind === "integration").map((n) => n.label);
+    fetch("http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "faa28e" },
+      body: JSON.stringify({
+        sessionId: "faa28e",
+        runId: "post-fix",
+        hypothesisId: "G",
+        location: "agent-ia-view.tsx:productGraph",
+        message: "structure graph nodes",
+        data: {
+          agentId,
+          specToolCount: spec?.tools?.length ?? 0,
+          specToolIds: (spec?.tools ?? []).slice(0, 12).map((t) => t.tool),
+          integrationLabels: integrations,
+          nodeKinds: productGraph.nodes.map((n) => n.kind),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [agentId, productGraph, spec]);
+  // #endregion
+
   const hasGraph = productGraph.nodes.length > 0;
 
   const { data: executionVisual } = useLiveExecutionState(
