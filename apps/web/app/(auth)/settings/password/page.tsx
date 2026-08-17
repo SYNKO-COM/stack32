@@ -16,6 +16,7 @@ import {
   passwordIssueErrorKey,
 } from "@/lib/auth/password";
 import { AuthCompactCard } from "@/components/auth/auth-compact-card";
+import { PasswordRequirements } from "@/components/auth/password-requirements";
 
 export default function ChangePasswordPage() {
   const { t } = useTranslation(["auth", "errors"]);
@@ -36,10 +37,9 @@ export default function ChangePasswordPage() {
   return (
     <AuthCompactCard>
       <h1 className="text-2xl font-semibold tracking-tight">{t("auth:changePassword.title")}</h1>
-      <p className="mt-1.5 mb-2 text-sm text-muted-foreground">
+      <p className="mt-1.5 mb-6 text-sm text-muted-foreground">
         {t("auth:changePassword.subtitle")}
       </p>
-      <p className="mb-6 text-xs text-muted-foreground/80">{t("auth:password.requirements")}</p>
 
       {done ? (
         <>
@@ -87,6 +87,7 @@ export default function ChangePasswordPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("auth:password.placeholder")}
             />
+            <PasswordRequirements password={password} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="change-confirm">{t("auth:changePassword.confirm")}</Label>

@@ -26,8 +26,7 @@ function strokeForStatus(status?: ModuleExecState): {
     case "waiting_for_approval":
       return { stroke: "#ffc701", width: 2, animated: false };
     default:
-      // Hex — not hsl(var(--foreground)): CSS vars are hex and break hsl().
-      return { stroke: "#4a4a4a", width: 1.85, animated: false };
+      return { stroke: "var(--structure-edge)", width: 1.85, animated: false };
   }
 }
 

@@ -97,7 +97,7 @@ export function SquareCard({
       ) : null}
       <div
         className={cn(
-          "structure-shape flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white px-3 py-3 shadow-sm dark:bg-background",
+          "structure-shape flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-[var(--structure-node-fill)] px-3 py-3 shadow-sm",
           selected && "ring-2 ring-brand/45",
           className,
         )}

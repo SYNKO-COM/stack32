@@ -53,6 +53,8 @@ function OnboardingPageInner() {
   /** Only set after async profile retry when the query returned null. */
   const [retryReady, setRetryReady] = useState(false);
   const resolvingRef = useRef(false);
+  /** True once we showed the wizard — don't steal navigation when it completes. */
+  const startedIncompleteRef = useRef(false);
 
   const settling = userLoading || profileLoading || userFetching || profileFetching;
   const profileReadyForFlow = Boolean(profile && !profile.onboardingCompleted);
@@ -68,7 +70,12 @@ function OnboardingPageInner() {
       return;
     }
 
+    if (profile && !profile.onboardingCompleted) {
+      startedIncompleteRef.current = true;
+    }
+
     if (profile?.onboardingCompleted) {
+      if (startedIncompleteRef.current) return;
       router.replace(safeNextPath(searchParams.get("next")) ?? "/agents");
       return;
     }
@@ -82,7 +89,9 @@ function OnboardingPageInner() {
         const fresh = await fetchProfileWithRetry();
         await refetchProfile();
         if (fresh?.onboardingCompleted) {
-          router.replace(safeNextPath(searchParams.get("next")) ?? "/agents");
+          if (!startedIncompleteRef.current) {
+            router.replace(safeNextPath(searchParams.get("next")) ?? "/agents");
+          }
           return;
         }
         setRetryReady(true);
@@ -105,7 +114,7 @@ function OnboardingPageInner() {
 
   const readyForFlow = profileReadyForFlow || retryReady;
 
-  if (settling || !readyForFlow || profile?.onboardingCompleted) {
+  if (settling || !readyForFlow || (profile?.onboardingCompleted && !startedIncompleteRef.current)) {
     return (
       <OnboardingShell>
         <BrandLoader label={t("loading")} size="lg" />

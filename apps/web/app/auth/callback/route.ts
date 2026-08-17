@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { safeNextPath } from "@/lib/auth/post-auth";
+import { onboardingPathForNext, safeNextPath } from "@/lib/auth/post-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 async function wait(ms: number): Promise<void> {
@@ -53,22 +53,14 @@ export async function GET(request: NextRequest) {
         }
 
         if (found && completed) {
-          const dest = next === "/onboarding" ? "/agents" : next;
+          const dest = next === "/onboarding" || next.startsWith("/onboarding?") ? "/agents" : next;
           return NextResponse.redirect(`${origin}${dest}`);
         }
         if (found && !completed) {
-          const onboarding =
-            next && next !== "/onboarding"
-              ? `/onboarding?next=${encodeURIComponent(next)}`
-              : "/onboarding";
-          return NextResponse.redirect(`${origin}${onboarding}`);
+          return NextResponse.redirect(`${origin}${onboardingPathForNext(next)}`);
         }
         // Still no profile after retries — safest for brand-new OAuth users.
-        const onboarding =
-          next && next !== "/onboarding"
-            ? `/onboarding?next=${encodeURIComponent(next)}`
-            : "/onboarding";
-        return NextResponse.redirect(`${origin}${onboarding}`);
+        return NextResponse.redirect(`${origin}${onboardingPathForNext(next)}`);
       }
     }
   }

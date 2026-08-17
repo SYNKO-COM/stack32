@@ -33,7 +33,7 @@ import { useCreateAgent } from "@/hooks/use-agents";
 import { useCompleteOnboarding, useCurrentUser } from "@/hooks/use-auth";
 import { useCreateWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
-import { safeNextPath } from "@/lib/auth/post-auth";
+import { isCheckoutNext, postOnboardingPath } from "@/lib/auth/post-auth";
 import {
   clearOnboardingDraft,
   readOnboardingDraft,
@@ -270,13 +270,13 @@ export function OnboardingFlow() {
         writeActiveWorkspaceId(userId, workspace.id);
         clearOnboardingDraft(userId);
       }
-      const preferred = safeNextPath(searchParams.get("next"));
-      if (preferred) {
-        router.push(preferred);
+      const dest = postOnboardingPath(searchParams.get("next"));
+      if (isCheckoutNext(dest)) {
+        router.push(dest);
         return;
       }
       await createAgent.mutateAsync({ workspaceId: workspace.id });
-      router.push("/billing/plans");
+      router.push(dest);
     } catch {
       setFinishing(false);
     }

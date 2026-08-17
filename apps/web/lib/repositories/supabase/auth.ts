@@ -130,9 +130,7 @@ export class SupabaseAuthRepository implements AuthRepository {
       stored = null;
     }
     const resolved = next || stored;
-    const nextParam = resolved
-      ? `?next=${encodeURIComponent(resolved)}`
-      : "?next=/agents";
+    const nextParam = resolved ? `?next=${encodeURIComponent(resolved)}` : "";
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {

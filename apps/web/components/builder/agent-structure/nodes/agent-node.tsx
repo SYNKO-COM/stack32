@@ -54,7 +54,7 @@ export function AgentNode({ data }: NodeProps<Node<ProductNodeData>>) {
       />
       <HiddenHandle type="target" position={Position.Right} id="agent-tools" />
       <div
-        className="structure-shape flex min-h-[236px] w-[172px] flex-col items-center justify-start gap-3.5 rounded-2xl bg-white px-3.5 pb-5 pt-6 shadow-sm dark:bg-background"
+        className="structure-shape flex min-h-[236px] w-[172px] flex-col items-center justify-start gap-3.5 rounded-2xl bg-[var(--structure-node-fill)] px-3.5 pb-5 pt-6 shadow-sm"
         style={{ border: `2px solid ${border}` }}
       >
         <StructureKindIcon kind="agent" status={status} className="size-[76px]" />

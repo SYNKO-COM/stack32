@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export type StructureTone = "orange" | "green" | "amber" | "red";
 
 export const STRUCTURE_COLORS = {
-  orange: { inner: "#fedbb4", icon: "#fa8908", border: "#0a0a0a" },
+  orange: { inner: "#fedbb4", icon: "#fa8908", border: "var(--structure-node-border)" },
   green: { inner: "#c8e2bd", icon: "#50d835", border: "#50d835" },
   amber: { inner: "#ffeeb2", icon: "#ffc701", border: "#ffc701" },
   /** Icon red — user listed #ffc701 twice for red; mockups use dark red. */
@@ -57,7 +57,7 @@ export function statusShowsError(status: string): boolean {
   return status === "error" || status === "broken";
 }
 
-/** Outer border color for the node shell (white fill always). */
+/** Outer border color for the node shell. Idle uses the theme token; status colors stay. */
 export function toneBorderColor(tone: StructureTone, status: string): string {
   if (statusShowsPause(status) || statusShowsWarning(status)) return STRUCTURE_COLORS.amber.border;
   if (statusShowsSpinner(status)) return STRUCTURE_COLORS.orange.icon;
@@ -247,7 +247,7 @@ export function StructureAppIcon({
         </span>
       ) : null}
       <span
-        className="structure-shape relative flex size-full items-center justify-center rounded-full bg-white"
+        className="structure-shape relative flex size-full items-center justify-center rounded-full bg-[var(--structure-node-fill)]"
         style={{ border: `2px solid ${toneBorderColor(tone, status)}` }}
       >
         <img
@@ -275,7 +275,7 @@ export function StructureAppIcon({
   );
 }
 
-/** Circular shell for model/memory: white + border + full kind icon inside. */
+/** Circular shell for model/memory: themed fill + border + kind icon inside. */
 export function StructureCircleNode({
   kind,
   status,
@@ -303,7 +303,7 @@ export function StructureCircleNode({
         ) : null}
         <span
           className={cn(
-            "structure-shape flex size-[100px] items-center justify-center rounded-full bg-white p-2.5",
+            "structure-shape flex size-[100px] items-center justify-center rounded-full bg-[var(--structure-node-fill)] p-2.5",
             selected && "ring-2 ring-brand/45",
           )}
           style={{ border: `2px solid ${toneBorderColor(tone, status)}` }}

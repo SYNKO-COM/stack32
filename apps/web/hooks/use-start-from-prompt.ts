@@ -11,8 +11,9 @@ import { useUiStore } from "@/store/ui-store";
 /**
  * Landing funnel: store the visitor's prompt, then either open the auth
  * modal (guest), send to onboarding (new user) or straight to the app
- * (returning user). The pending prompt survives the whole funnel via
- * sessionStorage and initializes the first agent build.
+ * (returning user). After signup the flow is the same as navbar signup:
+ * onboarding → plan offers. The pending prompt survives via sessionStorage
+ * and initializes the first agent once they enter the builder.
  */
 export function useStartFromPrompt() {
   const router = useRouter();

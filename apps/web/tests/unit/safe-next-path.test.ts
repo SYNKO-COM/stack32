@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { safeNextPath } from "@/lib/auth/post-auth";
+import {
+  isCheckoutNext,
+  onboardingPathForNext,
+  postOnboardingPath,
+  safeNextPath,
+} from "@/lib/auth/post-auth";
 
 describe("safeNextPath", () => {
   it("allows same-origin relative paths", () => {
@@ -36,5 +41,31 @@ describe("safeNextPath", () => {
     expect(safeNextPath("   ")).toBeNull();
     expect(safeNextPath("agents")).toBeNull();
     expect(safeNextPath(`/${"a".repeat(600)}`)).toBeNull();
+  });
+});
+
+describe("post-onboarding destinations", () => {
+  it("treats only checkout as a paywall bypass", () => {
+    expect(isCheckoutNext("/billing/checkout?plan=pro")).toBe(true);
+    expect(isCheckoutNext("/billing/checkout")).toBe(true);
+    expect(isCheckoutNext("/agents")).toBe(false);
+    expect(isCheckoutNext("/billing/plans")).toBe(false);
+    expect(isCheckoutNext(null)).toBe(false);
+  });
+
+  it("sends new users to onboarding without an /agents next", () => {
+    expect(onboardingPathForNext("/agents")).toBe("/onboarding");
+    expect(onboardingPathForNext(null)).toBe("/onboarding");
+    expect(onboardingPathForNext("/billing/checkout?plan=starter&interval=monthly")).toBe(
+      "/onboarding?next=%2Fbilling%2Fcheckout%3Fplan%3Dstarter%26interval%3Dmonthly",
+    );
+  });
+
+  it("shows the plan picker after onboarding unless a checkout was chosen", () => {
+    expect(postOnboardingPath(null)).toBe("/billing/plans");
+    expect(postOnboardingPath("/agents")).toBe("/billing/plans");
+    expect(postOnboardingPath("/billing/checkout?plan=pro")).toBe(
+      "/billing/checkout?plan=pro",
+    );
   });
 });

@@ -78,6 +78,10 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await page.locator("#onboarding-workspace").fill("E2E Workspace");
   await page.getByRole("button", { name: /finish|start|terminer|commencer|créer/i }).click();
 
+  // --- Plan picker (same as homepage signup / first prompt) -----------------
+  await page.waitForURL("**/billing/plans**", { timeout: 30_000 });
+  await page.getByRole("button", { name: /start for free|commencer gratuitement/i }).click();
+
   // --- Builder --------------------------------------------------------------
   await reachBuilderComposer(page);
 

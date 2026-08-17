@@ -314,7 +314,7 @@ function ProductAgentGraphCanvas({
           }}
         >
           <Background gap={22} size={1.2} color="#c4c4c8" />
-          <Controls showInteractive={false} className="!rounded-xl !border-border !bg-background/90" />
+          <Controls showInteractive={false} className="!rounded-xl" />
           <FitViewOnLayout signature={layoutSignature} />
         </ReactFlow>
       </div>

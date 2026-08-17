@@ -74,6 +74,32 @@ export function safeNextPath(raw: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Only a pricing checkout should skip the post-onboarding plan picker.
+ * `/agents` (OAuth default) and other app paths must still see the offers.
+ */
+export function isCheckoutNext(path: string | null | undefined): boolean {
+  const next = safeNextPath(path);
+  if (!next) return false;
+  return next === "/billing/checkout" || next.startsWith("/billing/checkout?");
+}
+
+/** Onboarding URL, preserving a checkout destination when one was chosen. */
+export function onboardingPathForNext(preferredNext?: string | null): string {
+  const next = safeNextPath(preferredNext);
+  if (next && isCheckoutNext(next)) {
+    return `/onboarding?next=${encodeURIComponent(next)}`;
+  }
+  return "/onboarding";
+}
+
+/** Where to go after the last onboarding step. */
+export function postOnboardingPath(preferredNext?: string | null): string {
+  const next = safeNextPath(preferredNext);
+  if (next && isCheckoutNext(next)) return next;
+  return "/billing/plans";
+}
+
 /** Destination after a successful auth (client-side). */
 export async function resolvePostAuthPath(
   preferredNext?: string | null,
@@ -82,10 +108,7 @@ export async function resolvePostAuthPath(
   const profile = await fetchProfileWithRetry();
 
   if (!profile?.onboardingCompleted) {
-    if (next && next !== "/onboarding" && !next.startsWith("/onboarding?")) {
-      return `/onboarding?next=${encodeURIComponent(next)}`;
-    }
-    return "/onboarding";
+    return onboardingPathForNext(next);
   }
 
   if (next && next !== "/onboarding" && !next.startsWith("/onboarding?")) {

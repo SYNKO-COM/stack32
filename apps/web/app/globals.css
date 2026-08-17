@@ -51,6 +51,15 @@
   --glass-strong-bg: rgb(255 255 255 / 0.94);
   --glass-strong-border: rgb(0 0 0 / 0.14);
   --surface: #ffffff;
+
+  /* Agent structure canvas (light). */
+  --structure-node-fill: #ffffff;
+  --structure-node-border: #0a0a0a;
+  --structure-edge: #4a4a4a;
+  --structure-control-bg: #ffffff;
+  --structure-control-bg-hover: #f4f4f5;
+  --structure-control-border: #e4e4e7;
+  --structure-control-fg: #0a0a0a;
 }
 
 .dark {
@@ -87,6 +96,15 @@
   --glass-strong-bg: rgb(255 255 255 / 0.07);
   --glass-strong-border: rgb(255 255 255 / 0.12);
   --surface: #080808;
+
+  /* Agent structure canvas (dark): gray shells, light default borders. */
+  --structure-node-fill: #2f2f33;
+  --structure-node-border: #c8c8cc;
+  --structure-edge: #9a9aa0;
+  --structure-control-bg: #2f2f33;
+  --structure-control-bg-hover: #3a3a40;
+  --structure-control-border: #5c5c64;
+  --structure-control-fg: #fafafa;
 }
 
 @theme inline {
@@ -358,6 +376,28 @@
     box-shadow: none !important;
     padding: 0 !important;
     z-index: 2 !important;
+  }
+
+  .structure-agent-flow .react-flow__controls {
+    overflow: hidden;
+    box-shadow: none;
+    border: 1px solid var(--structure-control-border);
+    background: var(--structure-control-bg);
+  }
+
+  .structure-agent-flow .react-flow__controls-button {
+    background: var(--structure-control-bg);
+    border-bottom: 1px solid var(--structure-control-border);
+    fill: var(--structure-control-fg);
+    color: var(--structure-control-fg);
+  }
+
+  .structure-agent-flow .react-flow__controls-button:hover {
+    background: var(--structure-control-bg-hover);
+  }
+
+  .structure-agent-flow .react-flow__controls-button svg {
+    fill: currentColor;
   }
 }
 

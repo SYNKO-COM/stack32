@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Trans } from "react-i18next";
 
 import { HCaptchaGate, type HCaptchaGateHandle } from "@/components/auth/hcaptcha-gate";
+import { PasswordRequirements } from "@/components/auth/password-requirements";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -230,9 +231,7 @@ export function AuthForm({
             }
             required
           />
-          {mode === "signup" ? (
-            <p className="text-xs text-muted-foreground/80">{t("auth:password.requirements")}</p>
-          ) : null}
+          {mode === "signup" ? <PasswordRequirements password={password} /> : null}
         </div>
 
         {error ? (
