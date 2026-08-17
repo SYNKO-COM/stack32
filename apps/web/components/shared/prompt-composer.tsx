@@ -204,8 +204,12 @@ export function PromptComposer({
   draftKey,
 }: PromptComposerProps) {
   const { t } = useTranslation("common");
-  const [value, setValue] = useState(initialValue);
-  const restoredRef = useRef(false);
+  const [value, setValue] = useState(() => {
+    if (initialValue) return initialValue;
+    if (draftKey) return readComposerDraft(draftKey) ?? "";
+    return "";
+  });
+  const restoredRef = useRef(Boolean(draftKey && !initialValue));
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [dragging, setDragging] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -233,6 +237,7 @@ export function PromptComposer({
 
   useEffect(() => {
     if (!initialValue) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- parent prefill can arrive after first paint
     setValue(initialValue);
   }, [initialValue]);
 
@@ -240,7 +245,9 @@ export function PromptComposer({
     if (!draftKey || restoredRef.current || initialValue) return;
     restoredRef.current = true;
     const saved = readComposerDraft(draftKey);
-    if (saved) setValue((current) => current || saved);
+    if (!saved) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restore the session draft once
+    setValue((current) => current || saved);
   }, [draftKey, initialValue]);
 
   useEffect(() => {

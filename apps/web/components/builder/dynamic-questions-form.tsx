@@ -77,7 +77,9 @@ export function DynamicQuestionsForm({
 
   return (
     <div className="mt-4 space-y-4">
-      <p className="text-sm leading-relaxed text-muted-foreground">{t("questions.hint")}</p>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {variant === "providers" ? t("providers.prompt") : t("questions.hint")}
+      </p>
       {uiComponent.fields.map((field) => (
         <label key={field.key} className="block space-y-1.5">
           <span className="text-sm font-medium text-foreground/90">

@@ -825,6 +825,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     buildTurnActive && !waitingOnForm && !hasVisibleWorkingBubble;
   // #region agent log
   useEffect(() => {
+    if (typeof window === "undefined" || window.location.hostname !== "localhost") return;
     fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',hypothesisId:'B',location:'build-view.tsx:workingState',message:'builder working flags',data:{showLocalWorking,waitingOnForm,awaitingReply,busy,lastCard:lastMessage?.card ?? null,lastContent:(lastMessage?.content ?? '').slice(0,80),lastUi:lastMessage?.uiComponent?.type ?? null,formResolved:Boolean(lastMessage?.formResolved),visibleCount:visibleMessages.length,rawCount:messages.length,activityEnabled,activityLineCount:activityLines.length},timestamp:Date.now()})}).catch(()=>{});
   }, [showLocalWorking, waitingOnForm, awaitingReply, busy, lastMessage?.id, lastMessage?.card, lastMessage?.content, lastMessage?.uiComponent?.type, lastMessage?.formResolved, visibleMessages.length, messages.length, activityEnabled, activityLines.length]);
   // #endregion
@@ -928,8 +929,11 @@ export function BuildView({ agentId }: { agentId: string }) {
     // poll so filling it does not keep refetching in the background.
     if (waitingOnForm) {
       // #region agent log
-      fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',hypothesisId:'E',location:'build-view.tsx:clearAwaiting',message:'cleared wait because next form arrived',data:{lastCard:messages.at(-1)?.card ?? null,lastUi:messages.at(-1)?.uiComponent?.type ?? null},timestamp:Date.now()})}).catch(()=>{});
+      if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+        fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',hypothesisId:'E',location:'build-view.tsx:clearAwaiting',message:'cleared wait because next form arrived',data:{lastCard:messages.at(-1)?.card ?? null,lastUi:messages.at(-1)?.uiComponent?.type ?? null},timestamp:Date.now()})}).catch(()=>{});
+      }
       // #endregion
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- next form arrived; end the local waiting turn
       setPendingToken(null);
       setAwaitingReply(false);
       return;
@@ -981,7 +985,6 @@ export function BuildView({ agentId }: { agentId: string }) {
     // card ends the turn. Otherwise the working panel disappears before progress
     // events arrive and the UI goes silent.
     if (!readyTerminal && (busy || isEphemeralBuilderAck(last))) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- derive turn-completion from server messages; guarded by terminal checks above
     setPendingToken(null);
     setAwaitingReply(false);
   }, [messages, pendingToken, awaitingReply, busy, waitingOnForm]);

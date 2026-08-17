@@ -249,6 +249,7 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
     type !== "secret_form" &&
     type !== "agent_capabilities_form" &&
     type !== "dynamic_questions_form" &&
+    type !== "provider_clarification_form" &&
     type !== "connection_form" &&
     type !== "approval_form"
   ) {

@@ -254,7 +254,7 @@
     "formClosed": "Déclencheurs enregistrés. Construction en cours."
   },
   "providers": {
-    "prompt": "Plusieurs outils se ressemblent (ex. Canva vs Canvas). Indiquez l’application exacte — vous pouvez aussi coller le lien du site. Pas de connexion de compte pour l’instant.",
+    "prompt": "J’ai trouvé plusieurs applications possibles pour un outil que vous avez mentionné. Choisissez la bonne ci-dessous — vous pouvez aussi coller le lien du site. Pas de connexion de compte pour l’instant.",
     "saved": "Compris — j'intègre ces apps dans la définition de l'agent."
   },
   "questions": {

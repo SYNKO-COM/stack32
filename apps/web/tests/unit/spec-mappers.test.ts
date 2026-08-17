@@ -182,6 +182,38 @@ describe("message mappers", () => {
     expect(approval?.uiComponent?.type).toBe("approval_form");
   });
 
+  it("maps provider_clarification_form so the user can pick the exact app", () => {
+    const mapped = mapBuilderMessage(
+      builderRow({
+        role: "assistant",
+        content: "builder:providers.prompt",
+        metadata: {
+          ui_component: {
+            type: "provider_clarification_form",
+            version: "1",
+            request_id: "run-prov",
+            context: "builder",
+            fields: [
+              {
+                key: "app_google_maps",
+                type: "select",
+                required: true,
+                label: "Which app did you mean by “google maps”?",
+                options: ["google_maps", "google_sheets"],
+                suggested_value: "google_maps",
+              },
+              { key: "tool_website", type: "text", required: false },
+            ],
+          },
+          interrupt_run_id: "run-prov",
+        },
+      }),
+    );
+    expect(mapped?.uiComponent?.type).toBe("provider_clarification_form");
+    expect(mapped?.uiComponent?.fields[0]?.options).toEqual(["google_maps", "google_sheets"]);
+    expect(mapped?.interruptRunId).toBe("run-prov");
+  });
+
   it("maps V4 tool bindings loosely", () => {
     const spec = specFromDb({
       schema_version: "4.0",
