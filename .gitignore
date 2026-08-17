@@ -17,7 +17,10 @@ __pycache__/
 .mypy_cache/
 *.egg-info/
 dist/
-build/
+# Python/setuptools artifacts only — never ignore the Next.js /agents/[id]/build route.
+/build/
+services/**/build/
+packages/**/build/
 
 # env
 .env
