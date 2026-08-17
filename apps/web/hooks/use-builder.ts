@@ -53,6 +53,22 @@ function isThreadActive(thread: BuilderThread | undefined): boolean {
     );
     if (!metaDone) return true;
   }
+  // After a form, the last card is an ack ("Identity saved", "Settings saved").
+  // Production then writes the next form or progress — keep polling until it appears
+  // or the ack is stale. Without this, a refresh during that gap shows a fake loop.
+  if (last.role === "assistant" && !last.uiComponent) {
+    const content = last.content ?? "";
+    const continuationAck =
+      last.card === "identity_confirmed" ||
+      content === "builder:capabilities.saved" ||
+      content === "builder:identity.confirmed" ||
+      content.startsWith("builder:identity.confirmed") ||
+      content === "builder:secrets.saved" ||
+      content === "builder:providers.saved";
+    if (continuationAck && !isStaleInflightMessage(last.createdAt)) {
+      return true;
+    }
+  }
   return Boolean(last.steps?.some((s) => s.state === "running" || s.state === "pending"));
 }
 
