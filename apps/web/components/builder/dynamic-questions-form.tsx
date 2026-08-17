@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ export function DynamicQuestionsForm({
   variant?: "questions" | "providers";
 }) {
   const { t } = useTranslation("builder");
+  const queryClient = useQueryClient();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -65,6 +67,8 @@ export function DynamicQuestionsForm({
         await (variant === "providers"
           ? submitBuilderProviders({ runId, answers: values })
           : submitBuilderQuestions({ runId, answers: values }));
+        void queryClient.invalidateQueries({ queryKey: ["builder"] });
+        void queryClient.invalidateQueries({ queryKey: ["agents"] });
       } catch {
         setError(t("questions.error"));
       }

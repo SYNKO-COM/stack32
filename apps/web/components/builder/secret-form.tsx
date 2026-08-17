@@ -2,6 +2,7 @@
 
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ function fieldDefault(fields: BuilderUiComponent["fields"], key: string): string
 }
 
 export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretFormProps) {
+  const queryClient = useQueryClient();
   const { t } = useTranslation(["builder", "errors"]);
   const [provider, setProvider] = useState(
     () => fieldDefault(uiComponent.fields, "provider") || "openai",
@@ -73,6 +75,8 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
         });
       }
       setApiKey("");
+      void queryClient.invalidateQueries({ queryKey: ["builder"] });
+      void queryClient.invalidateQueries({ queryKey: ["agents"] });
     } catch (err) {
       setCompleted(false);
       setErrorKey(agentServiceErrorKey(err));

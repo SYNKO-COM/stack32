@@ -2,6 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ function fieldDefault(
 }
 
 export function AgentIdentityForm({ uiComponent, runId, onSubmitted }: AgentIdentityFormProps) {
+  const queryClient = useQueryClient();
   const { t } = useTranslation(["builder", "errors"]);
   const [name, setName] = useState(() => fieldDefault(uiComponent.fields, "name"));
   const [role, setRole] = useState(() => fieldDefault(uiComponent.fields, "role"));
@@ -60,6 +62,8 @@ export function AgentIdentityForm({ uiComponent, runId, onSubmitted }: AgentIden
         description: description.trim(),
         requestId: uiComponent.requestId,
       });
+      void queryClient.invalidateQueries({ queryKey: ["builder"] });
+      void queryClient.invalidateQueries({ queryKey: ["agents"] });
     } catch (err) {
       setCompleted(false);
       setErrorKey(agentServiceErrorKey(err));

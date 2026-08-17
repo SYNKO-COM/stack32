@@ -634,6 +634,8 @@ export function BuildView({ agentId }: { agentId: string }) {
   const { data: agent } = useAgent(agentId);
   const busy = agent?.status === "building";
   const [awaitingReply, setAwaitingReply] = useState(false);
+  /** Epoch ms of the in-flight send — survives stale refetches & duplicate prompt text. */
+  const [pendingToken, setPendingToken] = useState<number | null>(null);
   /** User hit Stop — free the composer even if the in-flight HTTP turn is still pending. */
   const [userStopped, setUserStopped] = useState(false);
   const [modeOverride, setModeOverride] = useState<{
@@ -655,15 +657,18 @@ export function BuildView({ agentId }: { agentId: string }) {
   const setInteractionMode = (next: BuilderInteractionMode) => {
     setModeOverride({ agentId, mode: next });
   };
-  const { data: thread } = useBuilderThread(agentId);
+  const { data: thread } = useBuilderThread(agentId, {
+    // Form continuations leave an ack card (identity_confirmed / capabilities.saved)
+    // that isThreadActive treats as idle — production then stops polling and the
+    // next form/progress never appears. Poll only while this turn is waiting.
+    forcePoll: awaitingReply || pendingToken !== null,
+  });
   const sendMessage = useSendBuilderMessage(agentId);
   const cancelRun = useCancelBuilderRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
-  /** Epoch ms of the in-flight send — survives stale refetches & duplicate prompt text. */
-  const [pendingToken, setPendingToken] = useState<number | null>(null);
   const [prefill, setPrefill] = useState("");
   const [resolvedFormIds, setResolvedFormIds] = useState<Set<string>>(() => new Set());
   /** Message IDs where the user already clicked Fix it for me. */
@@ -818,6 +823,11 @@ export function BuildView({ agentId }: { agentId: string }) {
       (lastIsUser && sendMessage.isPending));
   const showLocalWorking =
     buildTurnActive && !waitingOnForm && !hasVisibleWorkingBubble;
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',hypothesisId:'B',location:'build-view.tsx:workingState',message:'builder working flags',data:{showLocalWorking,waitingOnForm,awaitingReply,busy,lastCard:lastMessage?.card ?? null,lastContent:(lastMessage?.content ?? '').slice(0,80),lastUi:lastMessage?.uiComponent?.type ?? null,formResolved:Boolean(lastMessage?.formResolved),visibleCount:visibleMessages.length,rawCount:messages.length,activityEnabled,activityLineCount:activityLines.length},timestamp:Date.now()})}).catch(()=>{});
+  }, [showLocalWorking, waitingOnForm, awaitingReply, busy, lastMessage?.id, lastMessage?.card, lastMessage?.content, lastMessage?.uiComponent?.type, lastMessage?.formResolved, visibleMessages.length, messages.length, activityEnabled, activityLines.length]);
+  // #endregion
   // Keep Stop available for the whole in-flight turn (not only while awaitingReply).
   // Ready is terminal — never keep Stop / busy composer over a Ready card.
   const composerBusy =
@@ -914,6 +924,17 @@ export function BuildView({ agentId }: { agentId: string }) {
   useEffect(() => {
     if (!awaitingReply && pendingToken === null) return;
 
+    // The continuation we were waiting for is a new form — stop the working
+    // poll so filling it does not keep refetching in the background.
+    if (waitingOnForm) {
+      // #region agent log
+      fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',hypothesisId:'E',location:'build-view.tsx:clearAwaiting',message:'cleared wait because next form arrived',data:{lastCard:messages.at(-1)?.card ?? null,lastUi:messages.at(-1)?.uiComponent?.type ?? null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setPendingToken(null);
+      setAwaitingReply(false);
+      return;
+    }
+
     const last = messages.at(-1);
     const readyTerminal = last?.role === "assistant" && last.card === "ready";
     const contentTerminal =
@@ -963,7 +984,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- derive turn-completion from server messages; guarded by terminal checks above
     setPendingToken(null);
     setAwaitingReply(false);
-  }, [messages, pendingToken, awaitingReply, busy]);
+  }, [messages, pendingToken, awaitingReply, busy, waitingOnForm]);
 
 
   // Consume the landing-page pending prompt exactly once, on an empty thread.

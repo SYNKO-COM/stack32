@@ -2,6 +2,7 @@
 
 import { Check, Loader2, Lock, MessageSquare, Timer } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { submitBuilderCapabilities } from "@/lib/actions/builder";
@@ -25,6 +26,7 @@ export function AgentCapabilitiesForm({
   runId,
   onSubmitted,
 }: CapabilitiesFormProps) {
+  const queryClient = useQueryClient();
   const { t } = useTranslation(["builder", "errors"]);
   const [scheduleHourly, setScheduleHourly] = useState(
     () => fieldDefault(uiComponent.fields, "schedule_hourly") === "true",
@@ -50,6 +52,8 @@ export function AgentCapabilitiesForm({
         scheduleHourly,
         contextNotes: "",
       });
+      void queryClient.invalidateQueries({ queryKey: ["builder"] });
+      void queryClient.invalidateQueries({ queryKey: ["agents"] });
     } catch (err) {
       setCompleted(false);
       setErrorKey(agentServiceErrorKey(err));

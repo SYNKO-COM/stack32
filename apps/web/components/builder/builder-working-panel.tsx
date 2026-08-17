@@ -45,7 +45,13 @@ export function BuilderWorkingPanel({
   useEffect(() => {
     if (hasFeed || hasOps) return;
     const id = window.setInterval(() => {
-      setIndex((prev) => (prev + 1) % FALLBACK_KEYS.length);
+      setIndex((prev) => {
+        const next = Math.min(prev + 1, FALLBACK_KEYS.length - 1);
+        // #region agent log
+        fetch('http://127.0.0.1:7857/ingest/1ac9df66-3a30-4b3a-a8c1-bbbdaf39db81',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faa28e'},body:JSON.stringify({sessionId:'faa28e',hypothesisId:'A',location:'builder-working-panel.tsx:fallbackTick',message:'fallback activity tick',data:{prev,next,capped:next===FALLBACK_KEYS.length-1,hasFeed,hasOps},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return next;
+      });
     }, 2800);
     return () => window.clearInterval(id);
   }, [hasFeed, hasOps]);
