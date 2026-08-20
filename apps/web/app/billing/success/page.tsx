@@ -25,7 +25,9 @@ export default function BillingSuccessPage() {
   useEffect(() => {
     let cancelled = false;
     let attempts = 0;
-    const maxAttempts = 12;
+    const maxAttempts = 20;
+    /** Fast cadence so Whop pull / webhook lands within ~1–2s typically. */
+    const intervalMs = 400;
 
     const tick = async () => {
       attempts += 1;
@@ -50,7 +52,7 @@ export default function BillingSuccessPage() {
       }
       window.setTimeout(() => {
         void tick();
-      }, 1500);
+      }, intervalMs);
     };
 
     void tick();
