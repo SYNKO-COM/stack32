@@ -5,6 +5,7 @@ import {
   agentServiceFetch,
   requireAccessToken,
 } from "@/lib/ai/agent-service-client";
+import { AgentServiceError } from "@/lib/ai/agent-service-errors";
 import { currentAiExecutionMode } from "@/lib/ai/execution-adapter";
 import { mapAgent, mapGraphSpecFromApi, mapIdentityFromApi } from "@/lib/domain/mappers";
 import type { AgentGraphResponse, PublishResult } from "@/lib/domain/types";
@@ -28,6 +29,28 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
     .eq("id", agentId)
     .maybeSingle();
   if (!source) throw new Error("agent_not_found");
+
+  // Same cap as create_agent_workspace — duplicate must not bypass free/starter limits.
+  const { data: ent } = await supabase.rpc("resolve_user_entitlements", {
+    p_user_id: user.id,
+  });
+  const entRow = Array.isArray(ent) ? ent[0] : ent;
+  const planKeyRaw =
+    entRow && typeof entRow === "object" && "plan_key" in entRow
+      ? String((entRow as { plan_key: string }).plan_key)
+      : "free";
+  const plan = isPlanKey(planKeyRaw) ? PLANS[planKeyRaw] : PLANS.free;
+  if (plan.maxAgents !== null) {
+    const { count } = await supabase
+      .from("agents")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .neq("status", "archived");
+    if ((count ?? 0) >= plan.maxAgents) {
+      throw new Error("PLAN_AGENT_LIMIT");
+    }
+  }
 
   const baseSlug = `${source.slug}-copy`;
   let slug = baseSlug;
@@ -97,19 +120,21 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
  * - `agent-service` mode: calls Agent API publish gates (spec/graph/compile/smoke).
  * - `mock` / `disabled`: direct Supabase flip (dev only — no validation gates).
  */
-export async function publishAgentAction(agentId: string): Promise<PublishResult> {
+export async function publishAgentAction(
+  agentId: string,
+): Promise<PublishResult | { ok: false; code: string }> {
   const supabase = await requireSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("not_authenticated");
+  if (!user) return { ok: false, code: "not_authenticated" };
 
   const { data: owned } = await supabase
     .from("agents")
     .select("id, draft_version_id, slug")
     .eq("id", agentId)
     .maybeSingle();
-  if (!owned) throw new Error("agent_not_found");
+  if (!owned) return { ok: false, code: "agent_not_found" };
 
   // Server-side publish gate — do not rely on UI alone.
   const { data: ent } = await supabase.rpc("resolve_user_entitlements", {
@@ -121,46 +146,53 @@ export async function publishAgentAction(agentId: string): Promise<PublishResult
       ? String((entRow as { plan_key: string }).plan_key)
       : "free";
   const plan = isPlanKey(planKey) ? PLANS[planKey] : PLANS.free;
+  // Never throw from this server action in production — Next redacts messages.
   if (!plan.canPublish) {
-    throw Object.assign(new Error("PLAN_PUBLISH_REQUIRED"), {
-      code: "PLAN_PUBLISH_REQUIRED",
-    });
+    return { ok: false, code: "PLAN_PUBLISH_REQUIRED" };
   }
 
   let publicPath: string | undefined;
 
-  if (currentAiExecutionMode() === "agent-service") {
-    const accessToken = await requireAccessToken();
-    const result = await agentServiceFetch<{
-      publicPath?: string;
-      status?: string;
-      error?: string;
-    }>(`/v1/agents/${agentId}/publish`, {
-      method: "POST",
-      accessToken,
-      body: {},
-    });
-    if (typeof result.publicPath === "string") publicPath = result.publicPath;
-  } else {
-    if (!owned.draft_version_id) throw new Error("no_draft_version");
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
-    const username =
-      profile && "username" in profile && typeof profile.username === "string"
-        ? profile.username
-        : null;
-    if (!username) {
-      throw Object.assign(new Error("USERNAME_REQUIRED"), { code: "USERNAME_REQUIRED" });
+  try {
+    if (currentAiExecutionMode() === "agent-service") {
+      const accessToken = await requireAccessToken();
+      const result = await agentServiceFetch<{
+        publicPath?: string;
+        status?: string;
+        error?: string;
+        code?: string;
+      }>(`/v1/agents/${agentId}/publish`, {
+        method: "POST",
+        accessToken,
+        body: {},
+      });
+      if (typeof result.publicPath === "string") publicPath = result.publicPath;
+    } else {
+      if (!owned.draft_version_id) return { ok: false, code: "no_draft_version" };
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      const username =
+        profile && "username" in profile && typeof profile.username === "string"
+          ? profile.username
+          : null;
+      if (!username) {
+        return { ok: false, code: "USERNAME_REQUIRED" };
+      }
+      const { error } = await supabase
+        .from("agents")
+        .update({ status: "published", published_version_id: owned.draft_version_id })
+        .eq("id", agentId);
+      if (error) return { ok: false, code: "PUBLISH_FAILED" };
+      publicPath = `/@${username}/${owned.slug}`;
     }
-    const { error } = await supabase
-      .from("agents")
-      .update({ status: "published", published_version_id: owned.draft_version_id })
-      .eq("id", agentId);
-    if (error) throw error;
-    publicPath = `/@${username}/${owned.slug}`;
+  } catch (error) {
+    if (error instanceof AgentServiceError) {
+      return { ok: false, code: error.code || "PUBLISH_FAILED" };
+    }
+    return { ok: false, code: "PUBLISH_FAILED" };
   }
 
   const { data: agent, error: readError } = await supabase
@@ -168,7 +200,7 @@ export async function publishAgentAction(agentId: string): Promise<PublishResult
     .select("*")
     .eq("id", agentId)
     .single();
-  if (readError || !agent) throw readError ?? new Error("agent_not_found");
+  if (readError || !agent) return { ok: false, code: "agent_not_found" };
   return { agent: mapAgent(agent), publicPath };
 }
 

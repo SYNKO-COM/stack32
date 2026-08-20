@@ -287,6 +287,17 @@ export interface BuilderUiComponentField {
   label?: string;
 }
 
+export interface BuilderToolReviewEntry {
+  toolId: string;
+  name: string;
+  provider: string;
+  appId?: string;
+  externalActionId?: string;
+  utility: string;
+  change: "add" | "keep" | "remove";
+  removable?: boolean;
+}
+
 export interface BuilderUiComponent {
   type:
     | "agent_identity_form"
@@ -294,12 +305,16 @@ export interface BuilderUiComponent {
     | "agent_capabilities_form"
     | "dynamic_questions_form"
     | "provider_clarification_form"
+    | "tool_review_form"
     | "connection_form"
     | "approval_form";
   version: "1";
   requestId: string;
   context?: "builder" | "live";
   fields: BuilderUiComponentField[];
+  /** tool_review_form */
+  mode?: "initial" | "modify";
+  tools?: BuilderToolReviewEntry[];
   /** connection_form: all apps the user must connect before build continues */
   connectionRequirements?: Array<{
     provider: string;

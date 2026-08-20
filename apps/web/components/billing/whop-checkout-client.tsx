@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Check, Lock } from "lucide-react";
 import { Trans } from "react-i18next";
 
+import { useTheme } from "@/components/providers/theme-provider";
 import { Button } from "@/components/ui/button";
 import { createWhopCheckoutSession } from "@/lib/actions/billing";
 import { PLANS, pricePlanSelection, type BillingInterval, type PlanKey } from "@/lib/billing/plans";
@@ -43,9 +44,11 @@ function ConsentCheckbox({
         checked={checked}
         onChange={(e) => onCheckedChange(e.target.checked)}
         className={cn(
-          "mt-0.5 size-4 shrink-0 cursor-pointer appearance-none rounded-full border border-border bg-background",
-          "checked:border-brand checked:bg-brand checked:shadow-[inset_0_0_0_3px_hsl(var(--background))]",
+          "mt-0.5 size-4 shrink-0 cursor-pointer appearance-none rounded-full border bg-background",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
+          checked
+            ? "border-brand bg-brand shadow-[inset_0_0_0_3px_hsl(var(--background))]"
+            : "border-brand/60 [animation:consent-nudge_2.2s_ease-in-out_infinite]",
         )}
       />
       <span className="text-muted-foreground [&_a]:font-medium [&_a]:text-brand [&_a]:underline [&_a]:underline-offset-2">
@@ -61,6 +64,7 @@ export function WhopCheckoutClient({
   creditsMonthly,
 }: Props) {
   const { t, i18n } = useTranslation(["billing", "marketing"]);
+  const { theme } = useTheme();
   const router = useRouter();
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedImmediate, setAcceptedImmediate] = useState(false);
@@ -85,6 +89,10 @@ export function WhopCheckoutClient({
     ...(Array.isArray(featureItems) ? featureItems : []),
     t(`marketing:pricing.${planKey}.${PLANS[planKey].integrationsLabelKey}`),
   ];
+
+  // Whop embed: follow Stack32 theme toggle (not only OS preference).
+  const whopTheme = theme === "dark" ? "dark" : "light";
+  const whopBackground = theme === "dark" ? "#080808" : "#ffffff";
 
   useEffect(() => {
     if (!canProceed) return;
@@ -128,10 +136,10 @@ export function WhopCheckoutClient({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-3 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8">
-      <div className="flex min-h-[min(720px,calc(100dvh-5.5rem))] flex-1 flex-col overflow-hidden rounded-[20px] border border-border/70 bg-background/80 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] sm:rounded-[24px] lg:flex-row lg:rounded-[28px]">
+      <div className="flex min-h-[min(720px,calc(100dvh-5.5rem))] flex-1 flex-col overflow-hidden rounded-[20px] border border-border/70 bg-background shadow-[0_30px_80px_-40px_rgba(0,0,0,0.55)] sm:rounded-[24px] lg:flex-row lg:rounded-[28px]">
         <section
           id="checkout-payment"
-          className="relative order-2 flex min-h-[320px] flex-1 flex-col lg:order-1 lg:min-h-0"
+          className="relative order-2 flex min-h-[320px] flex-1 flex-col bg-background lg:order-1 lg:min-h-0"
         >
           <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 sm:px-5">
             <h1 className="text-sm font-medium sm:text-base">{t("billing:checkout.paymentTitle")}</h1>
@@ -140,15 +148,18 @@ export function WhopCheckoutClient({
             </p>
           </div>
 
-          <div className="relative min-h-0 flex-1">
+          <div className="relative min-h-0 flex-1 bg-background">
             {!canProceed ? (
               <div
-                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 px-6 text-center backdrop-blur-md"
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background px-6 text-center"
                 role="status"
               >
-                <span className="flex size-11 items-center justify-center rounded-full border border-border/70 bg-muted/40">
+                <span className="flex size-11 items-center justify-center rounded-full border border-border bg-background">
                   <Lock className="size-4 text-muted-foreground" aria-hidden="true" />
                 </span>
+                <p className="text-sm font-medium text-foreground">
+                  {t("billing:checkout.unlockTitle")}
+                </p>
                 <p className="max-w-sm text-sm text-muted-foreground">
                   {t("billing:checkout.unlockHint")}
                 </p>
@@ -156,7 +167,7 @@ export function WhopCheckoutClient({
             ) : null}
 
             {canProceed && loading ? (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/90">
                 <p className="text-sm text-muted-foreground">{t("billing:checkout.loading")}</p>
               </div>
             ) : null}
@@ -174,10 +185,12 @@ export function WhopCheckoutClient({
             ) : null}
 
             {paymentReady && sessionId ? (
-              <div className="h-full min-h-[360px] overflow-y-auto">
+              <div className="h-full min-h-[360px] overflow-y-auto bg-background">
                 <WhopCheckoutEmbed
+                  key={`${sessionId}-${whopTheme}`}
                   sessionId={sessionId}
-                  theme="system"
+                  theme={whopTheme}
+                  themeOptions={{ backgroundColor: whopBackground }}
                   returnUrl={`${site}/billing/success`}
                   setupFutureUsage="off_session"
                   onComplete={() => {
@@ -189,7 +202,7 @@ export function WhopCheckoutClient({
           </div>
         </section>
 
-        <aside className="order-1 flex w-full shrink-0 flex-col border-b border-border/70 lg:order-2 lg:w-[min(100%,24.5rem)] lg:border-b-0 lg:border-l xl:w-[26.5rem]">
+        <aside className="order-1 flex w-full shrink-0 flex-col border-b border-border/70 bg-background lg:order-2 lg:w-[min(100%,24.5rem)] lg:border-b-0 lg:border-l xl:w-[26.5rem]">
           <div className="border-b border-border/60 px-4 py-3 sm:px-5">
             <h2 className="text-sm font-medium sm:text-base">{t("billing:checkout.summaryTitle")}</h2>
           </div>
@@ -221,7 +234,7 @@ export function WhopCheckoutClient({
               </Link>
             </div>
 
-            <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <div className="rounded-2xl border border-border/70 bg-background p-4">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 {t("billing:checkout.dueToday")}
               </p>
@@ -241,7 +254,14 @@ export function WhopCheckoutClient({
               ))}
             </ul>
 
-            <div className="mt-auto space-y-3 rounded-2xl border border-border/70 bg-background/80 p-4">
+            <div
+              className={cn(
+                "mt-auto space-y-3 rounded-2xl border p-4",
+                canProceed
+                  ? "border-border/70 bg-background"
+                  : "border-brand/25 bg-brand/[0.04]",
+              )}
+            >
               <ConsentCheckbox
                 id="whop-checkout-accept-terms"
                 checked={acceptedTerms}

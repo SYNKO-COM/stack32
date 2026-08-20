@@ -4,6 +4,10 @@
   "agentService": "Le service agent est momentanément indisponible. Veuillez réessayer.",
   "rateLimit": "Trop de requêtes. Patientez un instant et réessayez.",
   "budgetExceeded": "Votre limite mensuelle d'utilisation IA est atteinte.",
+  "plan": {
+    "agentLimit": "Votre plan a atteint sa limite d’agents. Passez à un plan supérieur pour en créer davantage.",
+    "workspaceLimit": "Votre plan n’autorise qu’un workspace. Passez à un plan supérieur pour en ajouter."
+  },
   "builder": {
     "inputRejected": "Ce message n'a pas pu être traité. Reformulez votre demande.",
     "interrupted": "Cette étape de construction ne peut plus être reprise. Envoyez un nouveau message pour continuer.",
@@ -14,6 +18,7 @@
     "validationFailed": "La publication a échoué à la validation. Consultez Structure et lancez un test d'abord.",
     "testFailed": "Le dernier test n'a pas réussi. Corrigez les problèmes dans Build avant de publier.",
     "usernameRequired": "Choisissez un nom d'utilisateur dans Paramètres avant de publier un agent public.",
+    "planRequired": "La publication nécessite un plan payant. Passez à un plan supérieur pour partager votre agent.",
     "failed": "La publication a échoué. Veuillez réessayer."
   },
   "notFound": {

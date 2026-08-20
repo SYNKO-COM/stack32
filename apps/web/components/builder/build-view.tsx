@@ -14,6 +14,7 @@ import { IntegrationConnectionCard } from "@/components/builder/integration-conn
 import { MessageEntrance, TypewriterText } from "@/components/builder/message-motion";
 import { IdentityConfirmedMessage, ReadyCard } from "@/components/builder/ready-card";
 import { SecretForm } from "@/components/builder/secret-form";
+import { ToolReviewForm } from "@/components/builder/tool-review-form";
 import { ToolSetupCard } from "@/components/builder/tool-setup-card";
 import { LogoMark } from "@/components/shared/logo";
 import { Markdown } from "@/components/shared/markdown";
@@ -275,6 +276,8 @@ function BuilderBubble({
     content = t("builder:capabilities.formClosed");
   } else if (formLocked && contentKey === "builder:secrets.prompt") {
     content = t("builder:secrets.formClosed");
+  } else if (formLocked && contentKey === "builder:toolReview.prompt") {
+    content = t("builder:toolReview.formClosed");
   } else if (contentKey) {
     // Never show raw keys like "connection.prompt" to users.
     const friendlyFallback: Record<string, string> = {
@@ -287,6 +290,8 @@ function BuilderBubble({
         "How should this agent start? Chat is always on — add a schedule if you want.",
       "builder:secrets.prompt": "Add an AI provider key so your agent can think.",
       "builder:questions.prompt": "A few quick questions so I build the right agent.",
+      "builder:toolReview.prompt":
+        "Review the tools for this agent before I build. Remove or add tools, then confirm.",
     };
     content = t(contentKey, {
       defaultValue:
@@ -550,6 +555,14 @@ function BuilderBubble({
                 uiComponent={message.uiComponent}
                 runId={runId || message.uiComponent.requestId}
                 variant="providers"
+                onSubmitted={() => onFormSubmitted?.(formRequestId ?? "")}
+              />
+            ) : null}
+
+            {showForms && message.uiComponent?.type === "tool_review_form" ? (
+              <ToolReviewForm
+                uiComponent={message.uiComponent}
+                runId={runId || message.uiComponent.requestId}
                 onSubmitted={() => onFormSubmitted?.(formRequestId ?? "")}
               />
             ) : null}

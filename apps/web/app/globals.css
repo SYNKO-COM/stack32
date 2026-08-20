@@ -212,6 +212,18 @@
     }
   }
 
+  @keyframes consent-nudge {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 40%, transparent);
+      border-color: color-mix(in srgb, var(--brand) 60%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand) 14%, transparent);
+      border-color: color-mix(in srgb, var(--brand) 90%, transparent);
+    }
+  }
+
   @keyframes pulseGlow {
     0%,
     100% {

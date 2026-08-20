@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { useAgents, useCreateAgent } from "@/hooks/use-agents";
 import { useActiveWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
+import { isPlanLimitError } from "@/lib/billing/plan-limit";
 import { getPendingPrompt } from "@/lib/pending-prompt";
+import { useUiStore } from "@/store/ui-store";
 
 /**
  * /agents entry point:
@@ -19,6 +21,7 @@ import { getPendingPrompt } from "@/lib/pending-prompt";
 export default function AgentsIndexPage() {
   const { t } = useTranslation(["common", "errors"]);
   const router = useRouter();
+  const openDialog = useUiStore((s) => s.openDialog);
   const { activeWorkspaceId } = useActiveWorkspace();
   const { data: agents, isLoading } = useAgents(activeWorkspaceId);
   const createAgent = useCreateAgent();
@@ -32,16 +35,21 @@ export default function AgentsIndexPage() {
     if (pending || agents.length > 0) {
       handledRef.current = true;
       const go = async () => {
-        if (pending || agents.length === 0) {
-          const agent = await createAgent.mutateAsync({ workspaceId: activeWorkspaceId });
-          router.replace(`/agents/${agent.id}/build`);
-          return;
+        try {
+          if (pending || agents.length === 0) {
+            const agent = await createAgent.mutateAsync({ workspaceId: activeWorkspaceId });
+            router.replace(`/agents/${agent.id}/build`);
+            return;
+          }
+          router.replace(`/agents/${agents[0].id}/build`);
+        } catch (error) {
+          handledRef.current = false;
+          if (isPlanLimitError(error)) openDialog("upgrade");
         }
-        router.replace(`/agents/${agents[0].id}/build`);
       };
       void go();
     }
-  }, [agents, isLoading, createAgent, router, activeWorkspaceId]);
+  }, [agents, isLoading, createAgent, router, activeWorkspaceId, openDialog]);
 
   if (isLoading || !agents || !activeWorkspaceId) {
     return (
@@ -63,8 +71,14 @@ export default function AgentsIndexPage() {
           disabled={creating || createAgent.isPending}
           onClick={() => {
             startCreate(async () => {
-              const created = await createAgent.mutateAsync({ workspaceId: activeWorkspaceId });
-              router.replace(`/agents/${created.id}/build`);
+              try {
+                const created = await createAgent.mutateAsync({
+                  workspaceId: activeWorkspaceId,
+                });
+                router.replace(`/agents/${created.id}/build`);
+              } catch (error) {
+                if (isPlanLimitError(error)) openDialog("upgrade");
+              }
             });
           }}
         >

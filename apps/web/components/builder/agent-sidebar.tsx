@@ -39,7 +39,9 @@ import {
 import { useActiveWorkspace, useCreateWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
 import type { Agent } from "@/lib/domain/types";
+import { isPlanLimitError } from "@/lib/billing/plan-limit";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/store/ui-store";
 
 const CREATE_MIN_MS = 900;
 const CREATE_MAX_MS = 2200;
@@ -59,6 +61,7 @@ function AgentRow({
 }) {
   const { t } = useTranslation(["builder", "common"]);
   const router = useRouter();
+  const openDialog = useUiStore((s) => s.openDialog);
   const renameAgent = useRenameAgent();
   const duplicateAgent = useDuplicateAgent();
   const deleteAgent = useDeleteAgent();
@@ -111,9 +114,14 @@ function AgentRow({
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
-              void duplicateAgent.mutateAsync(agent.id).then((copy) => {
-                router.push(`/agents/${copy.id}/build`);
-              });
+              void duplicateAgent
+                .mutateAsync(agent.id)
+                .then((copy) => {
+                  router.push(`/agents/${copy.id}/build`);
+                })
+                .catch((error: unknown) => {
+                  if (isPlanLimitError(error)) openDialog("upgrade");
+                });
             }}
           >
             {t("builder:sidebar.menu.duplicate")}
@@ -202,6 +210,7 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
   const { data: agents } = useAgents(activeWorkspaceId);
   const createAgent = useCreateAgent();
   const createWorkspace = useCreateWorkspace();
+  const openDialog = useUiStore((s) => s.openDialog);
   const creatingLockRef = useRef(false);
   const pendingAgentIdRef = useRef<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -239,21 +248,29 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
       pendingAgentIdRef.current = agent.id;
       onNavigate();
       router.push(`/agents/${agent.id}/build`);
-    } catch {
+    } catch (error) {
       creatingLockRef.current = false;
       pendingAgentIdRef.current = null;
       setCreating(false);
+      if (isPlanLimitError(error)) openDialog("upgrade");
     }
   };
 
   const handleCreateWorkspace = async () => {
     const name = newWsName.trim();
     if (!name) return;
-    const ws = await createWorkspace.mutateAsync(name);
-    setActiveWorkspaceId(ws.id);
-    setCreateWsOpen(false);
-    setNewWsName("");
-    router.push("/agents");
+    try {
+      const ws = await createWorkspace.mutateAsync(name);
+      setActiveWorkspaceId(ws.id);
+      setCreateWsOpen(false);
+      setNewWsName("");
+      router.push("/agents");
+    } catch (error) {
+      if (isPlanLimitError(error)) {
+        setCreateWsOpen(false);
+        openDialog("upgrade");
+      }
+    }
   };
 
   return (

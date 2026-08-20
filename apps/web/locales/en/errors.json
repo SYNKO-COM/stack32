@@ -4,6 +4,10 @@
   "agentService": "The agent service is temporarily unavailable. Please try again.",
   "rateLimit": "Too many requests. Please wait a moment and try again.",
   "budgetExceeded": "Your monthly AI usage limit has been reached.",
+  "plan": {
+    "agentLimit": "Your plan has reached its agent limit. Upgrade to create more agents.",
+    "workspaceLimit": "Your plan allows one workspace. Upgrade to add more."
+  },
   "builder": {
     "inputRejected": "That message couldn't be processed. Try rephrasing your request.",
     "interrupted": "This build step can no longer be resumed. Send a new message to continue.",
@@ -14,6 +18,7 @@
     "validationFailed": "Publishing failed validation. Review Structure and run a test first.",
     "testFailed": "The latest test didn't pass. Fix issues in Build before publishing.",
     "usernameRequired": "Choose a username in Settings before publishing a public agent.",
+    "planRequired": "Publishing requires a paid plan. Upgrade to share your agent publicly.",
     "failed": "Publishing failed. Please try again."
   },
   "notFound": {

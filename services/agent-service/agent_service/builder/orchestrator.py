@@ -1317,6 +1317,227 @@ class BuilderOrchestrator:
         await self.db.update_agent_status(agent_id, user_id, "draft")
         return {"status": "interrupted", "run_id": run_id, "reason": "provider_clarification"}
 
+    async def _maybe_interrupt_for_tool_review(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        prompt: str,
+        identity: AgentIdentity,
+        capabilities: dict[str, Any],
+        spec: AgentSpec,
+        current_spec: AgentSpec | None,
+    ) -> dict[str, Any] | None:
+        from agent_service.builder.tool_review import build_tool_review_entries, tools_changed
+
+        if capabilities.get("tools_confirmed") and isinstance(
+            capabilities.get("confirmed_spec"), dict
+        ):
+            return None
+        if not tools_changed(proposed=list(spec.tools or []), current=current_spec.tools if current_spec else None):
+            return None
+
+        entries = build_tool_review_entries(
+            proposed=list(spec.tools or []),
+            current=list(current_spec.tools) if current_spec else None,
+            goal=str(spec.goal or prompt or "")[:400],
+        )
+        mode = "initial" if current_spec is None else "modify"
+        return await self._interrupt_tool_review_form(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity=identity,
+            capabilities=capabilities,
+            pending_spec=spec,
+            tools=entries,
+            mode=mode,
+        )
+
+    async def _interrupt_tool_review_form(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        agent_id: str,
+        thread_id: str,
+        prompt: str,
+        identity: AgentIdentity,
+        capabilities: dict[str, Any],
+        pending_spec: AgentSpec,
+        tools: list[dict[str, Any]],
+        mode: str,
+    ) -> dict[str, Any]:
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content="builder:toolReview.prompt",
+            metadata={
+                "tone": "normal",
+                "interrupt_run_id": run_id,
+                "ui_component": {
+                    "type": "tool_review_form",
+                    "version": "1",
+                    "request_id": str(uuid.uuid4()),
+                    "context": "builder",
+                    "fields": [],
+                    "mode": mode,
+                    "tools": tools,
+                },
+            },
+        )
+        await self.db.save_builder_interrupt(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            identity_draft={
+                **identity.model_dump(),
+                "_interrupt_type": "tool_review",
+                "capabilities": capabilities,
+                "original_goal": str(
+                    capabilities.get("original_goal") or pending_spec.goal or prompt
+                )[:4000],
+                "pending_spec": pending_spec.model_dump(mode="json"),
+                "tool_review_mode": mode,
+            },
+            interrupt_type="tool_review",
+        )
+        await self.db.update_run_status(run_id, "waiting_for_input")
+        await self.db.update_agent_status(agent_id, user_id, "draft")
+        return {"status": "interrupted", "run_id": run_id, "reason": "tool_review"}
+
+    async def resume_with_tool_review(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        tools: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        from agent_service.builder.capabilities import build_connection_requirements
+        from agent_service.builder.tool_review import apply_reviewed_tools
+
+        interrupt = await self.db.get_builder_interrupt(run_id, user_id)
+        if not interrupt or interrupt.get("status") == "completed":
+            return {"error": "BUILDER_INTERRUPTED"}
+        draft = interrupt.get("identity_draft") or {}
+        itype = interrupt.get("type") or draft.get("_interrupt_type")
+        if itype != "tool_review":
+            return {"error": "BUILDER_INTERRUPTED"}
+
+        pending_raw = draft.get("pending_spec")
+        if not isinstance(pending_raw, dict):
+            return {"error": "BUILDER_INTERRUPTED"}
+        try:
+            pending_spec = AgentSpec.model_validate(pending_raw)
+        except Exception:  # noqa: BLE001
+            return {"error": "BUILDER_INTERRUPTED"}
+
+        agent_id = interrupt["agent_id"]
+        thread_id = interrupt["thread_id"]
+        prompt = interrupt["prompt"]
+        identity = AgentIdentity(
+            name=str(draft.get("name") or pending_spec.identity.name or "Agent")[:120],
+            role=str(draft.get("role") or pending_spec.identity.role or "Assist the user")[:240],
+            tone=str(draft.get("tone") or pending_spec.identity.tone or "professional")[:64],
+            description=str(
+                draft.get("description") or pending_spec.identity.description or ""
+            )[:2000],
+        )
+
+        reviewed = [t for t in (tools or []) if isinstance(t, dict)]
+        # Resolve user-added apps that only have an app_id (from search).
+        resolved_extra: list[ToolBinding] = []
+        cleaned: list[dict[str, Any]] = []
+        for item in reviewed:
+            tool_id = str(item.get("tool_id") or "").strip()
+            app_id = str(item.get("app_id") or "").strip()
+            utility = str(item.get("utility") or "").strip()
+            if tool_id.startswith("app:") and app_id:
+                try:
+                    from agent_service.builder.capabilities import resolve_tools_for_capabilities
+
+                    extra, _, _ = await resolve_tools_for_capabilities(
+                        [],
+                        prompt=utility or app_id,
+                        preferred_apps=[app_id],
+                        llm_hints=[app_id],
+                    )
+                    for binding in extra:
+                        if binding.tool_id in {"current_datetime", "structured_output"}:
+                            continue
+                        cfg = dict(binding.config or {})
+                        if utility:
+                            cfg["utility"] = utility[:500]
+                        resolved_extra.append(binding.model_copy(update={"config": cfg}))
+                except Exception:  # noqa: BLE001
+                    logger.exception("tool_review_resolve_app_failed app_id=%s", app_id)
+                continue
+            cleaned.append(item)
+
+        merged_pending = list(pending_spec.tools) + resolved_extra
+        new_tools = apply_reviewed_tools(pending_tools=merged_pending, reviewed=cleaned)
+        # Append resolved extras that apply_reviewed_tools didn't already see.
+        seen = {t.tool_id for t in new_tools}
+        for binding in resolved_extra:
+            if binding.tool_id not in seen:
+                new_tools.append(binding)
+                seen.add(binding.tool_id)
+        new_tools = new_tools[:20]
+
+        connection_requirements = await build_connection_requirements(new_tools)
+        data = pending_spec.model_dump()
+        data["tools"] = [t.model_dump() for t in new_tools]
+        data["connection_requirements"] = [r.model_dump() for r in connection_requirements]
+        data["graph"] = self._build_graph(
+            new_tools,
+            str(pending_spec.goal or prompt),
+            knowledge_enabled=bool(pending_spec.knowledge.enabled),
+            memory_enabled=bool(pending_spec.memory.semantic_enabled),
+        ).model_dump()
+        confirmed = AgentSpec.model_validate(data)
+
+        caps = dict(draft.get("capabilities") or {})
+        caps["tools_confirmed"] = True
+        caps["confirmed_spec"] = confirmed.model_dump(mode="json")
+        caps["original_goal"] = str(
+            draft.get("original_goal") or caps.get("original_goal") or confirmed.goal or prompt
+        )[:4000]
+
+        await self.db.resolve_builder_form(thread_id=thread_id, request_id=run_id)
+        await self.db.insert_assistant_message(
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            content="builder:toolReview.saved",
+            metadata={"tone": "normal", "card": "tools_confirmed"},
+        )
+        await self.db.clear_builder_interrupt(run_id, user_id)
+        await self.db.update_run_status(run_id, "running")
+        await self.db.update_agent_status(agent_id, user_id, "building")
+
+        current_spec = None
+        try:
+            current_spec = await self.db.load_draft_spec(agent_id, user_id)
+        except Exception:  # noqa: BLE001
+            current_spec = None
+        return await self._dispatch_continue_after_form(
+            run_id=run_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            content=str(caps.get("original_goal") or prompt),
+            identity=identity,
+            current_spec=current_spec,
+            capabilities=caps,
+        )
+
     async def _connection_providers_bound(self, *, user_id: str, agent_id: str) -> set[str]:
         """Providers/apps bound to *this* agent (not merely any user connection)."""
         bound: set[str] = set()
@@ -1873,68 +2094,103 @@ class BuilderOrchestrator:
             focus=f"Planning next moves for {identity.name}",
         )
 
-        if complexity == TaskComplexity.FAST and current_spec is not None:
-            await self.db.emit_event(
-                run_id, "builder.plan.created", {"mapping_key": "builder.progress.architecture"}
-            )
-            await tick(
-                steps=[
-                    {"labelKey": "understanding", "state": "done"},
-                    {"labelKey": "capabilities", "state": "running"},
-                    {"labelKey": "building", "state": "pending"},
-                    {"labelKey": "testing", "state": "pending"},
-                ],
-                focus="Planning next moves",
-            )
-            spec = await self._fast_patch(current_spec, content, identity)
-        else:
-            clarified = await self._maybe_interrupt_for_provider_clarification(
+        caps = dict(capabilities or {})
+        confirmed_raw = caps.get("confirmed_spec")
+        if isinstance(confirmed_raw, dict) and caps.get("tools_confirmed"):
+            try:
+                spec = AgentSpec.model_validate(confirmed_raw)
+            except Exception:  # noqa: BLE001
+                confirmed_raw = None
+                caps.pop("confirmed_spec", None)
+                caps["tools_confirmed"] = False
+            else:
+                await tick(
+                    steps=[
+                        {"labelKey": "understanding", "state": "done"},
+                        {"labelKey": "capabilities", "state": "done"},
+                        {"labelKey": "building", "state": "running"},
+                        {"labelKey": "testing", "state": "pending"},
+                    ],
+                    focus="Applying confirmed tools",
+                )
+
+        if not (isinstance(confirmed_raw, dict) and caps.get("tools_confirmed")):
+            if complexity == TaskComplexity.FAST and current_spec is not None:
+                await self.db.emit_event(
+                    run_id, "builder.plan.created", {"mapping_key": "builder.progress.architecture"}
+                )
+                await tick(
+                    steps=[
+                        {"labelKey": "understanding", "state": "done"},
+                        {"labelKey": "capabilities", "state": "running"},
+                        {"labelKey": "building", "state": "pending"},
+                        {"labelKey": "testing", "state": "pending"},
+                    ],
+                    focus="Planning next moves",
+                )
+                spec = await self._fast_patch(current_spec, content, identity)
+            else:
+                clarified = await self._maybe_interrupt_for_provider_clarification(
+                    run_id=run_id,
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    thread_id=thread_id,
+                    prompt=content,
+                    identity=identity,
+                    capabilities=caps,
+                )
+                if clarified:
+                    return clarified
+                await tick(
+                    steps=[
+                        {"labelKey": "understanding", "state": "done"},
+                        {"labelKey": "capabilities", "state": "done"},
+                        {"labelKey": "building", "state": "running"},
+                        {"labelKey": "testing", "state": "pending"},
+                    ],
+                    focus="Planning next moves",
+                )
+                spec, ambiguous = await self._generate_spec(
+                    content,
+                    identity,
+                    complexity,
+                    current_spec,
+                    capabilities=caps,
+                    user_id=user_id,
+                    agent_id=agent_id,
+                )
+                original_goal = (
+                    caps.get("original_goal")
+                    or (current_spec.goal if current_spec else None)
+                    or content
+                )
+                app_clarified = await self._maybe_interrupt_for_ambiguous_apps(
+                    run_id=run_id,
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    thread_id=thread_id,
+                    prompt=content,
+                    identity=identity,
+                    capabilities=caps,
+                    ambiguous=ambiguous,
+                    original_goal=str(original_goal),
+                )
+                if app_clarified:
+                    return app_clarified
+
+            tool_review = await self._maybe_interrupt_for_tool_review(
                 run_id=run_id,
                 user_id=user_id,
                 agent_id=agent_id,
                 thread_id=thread_id,
                 prompt=content,
                 identity=identity,
-                capabilities=capabilities,
+                capabilities=caps,
+                spec=spec,
+                current_spec=current_spec,
             )
-            if clarified:
-                return clarified
-            await tick(
-                steps=[
-                    {"labelKey": "understanding", "state": "done"},
-                    {"labelKey": "capabilities", "state": "done"},
-                    {"labelKey": "building", "state": "running"},
-                    {"labelKey": "testing", "state": "pending"},
-                ],
-                focus="Planning next moves",
-            )
-            spec, ambiguous = await self._generate_spec(
-                content,
-                identity,
-                complexity,
-                current_spec,
-                capabilities=capabilities,
-                user_id=user_id,
-                agent_id=agent_id,
-            )
-            original_goal = (
-                (capabilities or {}).get("original_goal")
-                or (current_spec.goal if current_spec else None)
-                or content
-            )
-            app_clarified = await self._maybe_interrupt_for_ambiguous_apps(
-                run_id=run_id,
-                user_id=user_id,
-                agent_id=agent_id,
-                thread_id=thread_id,
-                prompt=content,
-                identity=identity,
-                capabilities=capabilities,
-                ambiguous=ambiguous,
-                original_goal=str(original_goal),
-            )
-            if app_clarified:
-                return app_clarified
+            if tool_review:
+                return tool_review
 
         # Connection binding is installation-scoped (AI Agent), never a Build gate.
         tool_names = ", ".join(t.tool_id for t in spec.tools[:4]) or "core tools"
@@ -3842,17 +4098,20 @@ class BuilderOrchestrator:
                     memory_enabled=spec.memory.semantic_enabled,
                 ).model_dump()
             elif patch.kind == "add_tool" and patch.tool_id:
-                if not any(t.tool_id == patch.tool_id for t in spec.tools):
-                    data["tools"].append({"tool_id": patch.tool_id, "enabled": True})
+                # Tool add/remove is mandatory human-gated — never auto-apply in repair.
+                logger.info(
+                    "repair_skip_tool_patch kind=add_tool tool_id=%s",
+                    patch.tool_id,
+                )
             elif patch.kind == "append_system_instruction" and patch.text:
                 data["instructions"]["system"] = (
                     data["instructions"]["system"] + "\n" + patch.text
                 )[:20000]
             elif patch.kind == "disable_tool" and patch.tool_id:
-                data["tools"] = [
-                    {**t, "enabled": False} if t.get("tool_id") == patch.tool_id else t
-                    for t in data["tools"]
-                ]
+                logger.info(
+                    "repair_skip_tool_patch kind=disable_tool tool_id=%s",
+                    patch.tool_id,
+                )
             elif patch.kind == "enable_knowledge":
                 data["knowledge"]["enabled"] = True
             elif patch.kind == "enable_memory":

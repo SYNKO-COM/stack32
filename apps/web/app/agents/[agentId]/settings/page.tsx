@@ -29,10 +29,12 @@ export default function AgentSettingsPage() {
   const listing = useQuery({
     queryKey: ["agent-listing", agentId],
     queryFn: () => getAgentListingSettingsAction(agentId),
+    enabled: Boolean(agentId),
   });
   const requests = useQuery({
     queryKey: ["agent-access-requests", agentId],
     queryFn: () => listAccessRequestsAction(agentId),
+    enabled: Boolean(agentId),
   });
 
   const [visibility, setVisibility] = useState<ListingVisibility>("private");

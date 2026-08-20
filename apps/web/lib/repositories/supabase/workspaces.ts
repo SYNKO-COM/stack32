@@ -47,7 +47,10 @@ export class SupabaseWorkspaceRepository implements WorkspaceRepository {
     const { data, error } = await supabase.rpc("create_workspace", {
       p_name: name,
     });
-    if (error) throw error;
+    if (error) {
+      const { throwMappedPlanLimit } = await import("@/lib/billing/plan-limit");
+      throwMappedPlanLimit(error);
+    }
     return mapWorkspace(data as WorkspaceRow);
   }
 

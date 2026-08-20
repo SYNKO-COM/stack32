@@ -50,6 +50,18 @@ class BuilderQuestionsResumeRequest(BaseModel):
     answers: dict[str, Any] = Field(default_factory=dict)
 
 
+class BuilderToolReviewItem(BaseModel):
+    tool_id: str = Field(min_length=1, max_length=128)
+    provider: str = Field(default="native", max_length=64)
+    app_id: str | None = Field(default=None, max_length=128)
+    external_action_id: str | None = Field(default=None, max_length=256)
+    utility: str = Field(default="", max_length=500)
+
+
+class BuilderToolReviewResumeRequest(BaseModel):
+    tools: list[BuilderToolReviewItem] = Field(default_factory=list, max_length=20)
+
+
 async def _guards(user_id: str) -> None:
     try:
         await check_user_rate_limit(user_id)
@@ -325,6 +337,27 @@ async def submit_builder_providers(
         run_id=str(run_id),
         user_id=user.user_id,
         answers=body.answers,
+    )
+    if result.get("error") == "BUILDER_INTERRUPTED":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "BUILDER_INTERRUPTED", "message": "Cannot resume this run."},
+        )
+    return result
+
+
+@router.post("/builder/runs/{run_id}/tools")
+async def submit_builder_tool_review(
+    run_id: UUID,
+    body: BuilderToolReviewResumeRequest,
+    user: CurrentUser,
+) -> dict[str, Any]:
+    await _guards(user.user_id)
+    orch = BuilderOrchestrator()
+    result = await orch.resume_with_tool_review(
+        run_id=str(run_id),
+        user_id=user.user_id,
+        tools=[item.model_dump() for item in body.tools],
     )
     if result.get("error") == "BUILDER_INTERRUPTED":
         raise HTTPException(

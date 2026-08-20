@@ -20,6 +20,7 @@ import {
 import { useAgent, usePublishAgent } from "@/hooks/use-agents";
 import { useTranslation } from "@/hooks/use-translation";
 import { AgentServiceError, agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
+import { isPlanLimitError } from "@/lib/billing/plan-limit";
 import { SITE_URL } from "@/lib/site";
 import { useUiStore } from "@/store/ui-store";
 
@@ -52,6 +53,7 @@ function ViewTabs({ agentId }: { agentId: string }) {
 }
 
 function publishErrorKey(error: unknown): string {
+  if (isPlanLimitError(error)) return "errors:publish.planRequired";
   if (error instanceof AgentServiceError) return agentServiceErrorKey(error);
   if (error && typeof error === "object" && "code" in error) {
     const code = String((error as { code?: string }).code ?? "");
@@ -87,6 +89,10 @@ export function Topbar({ agentId }: { agentId: string }) {
       setPublicUrl(path ? `${origin}${path}` : null);
       setPublishedOpen(true);
     } catch (error) {
+      if (isPlanLimitError(error)) {
+        openDialog("upgrade");
+        return;
+      }
       const key = publishErrorKey(error);
       if (key === "errors:publish.usernameRequired") {
         setUsernameRequiredOpen(true);

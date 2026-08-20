@@ -405,6 +405,41 @@ export async function submitBuilderQuestions(input: {
   });
 }
 
+/** Resume builder after mandatory tool review (add/remove confirmation). */
+export async function submitBuilderToolReview(input: {
+  runId: string;
+  tools: Array<{
+    toolId: string;
+    provider: string;
+    appId?: string;
+    externalActionId?: string;
+    utility: string;
+  }>;
+}): Promise<void> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("tool_review_requires_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  await agentServiceFetch(`/v1/builder/runs/${input.runId}/tools`, {
+    method: "POST",
+    accessToken,
+    body: {
+      tools: input.tools.map((t) => ({
+        tool_id: t.toolId,
+        provider: t.provider,
+        app_id: t.appId ?? null,
+        external_action_id: t.externalActionId ?? null,
+        utility: t.utility,
+      })),
+    },
+  });
+}
+
 /** Resume builder after provider clarification (email/CRM apps). */
 export async function submitBuilderProviders(input: {
   runId: string;

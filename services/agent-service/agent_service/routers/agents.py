@@ -224,9 +224,10 @@ async def publish_agent(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
     if result.get("error") == "forbidden":
         raise _not_found()
     if result.get("error"):
+        code = result.get("code") or result.get("error") or "DEPLOYMENT_VALIDATION_FAILED"
         raise HTTPException(
             status_code=400,
-            detail={"code": result["error"], "message": "Publish validation failed."},
+            detail={"code": code, "message": "Publish validation failed."},
         )
     return result
 

@@ -31,7 +31,10 @@ export class SupabaseAgentRepository implements AgentRepository {
       p_name: input?.name,
       p_workspace_id: input?.workspaceId,
     });
-    if (error) throw error;
+    if (error) {
+      const { throwMappedPlanLimit } = await import("@/lib/billing/plan-limit");
+      throwMappedPlanLimit(error);
+    }
     const result = data as { agent_id: string };
     const agent = await this.getAgent(result.agent_id);
     if (!agent) throw new Error("agent_creation_failed");
@@ -51,10 +54,15 @@ export class SupabaseAgentRepository implements AgentRepository {
   }
 
   async duplicateAgent(agentId: string): Promise<Agent> {
-    const { agentId: copyId } = await duplicateAgentAction(agentId);
-    const agent = await this.getAgent(copyId);
-    if (!agent) throw new Error("duplicate_failed");
-    return agent;
+    try {
+      const { agentId: copyId } = await duplicateAgentAction(agentId);
+      const agent = await this.getAgent(copyId);
+      if (!agent) throw new Error("duplicate_failed");
+      return agent;
+    } catch (error) {
+      const { throwMappedPlanLimit } = await import("@/lib/billing/plan-limit");
+      return throwMappedPlanLimit(error);
+    }
   }
 
   async deleteAgent(agentId: string): Promise<void> {
@@ -65,7 +73,16 @@ export class SupabaseAgentRepository implements AgentRepository {
 
   async publishAgent(agentId: string): Promise<PublishResult> {
     const { publishAgentAction } = await import("@/lib/actions/agents");
-    return publishAgentAction(agentId);
+    const { AgentServiceError } = await import("@/lib/ai/agent-service-errors");
+    const { PlanLimitError } = await import("@/lib/billing/plan-limit");
+    const result = await publishAgentAction(agentId);
+    if ("ok" in result && result.ok === false) {
+      if (result.code === "PLAN_PUBLISH_REQUIRED") {
+        throw new PlanLimitError("PLAN_PUBLISH_REQUIRED");
+      }
+      throw new AgentServiceError(result.code, result.code, 403);
+    }
+    return result as PublishResult;
   }
 
   async getCurrentVersion(agentId: string): Promise<AgentVersion | null> {

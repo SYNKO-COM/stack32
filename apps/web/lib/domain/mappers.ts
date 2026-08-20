@@ -250,6 +250,7 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
     type !== "agent_capabilities_form" &&
     type !== "dynamic_questions_form" &&
     type !== "provider_clarification_form" &&
+    type !== "tool_review_form" &&
     type !== "connection_form" &&
     type !== "approval_form"
   ) {
@@ -368,12 +369,82 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
     }
   }
 
+  let tools:
+    | Array<{
+        toolId: string;
+        name: string;
+        provider: string;
+        appId?: string;
+        externalActionId?: string;
+        utility: string;
+        change: "add" | "keep" | "remove";
+        removable?: boolean;
+      }>
+    | undefined;
+  let mode: "initial" | "modify" | undefined;
+  if (type === "tool_review_form") {
+    const modeRaw = rec.mode;
+    mode = modeRaw === "modify" ? "modify" : "initial";
+    tools = Array.isArray(rec.tools)
+      ? rec.tools
+          .map((raw) => {
+            const row = asRecord(raw);
+            const toolId =
+              (typeof row.tool_id === "string" ? row.tool_id : "") ||
+              (typeof row.toolId === "string" ? row.toolId : "");
+            if (!toolId) return null;
+            const changeRaw = typeof row.change === "string" ? row.change : "add";
+            const change: "add" | "keep" | "remove" =
+              changeRaw === "keep" || changeRaw === "remove" ? changeRaw : "add";
+            const mapped: {
+              toolId: string;
+              name: string;
+              provider: string;
+              appId?: string;
+              externalActionId?: string;
+              utility: string;
+              change: "add" | "keep" | "remove";
+              removable?: boolean;
+            } = {
+              toolId,
+              name:
+                typeof row.name === "string" && row.name.trim()
+                  ? row.name
+                  : toolId.replace(/_/g, " "),
+              provider:
+                typeof row.provider === "string" && row.provider
+                  ? row.provider
+                  : "native",
+              appId:
+                typeof row.app_id === "string"
+                  ? row.app_id
+                  : typeof row.appId === "string"
+                    ? row.appId
+                    : undefined,
+              externalActionId:
+                typeof row.external_action_id === "string"
+                  ? row.external_action_id
+                  : typeof row.externalActionId === "string"
+                    ? row.externalActionId
+                    : undefined,
+              utility: typeof row.utility === "string" ? row.utility : "",
+              change,
+              removable: row.removable !== false,
+            };
+            return mapped;
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null)
+      : [];
+  }
+
   return {
     type,
     version: "1",
     requestId,
     context,
     fields,
+    ...(mode ? { mode } : {}),
+    ...(tools ? { tools } : {}),
     ...(connectionRequirements && connectionRequirements.length > 0
       ? { connectionRequirements }
       : {}),

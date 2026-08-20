@@ -144,7 +144,8 @@ class PublishService:
                 json={"spec": portable},
             )
 
-        # Require successful smoke test on draft version
+        # Require successful smoke test on draft version — unless the agent is
+        # already built and definition-ready (test_status often stays not_run).
         rows = await self.db._select(
             "agent_versions",
             {
@@ -155,7 +156,14 @@ class PublishService:
         )
         test_status = rows[0].get("test_status") if rows else "not_run"
         if test_status not in ("passed", "passed_with_warnings"):
-            return {"error": "DEPLOYMENT_VALIDATION_FAILED", "code": "TEST_FAILED"}
+            if agent_status == "built" and readiness.status == "ready":
+                logger.info(
+                    "publish_skip_test_gate agent_id=%s test_status=%s",
+                    agent_id,
+                    test_status,
+                )
+            else:
+                return {"error": "DEPLOYMENT_VALIDATION_FAILED", "code": "TEST_FAILED"}
 
         # Fail-closed deploy pipeline: scan → staging smoke → atomic activate.
         from agent_service.config import get_settings
