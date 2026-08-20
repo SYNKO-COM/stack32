@@ -41,12 +41,15 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
       : "free";
   const plan = isPlanKey(planKeyRaw) ? PLANS[planKeyRaw] : PLANS.free;
   if (plan.maxAgents !== null) {
-    const { count } = await supabase
+    // Free: lifetime creations (incl. soft-deleted). Paid: active agents only.
+    let countQuery = supabase
       .from("agents")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .is("deleted_at", null)
-      .neq("status", "archived");
+      .eq("user_id", user.id);
+    if (plan.key !== "free") {
+      countQuery = countQuery.is("deleted_at", null).neq("status", "archived");
+    }
+    const { count } = await countQuery;
     if ((count ?? 0) >= plan.maxAgents) {
       throw new Error("PLAN_AGENT_LIMIT");
     }

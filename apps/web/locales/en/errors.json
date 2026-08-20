@@ -5,8 +5,9 @@
   "rateLimit": "Too many requests. Please wait a moment and try again.",
   "budgetExceeded": "Your monthly AI usage limit has been reached.",
   "plan": {
-    "agentLimit": "Your plan has reached its agent limit. Upgrade to create more agents.",
-    "workspaceLimit": "Your plan allows one workspace. Upgrade to add more."
+    "agentLimit": "Your free plan allows one agent for life — deleting it does not unlock another. Upgrade to create more.",
+    "workspaceLimit": "Your plan allows one workspace. Upgrade to add more.",
+    "liveMessageLimit": "Free plan allows 2 Agent IA messages. Upgrade to keep chatting."
   },
   "builder": {
     "inputRejected": "That message couldn't be processed. Try rephrasing your request.",

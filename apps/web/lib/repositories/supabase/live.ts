@@ -77,6 +77,30 @@ export class SupabaseLiveRepository implements LiveRepository {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("not_authenticated");
 
+    // Free plan: lifetime Live message cap (before insert).
+    const { PLANS, isPlanKey } = await import("@/lib/billing/plans");
+    const { PlanLimitError } = await import("@/lib/billing/plan-limit");
+    const { data: ent } = await supabase.rpc("resolve_user_entitlements", {
+      p_user_id: user.id,
+    });
+    const entRow = Array.isArray(ent) ? ent[0] : ent;
+    const planKeyRaw =
+      entRow && typeof entRow === "object" && "plan_key" in entRow
+        ? String((entRow as { plan_key: string }).plan_key)
+        : "free";
+    const plan = isPlanKey(planKeyRaw) ? PLANS[planKeyRaw] : PLANS.free;
+    if (plan.maxLiveMessages !== null) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("live_user_message_count")
+        .eq("id", user.id)
+        .maybeSingle();
+      const used = Number(profile?.live_user_message_count ?? 0);
+      if (used >= plan.maxLiveMessages) {
+        throw new PlanLimitError("PLAN_LIVE_MESSAGE_LIMIT");
+      }
+    }
+
     const messageId = crypto.randomUUID();
     const text = content.trim();
     const prepared =

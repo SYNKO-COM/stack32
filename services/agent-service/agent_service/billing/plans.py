@@ -20,6 +20,7 @@ class PlanDefinition:
     base_budget_usd: float
     max_workspaces: int | None
     max_agents: int | None
+    max_live_messages: int | None
     can_publish: bool
     can_monetize: bool
     beta_access: bool
@@ -30,10 +31,11 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         key="free",
         monthly_price_usd=0,
         annual_monthly_price_usd=0,
-        base_credits=25,
-        base_budget_usd=1.0,
+        base_credits=5,
+        base_budget_usd=0.2,
         max_workspaces=1,
         max_agents=1,
+        max_live_messages=2,
         can_publish=False,
         can_monetize=False,
         beta_access=False,
@@ -46,6 +48,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         base_budget_usd=6.0,
         max_workspaces=1,
         max_agents=5,
+        max_live_messages=None,
         can_publish=True,
         can_monetize=False,
         beta_access=False,
@@ -58,6 +61,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         base_budget_usd=11.0,
         max_workspaces=None,
         max_agents=30,
+        max_live_messages=None,
         can_publish=True,
         can_monetize=True,
         beta_access=True,
@@ -70,6 +74,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         base_budget_usd=21.0,
         max_workspaces=None,
         max_agents=None,
+        max_live_messages=None,
         can_publish=True,
         can_monetize=True,
         beta_access=True,

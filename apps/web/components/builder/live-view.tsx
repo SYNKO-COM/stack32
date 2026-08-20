@@ -22,7 +22,9 @@ import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
 import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-button";
 import { gatherSupportDiagnostic } from "@/lib/actions/support-diagnostic";
 import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
+import { isPlanLimitError } from "@/lib/billing/plan-limit";
 import type { LiveMessage } from "@/lib/domain/types";
+import { useUiStore } from "@/store/ui-store";
 import { cn } from "@/lib/utils";
 
 function LiveBubble({
@@ -246,6 +248,7 @@ export function LiveView({
 }) {
   const { t } = useTranslation(["live", "builder"]);
   const queryClient = useQueryClient();
+  const openDialog = useUiStore((s) => s.openDialog);
   const { data: agent } = useAgent(agentId);
   const { data: spec } = useAgentSpec(agentId);
   const { data: thread } = useLiveThread(agentId);
@@ -376,7 +379,9 @@ export function LiveView({
           draftKey={`live:${agentId}`}
           onSubmit={(value, attachments) => {
             if (busy) return;
-            void sendMessage.mutateAsync({ content: value, attachments });
+            void sendMessage.mutateAsync({ content: value, attachments }).catch((error) => {
+              if (isPlanLimitError(error)) openDialog("upgrade");
+            });
           }}
           onStop={() => {
             void cancelRun.mutateAsync(runId);

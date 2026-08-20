@@ -70,19 +70,19 @@ export function WhopCheckoutClient({
   const [acceptedImmediate, setAcceptedImmediate] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const canProceed = acceptedTerms && acceptedImmediate;
   const priced = pricePlanSelection(planKey, interval, creditsMonthly);
   const locale = i18n.language || "en";
-  const amountLabel = new Intl.NumberFormat(locale.startsWith("fr") ? "fr-FR" : "en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(priced.chargeUsd);
-  const monthlyLabel = new Intl.NumberFormat(locale.startsWith("fr") ? "fr-FR" : "en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(priced.displayMonthlyUsd);
+  const money = (value: number) =>
+    new Intl.NumberFormat(locale.startsWith("fr") ? "fr-FR" : "en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(value);
+  const amountLabel = money(priced.chargeUsd);
+  const monthlyLabel = money(priced.displayMonthlyUsd);
   const planName = t(`marketing:pricing.${planKey}.name`);
   const featureItems = t(`marketing:pricing.${planKey}.features`, { returnObjects: true });
   const features = [
@@ -193,10 +193,22 @@ export function WhopCheckoutClient({
                   themeOptions={{ backgroundColor: whopBackground }}
                   returnUrl={`${site}/billing/success`}
                   setupFutureUsage="off_session"
+                  onPaymentError={(err) => {
+                    setPaymentError(err.message);
+                  }}
+                  onAddressValidationError={(addressError) => {
+                    setPaymentError(addressError.error_message);
+                  }}
                   onComplete={() => {
+                    setPaymentError(null);
                     router.push("/billing/success");
                   }}
                 />
+                {paymentError ? (
+                  <div className="border-t border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    {paymentError}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -208,7 +220,7 @@ export function WhopCheckoutClient({
           </div>
 
           <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-5">
-            <div>
+            <div className="rounded-2xl border border-border/70 bg-background p-4">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 {t("billing:checkout.planLabel")}
               </p>
@@ -232,31 +244,20 @@ export function WhopCheckoutClient({
               >
                 {t("billing:checkout.changePlan")}
               </Link>
-            </div>
 
-            <div className="rounded-2xl border border-border/70 bg-background p-4">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                {t("billing:checkout.dueToday")}
-              </p>
-              <p className="mt-1 text-2xl font-semibold tracking-tight">{amountLabel}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("marketing:pricing.creditsPerMonth", { count: creditsMonthly })}
-                {interval === "annual" ? ` · ${t("billing:checkout.perYear")}` : ""}
-              </p>
+              <ul className="mt-4 space-y-2 border-t border-border/60 pt-4">
+                {features.slice(0, 6).map((feature) => (
+                  <li key={feature} className="flex items-start gap-2 text-sm">
+                    <Check className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-
-            <ul className="space-y-2">
-              {features.slice(0, 6).map((feature) => (
-                <li key={feature} className="flex items-start gap-2 text-sm">
-                  <Check className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
 
             <div
               className={cn(
-                "mt-auto space-y-3 rounded-2xl border p-4",
+                "space-y-3 rounded-2xl border p-4",
                 canProceed
                   ? "border-border/70 bg-background"
                   : "border-brand/25 bg-brand/[0.04]",

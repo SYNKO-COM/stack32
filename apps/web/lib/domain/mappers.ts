@@ -93,7 +93,18 @@ export function mapSupabaseUser(u: {
   };
 }
 
-export function mapProfile(row: ProfileRow, onboarding?: OnboardingRow | null): Profile {
+export function mapProfile(
+  row: Pick<
+    ProfileRow,
+    | "id"
+    | "first_name"
+    | "phone"
+    | "username"
+    | "locale"
+    | "onboarding_completed"
+  >,
+  onboarding?: OnboardingRow | null,
+): Profile {
   return {
     userId: row.id,
     firstName: row.first_name ?? undefined,

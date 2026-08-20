@@ -228,8 +228,9 @@
       "description": "Découvrez Stack32 et construisez un premier agent pour tester le produit.",
       "features": [
         "1 workspace",
-        "1 agent (non publiable)",
-        "25 crédits Builder / mois",
+        "1 agent (non publiable, à vie)",
+        "5 crédits Builder / mois",
+        "2 messages Agent IA",
         "Vues Build, Live et Structure",
         "Live avec votre propre clé LLM (BYOK)",
         "Support communautaire"

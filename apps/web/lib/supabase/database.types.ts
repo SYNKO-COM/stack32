@@ -1989,6 +1989,7 @@ export type Database = {
           first_name: string | null
           full_name: string | null
           id: string
+          live_user_message_count: number
           locale: string
           onboarding_completed: boolean
           onboarding_completed_at: string | null
@@ -2003,6 +2004,7 @@ export type Database = {
           first_name?: string | null
           full_name?: string | null
           id: string
+          live_user_message_count?: number
           locale?: string
           onboarding_completed?: boolean
           onboarding_completed_at?: string | null
@@ -2017,6 +2019,7 @@ export type Database = {
           first_name?: string | null
           full_name?: string | null
           id?: string
+          live_user_message_count?: number
           locale?: string
           onboarding_completed?: boolean
           onboarding_completed_at?: string | null

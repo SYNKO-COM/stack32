@@ -21,6 +21,12 @@ class BudgetExceeded(Exception):
         super().__init__(self.code)
 
 
+class PlanLimitExceeded(Exception):
+    def __init__(self, code: str = "PLAN_LIVE_MESSAGE_LIMIT") -> None:
+        self.code = code
+        super().__init__(code)
+
+
 async def check_user_rate_limit(user_id: str) -> None:
     settings = get_settings()
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
@@ -187,3 +193,57 @@ async def check_concurrent_runs(
         raise
     except Exception:  # noqa: BLE001
         logger.debug("concurrent run check skipped")
+
+
+async def check_live_message_limit(user_id: str) -> None:
+    """Free plan: max Live (Agent IA) user messages for the account lifetime."""
+    from agent_service.billing.plans import PLANS
+
+    settings = get_settings()
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
+        if settings.ENVIRONMENT in {"production", "production-like"}:
+            raise PlanLimitExceeded("PLAN_LIVE_MESSAGE_LIMIT")
+        return
+
+    try:
+        from agent_service.supabase_client import get_supabase_admin_client
+
+        async with get_supabase_admin_client() as client:
+            ent = await client.post(
+                "/rpc/resolve_user_entitlements",
+                json={"p_user_id": user_id},
+            )
+            plan_key = "free"
+            if ent.status_code < 400:
+                payload = ent.json()
+                row = payload[0] if isinstance(payload, list) and payload else payload
+                if isinstance(row, dict) and row.get("plan_key"):
+                    plan_key = str(row["plan_key"])
+            plan = PLANS.get(plan_key) or PLANS["free"]  # type: ignore[index]
+            max_messages = plan.max_live_messages
+            if max_messages is None:
+                return
+
+            profile = await client.get(
+                "/profiles",
+                params={
+                    "id": f"eq.{user_id}",
+                    "select": "live_user_message_count",
+                    "limit": "1",
+                },
+            )
+            count = 0
+            if profile.status_code < 400:
+                rows = profile.json() or []
+                if rows and isinstance(rows[0], dict):
+                    count = int(rows[0].get("live_user_message_count") or 0)
+            # Web inserts the user turn before this check — allow count == max.
+            if count > max_messages:
+                raise PlanLimitExceeded("PLAN_LIVE_MESSAGE_LIMIT")
+    except PlanLimitExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        if settings.ENVIRONMENT in {"production", "production-like"}:
+            logger.error("live message limit check failed closed: %s", type(exc).__name__)
+            raise PlanLimitExceeded("PLAN_LIVE_MESSAGE_LIMIT") from exc
+        logger.debug("live message limit check skipped")

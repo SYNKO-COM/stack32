@@ -26,8 +26,10 @@ export interface PlanDefinition {
   baseBudgetUsd: number;
   /** Max product workspaces (null = unlimited). */
   maxWorkspaces: number | null;
-  /** Max agents (null = unlimited). */
+  /** Max agents (null = unlimited). Free counts lifetime creations (incl. deleted). */
   maxAgents: number | null;
+  /** Max Live (Agent IA) user messages (null = unlimited). */
+  maxLiveMessages: number | null;
   canPublish: boolean;
   canMonetize: boolean;
   betaAccess: boolean;
@@ -39,10 +41,11 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     key: "free",
     monthlyPriceUsd: 0,
     annualMonthlyPriceUsd: 0,
-    baseCredits: 25,
-    baseBudgetUsd: 1,
+    baseCredits: 5,
+    baseBudgetUsd: 0.2,
     maxWorkspaces: 1,
     maxAgents: 1,
+    maxLiveMessages: 2,
     canPublish: false,
     canMonetize: false,
     betaAccess: false,
@@ -56,6 +59,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     baseBudgetUsd: 6,
     maxWorkspaces: 1,
     maxAgents: 5,
+    maxLiveMessages: null,
     canPublish: true,
     canMonetize: false,
     betaAccess: false,
@@ -70,6 +74,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     baseBudgetUsd: 11,
     maxWorkspaces: null,
     maxAgents: 30,
+    maxLiveMessages: null,
     canPublish: true,
     canMonetize: true,
     betaAccess: true,
@@ -84,6 +89,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     baseBudgetUsd: 21,
     maxWorkspaces: null,
     maxAgents: null,
+    maxLiveMessages: null,
     canPublish: true,
     canMonetize: true,
     betaAccess: true,

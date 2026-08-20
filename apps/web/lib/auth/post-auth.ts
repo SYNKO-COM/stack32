@@ -76,7 +76,7 @@ export function safeNextPath(raw: string | null | undefined): string | null {
 
 /**
  * Only a pricing checkout should skip the post-onboarding plan picker.
- * `/agents` (OAuth default) and other app paths must still see the offers.
+ * `/agents` (OAuth default) and other app paths still see the offers first.
  */
 export function isCheckoutNext(path: string | null | undefined): boolean {
   const next = safeNextPath(path);

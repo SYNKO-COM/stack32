@@ -12,9 +12,11 @@ from agent_service.auth import CurrentUser
 from agent_service.runtime.live import LiveRuntime
 from agent_service.security.rate_limit import (
     BudgetExceeded,
+    PlanLimitExceeded,
     RateLimitExceeded,
     check_concurrent_runs,
     check_installation_rate_limit,
+    check_live_message_limit,
     check_monthly_budget,
     check_user_rate_limit,
 )
@@ -51,11 +53,17 @@ async def post_live_message(
     try:
         await check_user_rate_limit(user.user_id)
         await check_monthly_budget(user.user_id)
+        await check_live_message_limit(user.user_id)
         await check_concurrent_runs(user_id=user.user_id, kind="live")
     except RateLimitExceeded as exc:
         raise HTTPException(status_code=429, detail={"code": exc.code, "message": "Rate limit."}) from exc
     except BudgetExceeded as exc:
         raise HTTPException(status_code=402, detail={"code": exc.code, "message": "Budget exceeded."}) from exc
+    except PlanLimitExceeded as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": exc.code, "message": "Live message limit reached."},
+        ) from exc
 
     db = get_persistence()
     rows = await db._select(
