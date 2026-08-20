@@ -56,17 +56,17 @@ class Settings(BaseSettings):
     LITELLM_CONFIG_PATH: str = ""
     MODEL_CONFIG_PATH: str = "services/model-gateway/config/models.yaml"
 
-    MODEL_FAST_PRIMARY: str = "openai/gpt-4.1-mini"
-    MODEL_FAST_FALLBACK: str = "xai/grok-3-mini"
-    MODEL_BALANCED_PRIMARY: str = "openai/gpt-4.1-mini"
-    MODEL_BALANCED_FALLBACK: str = "xai/grok-3-mini"
-    MODEL_REASONING_PRIMARY: str = "xai/grok-4.5"
-    MODEL_REASONING_FALLBACK: str = "openai/gpt-4.1"
+    MODEL_FAST_PRIMARY: str = "openai/gpt-5.4-mini"
+    MODEL_FAST_FALLBACK: str = "xai/grok-4"
+    MODEL_BALANCED_PRIMARY: str = "openai/gpt-5.4"
+    MODEL_BALANCED_FALLBACK: str = "xai/grok-4.5"
+    MODEL_REASONING_PRIMARY: str = "openai/gpt-5.4"
+    MODEL_REASONING_FALLBACK: str = "xai/grok-4.5"
     # Coding profiles — prefer stable chat models (gpt-5.1-codex returns BadRequest on many keys)
-    MODEL_CODING_PRIMARY: str = "openai/gpt-4.1"
+    MODEL_CODING_PRIMARY: str = "openai/gpt-5.4"
     MODEL_CODING_FALLBACK: str = "xai/grok-code-fast-1"
-    MODEL_VALIDATOR_PRIMARY: str = "openai/gpt-4.1-mini"
-    MODEL_VALIDATOR_FALLBACK: str = "xai/grok-3-mini"
+    MODEL_VALIDATOR_PRIMARY: str = "openai/gpt-5.4-mini"
+    MODEL_VALIDATOR_FALLBACK: str = "xai/grok-4"
     MODEL_EMBEDDING_PRIMARY: str = "openai/text-embedding-3-small"
     EMBEDDING_DIMENSION: int = 1536
 

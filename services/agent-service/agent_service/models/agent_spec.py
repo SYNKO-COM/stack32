@@ -149,12 +149,31 @@ class MemoryConfig(BaseModel):
     # M3: memory provider selection. Default = Stack32 zero-config memory.
     provider: MemoryProviderName = "stack32"
     external_config_id: str | None = Field(default=None, max_length=64)
+    # Pipedream app slug when provider=external_postgres (postgresql, supabase, …).
+    external_app_id: str | None = Field(default=None, max_length=128)
+    # Free-form instructions the Live agent must follow for the external DB.
+    external_instructions: str | None = Field(default=None, max_length=4000)
     conversation_enabled: bool = True
     semantic_enabled: bool = False
     retention_days: int = Field(default=90, ge=1, le=3650)
     max_memory_items: int = Field(default=200, ge=0, le=5000)
     write_policy: WritePolicy = "explicit"
     conversation_window: int = Field(default=12, ge=1, le=100)
+
+    def system_addon(self) -> str:
+        """Extra system text when memory is backed by an external Pipedream database."""
+        if self.provider != "external_postgres":
+            return ""
+        app = (self.external_app_id or "database").strip() or "database"
+        bits = [
+            f"External memory uses a Pipedream-connected database ({app}).",
+            "You must configure and use that database yourself with the available tools.",
+            "Do not invent rows or claim writes succeeded without calling a tool.",
+        ]
+        notes = (self.external_instructions or "").strip()
+        if notes:
+            bits.append(f"User instructions for this database:\n{notes}")
+        return "\n".join(bits)
 
 
 class AgentRule(BaseModel):

@@ -42,6 +42,7 @@ export async function listAgentConnections(agentId: string): Promise<{
   if (currentAiExecutionMode() !== "agent-service") {
     return { bindings: [], connections: [] };
   }
+  try {
   const accessToken = await requireAccessToken();
   const result = await agentServiceFetch<{
     bindings: Array<{ connection_id: string; tool_ids: string[]; enabled: boolean }>;
@@ -51,7 +52,11 @@ export async function listAgentConnections(agentId: string): Promise<{
     accessToken,
   });
   return {
-    bindings: result.bindings ?? [],
+    bindings: (result.bindings ?? []).map((b) => ({
+      connection_id: b.connection_id,
+      tool_ids: Array.isArray(b.tool_ids) ? b.tool_ids : [],
+      enabled: b.enabled !== false,
+    })),
     connections: (result.connections ?? []).map((c) => {
       const meta =
         c.provider_metadata && typeof c.provider_metadata === "object"
@@ -73,6 +78,9 @@ export async function listAgentConnections(agentId: string): Promise<{
       };
     }),
   };
+  } catch {
+    return { bindings: [], connections: [] };
+  }
 }
 
 export async function revokeConnection(connectionId: string): Promise<{ revoked: boolean }> {

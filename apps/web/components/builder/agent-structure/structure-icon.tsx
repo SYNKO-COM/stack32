@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Pause, Send, X } from "lucide-react";
+import { Check, Clock, Loader2, Pause, Send, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getCachedIntegrationIcon } from "@/lib/integrations/icon-resolver";
@@ -69,7 +69,7 @@ export function toneBorderColor(tone: StructureTone, status: string): string {
 
 const KIND_SLOT: Record<string, string> = {
   trigger_chat: "chat",
-  trigger_schedule: "chat",
+  trigger_schedule: "schedule",
   agent: "agent",
   memory: "memory",
   model: "model",
@@ -128,12 +128,14 @@ export function StructureKindIcon({
 }) {
   const tone = statusToTone(status);
   const slot = KIND_SLOT[kind] ?? "agent";
-  // Orange pack has no dedicated output asset — compose ring + plane.
-  const composeOutput = slot === "output" && tone === "orange";
+  // Compose ring + glyph when we have no dedicated PNG for that slot/tone.
+  const composeGlyph =
+    slot === "schedule" || (slot === "output" && tone === "orange");
+  const Glyph = slot === "schedule" ? Clock : Send;
 
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
-      {composeOutput ? (
+      {composeGlyph ? (
         <span className="relative flex size-full items-center justify-center">
           <img
             src={ringSrc(tone)}
@@ -141,7 +143,7 @@ export function StructureKindIcon({
             draggable={false}
             className="pointer-events-none absolute inset-0 size-full object-contain"
           />
-          <Send
+          <Glyph
             className="relative z-[1] size-[38%]"
             style={{ color: STRUCTURE_COLORS[tone].icon }}
             strokeWidth={2.25}

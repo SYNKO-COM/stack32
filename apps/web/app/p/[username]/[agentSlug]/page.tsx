@@ -1,110 +1,91 @@
-"use client";
+import type { Metadata } from "next";
 
-import { useQuery } from "@tanstack/react-query";
-import { Heart, Loader2 } from "lucide-react";
-import { useParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { JsonLd } from "@/components/seo/json-ld";
+import { resolvePublishedAgentAction } from "@/lib/actions/public-agents";
+import { buildPageMetadata, publicAgentJsonLd, SITE_NAME } from "@/lib/seo";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-import { AgentIaView } from "@/components/builder/agent-ia-view";
-import { RequireAuth } from "@/components/auth/require-auth";
-import { AnimatedBackground } from "@/components/shared/animated-background";
-import { BrandLoader } from "@/components/shared/brand-loader";
-import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/hooks/use-translation";
-import {
-  openPublishedAgentAction,
-  toggleFavoriteAction,
-} from "@/lib/actions/public-agents";
-import type { PublicAgentDto } from "@/lib/domain/types";
-import { cn } from "@/lib/utils";
+import { PublicAgentClient } from "./public-agent-client";
 
-function PublicAgentContent() {
-  const { t } = useTranslation(["common", "errors"]);
-  const params = useParams<{ username: string; agentSlug: string }>();
-  const username = decodeURIComponent(params.username ?? "").toLowerCase();
-  const agentSlug = decodeURIComponent(params.agentSlug ?? "").toLowerCase();
+type PageProps = {
+  params: Promise<{ username: string; agentSlug: string }>;
+};
 
-  const query = useQuery({
-    queryKey: ["public-agent", username, agentSlug],
-    queryFn: () => openPublishedAgentAction(username, agentSlug),
-    retry: false,
-  });
-
-  const [favoriteOverride, setFavoriteOverride] = useState<boolean | null>(null);
-  const [pending, startTransition] = useTransition();
-  const favorited = favoriteOverride ?? query.data?.favorited ?? false;
-
-  if (query.isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <BrandLoader label={t("common:loading")} size="lg" />
-      </div>
-    );
+async function loadAgent(username: string, agentSlug: string) {
+  try {
+    return await resolvePublishedAgentAction(username, agentSlug);
+  } catch {
+    return null;
   }
-
-  if (query.isError || !query.data) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t("errors:agentNotFound.title")}
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-muted-foreground">
-          {t("errors:agentNotFound.subtitle")}
-        </p>
-      </div>
-    );
-  }
-
-  const agent: PublicAgentDto = query.data.agent;
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-6">
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold">{agent.name}</h1>
-          <p className="truncate text-xs text-muted-foreground">
-            @{agent.creatorUsername}/{agent.slug}
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          disabled={pending}
-          onClick={() => {
-            startTransition(async () => {
-              const result = await toggleFavoriteAction(agent.agentId, favorited);
-              setFavoriteOverride(result.favorited);
-            });
-          }}
-        >
-          {pending ? (
-            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Heart
-              className={cn("size-3.5", favorited && "fill-current text-brand")}
-              aria-hidden="true"
-            />
-          )}
-          {favorited ? t("common:myAgents.unfavorite") : t("common:myAgents.favorite")}
-        </Button>
-      </header>
-      <div className="min-h-0 flex-1">
-        <AgentIaView agentId={agent.agentId} mode="consumer" />
-      </div>
-    </div>
-  );
 }
 
-export default function PublicAgentPage() {
+async function loadIsAuthenticated(): Promise<boolean> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    if (!supabase) return false;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return Boolean(user);
+  } catch {
+    return false;
+  }
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { username: rawUser, agentSlug: rawSlug } = await params;
+  const username = decodeURIComponent(rawUser ?? "").toLowerCase();
+  const agentSlug = decodeURIComponent(rawSlug ?? "").toLowerCase();
+  const path = `/@${username}/${agentSlug}`;
+  const agent = await loadAgent(username, agentSlug);
+
+  if (!agent) {
+    return buildPageMetadata({
+      title: "Agent not found",
+      description: "This Stack32 agent does not exist or is no longer published.",
+      path,
+      noIndex: true,
+    });
+  }
+
+  const description =
+    agent.description?.trim() ||
+    `${agent.name} — AI agent by @${agent.creatorUsername} on ${SITE_NAME}. Describe what you need; Stack32 builds agents you can use immediately.`;
+
+  return buildPageMetadata({
+    title: `${agent.name} · @${agent.creatorUsername}`,
+    description,
+    path,
+  });
+}
+
+export default async function PublicAgentPage({ params }: PageProps) {
+  const { username: rawUser, agentSlug: rawSlug } = await params;
+  const username = decodeURIComponent(rawUser ?? "").toLowerCase();
+  const agentSlug = decodeURIComponent(rawSlug ?? "").toLowerCase();
+  const [agent, initialAuthenticated] = await Promise.all([
+    loadAgent(username, agentSlug),
+    loadIsAuthenticated(),
+  ]);
+
   return (
-    <RequireAuth>
-      <div className="relative flex h-svh overflow-hidden">
-        <AnimatedBackground variant="editor" />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <PublicAgentContent />
-        </div>
-      </div>
-    </RequireAuth>
+    <>
+      {agent ? (
+        <JsonLd
+          data={publicAgentJsonLd({
+            name: agent.name,
+            description: agent.description,
+            path: `/@${agent.creatorUsername}/${agent.slug}`,
+            creatorUsername: agent.creatorUsername,
+          })}
+        />
+      ) : null}
+      <PublicAgentClient
+        agent={agent}
+        username={username}
+        agentSlug={agentSlug}
+        initialAuthenticated={initialAuthenticated}
+      />
+    </>
   );
 }

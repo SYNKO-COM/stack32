@@ -29,7 +29,7 @@ function composerToMessageAttachments(
 }
 
 /** True while the builder is still producing progressive updates. */
-function isThreadActive(thread: BuilderThread | undefined): boolean {
+export function isThreadActive(thread: BuilderThread | undefined): boolean {
   if (!thread) return false;
   const last = thread.messages[thread.messages.length - 1];
   if (!last) return false;
@@ -86,8 +86,9 @@ export function useBuilderThread(agentId: string, opts?: { forcePoll?: boolean }
     // Keep polling after a form submit even if the user switches tabs — otherwise
     // production waits on Cloud Tasks / a slow identity resume with no client fetch.
     refetchIntervalInBackground: Boolean(opts?.forcePoll),
-    refetchOnWindowFocus: (query) =>
-      Boolean(opts?.forcePoll) || isThreadActive(query.state.data),
+    // Never refetch on tab focus — remounting the working panel looked like a
+    // "reload to zero" and felt like a full page refresh.
+    refetchOnWindowFocus: false,
     staleTime: 12_000,
     notifyOnChangeProps: ["data", "error", "isPending"],
   });
@@ -105,6 +106,7 @@ export function useSendBuilderMessage(agentId: string) {
     onMutate: async (input) => {
       const content = typeof input === "string" ? input : input.content;
       const attachments = typeof input === "string" ? undefined : input.attachments;
+      const mode = typeof input === "string" ? "build" : (input.mode ?? "build");
       await queryClient.cancelQueries({ queryKey: ["builder", agentId] });
       await queryClient.cancelQueries({ queryKey: ["agents", agentId] });
       const previous = queryClient.getQueryData<BuilderThread>(["builder", agentId]);
@@ -115,6 +117,7 @@ export function useSendBuilderMessage(agentId: string) {
           role: "user",
           content,
           attachments: composerToMessageAttachments(attachments),
+          interactionMode: mode,
           createdAt: new Date().toISOString(),
         };
         queryClient.setQueryData<BuilderThread>(["builder", agentId], {
@@ -122,7 +125,6 @@ export function useSendBuilderMessage(agentId: string) {
           messages: [...previous.messages, optimistic],
         });
       }
-      const mode = typeof input === "string" ? "build" : (input.mode ?? "build");
       // Chat mode must not flip the agent into "building".
       if (mode === "build") {
         queryClient.setQueryData(["agents", agentId], (old: { status?: string } | undefined) =>

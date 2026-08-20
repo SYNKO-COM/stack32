@@ -20,6 +20,7 @@ class _FakeDB:
             }
         }
         self.installs: dict[tuple[str, str], dict] = {}
+        self.access_requests: list[dict] = []
         self.audits: list[dict] = []
 
     async def _select(self, table: str, params: dict[str, str]):
@@ -43,6 +44,17 @@ class _FakeDB:
             if status and row.get("status") != status:
                 return []
             return [row]
+        if table == "agent_access_requests":
+            agent = (params.get("agent_id") or "").replace("eq.", "")
+            requester = (params.get("requester_id") or "").replace("eq.", "")
+            status = (params.get("status") or "").replace("eq.", "")
+            return [
+                row
+                for row in self.access_requests
+                if row.get("agent_id") == agent
+                and row.get("requester_id") == requester
+                and (not status or row.get("status") == status)
+            ]
         return []
 
     async def get_owned_agent(self, agent_id: str, user_id: str):
@@ -132,6 +144,53 @@ async def test_consumer_cannot_steal_owner_install(monkeypatch):
     consumer = await svc.get_or_create(user_id="consumer", agent_id="def-1")
     assert consumer["user_id"] == "consumer"
     assert consumer["id"] != "inst-owner"
+
+
+@pytest.mark.asyncio
+async def test_private_published_agent_requires_approval(monkeypatch):
+    db = _FakeDB()
+    db.agents["def-1"]["status"] = "published"
+    db.agents["def-1"]["listing_visibility"] = "private"
+    svc = InstallationService(db)  # type: ignore[arg-type]
+
+    with pytest.raises(InstallationError) as exc:
+        await svc.get_or_create(user_id="consumer", agent_id="def-1")
+    assert exc.value.code == "AGENT_NOT_INSTALLABLE"
+
+    db.access_requests.append(
+        {
+            "agent_id": "def-1",
+            "requester_id": "consumer",
+            "status": "approved",
+        }
+    )
+
+    class _Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, path, json=None, headers=None):
+            key = (json["user_id"], json["agent_id"])
+            db.installs[key] = json
+
+            class R:
+                status_code = 201
+
+                def json(self_inner):
+                    return [json]
+
+            return R()
+
+    monkeypatch.setattr(
+        "agent_service.installations.service.get_supabase_admin_client",
+        lambda: _Client(),
+    )
+
+    created = await svc.get_or_create(user_id="consumer", agent_id="def-1")
+    assert created["user_id"] == "consumer"
 
 
 @pytest.mark.asyncio

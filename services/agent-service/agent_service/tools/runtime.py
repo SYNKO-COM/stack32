@@ -182,7 +182,14 @@ async def execute_native_tool(
             value = _safe_eval(CalculatorInput.model_validate(args).expression)
             return {"value": value}
         if tool_id == "current_datetime":
-            return {"iso": datetime.now(UTC).isoformat(), "timezone": "UTC"}
+            from agent_service.runtime.datetime_context import current_datetime_snapshot
+
+            tz = None
+            if isinstance(context, dict):
+                tz = context.get("timezone") or context.get("schedule_timezone")
+            return current_datetime_snapshot(
+                str(tz) if tz else None
+            )
         if tool_id == "structured_output":
             payload = StructuredOutputInput.model_validate(args)
             if len(str(payload.data)) > 50_000:
@@ -444,6 +451,25 @@ async def _web_search(inp: WebSearchInput) -> dict[str, Any]:
 
 async def _fetch_url(inp: FetchUrlInput) -> dict[str, Any]:
     import httpx
+    from urllib.parse import urlparse
+
+    raw_url = (inp.url or "").strip()
+    host = (urlparse(raw_url).hostname or "").lower()
+    path = (urlparse(raw_url).path or "").lower()
+    # Google Maps / Google listing HTML scrapes fail (redirects / blocks) and cause
+    # Live TOOL_FAILED loops — force the agent toward Maps API actions instead.
+    maps_host = (
+        host.endswith("google.com")
+        and ("maps" in host or path.startswith("/maps") or "maps" in path)
+    ) or host.endswith("maps.google.com") or host.endswith("goo.gl") or host.endswith(
+        "maps.app.goo.gl"
+    )
+    if maps_host or "google.com/maps" in raw_url.lower():
+        raise ToolError(
+            "FETCH_URL_GOOGLE_BLOCKED",
+            "Do not scrape Google Maps HTML with fetch_url. Use google_maps_platform "
+            "search-places / get-place-details instead.",
+        )
 
     url = validate_public_http_url(inp.url)
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as client:

@@ -1,7 +1,8 @@
 {
   "tabs": {
     "build": "Build",
-    "agent": "Agent IA"
+    "agent": "Agent IA",
+    "settings": "Paramètres"
   },
   "structurePanel": {
     "title": "Structure exécutable",
@@ -216,9 +217,10 @@
     "warning": "J’ai appliqué les changements, mais le test rapide a signalé un petit souci. On peut corriger, ou tu continues à itérer ici."
   },
   "secrets": {
-    "prompt": "Pour que votre agent puisse réfléchir, connectez un cerveau (LLM) avec votre clé API.\n\nChoisissez un fournisseur, collez votre clé, puis enregistrez. Elle est chiffrée et ne sera plus jamais affichée en entier.",
-    "saved": "C'est enregistré.\n\nVotre clé est bien prise en compte.",
+    "prompt": "Pour que votre agent puisse réfléchir, connectez un cerveau (LLM) avec Pipedream.\n\nChoisissez un fournisseur, connectez votre compte, puis continuez. Stack32 ne stocke jamais votre clé API.",
+    "saved": "C'est enregistré.\n\nVotre connexion LLM est bien prise en compte.",
     "secureNotice": "Votre clé est chiffrée et utilisée uniquement pour faire fonctionner cet agent.",
+    "pipedreamNotice": "Connectez votre fournisseur LLM avec Pipedream. Stack32 utilise ce compte de façon sécurisée — vous ne collez plus de clé API ici.",
     "provider": "Fournisseur",
     "apiKey": "Clé API",
     "apiKeyPlaceholder": "Collez votre clé ici",
@@ -377,6 +379,9 @@
   "errors": {
     "buildFailed": "La construction s'est arrêtée.",
     "buildFailedDetail": "Je n'ai pas pu terminer cette construction. Vous pouvez réessayer, reformuler, ou me demander de corriger.",
+    "buildStuck": "Construction bloquée.",
+    "buildStuckDetail": "Aucune progression depuis un moment — j’ai arrêté la course bloquée. Renvoyez votre demande pour continuer.",
+    "promptMissing": "La construction n’a pas pu continuer (prompt manquant après un formulaire). Renvoyez votre demande.",
     "serviceUnavailable": "Le service de construction est momentanément indisponible. Réessayez dans un instant.",
     "validationFailed": "La configuration de l'agent n'est pas valide. Reformulez ou demandez une correction.",
     "canceled": "Arrêté.",
@@ -404,6 +409,12 @@
     "building": "Construction de l'agent",
     "repairing": "Correction de l'agent",
     "complete": "Construction terminée"
+  },
+  "workspaceNav": {
+    "label": "Sections de l'espace de travail",
+    "create": "Créer",
+    "library": "Mes agents",
+    "dashboard": "Tableau de bord"
   },
   "workspace": {
     "label": "Workspace",

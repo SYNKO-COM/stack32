@@ -6,7 +6,13 @@ import Script from "next/script";
 import { Providers } from "@/components/providers/providers";
 import { CONSENT_COOKIE, parseConsentCookie } from "@/lib/consent";
 import { LOCALE_COOKIE, readLocaleCookie } from "@/lib/i18n/locales";
-import { SITE_URL } from "@/lib/site";
+import {
+  DEFAULT_DESCRIPTION,
+  DEFAULT_OG_IMAGE,
+  DEFAULT_TITLE,
+  getCanonicalSiteUrl,
+  SITE_NAME,
+} from "@/lib/seo";
 import { readThemeCookie, THEME_COOKIE, themeInitScript } from "@/lib/theme";
 import "./globals.css";
 
@@ -34,15 +40,46 @@ const caveat = Caveat({
   weight: ["500", "700"],
 });
 
+const siteUrl = getCanonicalSiteUrl();
+
 export const metadata: Metadata = {
   title: {
-    default: "Stack32 — Build your next AI agent",
-    template: "%s · Stack32",
+    default: DEFAULT_TITLE,
+    template: `%s · ${SITE_NAME}`,
   },
-  description:
-    "Describe the agent you need. Stack32 builds the agent, tests it and makes it ready to use.",
-  applicationName: "Stack32",
-  metadataBase: new URL(SITE_URL),
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  metadataBase: new URL(siteUrl),
+  alternates: {
+    canonical: `${siteUrl}/`,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    url: `${siteUrl}/`,
+    locale: "en_US",
+    alternateLocale: ["fr_FR"],
+    images: [{ url: DEFAULT_OG_IMAGE, alt: SITE_NAME }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE],
+  },
   icons: {
     icon: [{ url: "/favicon.png", type: "image/png", sizes: "512x512" }],
     apple: [{ url: "/apple-icon.png", type: "image/png", sizes: "180x180" }],

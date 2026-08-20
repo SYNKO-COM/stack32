@@ -1,23 +1,31 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DaSelect } from "@/components/ui/da-select";
 import { Label } from "@/components/ui/label";
 import { useTranslation } from "@/hooks/use-translation";
-import { LLM_PROVIDERS, modelsForProvider } from "@/lib/ai/llm-catalog";
+import {
+  LIVE_LLM_PROVIDERS,
+  modelsForProvider,
+  pipedreamAppForLlmProvider,
+  type LiveLlmProviderId,
+} from "@/lib/ai/llm-catalog";
 import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
-import { submitLiveLlmSecret, updateAgentModel } from "@/lib/actions/builder";
+import { updateAgentModel } from "@/lib/actions/builder";
+import { listAgentConnections } from "@/lib/actions/connections";
 import type { ProductNode } from "@/lib/domain/product-agent-graph";
-import { cn } from "@/lib/utils";
 
-const selectClass = cn(
-  "flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-);
+function normalizeLiveProvider(raw: string | undefined): LiveLlmProviderId {
+  const value = (raw || "openai").toLowerCase();
+  return (LIVE_LLM_PROVIDERS as readonly string[]).includes(value)
+    ? (value as LiveLlmProviderId)
+    : "openai";
+}
 
 export function ModelConfigForm({
   agentId,
@@ -30,13 +38,15 @@ export function ModelConfigForm({
 }) {
   const { t } = useTranslation(["structure", "builder", "errors"]);
   const queryClient = useQueryClient();
+  const { data: connectionPayload, isFetching: connectionsLoading } = useQuery({
+    queryKey: ["connections", agentId],
+    queryFn: () => listAgentConnections(agentId),
+  });
   const current = node.subtitle?.split(" · ") ?? [];
-  const [provider, setProvider] = useState(
-    () => current[0]?.toLowerCase() || "openai",
+  const [provider, setProvider] = useState<LiveLlmProviderId>(() =>
+    normalizeLiveProvider(current[0]),
   );
   const [modelId, setModelId] = useState(() => current[1] ?? "");
-  const [apiKey, setApiKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -45,22 +55,40 @@ export function ModelConfigForm({
   const resolvedModelId = models.some((m) => m.id === modelId)
     ? modelId
     : (models[0]?.id ?? "");
+  const appId = pipedreamAppForLlmProvider(provider);
+
+  const connection = useMemo(() => {
+    const list = connectionPayload?.connections ?? [];
+    const aliases = new Set(
+      [appId, provider, ...(provider === "mistral" ? ["mistral_ai", "mistral"] : [])].map((s) =>
+        s.toLowerCase(),
+      ),
+    );
+    return list.find((c) => {
+      const status = String(c.status || "").toLowerCase();
+      if (!["active", "connected", "ok"].includes(status)) return false;
+      const metaApp = String(c.app_id || "").toLowerCase();
+      return aliases.has(metaApp);
+    });
+  }, [connectionPayload, appId, provider]);
+
+  const connected = Boolean(connection);
+  const connectStatus = connected
+    ? "connected"
+    : connectionsLoading
+      ? "needs_setup"
+      : "disconnected";
 
   const handleProviderChange = (next: string) => {
-    setProvider(next);
-    const nextModels = modelsForProvider(next);
+    const normalized = normalizeLiveProvider(next);
+    setProvider(normalized);
+    const nextModels = modelsForProvider(normalized);
     setModelId(nextModels[0]?.id ?? "");
+    setSaved(false);
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (submitting) return;
+  const persistModel = async () => {
     if (!provider || !resolvedModelId) {
-      setErrorKey("errors:form.required");
-      return;
-    }
-    const needsKey = node.configurationStatus !== "ready" || Boolean(apiKey.trim());
-    if (needsKey && apiKey.trim().length < 8) {
       setErrorKey("errors:form.required");
       return;
     }
@@ -68,20 +96,11 @@ export function ModelConfigForm({
     setErrorKey(null);
     setSaved(false);
     try {
-      if (apiKey.trim()) {
-        await submitLiveLlmSecret({
-          agentId,
-          provider,
-          apiKey: apiKey.trim(),
-          modelId: resolvedModelId,
-        });
-      } else {
-        await updateAgentModel({ agentId, provider, modelId: resolvedModelId });
-      }
-      setApiKey("");
+      await updateAgentModel({ agentId, provider, modelId: resolvedModelId });
       setSaved(true);
       await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
       await queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
+      await queryClient.invalidateQueries({ queryKey: ["connections", agentId] });
       onSaved?.();
     } catch (err) {
       setErrorKey(agentServiceErrorKey(err));
@@ -91,77 +110,59 @@ export function ModelConfigForm({
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">{t("structure:panel.modelSubtitle")}</p>
+
       <div className="space-y-1.5">
         <Label htmlFor="structure-model-provider">{t("structure:panel.provider")}</Label>
-        <select
+        <DaSelect
           id="structure-model-provider"
           value={provider}
-          onChange={(e) => {
-            handleProviderChange(e.target.value);
-            setSaved(false);
-          }}
           disabled={submitting}
-          className={selectClass}
-        >
-          {LLM_PROVIDERS.map((option) => (
-            <option key={option} value={option}>
-              {t(`builder:secrets.providers.${option}`, { defaultValue: option })}
-            </option>
-          ))}
-        </select>
+          onChange={handleProviderChange}
+          options={LIVE_LLM_PROVIDERS.map((option) => ({
+            value: option,
+            label: t(`builder:secrets.providers.${option}`, { defaultValue: option }),
+          }))}
+        />
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="structure-model-id">{t("structure:panel.model")}</Label>
-        <select
+        <DaSelect
           id="structure-model-id"
           value={resolvedModelId}
-          onChange={(e) => {
-            setModelId(e.target.value);
+          disabled={submitting || models.length === 0}
+          onChange={(value) => {
+            setModelId(value);
             setSaved(false);
           }}
-          disabled={submitting || models.length === 0}
-          className={selectClass}
-        >
-          {models.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          options={models.map((option) => ({
+            value: option.id,
+            label: option.label,
+          }))}
+        />
+        <p className="text-xs text-muted-foreground">{t("structure:panel.modelChoiceHint")}</p>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="structure-model-key">{t("structure:panel.apiKey")}</Label>
-        <div className="relative">
-          <Input
-            id="structure-model-key"
-            type={showKey ? "text" : "password"}
-            autoComplete="off"
-            value={apiKey}
-            onChange={(e) => {
-              setApiKey(e.target.value);
-              setSaved(false);
-            }}
-            disabled={submitting}
-            placeholder={
-              node.configurationStatus === "ready"
-                ? t("structure:panel.apiKeyKeep")
-                : t("builder:secrets.apiKeyPlaceholder")
-            }
-            className="h-10 rounded-xl pr-10"
-          />
-          <button
-            type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground"
-            onClick={() => setShowKey((v) => !v)}
-            aria-label={showKey ? t("builder:secrets.hide") : t("builder:secrets.show")}
-          >
-            {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-          </button>
-        </div>
-        <p className="text-xs text-muted-foreground">{t("structure:panel.apiKeyHint")}</p>
+      <div className="space-y-2">
+        <Label>{t("structure:panel.connectProvider")}</Label>
+        <p className="text-xs text-muted-foreground">{t("structure:panel.connectHint")}</p>
+        <IntegrationConnectionCard
+          provider="pipedream"
+          appId={appId}
+          agentId={agentId}
+          status={connectStatus}
+          accountEmail={connection?.account_email}
+          connectionId={connection?.id}
+          onConnected={() => {
+            void persistModel();
+          }}
+          onChanged={() => {
+            void queryClient.invalidateQueries({ queryKey: ["connections", agentId] });
+            void queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
+          }}
+        />
       </div>
 
       {errorKey ? (
@@ -170,7 +171,12 @@ export function ModelConfigForm({
         <p className="text-sm text-emerald-700 dark:text-emerald-400">{t("structure:panel.saved")}</p>
       ) : null}
 
-      <Button type="submit" className="w-full rounded-xl" disabled={submitting}>
+      <Button
+        type="button"
+        className="w-full rounded-xl"
+        disabled={submitting || !resolvedModelId}
+        onClick={() => void persistModel()}
+      >
         {submitting ? (
           <>
             <Loader2 className="size-4 animate-spin" />
@@ -180,6 +186,6 @@ export function ModelConfigForm({
           t("structure:panel.save")
         )}
       </Button>
-    </form>
+    </div>
   );
 }

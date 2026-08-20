@@ -66,6 +66,7 @@ export function AgentIaView({
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshing, startRefresh] = useTransition();
   const [setupOpen, setSetupOpen] = useState(false);
+  const [ignoredRunIds, setIgnoredRunIds] = useState<string[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
   const readOnly = mode === "consumer";
 
@@ -99,7 +100,13 @@ export function AgentIaView({
     notifyOnChangeProps: ["data", "error"],
     refetchInterval: (q) => {
       const row = q.state.data as { id?: string; status?: string } | null | undefined;
-      if (row?.status === "queued" || row?.status === "running") return 2200;
+      if (
+        row?.status === "queued" ||
+        row?.status === "running" ||
+        row?.status === "waiting_for_input"
+      ) {
+        return 2200;
+      }
       const msgs = liveThread?.messages ?? [];
       const last = msgs[msgs.length - 1];
       if (last?.role === "user" || last?.pending) return 2200;
@@ -112,7 +119,7 @@ export function AgentIaView({
         .select("id,status,created_at")
         .eq("agent_id", agentId)
         .eq("run_type", "live")
-        .in("status", ["queued", "running"])
+        .in("status", ["queued", "running", "waiting_for_input"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -122,6 +129,8 @@ export function AgentIaView({
   });
 
   const liveRunId = messageRunId || activeRunQuery.data?.id || null;
+  const visualRunId =
+    liveRunId && !ignoredRunIds.includes(liveRunId) ? liveRunId : null;
 
   const connectionsQuery = useQuery({
     queryKey: ["agent-connections", agentId],
@@ -139,7 +148,7 @@ export function AgentIaView({
     const ids = new Set<string>();
     for (const binding of connectionsQuery.data?.bindings ?? []) {
       if (!binding.enabled) continue;
-      for (const toolId of binding.tool_ids) ids.add(toolId);
+      for (const toolId of binding.tool_ids ?? []) ids.add(toolId);
     }
     return ids;
   }, [connectionsQuery.data?.bindings]);
@@ -184,31 +193,51 @@ export function AgentIaView({
         ? ("ready" as const)
         : ("setup_required" as const);
 
-  const productGraph = useMemo(
-    () =>
-      buildProductAgentGraph({
+  const memoryCheck = readinessQuery.data?.checks?.find((c) => c.key === "memory");
+  const memoryStatus = useMemo(() => {
+    if (spec?.memory?.provider === "external_postgres") {
+      const appId = (spec.memory.externalAppId || "").toLowerCase();
+      if (!appId) return "setup_required" as const;
+      const aliases = new Set([appId, appId.replace(/_/g, "-"), appId.replace(/-/g, "_")]);
+      const connected = [...boundAppIds].some((id) => aliases.has(id.toLowerCase()));
+      if (connected) return "ready" as const;
+      if (memoryCheck !== undefined) {
+        return memoryCheck.ok ? ("ready" as const) : ("setup_required" as const);
+      }
+      return "setup_required" as const;
+    }
+    if (memoryCheck === undefined) return undefined;
+    return memoryCheck.ok ? ("ready" as const) : ("setup_required" as const);
+  }, [spec?.memory?.provider, spec?.memory?.externalAppId, boundAppIds, memoryCheck]);
+
+  const productGraph = useMemo(() => {
+    try {
+      return buildProductAgentGraph({
         definition: spec,
         graph: graphResponse?.graph,
         boundToolIds,
         boundProviders,
         boundAppIds,
         modelStatus,
-      }),
-    [spec, graphResponse?.graph, boundToolIds, boundProviders, boundAppIds, modelStatus],
-  );
+        memoryStatus,
+      });
+    } catch {
+      return { nodes: [], edges: [] };
+    }
+  }, [spec, graphResponse?.graph, boundToolIds, boundProviders, boundAppIds, modelStatus, memoryStatus]);
 
   const hasGraph = productGraph.nodes.length > 0;
 
   const { data: executionVisual } = useLiveExecutionState(
-    liveRunId,
-    Boolean(liveRunId),
+    visualRunId,
+    Boolean(visualRunId),
     productGraph,
   );
 
   useRunEventStream({
     agentId,
-    runId: liveRunId,
-    enabled: Boolean(liveRunId),
+    runId: visualRunId,
+    enabled: Boolean(visualRunId),
     accessToken,
   });
 
@@ -262,14 +291,29 @@ export function AgentIaView({
 
   const resetStructureExecution = () => {
     startRefresh(async () => {
+      if (liveRunId) {
+        setIgnoredRunIds((prev) =>
+          prev.includes(liveRunId) ? prev : [...prev, liveRunId],
+        );
+      }
       try {
         await cancelLiveRun({ agentId, runId: liveRunId, silent: true });
       } catch {
         // Best-effort stop.
       }
+      queryClient.setQueryData(["live-execution", liveRunId], {
+        runStatus: "idle",
+        nodes: {},
+        edges: {},
+        legacy: {},
+        error: null,
+      });
       void queryClient.removeQueries({ queryKey: ["live-execution"] });
       void queryClient.removeQueries({ queryKey: ["active-live-run", agentId] });
       void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
+      void queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
+      void queryClient.invalidateQueries({ queryKey: ["agents", agentId, "graph"] });
+      void queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
     });
   };
 
@@ -314,6 +358,7 @@ export function AgentIaView({
       boundProviders={boundProviders}
       boundAppIds={boundAppIds}
       modelStatus={modelStatus}
+      memoryStatus={memoryStatus}
       executionVisual={executionVisual}
       readOnly={readOnly}
       onConnectionsChanged={
@@ -347,7 +392,7 @@ export function AgentIaView({
       >
         <LiveView
           agentId={agentId}
-          activeRunId={liveRunId}
+          activeRunId={visualRunId}
           headerActions={
             <Button
               type="button"

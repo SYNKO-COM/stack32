@@ -150,8 +150,12 @@ export interface AgentSpec {
     semanticEnabled?: boolean;
     writePolicy?: "never" | "explicit" | "automatic";
     retentionDays?: number;
-    /** stack32 built-in vs external Postgres (BYO). */
+    /** stack32 built-in vs external DB via Pipedream. */
     provider?: "stack32" | "external_postgres";
+    /** Pipedream app slug when provider is external (postgresql, supabase, …). */
+    externalAppId?: string | null;
+    /** Free-form instructions the Live agent must follow for the external DB. */
+    externalInstructions?: string | null;
   };
   rules: string[];
   output: {
@@ -179,6 +183,8 @@ export type TriggerKind = "chat" | "schedule" | "manual" | "webhook";
 export interface AgentTrigger {
   kind: TriggerKind;
   enabled: boolean;
+  cron?: string | null;
+  timezone?: string | null;
 }
 
 export interface AgentIdentity {
@@ -358,6 +364,8 @@ export interface BuilderMessage {
   /** Short human-readable problems when Fix it for me is offered. */
   detectedProblems?: string[];
   attachments?: MessageAttachment[];
+  /** Composer mode for this user turn — chat must stay read-only. */
+  interactionMode?: "build" | "chat";
   createdAt: string;
 }
 

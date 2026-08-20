@@ -10,6 +10,24 @@ export const LLM_PROVIDERS = [
 
 export type LlmProviderId = (typeof LLM_PROVIDERS)[number];
 
+/** Providers available for Live agent brain via Pipedream Connect. */
+export const LIVE_LLM_PROVIDERS = ["openai", "anthropic", "xai", "mistral"] as const;
+
+export type LiveLlmProviderId = (typeof LIVE_LLM_PROVIDERS)[number];
+
+/** Stack32 Live provider → Pipedream Connect app slug. */
+export const LIVE_LLM_PIPEDREAM_APP: Record<LiveLlmProviderId, string> = {
+  openai: "openai",
+  anthropic: "anthropic",
+  xai: "xai",
+  mistral: "mistral_ai",
+};
+
+export function pipedreamAppForLlmProvider(provider: string): string {
+  const key = provider.toLowerCase() as LiveLlmProviderId;
+  return LIVE_LLM_PIPEDREAM_APP[key] || provider;
+}
+
 export interface LlmModelOption {
   id: string;
   label: string;

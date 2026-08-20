@@ -29,11 +29,8 @@ PROVIDER_ENV_PREFIX = {
 LLM_PROVIDER_OPTIONS = [
     "openai",
     "anthropic",
-    "google",
     "xai",
     "mistral",
-    "groq",
-    "openrouter",
 ]
 
 
@@ -58,12 +55,30 @@ async def resolve_llm_credentials(
     agent_id: str,
     installation_id: str | None = None,
     allow_legacy_owner_fallback: bool = True,
+    preferred_provider: str | None = None,
 ) -> tuple[str, str] | None:
-    """Return (provider, api_key) preferring installation-scoped then legacy agent-scoped.
+    """Return (provider, api_key).
 
-    Never falls back to Stack32 platform keys. User-default secrets are NOT used for
-    generated agents (installation isolation).
+    Prefer Pipedream Connect LLM accounts (no Stack32-stored keys). Fall back to
+    legacy encrypted user_secrets for agents that still have BYOK keys.
+
+    Never falls back to Stack32 platform keys.
     """
+    # 1) Pipedream Connect — user connected OpenAI/Anthropic/… via Connect UI.
+    try:
+        from agent_service.integrations.pipedream.llm import (
+            resolve_pipedream_llm_credentials,
+        )
+
+        pd_creds = await resolve_pipedream_llm_credentials(
+            user_id=user_id,
+            provider=preferred_provider,
+        )
+        if pd_creds:
+            return pd_creds
+    except Exception:  # noqa: BLE001
+        logger.exception("resolve_pipedream_llm_credentials_failed")
+
     async with get_supabase_admin_client() as client:
         if installation_id:
             response = await client.get(
@@ -127,12 +142,14 @@ async def has_llm_secret(
     user_id: str,
     agent_id: str,
     installation_id: str | None = None,
+    preferred_provider: str | None = None,
 ) -> bool:
     creds = await resolve_llm_credentials(
         user_id=user_id,
         agent_id=agent_id,
         installation_id=installation_id,
         allow_legacy_owner_fallback=True,
+        preferred_provider=preferred_provider,
     )
     return creds is not None
 
@@ -274,6 +291,47 @@ async def record_llm_validation(
         response = await client.post("/llm_validations", json=payload)
     if response.status_code >= 400:
         logger.info("llm_validation record failed status=%s", response.status_code)
+
+
+async def latest_valid_model_config(
+    *, user_id: str, agent_id: str
+) -> dict[str, Any] | None:
+    """Latest valid BYOK model for this user+agent — never another user's session."""
+    async with get_supabase_admin_client() as client:
+        response = await client.get(
+            "/llm_validations",
+            params={
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "status": "eq.valid",
+                "select": "provider,model_id,checked_at",
+                "order": "checked_at.desc",
+                "limit": "1",
+            },
+        )
+    if response.status_code >= 400:
+        return None
+    rows = response.json()
+    if not isinstance(rows, list) or not rows:
+        return None
+    provider = str(rows[0].get("provider") or "").strip().lower()
+    model_id = str(rows[0].get("model_id") or "").strip()
+    if not provider or not model_id:
+        return None
+    secrets = await list_secret_meta(user_id=user_id, agent_id=agent_id)
+    has_key = any(
+        str(row.get("provider") or "").lower() == provider
+        and str(row.get("secret_kind") or "") in {"", "llm_api_key"}
+        for row in secrets
+    )
+    if not has_key:
+        return None
+    return {
+        "provider": provider,
+        "model_id": model_id,
+        "credential_scope": "agent",
+        "fallback_enabled": False,
+    }
 
 
 async def latest_llm_validation(

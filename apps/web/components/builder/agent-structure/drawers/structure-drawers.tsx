@@ -8,6 +8,10 @@ import {
 } from "@/components/builder/agent-structure/drawers/memory-config-form";
 import { ModelConfigForm } from "@/components/builder/agent-structure/drawers/model-config-form";
 import { ModuleErrorBanner } from "@/components/builder/agent-structure/drawers/module-error-banner";
+import {
+  AgentScheduleToggle,
+  ScheduleTimingForm,
+} from "@/components/builder/agent-structure/drawers/triggers-config-form";
 import type { ExecutionErrorInfo } from "@/lib/domain/execution-state";
 import {
   Dialog,
@@ -67,7 +71,7 @@ function resolveConnection(
   };
 
   const binding = bindings.find(
-    (b) => b.enabled && b.tool_ids.some((id) => toolIds.includes(id)),
+    (b) => b.enabled && (b.tool_ids ?? []).some((id) => toolIds.includes(id)),
   );
   let connection = connections.find(
     (c) => c.id === binding?.connection_id && isActive(c),
@@ -303,6 +307,7 @@ export function AgentDrawer({
   modelSubtitle,
   integrationCount,
   executionError,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -312,6 +317,7 @@ export function AgentDrawer({
   modelSubtitle?: string;
   integrationCount: number;
   executionError?: ExecutionErrorInfo | null;
+  onSaved?: () => void;
 }) {
   const { t } = useTranslation("structure");
   if (!node) return null;
@@ -357,6 +363,15 @@ export function AgentDrawer({
         ) : null}
       </dl>
 
+      <DetailBlock title={t("panel.triggersTitle")}>
+        <AgentScheduleToggle
+          key={`${agentId}:${(spec?.triggers ?? []).some((t) => t.kind === "schedule" && t.enabled)}`}
+          agentId={agentId}
+          spec={spec}
+          onSaved={onSaved}
+        />
+      </DetailBlock>
+
       <p className="text-sm text-muted-foreground">{t("panel.agentReadOnlyHint")}</p>
 
       {goal ? (
@@ -388,10 +403,16 @@ export function TriggerDrawer({
   open,
   onOpenChange,
   node,
+  agentId,
+  spec,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   node: ProductNode | null;
+  agentId?: string;
+  spec?: AgentSpec | null;
+  onSaved?: () => void;
 }) {
   const { t } = useTranslation("structure");
   if (!node) return null;
@@ -404,13 +425,25 @@ export function TriggerDrawer({
       onOpenChange={onOpenChange}
       title={node.label}
       subtitle={
-        isSchedule ? t("modules.kinds.trigger") : t("panel.chatSubtitle")
+        isSchedule ? t("panel.scheduleSubtitle") : t("panel.chatSubtitle")
       }
     >
       {isSchedule ? (
-        <p className="text-sm text-muted-foreground">
-          {node.subtitle || t("product.scheduleDefault", { defaultValue: "Runs on a schedule." })}
-        </p>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {node.subtitle || t("product.scheduleDefault", { defaultValue: "Runs on a schedule." })}
+          </p>
+          {agentId ? (
+            <ScheduleTimingForm
+              key={`${agentId}:schedule:${(spec?.triggers ?? [])
+                .find((t) => t.kind === "schedule")
+                ?.cron ?? "none"}`}
+              agentId={agentId}
+              spec={spec}
+              onSaved={onSaved}
+            />
+          ) : null}
+        </div>
       ) : (
         <div className="space-y-4">
           <DetailBlock title={t("panel.chatWhat")}>

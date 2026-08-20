@@ -377,28 +377,34 @@
     padding: 0 !important;
     z-index: 2 !important;
   }
+}
 
-  .structure-agent-flow .react-flow__controls {
-    overflow: hidden;
-    box-shadow: none;
-    border: 1px solid var(--structure-control-border);
-    background: var(--structure-control-bg);
-  }
+/*
+ * React Flow ships unlayered button CSS that beats Tailwind @layer.
+ * Dark-only so the light zoom controls stay as they are.
+ */
+html.dark .structure-agent-flow .react-flow__controls {
+  background: var(--structure-control-bg) !important;
+  border: 1px solid var(--structure-control-border) !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
 
-  .structure-agent-flow .react-flow__controls-button {
-    background: var(--structure-control-bg);
-    border-bottom: 1px solid var(--structure-control-border);
-    fill: var(--structure-control-fg);
-    color: var(--structure-control-fg);
-  }
+html.dark .structure-agent-flow .react-flow__controls-button {
+  background: var(--structure-control-bg) !important;
+  border-bottom: 1px solid var(--structure-control-border) !important;
+  color: var(--structure-control-fg) !important;
+  fill: var(--structure-control-fg) !important;
+}
 
-  .structure-agent-flow .react-flow__controls-button:hover {
-    background: var(--structure-control-bg-hover);
-  }
+html.dark .structure-agent-flow .react-flow__controls-button:hover {
+  background: var(--structure-control-bg-hover) !important;
+}
 
-  .structure-agent-flow .react-flow__controls-button svg {
-    fill: currentColor;
-  }
+html.dark .structure-agent-flow .react-flow__controls-button svg,
+html.dark .structure-agent-flow .react-flow__controls-button svg path {
+  fill: var(--structure-control-fg) !important;
+  stroke: var(--structure-control-fg) !important;
 }
 
 @keyframes builder-live-pulse {

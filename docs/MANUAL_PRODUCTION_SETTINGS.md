@@ -29,3 +29,13 @@ Only if you want a second reconciler outside Vercel Cron:
   Header: `Authorization: Bearer <same CRON_SECRET as Vercel>`
 
 You do **not** need this if Vercel Cron is enabled (it is, after this deploy).
+
+## Supabase backups (operator)
+
+In the hosted Supabase project dashboard:
+
+1. Confirm **automatic backups** are enabled for the production project.
+2. If your plan includes it, enable **Point-in-Time Recovery (PITR)**.
+3. Note who can restore and the expected RTO (see `docs/security/SECURITY_CHECKLIST.md`).
+
+This is ops-only — no app code change required.

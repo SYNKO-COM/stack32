@@ -560,6 +560,7 @@ def extract_external_app_queries(
     these queries drive JIT Pipedream app+action search.
     """
     hay = f"{prompt or ''} {' '.join(llm_hints or [])}".lower()
+    skip_postgres_alias = is_platform_postgres_noise(hay)
     found: list[str] = []
     seen: set[str] = set()
 
@@ -590,6 +591,13 @@ def extract_external_app_queries(
 
     # Alias dictionary (multi-word first).
     for alias in sorted(_PIPEDREAM_APP_ALIASES.keys(), key=len, reverse=True):
+        if skip_postgres_alias and _PIPEDREAM_APP_ALIASES[alias] in {
+            "postgresql",
+            "mysql",
+            "mongodb",
+            "snowflake",
+        }:
+            continue
         if alias in hay:
             _add(_PIPEDREAM_APP_ALIASES[alias])
 
@@ -626,6 +634,113 @@ def extract_external_app_queries(
 
     return found[:12]
 
+
+_PLATFORM_POSTGRES_MARKERS = (
+    "checkpointer",
+    "search_path",
+    "unrecognized configuration parameter",
+    "failed to initialize postgres checkpointer",
+)
+
+
+def is_platform_postgres_noise(text: str) -> bool:
+    """True when 'postgres' appears because of Stack32 internals, not a user app."""
+    hay = (text or "").lower()
+    return any(marker in hay for marker in _PLATFORM_POSTGRES_MARKERS)
+
+
+def is_postgres_user_tool(tool_id: str) -> bool:
+    return "postgres" in (tool_id or "").lower()
+
+
+_REMOVE_VERB_RE = re.compile(
+    r"(?:enleve(?:r|z)?|retir(?:e|er|ez)|supprim(?:e|er|ez)|remove|delete|drop)\s+"
+    r"(?:moi\s+)?(?:le\s+|la\s+|l['’])?",
+    re.I,
+)
+_NEGATE_APP_RE = re.compile(
+    r"(?:pas(?:\s+besoin)?\s+de|sans|without|do\s*not\s+(?:add|use)|don't\s+(?:add|use))\s+",
+    re.I,
+)
+
+
+def _normalize_prompt_for_intent(text: str) -> str:
+    hay = (text or "").lower()
+    return (
+        hay.replace("ève", "eve")
+        .replace("é", "e")
+        .replace("è", "e")
+        .replace("ê", "e")
+    )
+
+
+def apps_user_asked_to_remove(text: str) -> set[str]:
+    """Apps the user wants gone. Mentioning Postgres to remove it is not a request to add it."""
+    hay = _normalize_prompt_for_intent(text)
+    if not hay:
+        return set()
+    found: set[str] = set()
+    for alias in sorted(_PIPEDREAM_APP_ALIASES.keys(), key=len, reverse=True):
+        slug = _PIPEDREAM_APP_ALIASES[alias]
+        if re.search(_REMOVE_VERB_RE.pattern + re.escape(alias), hay):
+            found.add(slug)
+        elif re.search(_NEGATE_APP_RE.pattern + re.escape(alias), hay):
+            found.add(slug)
+    return found
+
+
+def _tool_matches_removed_app(tool: ToolBinding, removed: set[str]) -> bool:
+    tid = (tool.tool_id or "").lower()
+    app = _normalize_app_slug(tool.app_id or "") or (_app_slug_from_tool_id(tool.tool_id) or "")
+    for slug in removed:
+        if app == slug or slug in tid:
+            return True
+        if slug in {"postgresql", "postgres"} and "postgres" in tid:
+            return True
+    return False
+
+
+def drop_removed_tools(tools: list[ToolBinding], *, prompt: str) -> list[ToolBinding]:
+    removed = apps_user_asked_to_remove(prompt)
+    if not removed:
+        return tools
+    return [t for t in tools if not _tool_matches_removed_app(t, removed)]
+
+
+def user_requested_database_app(text: str) -> bool:
+    """User explicitly asked for a database app — not a platform checkpointer error."""
+    if is_platform_postgres_noise(text):
+        return False
+    removed = apps_user_asked_to_remove(text)
+    if removed & {"postgresql", "postgres", "mysql", "mongodb", "snowflake"}:
+        return False
+    return bool(
+        re.search(r"\b(postgres(ql)?|mysql|mongodb|snowflake)\b", (text or "").lower())
+    )
+
+
+def filter_unsolicited_database_tools(
+    tools: list[ToolBinding],
+    *,
+    prompt: str,
+    keep_app_ids: set[str] | None = None,
+) -> list[ToolBinding]:
+    """Drop Postgres/MySQL/… tools unless the user actually asked for a database."""
+    tools = drop_removed_tools(tools, prompt=prompt)
+    if user_requested_database_app(prompt):
+        return tools
+    keep = {_normalize_app_slug(a) for a in (keep_app_ids or set()) if a}
+    if not keep:
+        return [t for t in tools if not is_postgres_user_tool(t.tool_id)]
+    out: list[ToolBinding] = []
+    for binding in tools:
+        if not is_postgres_user_tool(binding.tool_id):
+            out.append(binding)
+            continue
+        app = _normalize_app_slug(binding.app_id or _app_slug_from_tool_id(binding.tool_id) or "")
+        if app in keep:
+            out.append(binding)
+    return out
 
 def _intent_verbs(prompt_lower: str) -> list[str]:
     verbs: list[str] = []
@@ -688,9 +803,36 @@ def _filter_actions_for_app(tools: list[Any], app_id: str) -> list[Any]:
 
 
 def _prefer_action_tools(tools: list[Any], prompt_lower: str) -> list[Any]:
-    """Rank create/design actions first when the user wants a presentation/page."""
+    """Rank create/design (or Maps search/details) actions first when relevant."""
     if not tools:
         return tools
+
+    mapsish = any(
+        "google_maps" in str(getattr(t, "tool_id", "") or "").lower()
+        or "maps_platform" in str(getattr(t, "tool_id", "") or "").lower()
+        or str(getattr(t, "provider_app_id", "") or "").lower()
+        in {"google_maps", "google_maps_platform"}
+        for t in tools
+    )
+    if mapsish or "google maps" in prompt_lower or "google_maps" in prompt_lower:
+
+        def _maps_score(tool: Any) -> int:
+            tid = str(getattr(tool, "tool_id", None) or "").lower()
+            name = str(getattr(tool, "name", None) or "").lower()
+            hay = f"{tid} {name}"
+            score = 0
+            if "search-places" in hay or "search_places" in hay or "search places" in hay:
+                score += 80
+            if "place-details" in hay or "place_details" in hay or "get-place" in hay:
+                score += 75
+            if "text-search" in hay or "nearby" in hay:
+                score += 40
+            if "fetch" in hay or "scrape" in hay:
+                score -= 50
+            return score
+
+        return sorted(tools, key=_maps_score, reverse=True)
+
     wants_create = bool(
         re.search(
             r"\b(create|créer|creer|crée|cree|design|présentation|presentation|slide|page|génér|gener)\b",
@@ -882,6 +1024,12 @@ def is_surgical_tool_edit(edit_prompt: str, *, current_tool_count: int = 0) -> b
         "juste cet outil",
         "photo",
         "logo",
+        "enlève",
+        "enleve",
+        "remove",
+        "retire",
+        "supprime",
+        "delete",
     )
     if any(m in lower for m in fix_markers):
         return True
@@ -902,6 +1050,10 @@ def merge_tools_on_edit(
         return incoming_tools
 
     apps = extract_external_app_queries(edit_prompt)
+    removed = apps_user_asked_to_remove(edit_prompt)
+    if removed:
+        return drop_removed_tools(current_tools, prompt=edit_prompt)
+
     targets: set[str] = set()
     for app in apps:
         slug = _normalize_app_slug(app)
@@ -1474,6 +1626,12 @@ async def resolve_tools_for_capabilities(
     for app_query in external_apps:
         if app_query in skip_pd:
             continue
+        app_norm = _normalize_app_slug(app_query)
+        maps_app = app_norm in {
+            "google_maps",
+            "google_maps_platform",
+            "googlemaps",
+        } or "google_map" in app_norm
         await resolve_pipedream_app(
             app_query=app_query,
             prompt=prompt,
@@ -1481,7 +1639,8 @@ async def resolve_tools_for_capabilities(
             search=search,
             add_binding=_add_binding,
             ambiguous=ambiguous,
-            max_actions=2,
+            # Maps research needs search + details (fetch_url on Maps URLs fails).
+            max_actions=3 if maps_app else 2,
         )
 
     # Build connection requirements for OAuth / connection_required tools.

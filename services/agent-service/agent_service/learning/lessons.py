@@ -283,7 +283,128 @@ PLATFORM_BOOTSTRAP_LESSONS: list[dict[str, Any]] = [
         "times_helped": 2,
         "times_seen": 2,
     },
+    {
+        "error_code": "SPEC_TOOL_MISMATCH",
+        "reason": (
+            "User asked to remove PostgreSQL; sandbox tools.json was edited but "
+            "Structure still showed the tool because spec.tools / graph / "
+            "connection_requirements were not updated"
+        ),
+        "resolution_summary": (
+            "Structure reads the persisted AgentSpec, not sandbox files. On "
+            "enlève/remove, drop the app from spec.tools, rebuild graph, and "
+            "strip connection_requirements. Never add Postgres for checkpointer "
+            "or search_path errors — Memory is the built-in conversation store."
+        ),
+        "times_helped": 6,
+        "times_seen": 6,
+    },
+    {
+        "error_code": "CHECKPOINTER_NOT_USER_TOOL",
+        "reason": (
+            "Failed to initialize Postgres checkpointer: unrecognized configuration "
+            "parameter +search_path"
+        ),
+        "resolution_summary": (
+            "Fix the platform DATABASE_URL search_path encoding. Do not add a "
+            "Pipedream PostgreSQL tool or ask the user to connect a database."
+        ),
+        "times_helped": 6,
+        "times_seen": 6,
+    },
+    {
+        "error_code": "LIVE_STRUCTURE_SOFT_FAIL_DESYNC",
+        "reason": (
+            "Live chat showed tool failures (fetch_url UnsafeURL_Error) while Structure "
+            "kept the agent spinning with green successes and no error banner"
+        ),
+        "resolution_summary": (
+            "When a live run ends (run.completed) after any tool.failed, Structure must "
+            "stop the agent spinner, mark agent/output as error or partial, and attach "
+            "the failure to a visible node. Native helpers like fetch_url/web_search are "
+            "not Structure apps — map their failures onto the agent node. Prefer Maps/"
+            "Sheets Pipedream actions over fetch_url for Google Maps listing URLs."
+        ),
+        "times_helped": 1,
+        "times_seen": 1,
+    },
+    {
+        "error_code": "FETCH_URL_GOOGLE_BLOCKED",
+        "reason": (
+            "Live run: fetch_url TOOL_FAILED / UnsafeURL after google_maps_platform-"
+            "search-places — agent scraped Maps/Google listing URLs in a long loop"
+        ),
+        "resolution_summary": (
+            "For business/place research use Pipedream Google Maps actions "
+            "(search-places, get-place-details) and Google Sheets/Gmail tools. "
+            "Do not instruct the agent to fetch_url Google Maps, google.com/maps, "
+            "or other Google HTML pages — SSRF policy blocks many of those hosts. "
+            "In system instructions: prefer Maps API fields over scraping; stop "
+            "retrying fetch_url after one failure on the same host family."
+        ),
+        "times_helped": 3,
+        "times_seen": 3,
+    },
+    {
+        "error_code": "TOOL_FAILED",
+        "reason": "fetch_url TOOL_FAILED during Live business lookup (Maps URL scrape)",
+        "resolution_summary": (
+            "Replace scrape-with-fetch_url patterns with google_maps_platform + "
+            "structured Sheets writes. Keep fetch_url only for explicitly public "
+            "non-Google pages the user named."
+        ),
+        "times_helped": 3,
+        "times_seen": 3,
+    },
 ]
+
+
+def extract_error_signals_from_prompt(content: str) -> tuple[str | None, str]:
+    """Pull error_code + reason snippet from Try-to-fix / user repair prompts (no PII)."""
+    text = content or ""
+    code = None
+    m = re.search(r"Error code:\s*([A-Za-z0-9_\-]+)", text, re.I)
+    if m:
+        code = m.group(1).strip().upper()
+    if not code:
+        m2 = re.search(r"error=([A-Za-z0-9_\-]+)", text, re.I)
+        if m2:
+            code = m2.group(1).strip().upper()
+    if "fetch_url" in text.lower() and (
+        "TOOL_FAILED" in text.upper() or "UnsafeURL" in text or "UNSAFEURL" in text.upper()
+    ):
+        code = code or "FETCH_URL_GOOGLE_BLOCKED"
+    reason = text[:500]
+    if "STACK32 LIVE TOOL REPAIR" in text.upper():
+        reason = "Live tool repair: " + reason
+    return code, reason
+
+
+async def lessons_for_builder_turn(
+    *,
+    user_prompt: str,
+    error_code: str | None = None,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Platform-wide lessons for any Builder turn (design, repair, Try to fix)."""
+    detected, reason = extract_error_signals_from_prompt(user_prompt)
+    code = error_code or detected
+    lessons = await lessons_for_repair(error_code=code, reason=reason, limit=limit)
+    # Always surface Maps/fetch_url guidance when the prompt mentions those tools.
+    lower = (user_prompt or "").lower()
+    if "fetch_url" in lower or "google maps" in lower or "google_maps" in lower:
+        extra = await lessons_for_repair(
+            error_code="FETCH_URL_GOOGLE_BLOCKED",
+            reason=reason or "fetch_url maps",
+            limit=2,
+        )
+        seen = {(r.get("error_code") or "").upper() for r in lessons}
+        for item in extra:
+            if (item.get("error_code") or "").upper() not in seen:
+                lessons.append(item)
+                seen.add((item.get("error_code") or "").upper())
+    out = lessons[: max(1, min(limit + 2, 12))]
+    return out
 
 
 async def lessons_for_repair(

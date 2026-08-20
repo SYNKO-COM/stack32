@@ -1,13 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { isThreadActive, useBuilderThread, useSendBuilderMessage } from "@/hooks/use-builder";
 import { useTranslation } from "@/hooks/use-translation";
 import type { ExecutionErrorInfo } from "@/lib/domain/execution-state";
-import { setPrefillDraft } from "@/lib/pending-prompt";
+import {
+  claimTryToFix,
+  isTryToFixLocked,
+  markPrefillSending,
+  releaseTryToFix,
+  setPrefillDraft,
+} from "@/lib/pending-prompt";
 
 function buildTryToFixPrompt(error: ExecutionErrorInfo, agentId: string): string {
   const logs = error.fullLogText || error.logs.map((l) =>
@@ -24,6 +31,13 @@ function buildTryToFixPrompt(error: ExecutionErrorInfo, agentId: string): string
     "- Prefer fixing tool args/config/bindings, Pipedream prop mapping, connection binding,",
     "  or tool instructions — keep the existing architecture intact.",
     "- If a tool must be replaced, explain why and keep capability coverage equivalent.",
+    "- NEVER add PostgreSQL, Supabase, or any database app because of a checkpointer,",
+    "  search_path, or DATABASE_URL error — those are Stack32 platform internals,",
+    "  not user tools. Conversation memory already uses the built-in Memory module.",
+    "- If logs show fetch_url TOOL_FAILED / UnsafeURL after Google Maps searches:",
+    "  instruct the agent to use google_maps_platform get-place-details (and Sheets/Gmail)",
+    "  instead of scraping Maps/Google HTML with fetch_url. Do not keep retrying fetch_url",
+    "  on google.com / maps hosts.",
     "",
     `Agent id: ${agentId}`,
     `Failed node: ${error.nodeId || "unknown"}`,
@@ -38,6 +52,27 @@ function buildTryToFixPrompt(error: ExecutionErrorInfo, agentId: string): string
   ].join("\n");
 }
 
+function errorFingerprint(error: ExecutionErrorInfo): string {
+  return [
+    error.nodeId || "",
+    error.code || "",
+    error.errorType || "",
+    (error.message || "").slice(0, 120),
+  ].join("|");
+}
+
+function goToBuild(router: ReturnType<typeof useRouter>, agentId: string): void {
+  const href = `/agents/${agentId}/build`;
+  router.push(href);
+  // Hard fallback if soft navigation does not land on Build (drawer remounts, etc.).
+  window.setTimeout(() => {
+    if (typeof window === "undefined") return;
+    if (!window.location.pathname.includes(`/agents/${agentId}/build`)) {
+      window.location.assign(href);
+    }
+  }, 400);
+}
+
 export function ModuleErrorBanner({
   error,
   agentId,
@@ -47,9 +82,81 @@ export function ModuleErrorBanner({
 }) {
   const { t } = useTranslation("structure");
   const router = useRouter();
+  const sendMessage = useSendBuilderMessage(agentId);
+  const { data: thread } = useBuilderThread(agentId);
   const [copied, setCopied] = useState(false);
   const [fixPending, setFixPending] = useState(false);
+  const [locked, setLocked] = useState(false);
   const preview = error.logs.slice(-4);
+
+  const builderBusy = isThreadActive(thread);
+  const alreadyLocked = locked || isTryToFixLocked(agentId);
+  const sendingNow = fixPending || sendMessage.isPending;
+  /** While sending, block clicks. When busy/locked, still allow a click → Build only. */
+  const blockSend = sendingNow || builderBusy || alreadyLocked;
+
+  useEffect(() => {
+    setLocked(isTryToFixLocked(agentId));
+  }, [agentId]);
+
+  // After the builder goes idle again, free the lock so a later error can be fixed.
+  useEffect(() => {
+    if (!isTryToFixLocked(agentId)) return;
+    if (fixPending || sendMessage.isPending) return;
+    if (isThreadActive(thread)) return;
+    const timer = window.setTimeout(() => {
+      if (isThreadActive(thread) || sendMessage.isPending) return;
+      releaseTryToFix(agentId);
+      setLocked(false);
+      setFixPending(false);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [agentId, thread, fixPending, sendMessage.isPending]);
+
+  const handleTryToFix = async () => {
+    // Spam / in-flight send: ignore further clicks (redirect already scheduled).
+    if (sendingNow) return;
+
+    // Builder already working, or a prior Try-to-fix claimed the slot → Build only.
+    if (builderBusy || alreadyLocked) {
+      goToBuild(router, agentId);
+      return;
+    }
+
+    const fingerprint = errorFingerprint(error);
+    if (!claimTryToFix(agentId, fingerprint)) {
+      setLocked(true);
+      goToBuild(router, agentId);
+      return;
+    }
+
+    setFixPending(true);
+    setLocked(true);
+    const prompt = buildTryToFixPrompt(error, agentId);
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+    } catch {
+      // Clipboard may be blocked; sending the message still works.
+    }
+
+    // Build page consumes this as "already sending" so it does not double-post.
+    markPrefillSending(prompt);
+    setPrefillDraft(prompt, { autoSend: false });
+
+    try {
+      await sendMessage.mutateAsync({ content: prompt });
+    } catch {
+      releaseTryToFix(agentId);
+      setLocked(false);
+      setFixPending(false);
+      // Still open Build so the user can retry from the composer if needed.
+      goToBuild(router, agentId);
+      return;
+    }
+
+    goToBuild(router, agentId);
+  };
 
   return (
     <div className="space-y-3 rounded-2xl border border-red-500/30 bg-red-500/[0.07] p-4">
@@ -116,34 +223,31 @@ export function ModuleErrorBanner({
         <Button
           type="button"
           size="sm"
-          className="h-8 w-full gap-1.5 rounded-xl text-xs font-medium"
-          disabled={fixPending}
-          onClick={async () => {
-            setFixPending(true);
-            try {
-              const prompt = buildTryToFixPrompt(error, agentId);
-              try {
-                await navigator.clipboard.writeText(prompt);
-              } catch {
-                // Clipboard may be blocked; Build prefill still works.
-              }
-              setPrefillDraft(prompt, { autoSend: true });
-              router.push(`/agents/${agentId}/build`);
-            } finally {
-              setFixPending(false);
-            }
+          className={`h-8 w-full gap-1.5 rounded-xl text-xs font-medium ${
+            blockSend && !sendingNow ? "opacity-60" : ""
+          }`}
+          disabled={sendingNow}
+          onClick={() => {
+            void handleTryToFix();
           }}
         >
           <Wrench className="size-3.5" aria-hidden="true" />
-          {fixPending
+          {sendingNow
             ? t("panel.errorTryFixPending", { defaultValue: "Opening Build…" })
-            : t("panel.errorTryFix", { defaultValue: "Try to fix" })}
+            : builderBusy || alreadyLocked
+              ? t("panel.errorTryFixBusy", { defaultValue: "Open Build" })
+              : t("panel.errorTryFix", { defaultValue: "Try to fix" })}
         </Button>
         <p className="text-[11px] leading-snug text-red-900/70 dark:text-red-100/70">
-          {t("panel.errorTryFixHint", {
-            defaultValue:
-              "Copies a detailed repair prompt and opens Build so Stack32 can fix this safely.",
-          })}
+          {builderBusy || alreadyLocked
+            ? t("panel.errorTryFixBusyHint", {
+                defaultValue:
+                  "A fix is already running. Open Build to follow progress — do not send another request.",
+              })
+            : t("panel.errorTryFixHint", {
+                defaultValue:
+                  "Sends the repair request to Stack32 and opens Build so you can watch the fix.",
+              })}
         </p>
       </div>
     </div>

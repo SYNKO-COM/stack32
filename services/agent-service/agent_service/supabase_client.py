@@ -601,22 +601,27 @@ class Persistence(SupabaseRepository):
     ) -> None:
         draft = identity_draft or {}
         itype = derive_builder_interrupt_type(draft, interrupt_type)
+        # Merge into existing input — never replace the whole JSON or we wipe
+        # top-level ``prompt`` / ``mode`` and Cloud Tasks resumes skip the run.
+        run = await self.get_owned_run(run_id, user_id)
+        meta = dict((run or {}).get("input") or {})
+        clipped = prompt[:8000]
+        meta["prompt"] = clipped
+        meta["interrupt"] = {
+            "type": itype,
+            "agent_id": agent_id,
+            "thread_id": thread_id,
+            "prompt": clipped,
+            "identity_draft": draft,
+            "status": "open",
+        }
         async with get_supabase_admin_client() as client:
             await client.patch(
                 "/runs",
                 params={"id": f"eq.{run_id}", "user_id": f"eq.{user_id}"},
                 json={
                     "error_code": "BUILDER_INTERRUPTED",
-                    "input": {
-                        "interrupt": {
-                            "type": itype,
-                            "agent_id": agent_id,
-                            "thread_id": thread_id,
-                            "prompt": prompt[:8000],
-                            "identity_draft": draft,
-                            "status": "open",
-                        }
-                    },
+                    "input": meta,
                 },
             )
 
@@ -703,6 +708,10 @@ class Persistence(SupabaseRepository):
         interrupt = dict(meta.get("interrupt") or {})
         interrupt["status"] = "completed"
         meta["interrupt"] = interrupt
+        # Restore top-level prompt so queued workers never see an empty prompt.
+        nested = str(interrupt.get("prompt") or "").strip()
+        if nested and not str(meta.get("prompt") or "").strip():
+            meta["prompt"] = nested
         async with get_supabase_admin_client() as client:
             await client.patch(
                 "/runs",

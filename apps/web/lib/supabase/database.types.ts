@@ -912,6 +912,10 @@ export type Database = {
           icon_key: string | null
           id: string
           last_opened_at: string | null
+          listing_currency: string
+          listing_price_cents: number
+          listing_tagline: string | null
+          listing_visibility: string
           name: string
           pre_suspension_status: string | null
           published_version_id: string | null
@@ -931,6 +935,10 @@ export type Database = {
           icon_key?: string | null
           id?: string
           last_opened_at?: string | null
+          listing_currency?: string
+          listing_price_cents?: number
+          listing_tagline?: string | null
+          listing_visibility?: string
           name: string
           pre_suspension_status?: string | null
           published_version_id?: string | null
@@ -950,6 +958,10 @@ export type Database = {
           icon_key?: string | null
           id?: string
           last_opened_at?: string | null
+          listing_currency?: string
+          listing_price_cents?: number
+          listing_tagline?: string | null
+          listing_visibility?: string
           name?: string
           pre_suspension_status?: string | null
           published_version_id?: string | null

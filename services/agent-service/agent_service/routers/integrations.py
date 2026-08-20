@@ -284,6 +284,22 @@ async def tool_dynamic_options(
     return {"options": options}
 
 
+@router.get("/integrations/apps/icons")
+async def lookup_integration_app_icons(
+    user: CurrentUser,
+    ids: str = Query(default="", max_length=800),
+) -> dict[str, Any]:
+    """Batch exact Pipedream img_src lookups (cached in-process)."""
+    _ = user
+    try:
+        slugs = [s.strip().lower() for s in ids.split(",") if s.strip()][:24]
+        client = PipedreamClient()
+        icons = await client.icons_for_apps(slugs)
+        return {"icons": icons}
+    except Exception:  # noqa: BLE001
+        return {"icons": {}}
+
+
 @router.get("/integrations/apps/search")
 async def search_integration_apps(
     user: CurrentUser,

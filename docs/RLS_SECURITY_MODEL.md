@@ -48,7 +48,7 @@ Ownership checks used inside policies live in the `private` schema (`private.own
 | --- | --- | --- | --- |
 | `avatars` | Public read⁴ | Owner folder | `{user_id}/avatar/{filename}` |
 | `agent-knowledge` | Private | Owner folder | `{user_id}/{agent_id}/{source_id}/{filename}` |
-| `attachments` | Private | Owner folder | `{user_id}/{agent_id}/{thread_id}/{attachment_id}/{filename}` |
+| `attachments` | Private; **8 MiB** + MIME allowlist (images/pdf/text) | Owner folder | `{user_id}/{agent_id}/{thread_id}/{attachment_id}/{filename}` |
 
 ⁴ Documented decision: the UI renders avatar URLs directly, so `avatars` is public-read; uploads/updates/deletes remain restricted to the owner's `{user_id}/` folder. Switch to signed URLs later if avatars become sensitive.
 

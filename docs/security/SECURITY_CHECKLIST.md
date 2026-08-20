@@ -14,6 +14,8 @@
 - [x] RLS tests for memories / deployments / queue
 - [x] Tool allowlist only
 - [x] Bounded repair (≤ 2) and run limits
+- [x] Chat `attachments` bucket MIME allowlist + 8 MiB size (aligned with composer)
+- [x] Auth captcha token plumbing (hCaptcha) on login / signup / reset when configured
 - [ ] Provider keys present in local `.env` or Secret Manager (operator)
 - [ ] Staging Cloud Run + Cloud Tasks OIDC (operator after GCP setup)
 
@@ -21,6 +23,7 @@
 
 - Frontend: lint, typecheck, unit, build
 - Python: ruff, pytest, bandit, pip-audit
+- Frontend deps: `pnpm audit` (critical/high) + Dependabot weekly
 - Containers: Trivy
 - Repo: gitleaks, semgrep
 - Database: pgTAP RLS
@@ -29,5 +32,9 @@
 
 - [ ] Rotate any keys previously shared in chat
 - [ ] Confirm `ENVIRONMENT=production` on Cloud Run
-- [ ] Confirm CORS allowlist matches production origins only
+- [ ] Confirm CORS allowlist matches production origins only (`CORS_ORIGINS` includes `https://stack32.com` / `https://www.stack32.com`, not `*`)
 - [ ] Confirm `DATABASE_URL` is direct/server-only (not exposed to browser)
+- [ ] Confirm Supabase Auth email confirmations + hosted captcha enabled
+- [ ] Confirm Supabase **automatic backups** (and PITR if on a plan that supports it)
+- [ ] Document restore drill (who restores, from which backup, RTO target)
+- [ ] Keep CSP Report-Only until Whop / hCaptcha / PostHog reports are clean, then enforce

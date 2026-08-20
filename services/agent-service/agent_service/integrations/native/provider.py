@@ -345,34 +345,6 @@ class NativeToolProvider:
             for a in apps
             if q == a["app_id"] or q in a["name"].lower()
         ][:limit]
-        # region agent log
-        try:
-            import json
-            from pathlib import Path
-
-            Path("/Users/3van/Documents/Stack32/.cursor/debug-faa28e.log").open("a").write(
-                json.dumps(
-                    {
-                        "sessionId": "faa28e",
-                        "runId": "pre-verify",
-                        "hypothesisId": "A",
-                        "location": "native/provider.py:search_apps",
-                        "message": "native app search",
-                        "data": {
-                            "q": q,
-                            "matched_ids": [a["app_id"] for a in matched],
-                            "summary_would_match": any(
-                                q in str(a.get("summary", "")).lower() for a in apps
-                            ),
-                        },
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        except Exception:
-            pass
-        # endregion
         return matched
 
     async def search_tools(self, query: str, *, limit: int = 20) -> list[CatalogTool]:

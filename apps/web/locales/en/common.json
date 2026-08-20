@@ -135,7 +135,68 @@
     "tabs": {
       "created": "Created",
       "using": "Using",
-      "favorites": "Favorites"
+      "favorites": "Favorites",
+      "marketplace": "Marketplace"
+    },
+    "searchPlaceholder": "Search public agents…",
+    "marketplaceEmpty": "No public agents yet. Publish yours from Settings.",
+    "priceFree": "Free",
+    "reviews": "Reviews"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Usage, views, subscribers and reviews for the agents you published.",
+    "empty": "No agents yet. Create one to see stats here.",
+    "views": "Views",
+    "subscribers": "Subscribers",
+    "revenue": "Revenue",
+    "reviewCount": "Reviews",
+    "avgRating": "Rating",
+    "subscriberNames": "People using this agent",
+    "buyerNames": "Paid subscribers",
+    "noNames": "Nobody yet."
+  },
+  "agentSettings": {
+    "title": "Agent settings",
+    "subtitle": "Live access, marketplace listing, and who can use this agent.",
+    "visibility": "Live access",
+    "visibilityPublic": "Public — listed in the marketplace",
+    "visibilityPrivate": "Private — only people you approve via the link",
+    "tagline": "Marketplace tagline",
+    "taglinePlaceholder": "Short pitch for the marketplace",
+    "price": "Price (€, 0 = free)",
+    "publicLink": "Public link",
+    "notPublished": "Publish the agent first to share a live link.",
+    "accessRequests": "Access requests",
+    "noRequests": "No requests yet.",
+    "approve": "Approve",
+    "deny": "Deny",
+    "saved": "Listing saved.",
+    "loadError": "Could not load agent settings.",
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "denied": "Denied"
     }
+  },
+  "review": {
+    "title": "Reviews",
+    "yours": "Your review",
+    "rating": "Rating",
+    "placeholder": "What did you think of this agent?",
+    "submit": "Save review",
+    "empty": "No reviews yet."
+  },
+  "liveAccess": {
+    "privateTitle": "This agent is private",
+    "privateBody": "Ask the creator for access to use it live.",
+    "request": "Request access",
+    "pending": "Access requested — waiting for approval.",
+    "denied": "Access denied."
+  },
+  "publicAgent": {
+    "byline": "by @{{username}} on Stack32",
+    "defaultDescription": "An AI agent built with Stack32. Sign in to chat with it in Live.",
+    "signInToUse": "Sign in to use this agent"
   }
 }

@@ -393,3 +393,71 @@ def test_google_sheet_singular_maps_and_pappers_are_detected():
     assert "google_sheets" in apps
     assert "pappers" in apps
     assert "google_maps" in apps
+
+
+def test_checkpointer_error_does_not_request_postgres_app():
+    from agent_service.builder.capabilities import (
+        filter_unsolicited_database_tools,
+        user_requested_database_app,
+    )
+    from agent_service.models.agent_spec import ToolBinding
+
+    prompt = (
+        "Failed to initialize Postgres checkpointer: FATAL: unrecognized "
+        "configuration parameter \"+search_path\""
+    )
+    apps = extract_external_app_queries(prompt)
+    assert "postgresql" not in apps
+    assert user_requested_database_app(prompt) is False
+    kept = filter_unsolicited_database_tools(
+        [
+            ToolBinding(tool_id="gmail_send_message", enabled=True),
+            ToolBinding(tool_id="pd:postgresql-query", provider="pipedream", enabled=True),
+        ],
+        prompt=prompt,
+    )
+    assert [t.tool_id for t in kept] == ["gmail_send_message"]
+
+
+def test_explicit_postgres_request_is_kept():
+    from agent_service.builder.capabilities import (
+        filter_unsolicited_database_tools,
+        user_requested_database_app,
+    )
+    from agent_service.models.agent_spec import ToolBinding
+
+    prompt = "Query my PostgreSQL database for orders"
+    assert user_requested_database_app(prompt) is True
+    kept = filter_unsolicited_database_tools(
+        [ToolBinding(tool_id="pd:postgresql-query", provider="pipedream", enabled=True)],
+        prompt=prompt,
+    )
+    assert len(kept) == 1
+
+
+def test_remove_postgres_keeps_other_apps():
+    from agent_service.builder.capabilities import (
+        apps_user_asked_to_remove,
+        filter_unsolicited_database_tools,
+        user_requested_database_app,
+    )
+    from agent_service.models.agent_spec import ToolBinding
+
+    prompt = (
+        "Enlève PostgreSQL. Garde Gmail, Google Maps et Google Sheets. "
+        "Ne touche pas à mon modèle."
+    )
+    assert "postgresql" in apps_user_asked_to_remove(prompt)
+    assert user_requested_database_app(prompt) is False
+    kept = filter_unsolicited_database_tools(
+        [
+            ToolBinding(tool_id="gmail_send_message", enabled=True),
+            ToolBinding(tool_id="pd:google_maps-get-place", provider="pipedream", enabled=True),
+            ToolBinding(tool_id="pd:postgresql-query", provider="pipedream", enabled=True),
+        ],
+        prompt=prompt,
+    )
+    ids = [t.tool_id for t in kept]
+    assert "gmail_send_message" in ids
+    assert any("google_maps" in i or "maps" in i for i in ids)
+    assert all("postgres" not in i for i in ids)

@@ -40,7 +40,8 @@ import { lookupIntegrationAppIcons } from "@/lib/actions/integrations";
 import type { ExecutionVisualState } from "@/lib/domain/execution-state";
 import type { ProductNode } from "@/lib/domain/product-agent-graph";
 import type { AgentSpec, ApprovalMode, GraphSpec } from "@/lib/domain/types";
-import { cacheIntegrationIcon } from "@/lib/integrations/icon-resolver";
+import { cacheIntegrationIcon, getCachedIntegrationIcon } from "@/lib/integrations/icon-resolver";
+import { formatScheduleSummary, parseScheduleCron } from "@/lib/schedule-cron";
 
 const nodeTypes = {
   trigger: TriggerNode,
@@ -53,6 +54,8 @@ const nodeTypes = {
 const edgeTypes = {
   status: StatusEdge,
 };
+
+const EMPTY_LEGACY: ExecutionVisualState["legacy"] = {};
 
 /** Resolve the error banner payload for a selected structure node (all agents/tools). */
 function errorForSelectedNode(
@@ -131,10 +134,11 @@ function ProductAgentGraphCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
+  const legacyMap = executionVisual?.legacy ?? EMPTY_LEGACY;
   /** After a successful run, fade greens back to idle after a few seconds. Errors stay. */
   const successKey =
     executionVisual?.runStatus === "success"
-      ? Object.entries(executionVisual.legacy)
+      ? Object.entries(legacyMap)
           .map(([k, v]) => `${k}:${v}`)
           .sort()
           .join("|") || "success"
@@ -167,8 +171,24 @@ function ProductAgentGraphCanvas({
   );
 
   const productGraph = useMemo(
-    () =>
-      buildProductAgentGraph({
+    () => {
+      const schedule = (spec?.triggers ?? []).find(
+        (t) => t.kind === "schedule" && t.enabled,
+      );
+      const dayLabels = {
+        mon: t("panel.dayMon"),
+        tue: t("panel.dayTue"),
+        wed: t("panel.dayWed"),
+        thu: t("panel.dayThu"),
+        fri: t("panel.dayFri"),
+        sat: t("panel.daySat"),
+        sun: t("panel.daySun"),
+        every: t("panel.dayEvery"),
+      };
+      const timing = schedule
+        ? parseScheduleCron(schedule.cron, schedule.timezone)
+        : null;
+      return buildProductAgentGraph({
         definition: spec,
         graph,
         boundToolIds,
@@ -176,8 +196,10 @@ function ProductAgentGraphCanvas({
         boundAppIds,
         modelStatus: modelStatus as never,
         memoryStatus: memoryStatus as never,
-      }),
-    [spec, graph, boundToolIds, boundProviders, boundAppIds, modelStatus, memoryStatus],
+        scheduleSummary: timing ? formatScheduleSummary(timing, dayLabels) : undefined,
+      });
+    },
+    [spec, graph, boundToolIds, boundProviders, boundAppIds, modelStatus, memoryStatus, t],
   );
 
   const layoutSignature = useMemo(
@@ -199,14 +221,29 @@ function ProductAgentGraphCanvas({
   useEffect(() => {
     if (!integrationAppKeySignature) return;
     const keys = integrationAppKeySignature.split("|");
+    const missing = keys.filter((key) => !getCachedIntegrationIcon(key));
+    if (missing.length === 0) return;
     let cancelled = false;
-    void lookupIntegrationAppIcons(keys).then((icons) => {
-      if (cancelled) return;
-      for (const [appKey, src] of Object.entries(icons)) {
-        cacheIntegrationIcon(appKey, src);
-      }
-      setPipedreamIcons(icons);
-    });
+    void lookupIntegrationAppIcons(missing)
+      .then((icons) => {
+        if (cancelled) return;
+        if (Object.keys(icons).length === 0) return;
+        for (const [appKey, src] of Object.entries(icons)) {
+          cacheIntegrationIcon(appKey, src);
+        }
+        setPipedreamIcons((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          for (const [appKey, src] of Object.entries(icons)) {
+            if (src && next[appKey] !== src) {
+              next[appKey] = src;
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -231,9 +268,10 @@ function ProductAgentGraphCanvas({
         const productNode =
           productById.get(node.id) ??
           (node.data as { productNode: ProductNode }).productNode;
+        const appKey = productNode.integration?.appKey ?? "";
         const rawExec =
-          executionVisual?.nodes[productNode.id]?.executionStatus ??
-          executionVisual?.legacy[productNode.id];
+          executionVisual?.nodes?.[productNode.id]?.executionStatus ??
+          executionVisual?.legacy?.[productNode.id];
         return {
           ...node,
           position: positionsRef.current[node.id] ?? node.position,
@@ -241,7 +279,10 @@ function ProductAgentGraphCanvas({
             productNode,
             executionStatus: mapExecStatus(rawExec),
             selected: selected?.id === productNode.id,
-            imgSrc: pipedreamIcons[productNode.integration?.appKey ?? ""] ?? null,
+            imgSrc:
+              pipedreamIcons[appKey] ??
+              getCachedIntegrationIcon(appKey) ??
+              null,
           },
         };
       }),
@@ -261,7 +302,7 @@ function ProductAgentGraphCanvas({
         data: {
           style: edge.style,
           executionStatus: mapExecStatus(
-            executionVisual?.edges[edge.id]?.executionStatus,
+            executionVisual?.edges?.[edge.id]?.executionStatus,
           ),
         },
       })),
@@ -374,11 +415,15 @@ function ProductAgentGraphCanvas({
         modelSubtitle={modelNode?.subtitle}
         integrationCount={integrationCount}
         executionError={executionVisual?.error ?? null}
+        onSaved={onConfigChanged}
       />
       <TriggerDrawer
         open={selected?.kind === "trigger_chat" || selected?.kind === "trigger_schedule"}
         onOpenChange={(open) => !open && setSelected(null)}
         node={selected}
+        agentId={agentId}
+        spec={spec}
+        onSaved={onConfigChanged}
       />
       <GenericDrawer
         open={

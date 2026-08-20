@@ -66,6 +66,7 @@ async def test_build_mode_does_not_use_chat_handler():
     db.load_draft_spec = AsyncMock(return_value=None)
     db.tag_thinking_with_run = AsyncMock()
     db.update_run_status = AsyncMock()
+    db.get_owned_run = AsyncMock(return_value={"input": {}})
 
     orch = BuilderOrchestrator(db)
     orch._handle_chat_turn = AsyncMock(return_value={"status": "completed", "mode": "chat"})
@@ -96,3 +97,38 @@ def test_builder_message_request_accepts_chat_mode():
     assert body.mode == "chat"
     body2 = BuilderMessageRequest(content="Add gmail", mode="build")
     assert body2.mode == "build"
+
+
+def test_queued_run_preserves_chat_mode():
+    from agent_service.queue.worker import _builder_mode_from_run
+
+    assert _builder_mode_from_run({"input": {"mode": "chat", "prompt": "why postgres?"}}) == "chat"
+    assert _builder_mode_from_run({"input": {"mode": "build"}}) == "build"
+    assert _builder_mode_from_run({"input": {}}) == "build"
+    assert _builder_mode_from_run({}) == "build"
+
+
+@pytest.mark.asyncio
+async def test_preserved_model_keeps_this_users_config():
+    from agent_service.models.agent_spec import (
+        AgentIdentity,
+        AgentInstructions,
+        AgentSpec,
+        ModelConfig,
+        ModelPolicy,
+    )
+    from agent_service.models.graph_spec import default_linear_graph
+
+    spec = AgentSpec(
+        identity=AgentIdentity(name="A", role="R"),
+        goal="g",
+        instructions=AgentInstructions(system="You are a helpful assistant."),
+        model=ModelConfig(provider="openai", model_id="gpt-4o-mini"),
+        model_policy=ModelPolicy(),
+        graph=default_linear_graph([]),
+    )
+    orch = BuilderOrchestrator(MagicMock())
+    kept = await orch._preserved_model(spec, user_id="u1", agent_id="a1")
+    assert kept is not None
+    assert kept.provider == "openai"
+    assert kept.model_id == "gpt-4o-mini"

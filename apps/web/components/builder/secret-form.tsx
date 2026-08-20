@@ -1,30 +1,22 @@
 "use client";
 
-import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { DaSelect } from "@/components/ui/da-select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  submitBuilderSecret,
-  submitLiveLlmSecret,
-} from "@/lib/actions/builder";
+import { updateAgentModel, submitBuilderSecret } from "@/lib/actions/builder";
+import { listAgentConnections } from "@/lib/actions/connections";
 import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
+import {
+  LIVE_LLM_PROVIDERS,
+  modelsForProvider,
+  pipedreamAppForLlmProvider,
+  type LiveLlmProviderId,
+} from "@/lib/ai/llm-catalog";
 import type { BuilderUiComponent } from "@/lib/domain/types";
 import { useTranslation } from "@/hooks/use-translation";
-
-const FALLBACK_PROVIDERS = [
-  "openai",
-  "anthropic",
-  "google",
-  "xai",
-  "mistral",
-  "groq",
-  "openrouter",
-] as const;
 
 interface SecretFormProps {
   uiComponent: BuilderUiComponent;
@@ -37,50 +29,79 @@ function fieldDefault(fields: BuilderUiComponent["fields"], key: string): string
   return fields.find((f) => f.key === key)?.suggested_value ?? "";
 }
 
+function normalizeLiveProvider(raw: string | undefined): LiveLlmProviderId {
+  const value = (raw || "openai").toLowerCase();
+  return (LIVE_LLM_PROVIDERS as readonly string[]).includes(value)
+    ? (value as LiveLlmProviderId)
+    : "openai";
+}
+
+/**
+ * Live / Build LLM gate — connect the provider via Pipedream (no pasted API keys).
+ * Model id is chosen in Stack32 and sent to LiteLLM; Pipedream only holds the account key.
+ */
 export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretFormProps) {
   const queryClient = useQueryClient();
-  const { t } = useTranslation(["builder", "errors"]);
-  const [provider, setProvider] = useState(
-    () => fieldDefault(uiComponent.fields, "provider") || "openai",
+  const { t } = useTranslation(["builder", "structure", "errors"]);
+  const [provider, setProvider] = useState<LiveLlmProviderId>(() =>
+    normalizeLiveProvider(fieldDefault(uiComponent.fields, "provider")),
   );
-  const [apiKey, setApiKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [modelId, setModelId] = useState(
+    () => fieldDefault(uiComponent.fields, "model_id") || "",
+  );
   const [completed, setCompleted] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (submitting || completed) return;
-    if (!apiKey.trim() || apiKey.trim().length < 8) {
-      setErrorKey("errors:form.required");
-      return;
-    }
-    setSubmitting(true);
-    setErrorKey(null);
-    setCompleted(true);
-    onSubmitted?.();
+  const { data: connectionPayload, isFetching: connectionsLoading } = useQuery({
+    queryKey: ["connections", agentId],
+    queryFn: () => listAgentConnections(agentId),
+  });
+
+  const appId = pipedreamAppForLlmProvider(provider);
+  const models = modelsForProvider(provider);
+  const resolvedModelId =
+    models.some((m) => m.id === modelId) ? modelId : (models[0]?.id ?? modelId);
+
+  const connection = useMemo(() => {
+    const list = connectionPayload?.connections ?? [];
+    const aliases = new Set(
+      [appId, provider, ...(provider === "mistral" ? ["mistral_ai", "mistral"] : [])].map((s) =>
+        s.toLowerCase(),
+      ),
+    );
+    return list.find((c) => {
+      const status = String(c.status || "").toLowerCase();
+      if (!["active", "connected", "ok"].includes(status)) return false;
+      return aliases.has(String(c.app_id || "").toLowerCase());
+    });
+  }, [connectionPayload, appId, provider]);
+
+  const connectStatus = connection
+    ? "connected"
+    : connectionsLoading
+      ? "needs_setup"
+      : "disconnected";
+
+  const finish = async () => {
     try {
-      if (uiComponent.context === "live" || !runId) {
-        await submitLiveLlmSecret({
-          agentId,
-          provider,
-          apiKey: apiKey.trim(),
-        });
-      } else {
+      if (runId) {
         await submitBuilderSecret({
           runId,
           provider,
-          apiKey: apiKey.trim(),
+          modelId: resolvedModelId || undefined,
         });
+      } else if (provider && resolvedModelId) {
+        await updateAgentModel({ agentId, provider, modelId: resolvedModelId });
       }
-      setApiKey("");
+      setCompleted(true);
+      onSubmitted?.();
       void queryClient.invalidateQueries({ queryKey: ["builder"] });
       void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      void queryClient.invalidateQueries({ queryKey: ["connections", agentId] });
+      void queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
     } catch (err) {
-      setCompleted(false);
       setErrorKey(agentServiceErrorKey(err));
-      setSubmitting(false);
+      setCompleted(false);
     }
   };
 
@@ -89,71 +110,56 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
   }
 
   return (
-    <form
-      onSubmit={(e) => void handleSubmit(e)}
-      className="mt-3 space-y-3 border-t border-border/60 pt-3"
-    >
+    <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {t("builder:secrets.secureNotice")}
+        {t("builder:secrets.pipedreamNotice")}
       </p>
 
       <div className="space-y-1.5">
-        <Label htmlFor="secret-provider">{t("builder:secrets.provider")}</Label>
+        <Label>{t("builder:secrets.provider")}</Label>
         <DaSelect
-          id="secret-provider"
           value={provider}
-          disabled={submitting}
-          options={FALLBACK_PROVIDERS.map((option) => ({
-            value: option,
-            label: t(`builder:secrets.providers.${option}`, { defaultValue: option }),
+          onChange={(v) => {
+            const next = normalizeLiveProvider(v);
+            setProvider(next);
+            const nextModels = modelsForProvider(next);
+            setModelId(nextModels[0]?.id ?? "");
+          }}
+          options={LIVE_LLM_PROVIDERS.map((p) => ({
+            value: p,
+            label: t(`builder:secrets.providers.${p}`, { defaultValue: p }),
           }))}
-          onChange={setProvider}
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="secret-api-key">{t("builder:secrets.apiKey")}</Label>
-        <div className="relative">
-          <Input
-            id="secret-api-key"
-            type={showKey ? "text" : "password"}
-            autoComplete="off"
-            spellCheck={false}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            required
-            disabled={submitting}
-            placeholder={t("builder:secrets.apiKeyPlaceholder")}
-            className="rounded-xl bg-background/40 pr-10 font-mono text-sm"
+      {models.length > 0 ? (
+        <div className="space-y-1.5">
+          <Label>{t("structure:panel.model")}</Label>
+          <DaSelect
+            value={resolvedModelId}
+            onChange={setModelId}
+            options={models.map((m) => ({ value: m.id, label: m.label }))}
           />
-          <button
-            type="button"
-            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground"
-            onClick={() => setShowKey((v) => !v)}
-            aria-label={showKey ? t("builder:secrets.hide") : t("builder:secrets.show")}
-          >
-            {showKey ? (
-              <EyeOff className="size-4" aria-hidden="true" />
-            ) : (
-              <Eye className="size-4" aria-hidden="true" />
-            )}
-          </button>
+          <p className="text-xs text-muted-foreground">{t("structure:panel.modelChoiceHint")}</p>
         </div>
-        <p className="text-[11px] text-muted-foreground">{t("builder:secrets.byokHint")}</p>
-      </div>
+      ) : null}
 
-      {errorKey ? <p className="text-xs text-destructive">{t(errorKey)}</p> : null}
+      <IntegrationConnectionCard
+        provider="pipedream"
+        appId={appId}
+        agentId={agentId}
+        status={connectStatus}
+        accountEmail={connection?.account_email}
+        connectionId={connection?.id}
+        onConnected={() => {
+          void finish();
+        }}
+        onChanged={() => {
+          void queryClient.invalidateQueries({ queryKey: ["connections", agentId] });
+        }}
+      />
 
-      <Button type="submit" size="sm" className="rounded-full" disabled={submitting}>
-        {submitting ? (
-          <>
-            <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
-            {t("builder:secrets.submitting")}
-          </>
-        ) : (
-          t("builder:secrets.continue")
-        )}
-      </Button>
-    </form>
+      {errorKey ? <p className="text-sm text-destructive">{t(errorKey)}</p> : null}
+    </div>
   );
 }

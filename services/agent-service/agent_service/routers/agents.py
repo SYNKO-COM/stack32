@@ -126,6 +126,26 @@ async def get_agent_readiness(
             detail={"code": "AGENT_SPEC_INVALID", "message": "Draft spec missing."},
         )
 
+    model_cfg = getattr(spec, "model", None)
+    if model_cfg is None or not getattr(model_cfg, "is_configured", False):
+        from agent_service.models.agent_spec import AgentSpec
+        from agent_service.security.user_secrets import latest_valid_model_config
+
+        restored = await latest_valid_model_config(
+            user_id=user.user_id, agent_id=str(agent_id)
+        )
+        if restored:
+            data = spec.model_dump()
+            data["model"] = restored
+            spec = AgentSpec.model_validate(data)
+            await db.persist_version(
+                agent_id=str(agent_id),
+                user_id=user.user_id,
+                spec=spec,
+                test_status="not_run",
+                change_summary="Restore this user's saved model after a builder overwrite",
+            )
+
     if scope == "definition":
         result = await evaluate_definition_readiness(
             agent_id=str(agent_id),
@@ -282,7 +302,8 @@ async def patch_memory_settings(
             status_code=400, detail={"code": "AGENT_SPEC_INVALID", "message": "No draft spec."}
         )
     data = spec.model_dump()
-    memory = data.get("memory") or {}
+    memory = dict(data.get("memory") or {})
+    previous_app = str(memory.get("external_app_id") or "").strip() or None
     for key in (
         "conversation_enabled",
         "semantic_enabled",
@@ -290,10 +311,41 @@ async def patch_memory_settings(
         "retention_days",
         "provider",
         "conversation_window",
+        "external_app_id",
+        "external_instructions",
     ):
         if key in body:
             memory[key] = body[key]
-    data["memory"] = memory
+
+    provider = str(memory.get("provider") or "stack32")
+    if provider == "external_postgres":
+        app_id = str(memory.get("external_app_id") or "").strip() or None
+        memory["conversation_enabled"] = False
+        memory["semantic_enabled"] = False
+        memory["write_policy"] = "never"
+        if not app_id:
+            memory["external_app_id"] = None
+        instructions = memory.get("external_instructions")
+        if isinstance(instructions, str):
+            memory["external_instructions"] = instructions.strip()[:4000] or None
+        data["memory"] = memory
+        data = await _sync_external_memory_tools(
+            data,
+            previous_app_id=previous_app,
+            new_app_id=app_id,
+        )
+    else:
+        memory["provider"] = "stack32"
+        memory["external_app_id"] = None
+        memory["external_instructions"] = None
+        data["memory"] = memory
+        if previous_app:
+            data = await _sync_external_memory_tools(
+                data,
+                previous_app_id=previous_app,
+                new_app_id=None,
+            )
+
     from agent_service.models.agent_spec import AgentSpec
 
     updated = AgentSpec.model_validate(data)
@@ -306,6 +358,285 @@ async def patch_memory_settings(
     )
     return {"version_id": version.get("id"), "memory": updated.memory.model_dump()}
 
+
+class TriggerPatchItem(BaseModel):
+    kind: str = Field(min_length=2, max_length=32)
+    enabled: bool = True
+    cron: str | None = Field(default=None, max_length=120)
+    timezone: str | None = Field(default=None, max_length=64)
+
+
+class TriggersPatchRequest(BaseModel):
+    """Replace Chat/Schedule triggers on the draft spec and sync agent_schedules."""
+
+    triggers: list[TriggerPatchItem] = Field(default_factory=list, max_length=20)
+    schedule_hourly: bool | None = None
+    cron: str | None = Field(default=None, max_length=120)
+    timezone: str | None = Field(default=None, max_length=64)
+
+
+@router.patch("/{agent_id}/triggers")
+async def patch_triggers(
+    agent_id: UUID, user: CurrentUser, body: TriggersPatchRequest
+) -> dict[str, Any]:
+    from agent_service.models.agent_spec import AgentSpec, normalize_triggers
+
+    db: Persistence = get_persistence()
+    spec = await db.load_draft_spec(str(agent_id), user.user_id)
+    if not spec:
+        raise HTTPException(
+            status_code=400, detail={"code": "AGENT_SPEC_INVALID", "message": "No draft spec."}
+        )
+
+    default_cron = (body.cron or "0 9 * * 1,2,3,4,5").strip()[:120]
+    default_tz = (body.timezone or "UTC").strip()[:64] or "UTC"
+
+    raw_triggers: list[dict[str, Any]]
+    if body.schedule_hourly is not None and not body.triggers:
+        raw_triggers = [{"kind": "chat", "enabled": True, "cron": None, "timezone": None}]
+        if body.schedule_hourly:
+            # Preserve existing schedule timing when re-enabling without explicit triggers.
+            prior = next(
+                (t for t in (spec.triggers or []) if t.kind == "schedule"),
+                None,
+            )
+            cron = (prior.cron if prior and prior.cron else default_cron)[:120]
+            timezone = (prior.timezone if prior and prior.timezone else default_tz)[:64]
+            # Legacy every-hour cron is incomplete for days+time UI — replace with default.
+            hour_field = cron.split()[1] if len(cron.split()) == 5 else "*"
+            if hour_field == "*":
+                cron = default_cron
+                timezone = default_tz
+            raw_triggers.append(
+                {
+                    "kind": "schedule",
+                    "enabled": True,
+                    "cron": cron,
+                    "timezone": timezone,
+                }
+            )
+    else:
+        raw_triggers = [item.model_dump() for item in body.triggers]
+
+    # Always keep Chat on the MVP surface.
+    if not any(str(t.get("kind") or "").lower() == "chat" for t in raw_triggers):
+        raw_triggers.insert(
+            0, {"kind": "chat", "enabled": True, "cron": None, "timezone": None}
+        )
+
+    normalized = normalize_triggers(raw_triggers)
+    data = spec.model_dump()
+    data["triggers"] = normalized
+    updated = AgentSpec.model_validate(data)
+
+    schedule = next((t for t in updated.triggers if t.kind == "schedule" and t.enabled), None)
+    await _sync_schedule_rows(
+        user_id=user.user_id,
+        agent_id=str(agent_id),
+        schedule=schedule,
+    )
+
+    version = await db.persist_version(
+        agent_id=str(agent_id),
+        user_id=user.user_id,
+        spec=updated,
+        test_status="not_run",
+        change_summary="Triggers updated",
+    )
+    return {
+        "version_id": version.get("id"),
+        "triggers": [t.model_dump() for t in updated.triggers],
+    }
+
+
+async def _sync_schedule_rows(
+    *,
+    user_id: str,
+    agent_id: str,
+    schedule: Any | None,
+) -> None:
+    """Create/enable or disable agent_schedules to match the schedule trigger."""
+    from datetime import UTC, datetime
+
+    from agent_service.scheduling.cron import CronError, compute_next_run
+    from agent_service.supabase_client import get_supabase_admin_client
+
+    async with get_supabase_admin_client() as client:
+        existing = await client.get(
+            "/agent_schedules",
+            params={
+                "agent_id": f"eq.{agent_id}",
+                "user_id": f"eq.{user_id}",
+                "select": "id,enabled,cron_expression,timezone",
+                "order": "created_at.desc",
+            },
+        )
+        rows = existing.json() if existing.status_code < 400 else []
+        if not isinstance(rows, list):
+            rows = []
+
+        if schedule is None:
+            for row in rows:
+                if row.get("enabled"):
+                    await client.patch(
+                        "/agent_schedules",
+                        params={"id": f"eq.{row['id']}"},
+                        json={"enabled": False},
+                    )
+            return
+
+        cron = str(schedule.cron or "0 9 * * 1,2,3,4,5")[:120]
+        timezone = str(schedule.timezone or "UTC")[:64]
+        next_run_at: str | None = None
+        try:
+            next_run_at = compute_next_run(cron, timezone, datetime.now(UTC)).isoformat()
+        except CronError:
+            next_run_at = None
+
+        payload = {
+            "enabled": True,
+            "cron_expression": cron,
+            "timezone": timezone,
+            "config": {"source": "structure_triggers", "trigger_chat": True},
+            **({"next_run_at": next_run_at} if next_run_at else {}),
+        }
+        if rows:
+            primary = rows[0]
+            await client.patch(
+                "/agent_schedules",
+                params={"id": f"eq.{primary['id']}"},
+                json=payload,
+            )
+            for row in rows[1:]:
+                if row.get("enabled"):
+                    await client.patch(
+                        "/agent_schedules",
+                        params={"id": f"eq.{row['id']}"},
+                        json={"enabled": False},
+                    )
+            return
+
+        await client.post(
+            "/agent_schedules",
+            json={
+                "user_id": user_id,
+                "agent_id": agent_id,
+                "cron_expression": cron,
+                "timezone": timezone,
+                "enabled": True,
+                "config": {"source": "structure_triggers", "trigger_chat": True},
+                **({"next_run_at": next_run_at} if next_run_at else {}),
+            },
+        )
+
+
+async def _sync_external_memory_tools(
+    data: dict[str, Any],
+    *,
+    previous_app_id: str | None,
+    new_app_id: str | None,
+) -> dict[str, Any]:
+    """Bind Pipedream DB tools + connection requirement for external memory."""
+    from agent_service.builder.capabilities import (
+        _app_slug_from_tool_id,
+        build_connection_requirements,
+        resolve_pipedream_app,
+    )
+    from agent_service.integrations.registry import get_provider_registry
+    from agent_service.models.agent_spec import ToolBinding
+
+    def _norm(value: str | None) -> str:
+        return (value or "").strip().lower().replace("-", "_")
+
+    prev = _norm(previous_app_id)
+    nxt = _norm(new_app_id)
+
+    tools_raw = list(data.get("tools") or [])
+    bindings: list[ToolBinding] = []
+    for item in tools_raw:
+        try:
+            bindings.append(
+                item if isinstance(item, ToolBinding) else ToolBinding.model_validate(item)
+            )
+        except Exception:  # noqa: BLE001
+            continue
+
+    def _belongs(binding: ToolBinding, app: str) -> bool:
+        if not app:
+            return False
+        bid_app = _norm(binding.app_id) or _norm(_app_slug_from_tool_id(binding.tool_id))
+        return bid_app == app or _norm(binding.tool_id).startswith(f"pd:{app}-")
+
+    # Drop tools that belonged only to the previous external memory app.
+    if prev and prev != nxt:
+        bindings = [b for b in bindings if not _belongs(b, prev)]
+
+    if nxt:
+        seen = {b.tool_id for b in bindings}
+        selected: list[ToolBinding] = list(bindings)
+
+        def add_binding(binding: ToolBinding) -> None:
+            if binding.tool_id in seen:
+                return
+            seen.add(binding.tool_id)
+            selected.append(binding)
+
+        reg = get_provider_registry()
+        search = getattr(reg, "search", None) or reg.search_tools
+        try:
+            await resolve_pipedream_app(
+                app_query=nxt,
+                prompt=f"{nxt} database query select insert update read write memory",
+                registry=reg,
+                search=search,
+                add_binding=add_binding,
+                ambiguous=[],
+                max_actions=3,
+            )
+        except Exception:  # noqa: BLE001
+            # Connection requirement below still lets the user Connect; tools can JIT later.
+            pass
+        bindings = selected
+
+    # Rebuild connection requirements from the full tool set.
+    data["tools"] = [b.model_dump() for b in bindings]
+    try:
+        reqs = await build_connection_requirements(bindings)
+        data["connection_requirements"] = [r.model_dump() for r in reqs]
+    except Exception:  # noqa: BLE001
+        # Fallback: ensure at least the chosen memory app is required.
+        if nxt:
+            reqs = list(data.get("connection_requirements") or [])
+            key = f"pipedream:{nxt}"
+            if not any(
+                str(r.get("provider") or "").lower() == "pipedream"
+                and _norm(str(r.get("app_id") or "")) == nxt
+                for r in reqs
+                if isinstance(r, dict)
+            ):
+                reqs.append(
+                    {
+                        "provider": "pipedream",
+                        "app_id": nxt,
+                        "auth_type": "oauth2",
+                        "tool_ids": [],
+                        "required_for": [],
+                        "required": True,
+                    }
+                )
+            data["connection_requirements"] = reqs
+        elif prev:
+            reqs = [
+                r
+                for r in (data.get("connection_requirements") or [])
+                if not (
+                    isinstance(r, dict)
+                    and str(r.get("provider") or "").lower() == "pipedream"
+                    and _norm(str(r.get("app_id") or "")) == prev
+                )
+            ]
+            data["connection_requirements"] = reqs
+    return data
 
 class ModelPatchRequest(BaseModel):
     provider: str = Field(min_length=2, max_length=32)

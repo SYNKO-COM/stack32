@@ -50,3 +50,19 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+
+  frontend-deps:
+    name: Frontend dependency audit (pnpm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Informational until the advisory backlog is cleared — Dependabot opens weekly PRs.
+      - name: pnpm audit (high+)
+        run: pnpm audit --audit-level=high
+        continue-on-error: true

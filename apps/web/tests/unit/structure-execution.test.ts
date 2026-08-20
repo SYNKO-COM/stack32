@@ -76,7 +76,8 @@ describe("live execution state mapping", () => {
     expect(state.gmail_send_message).toBe("error");
     expect(state["pd:hubspot-create-contact"]).toBe("waiting_for_connection");
     expect(state.output).toBe("success");
-    expect(state.brain).toBe("success");
+    // Soft tool failures after run.completed must stop the agent spinner.
+    expect(state.brain).toBe("error");
   });
 
   it("maps conversation memory events onto the Memory node", () => {

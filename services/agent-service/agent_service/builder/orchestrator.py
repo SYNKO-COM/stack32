@@ -24,12 +24,47 @@ from agent_service.models.agent_spec import (
     MemoryConfig,
     ModelPolicy,
     ToolBinding,
+    TriggerConfig,
 )
 from agent_service.models.graph_spec import GraphEdge, GraphNode, GraphSpec, default_linear_graph
 from agent_service.security.redaction import redact_text
 from agent_service.supabase_client import Persistence
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_spec_triggers(
+    *,
+    current: AgentSpec | None,
+    schedule_hourly: bool,
+) -> list[TriggerConfig]:
+    """Chat is always on; schedule comes from capabilities or a preserved current trigger."""
+    triggers: list[TriggerConfig] = [TriggerConfig(kind="chat", enabled=True)]
+    current_schedule = None
+    if current is not None:
+        for item in current.triggers or []:
+            if getattr(item, "kind", None) == "schedule":
+                current_schedule = item
+                break
+    if schedule_hourly:
+        triggers.append(
+            TriggerConfig(
+                kind="schedule",
+                enabled=True,
+                cron=str(getattr(current_schedule, "cron", None) or "0 9 * * 1,2,3,4,5")[:120],
+                timezone=str(getattr(current_schedule, "timezone", None) or "UTC")[:64],
+            )
+        )
+    elif current_schedule is not None and getattr(current_schedule, "enabled", True):
+        triggers.append(
+            TriggerConfig(
+                kind="schedule",
+                enabled=True,
+                cron=str(getattr(current_schedule, "cron", None) or "0 9 * * 1,2,3,4,5")[:120],
+                timezone=str(getattr(current_schedule, "timezone", None) or "UTC")[:64],
+            )
+        )
+    return triggers
 
 
 class BuilderIntent(StrEnum):
@@ -228,6 +263,27 @@ class BuilderOrchestrator:
         await self.db.update_run_status(run_id, "running")
         await self.db.emit_event(run_id, "run.started", {"mapping_key": "builder.progress.started"})
         await self.db.tag_thinking_with_run(thread_id=thread_id, run_id=run_id)
+        # Platform-wide learning: every Builder turn (esp. Try to fix) enriches shared memory.
+        try:
+            from agent_service.learning import (
+                extract_error_signals_from_prompt,
+                record_error_observation,
+            )
+
+            err_code, err_reason = extract_error_signals_from_prompt(content)
+            if err_code or "STACK32 LIVE TOOL REPAIR" in (content or "").upper():
+                await record_error_observation(
+                    error_code=err_code or "LIVE_TOOL_REPAIR",
+                    reason=err_reason or content[:500],
+                    context={
+                        "source": "builder_turn",
+                        "agent_id": agent_id,
+                        "run_id": run_id,
+                        "has_live_repair": "STACK32 LIVE TOOL REPAIR" in (content or "").upper(),
+                    },
+                )
+        except Exception:  # noqa: BLE001
+            logger.debug("builder_turn_observation_failed", exc_info=True)
         # Keep draft until identity/setup is done — "building" is reserved for the real compile.
 
         try:
@@ -252,6 +308,23 @@ class BuilderOrchestrator:
 
             current_spec = await self.db.load_draft_spec(agent_id, user_id)
             needs_identity = self._needs_identity_setup(agent, current_spec)
+            run_row_early = await self.db.get_owned_run(run_id, user_id)
+            payload_early = (run_row_early or {}).get("input") or {}
+            stored_ident_early = (
+                payload_early.get("identity")
+                if isinstance(payload_early.get("identity"), dict)
+                else None
+            )
+            stored_caps_early = (
+                payload_early.get("capabilities")
+                if isinstance(payload_early.get("capabilities"), dict)
+                else None
+            )
+            # Post-capabilities Cloud Tasks resume: identity already confirmed on this run.
+            if stored_ident_early and str(stored_ident_early.get("name") or "").strip():
+                placeholders = {"", "untitled agent", "untitled", "agent", "new agent"}
+                if str(stored_ident_early.get("name") or "").strip().lower() not in placeholders:
+                    needs_identity = False
 
             # Identity interrupt — always first for a new / untitled agent.
             if intent in (BuilderIntent.CREATE, BuilderIntent.MODIFY) and needs_identity:
@@ -386,6 +459,29 @@ class BuilderOrchestrator:
             description=(description or "")[:2000],
         )
         await self.db.rename_agent(agent_id, user_id, identity.name)
+        # Keep draft identity in sync so Cloud Tasks resumes don't see "Untitled agent".
+        try:
+            current = await self.db.load_draft_spec(agent_id, user_id)
+            if current is not None:
+                data = current.model_dump()
+                data["identity"] = identity.model_dump()
+                from agent_service.models.agent_spec import AgentSpec as _AgentSpec
+
+                updated = _AgentSpec.model_validate(data)
+                await self.db.persist_version(
+                    agent_id=agent_id,
+                    user_id=user_id,
+                    spec=updated,
+                    test_status="not_run",
+                    change_summary="Identity confirmed",
+                )
+        except Exception:  # noqa: BLE001
+            logger.debug("identity_draft_sync_failed", exc_info=True)
+        await self.db.merge_run_input(
+            run_id,
+            user_id,
+            {"identity": identity.model_dump(), "prompt": prompt[:8000]},
+        )
         await self.db.emit_event(
             run_id, "builder.identity.completed", {"mapping_key": "builder.progress.identityDone"}
         )
@@ -444,9 +540,10 @@ class BuilderOrchestrator:
                 "interrupt_run_id": run_id,
                 "ui_component": {
                     "type": "secret_form",
-                    "version": "1",
+                    "version": "2",
                     "request_id": str(uuid.uuid4()),
                     "context": "builder",
+                    "auth_mode": "pipedream",
                     "fields": [
                         {
                             "key": "provider",
@@ -456,17 +553,14 @@ class BuilderOrchestrator:
                             "options": [
                                 "openai",
                                 "anthropic",
-                                "google",
                                 "xai",
                                 "mistral",
-                                "groq",
-                                "openrouter",
                             ],
                         },
                         {
-                            "key": "api_key",
-                            "type": "secret",
-                            "required": True,
+                            "key": "model_id",
+                            "type": "text",
+                            "required": False,
                             "suggested_value": "",
                         },
                     ],
@@ -496,7 +590,8 @@ class BuilderOrchestrator:
         run_id: str,
         user_id: str,
         provider: str,
-        api_key: str,
+        api_key: str = "",
+        model_id: str | None = None,
     ) -> dict[str, Any]:
         interrupt = await self.db.get_builder_interrupt(run_id, user_id)
         if not interrupt or interrupt.get("status") == "completed":
@@ -513,24 +608,84 @@ class BuilderOrchestrator:
             description=str(draft.get("description") or "")[:2000],
         )
 
-        from agent_service.security.user_secrets import upsert_llm_secret
+        provider_norm = (provider or "openai").lower().strip()
+        key = (api_key or "").strip()
+        if key:
+            from agent_service.security.user_secrets import upsert_llm_secret
 
-        await upsert_llm_secret(
-            user_id=user_id,
-            agent_id=agent_id,
-            provider=provider,
-            api_key=api_key,
-        )
-        await self.db.audit(
-            user_id=user_id,
-            agent_id=agent_id,
-            action="secret_upsert",
-            resource_type="user_secret",
-            resource_id=provider,
-            result="success",
-            risk_level="high",
-            metadata={"provider": provider, "hint_only": True},
-        )
+            await upsert_llm_secret(
+                user_id=user_id,
+                agent_id=agent_id,
+                provider=provider_norm,
+                api_key=key,
+            )
+            await self.db.audit(
+                user_id=user_id,
+                agent_id=agent_id,
+                action="secret_upsert",
+                resource_type="user_secret",
+                resource_id=provider_norm,
+                result="success",
+                risk_level="high",
+                metadata={"provider": provider_norm, "hint_only": True},
+            )
+        else:
+            # Pipedream Connect path — credentials live on Pipedream.
+            from agent_service.integrations.pipedream.llm import (
+                resolve_pipedream_llm_credentials,
+            )
+            from agent_service.security.user_secrets import resolve_llm_credentials
+
+            pd = await resolve_pipedream_llm_credentials(
+                user_id=user_id, provider=provider_norm
+            )
+            legacy = None
+            if not pd:
+                legacy = await resolve_llm_credentials(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    preferred_provider=provider_norm,
+                )
+            if not pd and not legacy:
+                return {
+                    "error": "LLM_CONFIGURATION_REQUIRED",
+                    "message": "Connect your LLM provider with Pipedream first.",
+                }
+            await self.db.audit(
+                user_id=user_id,
+                agent_id=agent_id,
+                action="llm_pipedream_connected",
+                resource_type="pipedream_account",
+                resource_id=provider_norm,
+                result="success",
+                risk_level="medium",
+                metadata={"provider": provider_norm, "source": "pipedream"},
+            )
+
+        if model_id and model_id.strip():
+            try:
+                spec = await self.db.load_draft_spec(agent_id, user_id)
+                if spec is not None:
+                    data = spec.model_dump()
+                    model = dict(data.get("model") or {})
+                    model["provider"] = provider_norm
+                    model["model_id"] = model_id.strip()[:200]
+                    model["credential_scope"] = "agent"
+                    model["fallback_enabled"] = False
+                    data["model"] = model
+                    from agent_service.models.agent_spec import AgentSpec
+
+                    updated = AgentSpec.model_validate(data)
+                    await self.db.persist_version(
+                        agent_id=agent_id,
+                        user_id=user_id,
+                        spec=updated,
+                        test_status="not_run",
+                        change_summary="Model set via Pipedream Connect",
+                    )
+            except Exception:  # noqa: BLE001
+                logger.debug("builder_model_persist_after_pipedream_failed", exc_info=True)
+
         await self.db.resolve_builder_form(thread_id=thread_id, request_id=run_id)
         await self.db.clear_builder_interrupt(run_id, user_id)
         await self.db.update_run_status(run_id, "running")
@@ -592,7 +747,7 @@ class BuilderOrchestrator:
                     json={
                         "user_id": user_id,
                         "agent_id": agent_id,
-                        "cron_expression": "0 * * * *",
+                        "cron_expression": "0 9 * * 1,2,3,4,5",
                         "timezone": "UTC",
                         "enabled": True,
                         "config": {"source": "builder_capabilities", "trigger_chat": True},
@@ -957,38 +1112,9 @@ class BuilderOrchestrator:
             {
                 "capabilities": capabilities or {},
                 "identity": identity.model_dump(),
+                "prompt": content[:8000],
             },
         )
-        # region agent log
-        logger.info(
-            "builder_resume_dispatch run=%s preferred=%s",
-            run_id,
-            (capabilities or {}).get("preferred_apps"),
-        )
-        try:
-            import json
-            from pathlib import Path
-
-            Path("/Users/3van/Documents/Stack32/.cursor/debug-faa28e.log").open("a").write(
-                json.dumps(
-                    {
-                        "sessionId": "faa28e",
-                        "runId": "post-fix",
-                        "hypothesisId": "F",
-                        "location": "orchestrator.py:_dispatch_continue_after_form",
-                        "message": "dispatch continue after form",
-                        "data": {
-                            "run_id": run_id,
-                            "preferred": (capabilities or {}).get("preferred_apps"),
-                        },
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        except Exception:
-            pass
-        # endregion
         from agent_service.queue.dispatch import dispatch_run
 
         return await dispatch_run(
@@ -1788,6 +1914,8 @@ class BuilderOrchestrator:
                 complexity,
                 current_spec,
                 capabilities=capabilities,
+                user_id=user_id,
+                agent_id=agent_id,
             )
             original_goal = (
                 (capabilities or {}).get("original_goal")
@@ -1982,6 +2110,45 @@ class BuilderOrchestrator:
             test_status="passed" if test_report["status"].startswith("passed") else "failed",
             change_summary=f"Builder update from prompt ({complexity.value})",
         )
+        # Shared learning: successful repair after Live tool failure helps all users.
+        if str(test_report.get("status") or "").startswith("passed") and (
+            "STACK32 LIVE TOOL REPAIR" in (content or "").upper()
+            or (
+                "fetch_url" in (content or "").lower()
+                and (
+                    "TOOL_FAILED" in (content or "").upper()
+                    or "UnsafeURL" in (content or "")
+                    or "FETCH_URL_GOOGLE_BLOCKED" in (content or "").upper()
+                )
+            )
+        ):
+            try:
+                from agent_service.learning import (
+                    extract_error_signals_from_prompt,
+                    record_repair_lesson,
+                )
+
+                err_code, err_reason = extract_error_signals_from_prompt(content)
+                await record_repair_lesson(
+                    error_code=err_code or "FETCH_URL_GOOGLE_BLOCKED",
+                    reason=err_reason or content[:500],
+                    context={
+                        "agent_id": agent_id,
+                        "run_id": run_id,
+                        "tools": [t.tool_id for t in spec.tools[:16]],
+                        "source": "live_repair_success",
+                    },
+                    resolution={
+                        "tools": [t.tool_id for t in spec.tools[:16]],
+                        "test_status": test_report.get("status"),
+                    },
+                    resolution_summary=(
+                        "Builder repaired Live tool failure; prefer Maps/Sheets Pipedream "
+                        "actions over fetch_url scraping of Google hosts."
+                    ),
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug("live_repair_lesson_failed", exc_info=True)
 
         from agent_service.builder.project_files import upsert_project_files
 
@@ -2009,9 +2176,17 @@ class BuilderOrchestrator:
             )
 
         # Optional real sandbox coding pipeline (plan → files → tests → repair).
+        # Tool-list removals must persist on spec/graph — sandbox tools.json is not Structure.
+        from agent_service.builder.capabilities import apps_user_asked_to_remove as _apps_to_remove
+
+        skip_sandbox = bool(_apps_to_remove(content))
         build_ok: bool | None = None
         build_failure_reason: str | None = None
-        if self.settings.BUILDER_SANDBOX_ENABLED and test_report["status"].startswith("passed"):
+        if (
+            self.settings.BUILDER_SANDBOX_ENABLED
+            and test_report["status"].startswith("passed")
+            and not skip_sandbox
+        ):
             try:
                 from agent_service.builder.build_pipeline import RUNTIME_VERSION, CodeBuildPipeline
                 from agent_service.builder.templates.blueprint import (
@@ -2424,7 +2599,7 @@ class BuilderOrchestrator:
         await self.db.emit_event(
             run_id,
             "builder.chat.started",
-            {"mapping_key": "builder.progress.understanding", "mode": "chat"},
+            {"mapping_key": "builder.progress.thinking", "mode": "chat"},
         )
         await self.db.clear_thinking_messages(thread_id=thread_id)
 
@@ -2455,7 +2630,7 @@ class BuilderOrchestrator:
         answer = ""
         try:
             result = await self.gateway.complete(
-                profile=ModelProfile.FAST,
+                profile=ModelProfile.BALANCED,
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
@@ -2501,18 +2676,19 @@ class BuilderOrchestrator:
         self, agent: dict[str, Any], current_spec: AgentSpec | None
     ) -> bool:
         """True until the user has confirmed a real identity (not the skeleton draft)."""
-        name = (
-            (current_spec.identity.name if current_spec else None)
-            or agent.get("name")
-            or ""
-        )
-        name_l = str(name).strip().lower()
         placeholders = {"", "untitled agent", "untitled", "agent", "new agent"}
-        if name_l in placeholders:
-            return True
-        if current_spec is None:
-            return True
-        return False
+
+        def _clean(value: Any) -> str:
+            return str(value or "").strip().lower()
+
+        agent_name = _clean(agent.get("name"))
+        spec_name = _clean(current_spec.identity.name if current_spec else None)
+        # A real agent rename (post identity form) must win over a skeleton draft
+        # name like "Untitled agent" — otherwise Cloud Tasks resumes after
+        # capabilities re-open the identity form forever.
+        resolved = agent_name if agent_name and agent_name not in placeholders else spec_name
+        result = resolved in placeholders
+        return result
 
     async def _build_turn_timeline(self, *, run_id: str, user_id: str) -> list[str]:
         """Collapse run_events into short chronological facts for the final reply."""
@@ -2776,6 +2952,29 @@ class BuilderOrchestrator:
             pass
         return IdentityDraft(name=name, role=role, description=description)
 
+    async def _preserved_model(
+        self,
+        current: AgentSpec | None,
+        *,
+        user_id: str | None = None,
+        agent_id: str | None = None,
+    ) -> Any:
+        """Keep this user's BYOK model across rebuilds — never invent another user's config."""
+        from agent_service.models.agent_spec import ModelConfig
+        from agent_service.security.user_secrets import latest_valid_model_config
+
+        if current is not None and current.model is not None and current.model.is_configured:
+            return current.model
+        if not user_id or not agent_id:
+            return current.model if current is not None else None
+        restored = await latest_valid_model_config(user_id=user_id, agent_id=agent_id)
+        if not restored:
+            return current.model if current is not None else None
+        try:
+            return ModelConfig.model_validate(restored)
+        except Exception:  # noqa: BLE001
+            return current.model if current is not None else None
+
     async def _generate_spec(
         self,
         content: str,
@@ -2783,10 +2982,15 @@ class BuilderOrchestrator:
         complexity: TaskComplexity,
         current: AgentSpec | None,
         capabilities: dict[str, Any] | None = None,
+        *,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> tuple[AgentSpec, list[dict[str, Any]]]:
         from agent_service.builder.capabilities import (
             build_connection_requirements,
             extract_external_app_queries,
+            filter_unsolicited_database_tools,
+            apps_user_asked_to_remove,
             is_surgical_tool_edit,
             merge_tools_on_edit,
         )
@@ -2823,41 +3027,6 @@ class BuilderOrchestrator:
         )
         builtins = {"current_datetime", "structured_output"}
         selected_integrations = [t for t in tools if t.tool_id not in builtins]
-        # region agent log
-        logger.info(
-            "builder_generate_spec tools=%s named_apps=%s preferred=%s current_tools=%s",
-            [t.tool_id for t in tools][:12],
-            named_apps[:8],
-            preferred_apps[:8],
-            [t.tool_id for t in current.tools][:8] if current else [],
-        )
-        try:
-            import json
-            from pathlib import Path
-
-            Path("/Users/3van/Documents/Stack32/.cursor/debug-faa28e.log").open("a").write(
-                json.dumps(
-                    {
-                        "sessionId": "faa28e",
-                        "runId": "post-fix",
-                        "hypothesisId": "G",
-                        "location": "orchestrator.py:_generate_spec",
-                        "message": "spec tools before merge",
-                        "data": {
-                            "selected": [t.tool_id for t in tools][:12],
-                            "named_apps": named_apps[:8],
-                            "preferred": preferred_apps[:8],
-                            "current": [t.tool_id for t in current.tools][:8] if current else [],
-                            "integrations": [t.tool_id for t in selected_integrations][:12],
-                        },
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        except Exception:
-            pass
-        # endregion
 
         surgical = bool(
             current is not None
@@ -2881,6 +3050,19 @@ class BuilderOrchestrator:
         else:
             goal = original_goal if current is not None else content[:4000]
 
+        tools = filter_unsolicited_database_tools(
+            tools,
+            prompt=f"{content}\n{goal}\n{notes}",
+            keep_app_ids=(
+                {current.memory.external_app_id}
+                if current
+                and current.memory.provider == "external_postgres"
+                and current.memory.external_app_id
+                else None
+            ),
+        )
+        connection_requirements = await build_connection_requirements(tools)
+
         knowledge_enabled = bool(caps.get("knowledge_enabled")) or any(
             k in content.lower() for k in ("document", "knowledge", "pdf", "rag")
         ) or any(t.tool_id == "knowledge_search" for t in tools)
@@ -2894,6 +3076,9 @@ class BuilderOrchestrator:
         memory_semantic = bool(caps.get("memory_semantic")) or "remember" in content.lower()
         if current is not None and surgical:
             memory_semantic = memory_semantic or bool(current.memory.semantic_enabled)
+        if current is not None and current.memory.provider == "external_postgres":
+            memory_conversation = False
+            memory_semantic = False
         graph = self._build_graph(
             tools,
             goal,
@@ -2953,6 +3138,22 @@ class BuilderOrchestrator:
             AgentRule(id="no_secrets", text="Never request or expose secrets."),
             AgentRule(id="cite_sources", text="Cite knowledge sources when used."),
         ]
+        tool_ids_lower = " ".join(t.tool_id.lower() for t in tools)
+        has_maps = "google_maps" in tool_ids_lower or "maps_platform" in tool_ids_lower
+        has_fetch = "fetch_url" in tool_ids_lower
+        content_l = (content or "").lower()
+        if has_maps or has_fetch or "google maps" in content_l or "fetch_url" in content_l:
+            rules.append(
+                AgentRule(
+                    id="no_fetch_google_maps",
+                    text=(
+                        "Never use fetch_url on Google Maps, google.com/maps, maps.app.goo.gl, "
+                        "or other Google listing HTML. Use google_maps_platform search-places / "
+                        "get-place-details (and Sheets/Gmail tools) instead. After one fetch_url "
+                        "failure on a host family, stop retrying that host."
+                    ),
+                )
+            )
         if current is not None and surgical:
             for rule in current.rules or []:
                 if rule.id not in {"no_secrets", "cite_sources"}:
@@ -2977,6 +3178,14 @@ class BuilderOrchestrator:
         )
 
         profile = "reasoning" if complexity == TaskComplexity.HEAVY else "balanced"
+        preserved_model = await self._preserved_model(
+            current, user_id=user_id, agent_id=agent_id
+        )
+        schedule_hourly = bool(caps.get("schedule_hourly"))
+        triggers = _resolve_spec_triggers(
+            current=current,
+            schedule_hourly=schedule_hourly,
+        )
         spec = AgentSpec(
             schema_version="4.0",
             identity=identity,
@@ -2990,13 +3199,26 @@ class BuilderOrchestrator:
             memory=MemoryConfig(
                 conversation_enabled=memory_conversation,
                 semantic_enabled=memory_semantic,
-                write_policy="explicit",
+                write_policy=current.memory.write_policy if current else "explicit",
+                provider=current.memory.provider if current else "stack32",
+                conversation_window=(
+                    current.memory.conversation_window if current else 12
+                ),
+                external_config_id=(
+                    current.memory.external_config_id if current else None
+                ),
+                external_app_id=(current.memory.external_app_id if current else None),
+                external_instructions=(
+                    current.memory.external_instructions if current else None
+                ),
             ),
+            model=preserved_model,
             model_policy=ModelPolicy(profile=profile),  # type: ignore[arg-type]
             rules=rules,
             starter_prompts=starter_prompts,
             graph=graph,
             connection_requirements=connection_requirements,
+            triggers=triggers,
         )
         return spec, ambiguous
 
@@ -3011,24 +3233,30 @@ class BuilderOrchestrator:
         import json
 
         try:
+            from agent_service.learning import (
+                format_lessons_for_prompt,
+                lessons_for_builder_turn,
+            )
             from agent_service.runtime.multimodal import build_user_message_content
 
             existing = ", ".join((current_tools or [])[:20]) or "(none yet)"
+            lesson_block = ""
+            try:
+                lessons = await lessons_for_builder_turn(user_prompt=content, limit=4)
+                lesson_block = format_lessons_for_prompt(lessons, max_chars=1200)
+            except Exception:  # noqa: BLE001
+                logger.debug("design_lessons_inject_failed", exc_info=True)
             user_content = build_user_message_content(
                 (
                     f"Agent name: {identity.name}\nRole: {identity.role}\n"
                     f"Tone: {identity.tone}\nGoal: {content[:2500]}\n"
                     f"Extra notes: {notes[:800]}\n"
                     f"Existing tools to preserve unless the user asks to remove them: {existing}"
+                    + (f"\n\n{lesson_block}" if lesson_block else "")
                 ),
                 getattr(self, "_turn_images", None),
             )
-            result = await self.gateway.complete(
-                profile=ModelProfile.REASONING,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
+            system_content = (
                             "You design production AI agents. Return ONLY JSON with keys: "
                             "system_extra (2-4 sentences of specialized instructions), "
                             "tool_hints (array of short keywords: web, knowledge, calc, "
@@ -3043,6 +3271,19 @@ class BuilderOrchestrator:
                             "tool_hints MUST include exactly \"canva\" — never canvas or gocanvas.\n"
                             "- Preserve every existing third-party app unless the user "
                             "explicitly asks to remove it.\n"
+                            "- If the user says remove / enlève / retire an app, OMIT it "
+                            "from tool_hints. Structure reads spec.tools + graph + "
+                            "connection_requirements — never claim a tool is gone if it "
+                            "only changed in sandbox tools.json.\n"
+                            "- Never add PostgreSQL, Supabase, or any database app because "
+                            "of a checkpointer, search_path, or DATABASE_URL error. "
+                            "Conversation memory already uses the built-in Memory module.\n"
+                            "- Prefer Google Maps / Sheets / Gmail Pipedream actions over "
+                            "fetch_url for Maps listing URLs or Sheets rows — fetch_url is "
+                            "SSRF-blocked on many Google URLs and fails Live with "
+                            "UnsafeURL_Error / TOOL_FAILED. Do not scrape google.com/maps.\n"
+                            "- After a fetch_url failure on Google hosts, instruct the agent "
+                            "to use Maps get-place-details instead of retrying fetch_url.\n"
                             "- On a small fix (wrong tool / logo / photo), only change that "
                             "tool in tool_hints and keep the others.\n"
                             "- If several apps could match a name, prefer the brand the user "
@@ -3050,7 +3291,18 @@ class BuilderOrchestrator:
                             "Always include every third-party app the user mentioned; "
                             "the builder resolves tools via Pipedream Connect (3000+ apps). "
                             "Keep tool_hints short (max 8)."
-                        ),
+                            + (
+                                "\nApply these platform lessons when relevant:\n" + lesson_block
+                                if lesson_block
+                                else ""
+                            )
+            )
+            result = await self.gateway.complete(
+                profile=ModelProfile.REASONING,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_content,
                     },
                     {
                         "role": "user",
@@ -3084,6 +3336,48 @@ class BuilderOrchestrator:
         if "rule" in lower:
             data["rules"].append({"id": f"rule_{len(data['rules'])+1}", "text": content[:500]})
         data["identity"] = {**data["identity"], **identity.model_dump()}
+        from agent_service.builder.capabilities import (
+            apps_user_asked_to_remove,
+            filter_unsolicited_database_tools,
+        )
+
+        raw_tools = data.get("tools") or []
+        tools = [
+            t if isinstance(t, ToolBinding) else ToolBinding.model_validate(t) for t in raw_tools
+        ]
+        tools = filter_unsolicited_database_tools(
+            tools,
+            prompt=content,
+            keep_app_ids=(
+                {current.memory.external_app_id}
+                if current.memory.provider == "external_postgres"
+                and current.memory.external_app_id
+                else None
+            ),
+        )
+        data["tools"] = [t.model_dump() for t in tools]
+        keep_ids = {t.tool_id for t in tools}
+        removed = apps_user_asked_to_remove(content)
+        cleaned_reqs: list[dict[str, Any]] = []
+        for req in data.get("connection_requirements") or []:
+            if not isinstance(req, dict):
+                continue
+            app = str(req.get("app_id") or "").lower()
+            if app in removed or (removed and "postgres" in app):
+                continue
+            tids = [str(x) for x in (req.get("tool_ids") or req.get("required_for") or [])]
+            if tids and not any(tid in keep_ids for tid in tids):
+                continue
+            cleaned_reqs.append(req)
+        data["connection_requirements"] = cleaned_reqs
+        knowledge = data.get("knowledge") if isinstance(data.get("knowledge"), dict) else {}
+        memory = data.get("memory") if isinstance(data.get("memory"), dict) else {}
+        data["graph"] = self._build_graph(
+            tools,
+            content,
+            knowledge_enabled=bool(knowledge.get("enabled")),
+            memory_enabled=bool(memory.get("semantic_enabled")),
+        ).model_dump()
         return AgentSpec.model_validate(data)
 
     async def _select_tools(

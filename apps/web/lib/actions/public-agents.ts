@@ -1,6 +1,6 @@
 "use server";
 
-import { getOrCreateInstallation } from "@/lib/actions/installations";
+import { openMarketplaceAgentAction } from "@/lib/actions/marketplace";
 import type { PublicAgentDto } from "@/lib/domain/types";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -48,11 +48,18 @@ export async function resolvePublishedAgentAction(
 export async function openPublishedAgentAction(
   username: string,
   agentSlug: string,
-): Promise<{ agent: PublicAgentDto; installationId: string; favorited: boolean }> {
+): Promise<{
+  agent: PublicAgentDto;
+  installationId: string | null;
+  favorited: boolean;
+  needsAccess: boolean;
+  accessStatus: "none" | "pending" | "approved" | "denied";
+  isOwner: boolean;
+}> {
   const agent = await resolvePublishedAgentAction(username, agentSlug);
   if (!agent) throw new Error("not_found");
 
-  const installation = await getOrCreateInstallation(agent.agentId);
+  const opened = await openMarketplaceAgentAction(username, agentSlug);
   const supabase = await requireSupabaseServerClient();
   const {
     data: { user },
@@ -69,8 +76,11 @@ export async function openPublishedAgentAction(
 
   return {
     agent,
-    installationId: installation.id,
+    installationId: opened.installationId ?? null,
     favorited: Boolean(fav),
+    needsAccess: opened.needsAccess,
+    accessStatus: opened.accessStatus,
+    isOwner: opened.isOwner,
   };
 }
 

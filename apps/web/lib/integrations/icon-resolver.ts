@@ -14,14 +14,48 @@ const LOCAL_PROVIDER_ICONS: Record<string, string> = {
   google_docs: "/integrations/google-docs.svg",
 };
 
+const STORAGE_KEY = "stack32:pipedream-icons:v1";
 const metadataCache = new Map<string, string>();
 
+function hydrateIconCache(): void {
+  if (typeof window === "undefined" || metadataCache.size > 0) return;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    for (const [key, src] of Object.entries(parsed)) {
+      if (key && typeof src === "string" && src.startsWith("https://")) {
+        metadataCache.set(key.toLowerCase(), src);
+      }
+    }
+  } catch {
+    // Ignore quota / parse errors — network lookup still works.
+  }
+}
+
+hydrateIconCache();
+
+function persistIconCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const obj: Record<string, string> = {};
+    for (const [key, src] of metadataCache.entries()) obj[key] = src;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+  } catch {
+    // Ignore quota.
+  }
+}
+
 export function cacheIntegrationIcon(appKey: string, imgSrc: string): void {
-  if (appKey && imgSrc) metadataCache.set(appKey.toLowerCase(), imgSrc);
+  if (appKey && imgSrc) {
+    metadataCache.set(appKey.toLowerCase(), imgSrc);
+    persistIconCache();
+  }
 }
 
 export function getCachedIntegrationIcon(appKey: string): string | undefined {
   if (!appKey) return undefined;
+  hydrateIconCache();
   return metadataCache.get(appKey.toLowerCase());
 }
 

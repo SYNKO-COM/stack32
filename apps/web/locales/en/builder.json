@@ -1,7 +1,8 @@
 {
   "tabs": {
     "build": "Build",
-    "agent": "AI Agent"
+    "agent": "AI Agent",
+    "settings": "Settings"
   },
   "structurePanel": {
     "title": "Executable structure",
@@ -216,9 +217,10 @@
     "warning": "I applied your changes, but the quick test found a small issue. We can fix it, or you can keep iterating here."
   },
   "secrets": {
-    "prompt": "For your agent to think, connect a brain (LLM) with your API key.\n\nPick a provider, paste your key, then save. It is encrypted and will never be shown in full again.",
-    "saved": "Saved.\n\nYour key is in place.",
+    "prompt": "For your agent to think, connect a brain (LLM) with Pipedream.\n\nPick a provider, connect your account, then continue. Stack32 never stores your API key.",
+    "saved": "Saved.\n\nYour LLM connection is in place.",
     "secureNotice": "Your key is encrypted and used only to power this agent.",
+    "pipedreamNotice": "Connect your LLM provider with Pipedream. Stack32 uses that account securely — you never paste an API key here.",
     "provider": "Provider",
     "apiKey": "API key",
     "apiKeyPlaceholder": "Paste your key here",
@@ -377,6 +379,9 @@
   "errors": {
     "buildFailed": "Build stopped.",
     "buildFailedDetail": "I couldn't finish this build. You can retry, rephrase, or ask me to fix it.",
+    "buildStuck": "Build stalled.",
+    "buildStuckDetail": "No progress for a while — I stopped the stuck run. Send your request again to continue.",
+    "promptMissing": "The build could not continue (missing prompt after a form). Please send your request again.",
     "serviceUnavailable": "The build service is temporarily unavailable. Please try again in a moment.",
     "validationFailed": "The agent configuration is invalid. Rephrase or ask for a fix.",
     "canceled": "Stopped.",
@@ -404,6 +409,12 @@
     "building": "Building the agent",
     "repairing": "Fixing the agent",
     "complete": "Build complete"
+  },
+  "workspaceNav": {
+    "label": "Workspace sections",
+    "create": "Create",
+    "library": "My agents",
+    "dashboard": "Dashboard"
   },
   "workspace": {
     "label": "Workspace",

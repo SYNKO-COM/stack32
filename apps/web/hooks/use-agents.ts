@@ -18,6 +18,7 @@ export function useAgents(workspaceId?: string | null) {
     queryKey: [...agentKeys.list, workspaceId ?? "all"] as const,
     queryFn: () => getAgentRepository().listAgents(workspaceId ?? undefined),
     enabled: workspaceId !== null,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -26,6 +27,7 @@ export function useAgent(agentId: string) {
     queryKey: agentKeys.detail(agentId),
     queryFn: () => getAgentRepository().getAgent(agentId),
     enabled: Boolean(agentId),
+    refetchOnWindowFocus: false,
   });
 }
 

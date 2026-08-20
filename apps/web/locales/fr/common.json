@@ -135,7 +135,68 @@
     "tabs": {
       "created": "Créés",
       "using": "Utilisés",
-      "favorites": "Favoris"
+      "favorites": "Favoris",
+      "marketplace": "Marketplace"
+    },
+    "searchPlaceholder": "Rechercher des agents publics…",
+    "marketplaceEmpty": "Aucun agent public pour l'instant. Publiez le vôtre depuis Paramètres.",
+    "priceFree": "Gratuit",
+    "reviews": "Avis"
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "subtitle": "Usage, vues, abonnés et avis pour les agents que vous avez publiés.",
+    "empty": "Aucun agent pour l'instant. Créez-en un pour voir les stats.",
+    "views": "Vues",
+    "subscribers": "Abonnés",
+    "revenue": "Chiffre d'affaires",
+    "reviewCount": "Avis",
+    "avgRating": "Note",
+    "subscriberNames": "Personnes qui utilisent cet agent",
+    "buyerNames": "Abonnés payants",
+    "noNames": "Personne pour l'instant."
+  },
+  "agentSettings": {
+    "title": "Paramètres de l'agent",
+    "subtitle": "Accès live, fiche marketplace, et qui peut utiliser cet agent.",
+    "visibility": "Accès live",
+    "visibilityPublic": "Public — visible sur la marketplace",
+    "visibilityPrivate": "Privé — uniquement les personnes que vous approuvez via le lien",
+    "tagline": "Accroche marketplace",
+    "taglinePlaceholder": "Courte description pour la marketplace",
+    "price": "Prix (€, 0 = gratuit)",
+    "publicLink": "Lien public",
+    "notPublished": "Publiez d'abord l'agent pour partager un lien live.",
+    "accessRequests": "Demandes d'accès",
+    "noRequests": "Aucune demande pour l'instant.",
+    "approve": "Approuver",
+    "deny": "Refuser",
+    "saved": "Fiche enregistrée.",
+    "loadError": "Impossible de charger les paramètres de l'agent.",
+    "status": {
+      "pending": "En attente",
+      "approved": "Approuvée",
+      "denied": "Refusée"
     }
+  },
+  "review": {
+    "title": "Avis",
+    "yours": "Votre avis",
+    "rating": "Note",
+    "placeholder": "Que pensez-vous de cet agent ?",
+    "submit": "Enregistrer l'avis",
+    "empty": "Aucun avis pour l'instant."
+  },
+  "liveAccess": {
+    "privateTitle": "Cet agent est privé",
+    "privateBody": "Demandez l'accès au créateur pour l'utiliser en live.",
+    "request": "Demander l'accès",
+    "pending": "Demande envoyée — en attente d'approbation.",
+    "denied": "Accès refusé."
+  },
+  "publicAgent": {
+    "byline": "par @{{username}} sur Stack32",
+    "defaultDescription": "Un agent IA créé avec Stack32. Connectez-vous pour discuter avec lui dans Live.",
+    "signInToUse": "Se connecter pour utiliser cet agent"
   }
 }

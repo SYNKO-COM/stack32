@@ -12,6 +12,7 @@ import type {
   ProductNode,
 } from "@/lib/domain/product-agent-graph";
 import type { AgentSpec, GraphSpec, ToolBinding } from "@/lib/domain/types";
+import { isScheduleTimingConfigured } from "@/lib/schedule-cron";
 
 export interface BuildProductGraphInput {
   definition: AgentSpec | null | undefined;
@@ -157,12 +158,14 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
     });
   }
   if (hasSchedule) {
+    const schedule = triggers.find((t) => t.kind === "schedule");
+    const scheduleReady = isScheduleTimingConfigured(schedule?.cron);
     nodes.push({
       id: "trigger:schedule",
       kind: "trigger_schedule",
       label: "Schedule",
       subtitle: input.scheduleSummary,
-      configurationStatus: "ready",
+      configurationStatus: scheduleReady ? "ready" : "setup_required",
     });
   }
 
@@ -229,15 +232,21 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
   });
 
   const memoryEnabled =
+    definition?.memory?.provider === "external_postgres" ||
     (definition?.memory?.conversationEnabled ??
       (definition?.memory?.conversationWindow ?? 0) > 0) ||
     Boolean(definition?.memory?.semanticEnabled);
   if (memoryEnabled) {
     const memStatus = normalizeConfigStatus(input.memoryStatus, "ready");
+    const memSubtitle =
+      definition?.memory?.provider === "external_postgres"
+        ? definition.memory.externalAppId || "External DB"
+        : undefined;
     nodes.push({
       id: "attachment:memory",
       kind: "memory",
       label: "Memory",
+      subtitle: memSubtitle,
       configurationStatus: memStatus,
     });
     edges.push({

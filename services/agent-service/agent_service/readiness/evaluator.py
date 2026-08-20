@@ -458,25 +458,39 @@ async def evaluate_agent_readiness(
             )
         )
 
-    # Brain: installation requires BYOK; definition only notes recommended model.
+    # Brain: model selection + Pipedream Connect LLM (or legacy BYOK secret).
     brain_severity = "error" if (require_brain and include_installation_checks) else "info"
     model_cfg = parsed.model
     if include_installation_checks:
         if model_cfg is None or not (model_cfg.provider and model_cfg.model_id):
             brain_ok = False
-            brain_msg = "Configure the AI model for this installation."
+            brain_msg = "Choose a provider and model, then connect it with Pipedream."
         elif llm_status is not None and llm_status != "valid":
             brain_ok = False
-            brain_msg = "Re-validate your model API key — the last check did not pass."
-        else:
+            brain_msg = "Reconnect your LLM provider via Pipedream — the last check did not pass."
+        elif llm_status == "valid":
             brain_ok = True
-            brain_msg = "Agent brain (model + key) is configured."
+            brain_msg = "Agent brain (model + Pipedream connection) is configured."
+        else:
+            from agent_service.security.user_secrets import has_llm_secret
+
+            brain_ok = await has_llm_secret(
+                user_id=user_id,
+                agent_id=agent_id,
+                installation_id=installation_id,
+                preferred_provider=str(model_cfg.provider) if model_cfg.provider else None,
+            )
+            brain_msg = (
+                "Agent brain (model + Pipedream connection) is configured."
+                if brain_ok
+                else "Connect your LLM provider with Pipedream (OpenAI, Anthropic, …)."
+            )
     else:
         brain_ok = True
         brain_msg = (
             f"Recommended model: {model_cfg.provider}/{model_cfg.model_id}."
             if model_cfg and model_cfg.provider and model_cfg.model_id
-            else "Model credential is configured at installation time."
+            else "Model credential is configured at installation time via Pipedream."
         )
     checks.append(
         ReadinessCheck(
@@ -488,6 +502,56 @@ async def evaluate_agent_readiness(
     )
     if not brain_ok and require_brain and include_installation_checks:
         missing_config.append({"type": "brain", "message": brain_msg})
+
+    # External memory via Pipedream — require a connected account for the chosen app.
+    memory_cfg = parsed.memory
+    if (
+        include_installation_checks
+        and memory_cfg.provider == "external_postgres"
+        and memory_cfg.external_app_id
+    ):
+        mem_app = str(memory_cfg.external_app_id).strip().lower()
+        mem_aliases = {mem_app, mem_app.replace("_", "-"), mem_app.replace("-", "_")}
+        _, bound_apps, _ = await _agent_bound_coverage(
+            user_id, agent_id, installation_id=installation_id
+        )
+        mem_ok = any(a.lower() in mem_aliases for a in bound_apps)
+        mem_msg = (
+            f"External memory database ({memory_cfg.external_app_id}) is connected."
+            if mem_ok
+            else (
+                f"Connect {memory_cfg.external_app_id} via Pipedream for external memory."
+            )
+        )
+        checks.append(
+            ReadinessCheck(
+                key="memory",
+                ok=mem_ok,
+                message=mem_msg,
+                severity="info" if mem_ok else "warn",
+            )
+        )
+        if not mem_ok:
+            missing_config.append(
+                {
+                    "type": "memory",
+                    "app_id": memory_cfg.external_app_id,
+                    "message": mem_msg,
+                }
+            )
+    else:
+        checks.append(
+            ReadinessCheck(
+                key="memory",
+                ok=True,
+                message=(
+                    "Stack32 built-in memory is active."
+                    if memory_cfg.provider != "external_postgres"
+                    else "Choose a Pipedream database app for external memory."
+                ),
+                severity="info",
+            )
+        )
 
     # Trigger — Chat is the built-in entrypoint from agent creation (Structure UI and
     # normalize_triggers default to Chat when the list is empty). Schedule is optional.

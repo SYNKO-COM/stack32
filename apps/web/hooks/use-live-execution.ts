@@ -48,7 +48,7 @@ export function useLiveExecutionState(
   return useQuery({
     queryKey: ["live-execution", runId],
     enabled: Boolean(runId) && enabled,
-    placeholderData: (previous) => previous,
+    placeholderData: enabled ? (previous) => previous : undefined,
     refetchInterval: enabled ? 2200 : false,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,

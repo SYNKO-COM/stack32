@@ -54,7 +54,16 @@ function toolToNodeId(toolId: string, graph: ProductAgentGraph | null): string {
   const integration = graph.nodes.find(
     (n) => n.kind === "integration" && n.integration?.appKey === appKey,
   );
-  return integration?.id ?? `app:${appKey}`;
+  // Native helpers (fetch_url, web_search, …) have no Structure node — surface on agent.
+  return integration?.id ?? "agent";
+}
+
+function isVisibleProductNode(
+  nodeId: string,
+  graph: ProductAgentGraph | null,
+): boolean {
+  if (!graph) return nodeId === "agent" || nodeId === "output";
+  return graph.nodes.some((n) => n.id === nodeId);
 }
 
 function edgeBetween(graph: ProductAgentGraph | null, source: string, target: string): string | undefined {
@@ -146,13 +155,25 @@ export function reduceExecutionEvents(
     }
 
     if (t.includes("runtime.input.received")) {
-      setNode("trigger:chat", "success");
-      setNode("trigger:schedule", "success");
-      legacy.input = "success";
+      const raw = event.rawPayload ?? {};
+      const triggerKind =
+        raw.trigger_kind === "schedule" ||
+        (typeof raw.schedule_id === "string" && raw.schedule_id.length > 0)
+          ? "schedule"
+          : "chat";
+      if (triggerKind === "schedule") {
+        setNode("trigger:schedule", "success");
+        legacy.input = "success";
+        const e = edgeBetween(graph, "trigger:schedule", "agent");
+        if (e) setEdge(e, "success");
+      } else {
+        setNode("trigger:chat", "success");
+        legacy.input = "success";
+        const e = edgeBetween(graph, "trigger:chat", "agent");
+        if (e) setEdge(e, "success");
+      }
       setNode("agent", "running");
       legacy.brain = "running";
-      const e = edgeBetween(graph, "trigger:chat", "agent") ?? edgeBetween(graph, "trigger:schedule", "agent");
-      if (e) setEdge(e, "success");
     }
 
     if (t.includes("runtime.model.started")) {
@@ -261,13 +282,41 @@ export function reduceExecutionEvents(
   }
 
   if (runEnded) {
-    if (runFailed || legacy.output === "error") {
-      runStatus = anyToolSuccess ? "partial" : "error";
-      setNode("agent", anyToolSuccess ? "error" : "error");
+    // Soft-fail path: run.completed with tool errors (e.g. fetch_url UnsafeURL) still
+    // returns a chat answer — Structure must stop spinning and show the failure.
+    if (runFailed || anyToolError || legacy.output === "error") {
+      runStatus = anyToolSuccess && !runFailed ? "partial" : "error";
+      setNode("agent", "error");
       legacy.brain = "error";
+      if (legacy.output !== "success") {
+        setNode("output", "error");
+        legacy.output = "error";
+      }
       lastFailNodeId = lastFailNodeId || "agent";
-    } else if (legacy.output === "success") {
-      runStatus = anyToolError ? "partial" : "success";
+      if (lastFailNodeId && !isVisibleProductNode(lastFailNodeId, graph)) {
+        lastFailNodeId = "agent";
+      }
+      if (lastFailNodeId === "agent" && (lastFailCode || lastFailMessage)) {
+        nodeErrors.agent = {
+          code: lastFailCode,
+          message: lastFailMessage || lastFailCode || "Run failed",
+          errorType: lastFailType,
+          nodeId: "agent",
+          logs: logLines.slice(),
+          fullLogText: logLines
+            .map((l) => `#${l.sequence} ${l.eventType} — ${l.summary}`)
+            .join("\n"),
+        };
+      }
+    } else {
+      // Run finished cleanly — always finalize agent + output (never leave "running").
+      if (legacy.output !== "success") {
+        setNode("output", "success");
+        legacy.output = "success";
+        const e = edgeBetween(graph, "agent", "output");
+        if (e) setEdge(e, "success");
+      }
+      runStatus = "success";
       setNode("agent", "success");
       legacy.brain = "success";
     }

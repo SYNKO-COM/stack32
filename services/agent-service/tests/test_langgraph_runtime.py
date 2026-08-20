@@ -120,3 +120,12 @@ def test_parallel_fanout_visits_multiple_tools():
     )
     visited = state.get("visited_nodes") or []
     assert "t1" in visited and "t2" in visited
+
+
+def test_checkpoint_url_does_not_encode_plus_search_path():
+    from agent_service.runtime.langgraph_runtime import _with_checkpoint_search_path
+
+    scoped = _with_checkpoint_search_path("postgresql://u:p@localhost:5432/db")
+    assert "+search_path" not in scoped
+    assert "search_path" in scoped
+    assert "-csearch_path=" in scoped or "-c%20search_path=" not in scoped

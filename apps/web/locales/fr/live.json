@@ -51,7 +51,7 @@
   },
   "errors": {
     "canceled": "Exécution arrêtée.",
-    "missingUserLlmKey": "Pour discuter avec cet agent, connectez un cerveau (LLM) avec votre clé API ci-dessous. Elle est stockée de façon sécurisée.",
+    "missingUserLlmKey": "Pour discuter avec cet agent, connectez un cerveau (LLM) avec Pipedream ci-dessous. Stack32 ne stocke jamais votre clé API.",
     "runFailed": "Un problème est survenu pendant l’exécution. Réessayez.",
     "serviceUnavailable": "Le service agent est momentanément indisponible. Réessayez dans un instant.",
     "budgetExceeded": "Cette conversation a utilisé trop d’appels au modèle. Essayez une demande plus courte.",

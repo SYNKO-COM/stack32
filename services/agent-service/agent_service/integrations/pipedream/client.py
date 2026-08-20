@@ -13,6 +13,8 @@ from agent_service.config import get_settings
 logger = logging.getLogger(__name__)
 
 PIPEDREAM_API_BASE = "https://api.pipedream.com/v1"
+
+_ICON_CACHE: dict[str, str] = {}
 _DEFAULT_TIMEOUT = 20.0
 _MAX_RETRIES = 2
 
@@ -189,6 +191,34 @@ class PipedreamClient:
                     "raw": row,
                 }
             )
+            slug = str(out[-1]["app_id"] or "").strip().lower()
+            src = out[-1].get("img_src")
+            if slug and isinstance(src, str) and src.startswith("http"):
+                _ICON_CACHE[slug] = src
+        return out
+
+    async def icons_for_apps(self, app_ids: list[str]) -> dict[str, str]:
+        """Exact app_id → img_src. Cache hits are instant; misses search once."""
+        out: dict[str, str] = {}
+        missing: list[str] = []
+        for raw in app_ids:
+            slug = str(raw or "").strip().lower()
+            if not slug:
+                continue
+            cached = _ICON_CACHE.get(slug)
+            if cached:
+                out[slug] = cached
+            else:
+                missing.append(slug)
+        for slug in missing:
+            rows = await self.search_apps(slug, limit=20)
+            for row in rows:
+                app_id = str(row.get("app_id") or "").strip().lower()
+                src = row.get("img_src")
+                if app_id and isinstance(src, str) and src.startswith("http"):
+                    _ICON_CACHE[app_id] = src
+            if slug in _ICON_CACHE:
+                out[slug] = _ICON_CACHE[slug]
         return out
 
     async def search_actions(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]:

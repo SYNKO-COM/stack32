@@ -11,7 +11,6 @@ const PROTECTED_PREFIXES = [
   "/settings",
   "/billing",
   "/my-agents",
-  "/p",
 ];
 
 /** Auth screens an already-authenticated user should not see again. */
@@ -90,14 +89,10 @@ export async function updateSupabaseSession(request: NextRequest): Promise<NextR
 
   const pretty = parsePrettyAgentPath(pathname);
   if (pretty) {
-    const prettyPath = `/@${pretty.username}/${pretty.slug}`;
-    if (!user) {
-      return loginRedirect(request, prettyPath);
-    }
+    // Public agent pages are crawlable; interactive Live stays gated in the page.
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname = `/p/${pretty.username}/${pretty.slug}`;
     const rewriteResponse = NextResponse.rewrite(rewriteUrl);
-    // Preserve refreshed auth cookies on the rewrite response.
     for (const cookie of response.cookies.getAll()) {
       rewriteResponse.cookies.set(cookie);
     }
@@ -105,14 +100,7 @@ export async function updateSupabaseSession(request: NextRequest): Promise<NextR
   }
 
   if (!user && isProtectedPath(pathname)) {
-    let nextPath = pathname;
-    if (pathname.startsWith("/p/")) {
-      const parts = pathname.split("/").filter(Boolean);
-      if (parts.length >= 3 && parts[0] === "p") {
-        nextPath = `/@${parts[1]}/${parts[2]}`;
-      }
-    }
-    return loginRedirect(request, nextPath);
+    return loginRedirect(request, pathname);
   }
 
   if (user && AUTH_SCREENS.includes(pathname)) {

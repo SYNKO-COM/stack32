@@ -190,19 +190,24 @@ export async function getAgentGraphAction(agentId: string): Promise<AgentGraphRe
   const isOwner = agent.user_id === user.id;
 
   if (isOwner && currentAiExecutionMode() === "agent-service") {
-    const accessToken = await requireAccessToken();
-    const result = await agentServiceFetch<{
-      graph: unknown;
-      schema_version?: string | null;
-      identity?: unknown;
-      test_ready?: boolean;
-    }>(`/v1/agents/${agentId}/graph`, { accessToken });
-    return {
-      graph: result.graph ? mapGraphSpecFromApi(result.graph) : null,
-      schemaVersion: result.schema_version ?? null,
-      identity: result.identity ? mapIdentityFromApi(result.identity) ?? null : null,
-      testReady: result.test_ready,
-    };
+    try {
+      const accessToken = await requireAccessToken();
+      const result = await agentServiceFetch<{
+        graph: unknown;
+        schema_version?: string | null;
+        identity?: unknown;
+        test_ready?: boolean;
+      }>(`/v1/agents/${agentId}/graph`, { accessToken });
+      return {
+        graph: result.graph ? mapGraphSpecFromApi(result.graph) : null,
+        schemaVersion: result.schema_version ?? null,
+        identity: result.identity ? mapIdentityFromApi(result.identity) ?? null : null,
+        testReady: result.test_ready,
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message === "not_authenticated") throw error;
+      return { graph: null, schemaVersion: null, identity: null };
+    }
   }
 
   const versionId =

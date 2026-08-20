@@ -107,7 +107,7 @@ async def cancel_active_builder_run(agent_id: UUID, user: CurrentUser) -> dict[s
     active = await db.get_latest_active_build_run(agent_id=str(agent_id), user_id=user.user_id)
     if not active:
         return {"status": "idle"}
-    return await cancel_run(UUID(str(active["id"])), user)
+    return await _cancel_run_impl(str(active["id"]), user, silent=False)
 
 
 @router.get("/runs/{run_id}/events")

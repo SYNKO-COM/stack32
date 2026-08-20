@@ -3,7 +3,7 @@
 import { AlertTriangle, CircleX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AgentCapabilitiesForm } from "@/components/builder/agent-capabilities-form";
 import { AgentIdentityForm } from "@/components/builder/agent-identity-form";
@@ -27,6 +27,7 @@ import {
   useBuilderThread,
   useCancelBuilderRun,
   useSendBuilderMessage,
+  isThreadActive,
 } from "@/hooks/use-builder";
 import { summarizeActivity, useRunActivity } from "@/hooks/use-run-activity";
 import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-button";
@@ -40,7 +41,8 @@ import type {
   ComposerAttachment,
 } from "@/components/shared/prompt-composer";
 import type { BuilderAction, BuilderMessage } from "@/lib/domain/types";
-import { consumePendingPrompt, consumePrefillAutoSend, consumePrefillDraft } from "@/lib/pending-prompt";
+import { consumePendingPrompt, consumePrefillPayload, takePrefillSending } from "@/lib/pending-prompt";
+import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { BuilderOperation } from "@/components/builder/builder-working-panel";
 
@@ -345,7 +347,7 @@ function BuilderBubble({
   if (showThinking) {
     return (
       <MessageEntrance active={isFresh && animateNow}>
-        <BuilderWorkingPanel activityLines={activityLines} />
+        <BuilderWorkingPanel activityLines={activityLines} persistKey={agentId} resumeMode />
       </MessageEntrance>
     );
   }
@@ -633,7 +635,8 @@ export function BuildView({ agentId }: { agentId: string }) {
   const { t } = useTranslation(["builder", "common"]);
   const queryClient = useQueryClient();
   const { data: agent } = useAgent(agentId);
-  const busy = agent?.status === "building";
+  const rawBuilding = agent?.status === "building";
+  const [staleBuilding, setStaleBuilding] = useState(false);
   const [awaitingReply, setAwaitingReply] = useState(false);
   /** Epoch ms of the in-flight send — survives stale refetches & duplicate prompt text. */
   const [pendingToken, setPendingToken] = useState<number | null>(null);
@@ -665,6 +668,10 @@ export function BuildView({ agentId }: { agentId: string }) {
     forcePoll: awaitingReply || pendingToken !== null,
   });
   const sendMessage = useSendBuilderMessage(agentId);
+  const sendMutateRef = useRef(sendMessage.mutateAsync);
+  sendMutateRef.current = sendMessage.mutateAsync;
+  const threadRef = useRef(thread);
+  threadRef.current = thread;
   const cancelRun = useCancelBuilderRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -684,6 +691,41 @@ export function BuildView({ agentId }: { agentId: string }) {
   const [baselineIds, setBaselineIds] = useState<Set<string> | null>(null);
 
   const messages = useMemo(() => thread?.messages ?? [], [thread?.messages]);
+  const lastMessageAt = messages.at(-1)?.createdAt;
+  const busy = rawBuilding && !staleBuilding;
+  const staleRecoveredRef = useRef(false);
+
+  // If the agent stays "building" with no new thread activity, the Cloud Tasks
+  // worker likely exited early — stop the fake spinner and free the composer.
+  useEffect(() => {
+    if (!rawBuilding) {
+      setStaleBuilding(false);
+      staleRecoveredRef.current = false;
+      return;
+    }
+    const STALE_MS = 150_000;
+    const anchor = lastMessageAt ? new Date(lastMessageAt).getTime() : Date.now();
+    const tick = () => {
+      if (Date.now() - anchor < STALE_MS) return;
+      setStaleBuilding(true);
+      setAwaitingReply(false);
+      setPendingToken(null);
+    };
+    tick();
+    const id = window.setInterval(tick, 12_000);
+    return () => window.clearInterval(id);
+  }, [rawBuilding, lastMessageAt, agentId]);
+
+  // Once we detect a stuck build, cancel so status leaves "building".
+  useEffect(() => {
+    if (!staleBuilding || !rawBuilding) return;
+    if (staleRecoveredRef.current) return;
+    staleRecoveredRef.current = true;
+    void cancelRun.mutateAsync().catch(() => {
+      /* local UI already freed */
+    });
+  }, [staleBuilding, rawBuilding, cancelRun]);
+
 
   const messageIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -754,7 +796,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   }));
 
   // Only bind activity to the *current* turn's in-flight run (ignore canceled leftovers).
-  const activeRunId =
+  const messageRunId =
     [...turnMessages]
       .reverse()
       .find(
@@ -766,18 +808,75 @@ export function BuildView({ agentId }: { agentId: string }) {
               !isCanceledProgress(m) &&
               m.steps?.some((s) => s.state === "running" || s.state === "pending"))),
       )?.interruptRunId ?? null;
+
+  // After a hard refresh, thinking cards may be gone while the run is still queued/running.
+  // Resume from the latest active build run so live events continue where they left off.
+  const activeBuildRunQuery = useQuery({
+    queryKey: ["active-build-run", agentId],
+    enabled: Boolean(agentId),
+    staleTime: 4000,
+    refetchOnWindowFocus: false,
+    placeholderData: (previous) => previous,
+    notifyOnChangeProps: ["data", "error"],
+    refetchInterval: (q) => {
+      const row = q.state.data as { id?: string; status?: string } | null | undefined;
+      if (row?.status === "queued" || row?.status === "running") return 2200;
+      if (rawBuilding || awaitingReply || pendingToken !== null) return 2200;
+      return false;
+    },
+    queryFn: async () => {
+      const supabase = requireSupabaseBrowserClient();
+      const { data, error } = await supabase
+        .from("runs")
+        .select("id,status,created_at")
+        .eq("agent_id", agentId)
+        .eq("run_type", "build")
+        .in("status", ["queued", "running", "waiting_for_input"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const serverBuildRunId =
+    activeBuildRunQuery.data?.status === "queued" ||
+    activeBuildRunQuery.data?.status === "running"
+      ? activeBuildRunQuery.data.id
+      : null;
+  const activeRunId =
+    (messageRunId && !stoppedRunIds.has(messageRunId) ? messageRunId : null) ??
+    (serverBuildRunId && !stoppedRunIds.has(serverBuildRunId) ? serverBuildRunId : null);
+
+  // Resume local "turn in progress" UI after refresh when the server still has a build.
+  useEffect(() => {
+    if (!serverBuildRunId) return;
+    if (userStopped) return;
+    setAwaitingReply(true);
+    setPendingToken((prev) => prev ?? Date.now());
+  }, [serverBuildRunId, userStopped]);
+
   const activityEnabled =
     Boolean(activeRunId) &&
+    !userStopped &&
     (awaitingReply ||
+      pendingToken !== null ||
       sendMessage.isPending ||
       busy ||
+      Boolean(serverBuildRunId) ||
       Boolean(liveProgress) ||
       turnMessages.some((m) => m.card === "thinking"));
   const { data: runEvents = [] } = useRunActivity(activeRunId, activityEnabled);
   // Never keep stale run activity under a finished Ready card (placeholderData
   // would otherwise leave "Repairing / Thinking" visible after the turn ends).
+  const turnIsChat =
+    messages[lastUserIdx]?.interactionMode === "chat" ||
+    (messages[lastUserIdx]?.interactionMode == null && interactionMode === "chat");
   const activityLines = activityEnabled
-    ? summarizeActivity(runEvents).lines.map((line) => {
+    ? summarizeActivity(runEvents, {
+        readOnly: turnIsChat,
+      }).lines.map((line) => {
         const text = t(`builder:activity.${line.key}`, {
           ...(line.params ?? {}),
           defaultValue: line.key,
@@ -819,11 +918,14 @@ export function BuildView({ agentId }: { agentId: string }) {
       sendMessage.isPending ||
       busy ||
       workInFlight ||
+      Boolean(serverBuildRunId) ||
       Boolean(liveProgress) ||
       turnMessages.some((m) => m.card === "thinking") ||
       (lastIsUser && sendMessage.isPending));
   const showLocalWorking =
     buildTurnActive && !waitingOnForm && !hasVisibleWorkingBubble;
+  const resumeWorking =
+    Boolean(serverBuildRunId) || Boolean(activeRunId && activityLines.length > 0);
   // Keep Stop available for the whole in-flight turn (not only while awaitingReply).
   // Ready is terminal — never keep Stop / busy composer over a Ready card.
   const composerBusy =
@@ -902,11 +1004,12 @@ export function BuildView({ agentId }: { agentId: string }) {
     setUserStopped(false);
     setPendingToken(token);
     setAwaitingReply(true);
+    const sentMode = options?.mode ?? interactionMode;
     try {
       await sendMessage.mutateAsync({
         content: value,
         attachments,
-        mode: options?.mode ?? interactionMode,
+        mode: sentMode,
       });
     } catch {
       setPendingToken(null);
@@ -987,29 +1090,58 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (thread.messages.length === 0) {
       const pending = consumePendingPrompt();
       if (pending) {
-        const timer = window.setTimeout(() => {
-          setPendingToken(Date.now());
-          setAwaitingReply(true);
-          void sendMessage.mutateAsync(pending);
-        }, 0);
-        return () => window.clearTimeout(timer);
+        setPendingToken(Date.now());
+        setAwaitingReply(true);
+        void sendMessage.mutateAsync(pending);
       }
-    }
-    const draft = consumePrefillDraft();
-    const autoSend = consumePrefillAutoSend();
-    if (draft) {
-      if (autoSend) {
-        const timer = window.setTimeout(() => {
-          setPendingToken(Date.now());
-          setAwaitingReply(true);
-          void sendMessage.mutateAsync(draft);
-        }, 0);
-        return () => window.clearTimeout(timer);
-      }
-      const timeout = window.setTimeout(() => setPrefill(draft), 0);
-      return () => window.clearTimeout(timeout);
     }
   }, [thread, sendMessage]);
+
+  const threadReady = Boolean(thread);
+
+  // Try to fix / Structure prefill — independent of bootstrappedRef so returning
+  // to Build still sends the repair prompt as a user message.
+  useEffect(() => {
+    if (!threadReady) return;
+    const currentThread = threadRef.current;
+    if (!currentThread) return;
+    const sending = takePrefillSending();
+    const payload = consumePrefillPayload();
+    const draft = payload.draft ?? sending;
+    if (!draft && !payload.autoSend && !sending) return;
+
+    // Banner already posted the repair (markPrefillSending). Never double-send.
+    if (sending) {
+      setUserStopped(false);
+      setPendingToken(Date.now());
+      setAwaitingReply(true);
+      return;
+    }
+
+    const last = currentThread.messages[currentThread.messages.length - 1];
+    const alreadyQueued = Boolean(draft && last?.role === "user" && last.content === draft);
+    const builderBusy = isThreadActive(currentThread);
+
+    if (payload.autoSend) {
+      // If Build is already working, only show the draft — do not enqueue another turn.
+      if (builderBusy || alreadyQueued) {
+        if (draft && !alreadyQueued) setPrefill(draft);
+        return;
+      }
+      setUserStopped(false);
+      setPendingToken(Date.now());
+      setAwaitingReply(true);
+      if (draft) {
+        void sendMutateRef.current(draft).catch(() => {
+          setPrefill(draft);
+          setPendingToken(null);
+          setAwaitingReply(false);
+        });
+      }
+      return;
+    }
+    if (draft) setPrefill(draft);
+  }, [agentId, threadReady]);
 
   // Soft pin only when new messages arrive — ResizeObserver handles growth without
   // re-running on every activity-line poll (those caused micro-jumps every ~1s).
@@ -1204,7 +1336,19 @@ export function BuildView({ agentId }: { agentId: string }) {
                   <BuilderWorkingPanel
                     operations={workingOperations}
                     activityLines={activityLines}
+                    persistKey={agentId}
+                    resumeMode={resumeWorking || Boolean(serverBuildRunId)}
                   />
+                </MessageEntrance>
+              ) : null}
+              {staleBuilding ? (
+                <MessageEntrance active>
+                  <div className="mx-auto max-w-3xl rounded-2xl border border-destructive/30 bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                    <p className="font-medium">{t("builder:errors.buildStuck")}</p>
+                    <p className="mt-1 text-destructive/90">
+                      {t("builder:errors.buildStuckDetail")}
+                    </p>
+                  </div>
                 </MessageEntrance>
               ) : null}
             </>

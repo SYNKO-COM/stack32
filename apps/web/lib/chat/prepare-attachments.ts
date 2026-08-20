@@ -1,4 +1,5 @@
 import type { ComposerAttachment } from "@/components/shared/prompt-composer";
+import { resolveAttachmentMimeType } from "@/lib/chat/attachment-allowlist";
 import {
   fileToBase64,
   safeStorageFileName,
@@ -35,13 +36,20 @@ export async function prepareChatAttachments(input: {
 
   for (const att of input.attachments) {
     if (!att.file) continue;
+    const mime =
+      resolveAttachmentMimeType({ name: att.name, type: att.mimeType || att.file.type }) ??
+      null;
+    if (!mime) {
+      console.warn("attachment rejected: mime not allowed", att.name, att.mimeType);
+      continue;
+    }
     const attachmentId = crypto.randomUUID();
     const path = `${input.userId}/${input.agentId}/${input.threadId}/${attachmentId}/${safeStorageFileName(att.name)}`;
 
     const { error: uploadError } = await input.supabase.storage
       .from(BUCKET)
       .upload(path, att.file, {
-        contentType: att.mimeType,
+        contentType: mime,
         upsert: false,
       });
     if (uploadError) {
@@ -60,7 +68,7 @@ export async function prepareChatAttachments(input: {
       storage_bucket: BUCKET,
       storage_path: path,
       original_name: att.name,
-      mime_type: att.mimeType,
+      mime_type: mime,
       size_bytes: att.size,
       status: "uploaded",
       metadata: { kind: att.kind },
@@ -80,7 +88,7 @@ export async function prepareChatAttachments(input: {
     messageAttachments.push({
       id: attachmentId,
       name: att.name,
-      mimeType: att.mimeType,
+      mimeType: mime,
       kind: att.kind,
       url: signed?.signedUrl,
       bucket: BUCKET,
@@ -92,7 +100,7 @@ export async function prepareChatAttachments(input: {
       try {
         imagePayloads.push({
           name: att.name,
-          mimeType: att.mimeType,
+          mimeType: mime,
           dataBase64: await fileToBase64(att.file),
         });
       } catch (err) {

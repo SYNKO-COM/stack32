@@ -20,14 +20,14 @@ export default function AgentsLayout({ children }: { children: React.ReactNode }
       <div className="relative flex h-svh overflow-hidden">
         <AnimatedBackground variant="editor" />
 
-        {/* Desktop sidebar */}
-        <aside className="glass hidden h-full w-[300px] shrink-0 border-y-0 border-l-0 lg:block">
+        {/* Desktop sidebar — slightly under default 300px */}
+        <aside className="glass hidden h-full w-[272px] shrink-0 border-y-0 border-l-0 lg:block">
           <AgentSidebar />
         </aside>
 
         {/* Mobile drawer */}
         <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-          <SheetContent side="left" className="glass-strong w-[300px] border-border p-0">
+          <SheetContent side="left" className="glass-strong w-[272px] border-border p-0">
             <SheetTitle className="sr-only">{t("sidebar.agentsTitle")}</SheetTitle>
             <AgentSidebar onNavigate={() => setMobileSidebarOpen(false)} />
           </SheetContent>

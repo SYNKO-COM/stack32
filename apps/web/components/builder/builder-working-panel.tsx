@@ -17,6 +17,8 @@ const FALLBACK_KEYS = [
   "preparingStructure",
 ] as const;
 
+const STAGE_KEY_PREFIX = "stack32.builderWorkingStage:";
+
 /** A real operational step emitted by the Builder (event + state). */
 export interface BuilderOperation {
   event: string;
@@ -24,34 +26,69 @@ export interface BuilderOperation {
   detail?: string;
 }
 
+function readPersistedStage(storageKey: string | undefined): number {
+  if (!storageKey || typeof window === "undefined") return 0;
+  try {
+    const raw = window.sessionStorage.getItem(`${STAGE_KEY_PREFIX}${storageKey}`);
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(FALLBACK_KEYS.length - 1, Math.floor(n)));
+  } catch {
+    return 0;
+  }
+}
+
+function writePersistedStage(storageKey: string | undefined, index: number): void {
+  if (!storageKey || typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(`${STAGE_KEY_PREFIX}${storageKey}`, String(index));
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Live “builder is working” panel — Cursor-style activity feed.
  * Prefers `activityLines` / `operations`; otherwise rotates fallback labels.
+ * Stage is persisted per agent so refresh / navigation resumes where it left off
+ * (never replays completed fake steps from zero).
  */
 export function BuilderWorkingPanel({
   className,
   operations,
   activityLines,
+  persistKey,
+  /** True when we already know a build run is in flight — skip theatrical cascade. */
+  resumeMode = false,
 }: {
   className?: string;
   operations?: BuilderOperation[];
   activityLines?: ActivityLine[];
+  /** Agent id (or run id) — keeps fallback progress across remounts. */
+  persistKey?: string;
+  resumeMode?: boolean;
 }) {
   const { t } = useTranslation("builder");
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => readPersistedStage(persistKey));
   const hasFeed = Boolean(activityLines && activityLines.length > 0);
   const hasOps = Boolean(operations && operations.length > 0);
 
   useEffect(() => {
-    if (hasFeed || hasOps) return;
+    setIndex(readPersistedStage(persistKey));
+  }, [persistKey]);
+
+  useEffect(() => {
+    // Real server events / ops own the feed — do not animate a parallel story.
+    if (hasFeed || hasOps || resumeMode) return;
     const id = window.setInterval(() => {
       setIndex((prev) => {
         const next = Math.min(prev + 1, FALLBACK_KEYS.length - 1);
+        writePersistedStage(persistKey, next);
         return next;
       });
     }, 2800);
     return () => window.clearInterval(id);
-  }, [hasFeed, hasOps]);
+  }, [hasFeed, hasOps, persistKey, resumeMode]);
 
   let lines: ActivityLine[] = [];
   if (hasFeed) {
@@ -69,6 +106,15 @@ export function BuilderWorkingPanel({
     if (!lines.some((l) => l.active)) {
       lines = [...lines, { id: "planning", text: t("working.planning"), active: true }];
     }
+  } else if (resumeMode) {
+    // Refresh mid-build before events hydrate: show prior steps as done, no cascade replay.
+    const doneThrough = Math.max(index, 0);
+    lines = FALLBACK_KEYS.slice(0, doneThrough + 1).map((key) => ({
+      id: key,
+      text: t(`working.activities.${key}`),
+      active: false,
+    }));
+    lines = [...lines, { id: "planning", text: t("working.planning"), active: true }];
   } else {
     lines = FALLBACK_KEYS.slice(0, index + 1).map((key, i) => ({
       id: key,

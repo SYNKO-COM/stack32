@@ -1,8 +1,10 @@
 """Learning memory for Builder repairs + Pipedream tool playbooks."""
 
 from agent_service.learning.lessons import (
+    extract_error_signals_from_prompt,
     fetch_relevant_lessons,
     format_lessons_for_prompt,
+    lessons_for_builder_turn,
     lessons_for_repair,
     normalize_error_signature,
     record_error_observation,
@@ -17,10 +19,12 @@ from agent_service.learning.playbooks import (
 )
 
 __all__ = [
+    "extract_error_signals_from_prompt",
     "fetch_playbooks_for_tool",
     "fetch_relevant_lessons",
     "format_lessons_for_prompt",
     "format_playbooks_for_prompt",
+    "lessons_for_builder_turn",
     "lessons_for_repair",
     "normalize_error_signature",
     "playbooks_for_tool",

@@ -69,12 +69,18 @@ function shortPath(path?: string): string {
 }
 
 /** Collapse raw events into Cursor-like status line specs (i18n keys). */
-export function summarizeActivity(events: RunActivityEvent[]): {
+export function summarizeActivity(
+  events: RunActivityEvent[],
+  opts?: { readOnly?: boolean },
+): {
   lines: ActivityLineSpec[];
 } {
-  const fileCreates = events.filter(
-    (e) => e.eventType.includes("file.created") || e.eventType.includes("file.write"),
-  );
+  const readOnly = Boolean(opts?.readOnly);
+  const fileCreates = readOnly
+    ? []
+    : events.filter(
+        (e) => e.eventType.includes("file.created") || e.eventType.includes("file.write"),
+      );
   const fileReads = events.filter((e) => e.eventType.includes("file.read"));
   const searches = events.filter(
     (e) =>
@@ -162,12 +168,29 @@ export function summarizeActivity(events: RunActivityEvent[]): {
     { id: "snapshot", match: (t) => t.includes("snapshot"), key: "snapshot" },
     {
       id: "thinking",
-      match: (t) => t.includes("model.call") || t.includes("builder.model"),
+      match: (t) =>
+        t.includes("model.call") || t.includes("builder.model") || t.includes("builder.chat"),
       key: "thinking",
     },
   ];
 
+  const mutationIds = new Set([
+    "planning",
+    "identity",
+    "spec",
+    "graph",
+    "validation",
+    "tests-run",
+    "tests-ok",
+    "tests-fail",
+    "repair",
+    "sandbox",
+    "scaffold",
+    "snapshot",
+  ]);
+
   for (const m of milestones) {
+    if (readOnly && mutationIds.has(m.id)) continue;
     const matching = events.filter((e) => m.match(e.eventType));
     if (matching.length > 0) {
       push({ id: m.id, key: m.key }, firstSequence(matching));
@@ -175,7 +198,7 @@ export function summarizeActivity(events: RunActivityEvent[]): {
   }
 
   if (lines.length === 0) {
-    push({ id: "boot", key: "planning", active: true }, 0);
+    push({ id: "boot", key: readOnly ? "thinking" : "planning", active: true }, 0);
     return { lines };
   }
 

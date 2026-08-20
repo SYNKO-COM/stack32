@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(8);
+select plan(10);
 
 select is(
   (select count(*)::int from storage.buckets
@@ -20,6 +20,19 @@ select is(
 select is(
   (select public from storage.buckets where id = 'attachments'),
   false, 'attachments bucket is private'
+);
+select is(
+  (select file_size_limit::bigint from storage.buckets where id = 'attachments'),
+  (8 * 1024 * 1024)::bigint,
+  'attachments bucket enforces 8 MiB limit'
+);
+select ok(
+  (select allowed_mime_types is not null
+     and cardinality(allowed_mime_types) > 0
+     and 'image/png' = any(allowed_mime_types)
+     and 'application/pdf' = any(allowed_mime_types)
+   from storage.buckets where id = 'attachments'),
+  'attachments bucket has a non-empty MIME allowlist'
 );
 
 insert into auth.users (

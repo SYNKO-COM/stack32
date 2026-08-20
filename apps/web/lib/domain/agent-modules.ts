@@ -345,7 +345,11 @@ function fromSpec(
   if (spec.knowledge.enabled) {
     attachments.push({ id: "knowledge", kind: "knowledge", ready: true, setupStatus: "ready" });
   }
-  if (spec.memory.conversationEnabled ?? spec.memory.conversationWindow > 0) {
+  if (
+    spec.memory.provider === "external_postgres" ||
+    (spec.memory.conversationEnabled ?? spec.memory.conversationWindow > 0) ||
+    Boolean(spec.memory.semanticEnabled)
+  ) {
     const memStatus = options?.memoryStatus;
     attachments.push({
       id: "memory",

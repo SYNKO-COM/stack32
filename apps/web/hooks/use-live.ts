@@ -37,7 +37,7 @@ export function useLiveThread(agentId: string) {
     placeholderData: (previous) => previous,
     refetchInterval: (query) => (isThreadActive(query.state.data) ? 2200 : false),
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: (query) => isThreadActive(query.state.data),
+    refetchOnWindowFocus: false,
     staleTime: 12_000,
     notifyOnChangeProps: ["data", "error", "isPending"],
   });

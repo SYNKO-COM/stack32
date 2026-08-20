@@ -185,11 +185,12 @@ export async function submitBuilderIdentity(input: {
   });
 }
 
-/** Resume builder after the user stores a BYOK LLM key. */
+/** Resume builder after the user connects an LLM via Pipedream (or legacy key). */
 export async function submitBuilderSecret(input: {
   runId: string;
   provider: string;
-  apiKey: string;
+  apiKey?: string;
+  modelId?: string;
 }): Promise<void> {
   const supabase = await requireSupabaseServerClient();
   const {
@@ -205,7 +206,8 @@ export async function submitBuilderSecret(input: {
     accessToken,
     body: {
       provider: input.provider,
-      api_key: input.apiKey,
+      api_key: input.apiKey || "",
+      model_id: input.modelId,
     },
   });
 }
@@ -255,6 +257,36 @@ export async function updateAgentModel(input: {
   });
 }
 
+/** Persist Chat/Schedule triggers from Structure (adds/removes timed schedule). */
+export async function updateAgentTriggers(input: {
+  agentId: string;
+  scheduleHourly?: boolean;
+  cron?: string | null;
+  timezone?: string | null;
+  triggers?: Array<{
+    kind: string;
+    enabled?: boolean;
+    cron?: string | null;
+    timezone?: string | null;
+  }>;
+}): Promise<{ triggers: Array<{ kind: string; enabled: boolean; cron?: string | null; timezone?: string | null }> }> {
+  await requireOwnedAgent(input.agentId);
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("triggers_require_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  const body: Record<string, unknown> = {};
+  if (input.scheduleHourly !== undefined) body.schedule_hourly = input.scheduleHourly;
+  if (input.cron !== undefined) body.cron = input.cron;
+  if (input.timezone !== undefined) body.timezone = input.timezone;
+  if (input.triggers !== undefined) body.triggers = input.triggers;
+  return agentServiceFetch(`/v1/agents/${input.agentId}/triggers`, {
+    method: "PATCH",
+    accessToken,
+    body,
+  });
+}
+
 /** Persist memory settings from Structure (conversation / semantic / provider). */
 export async function updateAgentMemorySettings(input: {
   agentId: string;
@@ -264,6 +296,8 @@ export async function updateAgentMemorySettings(input: {
   retentionDays?: number;
   provider?: "stack32" | "external_postgres";
   conversationWindow?: number;
+  externalAppId?: string | null;
+  externalInstructions?: string | null;
 }): Promise<void> {
   await requireOwnedAgent(input.agentId);
   if (currentAiExecutionMode() !== "agent-service") {
@@ -282,6 +316,12 @@ export async function updateAgentMemorySettings(input: {
   if (input.provider !== undefined) body.provider = input.provider;
   if (input.conversationWindow !== undefined) {
     body.conversation_window = input.conversationWindow;
+  }
+  if (input.externalAppId !== undefined) {
+    body.external_app_id = input.externalAppId;
+  }
+  if (input.externalInstructions !== undefined) {
+    body.external_instructions = input.externalInstructions;
   }
   await agentServiceFetch(`/v1/agents/${input.agentId}/memory-settings`, {
     method: "PATCH",

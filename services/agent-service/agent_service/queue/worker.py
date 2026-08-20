@@ -11,6 +11,12 @@ from agent_service.supabase_client import Persistence, get_supabase_admin_client
 logger = logging.getLogger(__name__)
 
 
+def _builder_mode_from_run(run: dict[str, Any]) -> str:
+    """Chat vs Build must survive Cloud Tasks — the payload lives on runs.input."""
+    raw = str((run.get("input") or {}).get("mode") or "build").strip().lower()
+    return "chat" if raw == "chat" else "build"
+
+
 async def process_run_by_id(run_id: str) -> dict[str, Any]:
     """Load run context from DB and execute. Payload must only carry run_id."""
     from agent_service.logging_config import bind_log_context, reset_log_context
@@ -61,15 +67,40 @@ async def _process_run_by_id_inner(
         from agent_service.builder.orchestrator import BuilderOrchestrator
 
         orch = BuilderOrchestrator(db)
-        prompt = (run.get("input") or {}).get("prompt") or ""
+        payload = run.get("input") or {}
+        prompt = str(payload.get("prompt") or "").strip()
+        if not prompt and isinstance(interrupt, dict):
+            prompt = str(interrupt.get("prompt") or "").strip()
         if not prompt:
-            return {"status": "skipped", "run_id": run_id}
+            logger.error(
+                "builder_run_skipped_empty_prompt run=%s agent=%s",
+                run_id,
+                agent_id,
+            )
+            await db.emit_event(
+                run_id,
+                "run.failed",
+                {"mapping_key": "builder.progress.failed", "code": "BUILDER_PROMPT_MISSING"},
+            )
+            await db.fail_run(run_id, "BUILDER_PROMPT_MISSING")
+            await db.update_agent_status(agent_id, user_id, "needs_attention")
+            if thread_id:
+                await db.insert_assistant_message(
+                    thread_id=thread_id,
+                    agent_id=agent_id,
+                    user_id=user_id,
+                    content="builder:errors.promptMissing",
+                    metadata={"tone": "error", "card": "error"},
+                )
+            return {"error": "BUILDER_PROMPT_MISSING", "run_id": run_id}
+        builder_mode = _builder_mode_from_run(run)
         return await orch.execute_build_run(
             run_id=run_id,
             user_id=user_id,
             agent_id=agent_id,
             thread_id=thread_id,
             content=prompt,
+            mode=builder_mode,
         )
 
     if run_type == "live":

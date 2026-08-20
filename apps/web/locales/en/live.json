@@ -51,7 +51,7 @@
   },
   "errors": {
     "canceled": "Run stopped.",
-    "missingUserLlmKey": "To chat with this agent, connect a brain (LLM) with your API key below. It is stored securely.",
+    "missingUserLlmKey": "To chat with this agent, connect a brain (LLM) with Pipedream below. Stack32 never stores your API key.",
     "runFailed": "Something went wrong while running your agent. Please try again.",
     "serviceUnavailable": "The agent service is temporarily unavailable. Please try again in a moment.",
     "budgetExceeded": "This run used too many model calls. Try a shorter request.",

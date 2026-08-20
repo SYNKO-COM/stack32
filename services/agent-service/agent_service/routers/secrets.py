@@ -33,7 +33,9 @@ class LlmSecretRequest(BaseModel):
 
 class BuilderSecretResumeRequest(BaseModel):
     provider: str = Field(min_length=2, max_length=32)
-    api_key: str = Field(min_length=8, max_length=512)
+    # Optional — empty when the user connected via Pipedream Connect.
+    api_key: str = Field(default="", max_length=512)
+    model_id: str | None = Field(default=None, max_length=200)
 
 
 class BuilderCapabilitiesResumeRequest(BaseModel):
@@ -202,7 +204,8 @@ async def submit_builder_secret(
             run_id=str(run_id),
             user_id=user.user_id,
             provider=body.provider,
-            api_key=body.api_key,
+            api_key=body.api_key or "",
+            model_id=body.model_id,
         )
     except ValueError as exc:
         code = "INVALID_LLM_KEY" if "INVALID_LLM_KEY" in str(exc) else "INVALID_PROVIDER"
@@ -213,6 +216,15 @@ async def submit_builder_secret(
         raise HTTPException(
             status_code=409,
             detail={"code": "BUILDER_INTERRUPTED", "message": "Cannot resume this run."},
+        )
+    if result.get("error") == "LLM_CONFIGURATION_REQUIRED":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "LLM_CONFIGURATION_REQUIRED",
+                "message": result.get("message")
+                or "Connect your LLM provider with Pipedream first.",
+            },
         )
     return result
 

@@ -321,19 +321,59 @@ export async function lookupIntegrationAppIcons(
   const unique = [
     ...new Set(appIds.map((id) => id.trim().toLowerCase()).filter(Boolean)),
   ].slice(0, 24);
-  const { pickExactAppIcon } = await import("@/lib/integrations/rank-apps");
-  const entries = await Promise.all(
-    unique.map(async (appId) => {
-      const { apps } = await searchIntegrationApps(appId, 20);
-      const src = pickExactAppIcon(appId, apps);
-      return [appId, src] as const;
-    }),
-  );
+  if (unique.length === 0) return {};
+  if (currentAiExecutionMode() !== "agent-service") return {};
   const out: Record<string, string> = {};
-  for (const [id, src] of entries) {
-    if (src) out[id] = src;
+  try {
+    const accessToken = await requireAccessToken();
+    try {
+      const params = new URLSearchParams({ ids: unique.join(",") });
+      const result = await agentServiceFetch<{ icons?: Record<string, string> }>(
+        `/v1/integrations/apps/icons?${params.toString()}`,
+        { method: "GET", accessToken },
+      );
+      for (const [id, src] of Object.entries(result.icons ?? {})) {
+        if (id && typeof src === "string" && src.startsWith("https://")) {
+          out[id.toLowerCase()] = src;
+        }
+      }
+    } catch {
+      // Batch route missing/down — fall through to catalog search.
+    }
+    const missing = unique.filter((id) => !out[id]);
+    for (const id of missing) {
+      try {
+        const params = new URLSearchParams({ q: id.slice(0, 200), limit: "20" });
+        const result = await agentServiceFetch<{
+          apps?: Array<Record<string, unknown>>;
+        }>(`/v1/integrations/apps/search?${params.toString()}`, {
+          method: "GET",
+          accessToken,
+        });
+        for (const row of result.apps ?? []) {
+          const rec = asRecord(row);
+          const appId = String(rec.app_id ?? rec.appId ?? rec.name_slug ?? rec.id ?? "")
+            .trim()
+            .toLowerCase();
+          const src =
+            typeof rec.img_src === "string"
+              ? rec.img_src
+              : typeof rec.imgSrc === "string"
+                ? rec.imgSrc
+                : "";
+          if (appId && src.startsWith("https://")) {
+            if (!out[appId]) out[appId] = src;
+            if (appId === id) break;
+          }
+        }
+      } catch {
+        // Keep going — other apps may still resolve.
+      }
+    }
+    return out;
+  } catch {
+    return {};
   }
-  return out;
 }
 
 export async function getProvidersHealth(): Promise<{
@@ -360,27 +400,31 @@ export async function getAgentReadiness(agentId: string): Promise<{
   if (currentAiExecutionMode() !== "agent-service") {
     return { status: "unknown", checks: [], missingConnections: [], missingConfig: [] };
   }
-  const accessToken = await requireAccessToken();
-  const result = await agentServiceFetch<{
-    status: string;
-    agent_status?: string;
-    checks?: Array<Record<string, unknown>>;
-    missing_connections?: Array<Record<string, unknown>>;
-    missing_config?: Array<Record<string, unknown>>;
-  }>(`/v1/agents/${agentId}/readiness`, {
-    method: "GET",
-    accessToken,
-  });
-  return {
-    status: result.status,
-    agentStatus: result.agent_status,
-    checks: (result.checks ?? []).map((c) => ({
-      key: String(c.key ?? ""),
-      ok: c.ok === true,
-      message: String(c.message ?? ""),
-      severity: String(c.severity ?? "info"),
-    })),
-    missingConnections: result.missing_connections ?? [],
-    missingConfig: result.missing_config ?? [],
-  };
+  try {
+    const accessToken = await requireAccessToken();
+    const result = await agentServiceFetch<{
+      status: string;
+      agent_status?: string;
+      checks?: Array<Record<string, unknown>>;
+      missing_connections?: Array<Record<string, unknown>>;
+      missing_config?: Array<Record<string, unknown>>;
+    }>(`/v1/agents/${agentId}/readiness`, {
+      method: "GET",
+      accessToken,
+    });
+    return {
+      status: result.status,
+      agentStatus: result.agent_status,
+      checks: (result.checks ?? []).map((c) => ({
+        key: String(c.key ?? ""),
+        ok: c.ok === true,
+        message: String(c.message ?? ""),
+        severity: String(c.severity ?? "info"),
+      })),
+      missingConnections: result.missing_connections ?? [],
+      missingConfig: result.missing_config ?? [],
+    };
+  } catch {
+    return { status: "unknown", checks: [], missingConnections: [], missingConfig: [] };
+  }
 }

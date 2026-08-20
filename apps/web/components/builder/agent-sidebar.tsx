@@ -1,13 +1,14 @@
 "use client";
 
-import { Check, ChevronsUpDown, MoreHorizontal, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, LayoutDashboard, MoreHorizontal, Plus, Sparkles, Store } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { AgentIcon } from "@/components/builder/agent-icon";
 import { CreatingAgentOverlay } from "@/components/shared/brand-loader";
 import { Logo, LogoMark } from "@/components/shared/logo";
+import { SegmentedTabs } from "@/components/shared/segmented-tabs";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -185,6 +186,13 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
   const { t } = useTranslation(["builder", "common"]);
   const router = useRouter();
   const params = useParams<{ agentId?: string }>();
+  const pathname = usePathname();
+  const workspaceTab =
+    pathname.startsWith("/agents/library")
+      ? "library"
+      : pathname.startsWith("/agents/dashboard")
+        ? "dashboard"
+        : "create";
   const {
     workspaces,
     activeWorkspace,
@@ -250,46 +258,82 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
 
   return (
     <div className="flex h-full flex-col">
-      <div className="space-y-3 px-4 pt-5 pb-3">
-        <Logo href="/agents" />
-        <Button
-          className="w-full justify-start gap-2 rounded-2xl"
-          variant="secondary"
-          onClick={() => void handleNewAgent()}
-          disabled={!activeWorkspaceId || creating || createAgent.isPending}
-          aria-busy={creating}
-        >
-          {creating ? (
-            <LogoMark className="size-4 animate-pulse" />
-          ) : (
-            <Plus className="size-4" aria-hidden="true" />
-          )}
-          {creating ? t("builder:sidebar.creatingAgent") : t("builder:sidebar.newAgent")}
-        </Button>
+      <div className="flex flex-col items-center space-y-3 px-3 pt-5 pb-3">
+        <div className="w-full">
+          <Logo href="/agents" />
+        </div>
+        <SegmentedTabs
+          ariaLabel={t("builder:workspaceNav.label")}
+          layoutId="workspace-nav-tab"
+          className="mx-auto w-fit max-w-full"
+          active={workspaceTab}
+          items={[
+            {
+              id: "create",
+              href: params.agentId ? `/agents/${params.agentId}/build` : "/agents",
+              label: t("builder:workspaceNav.create"),
+              icon: Sparkles,
+            },
+            {
+              id: "library",
+              href: "/agents/library",
+              label: t("builder:workspaceNav.library"),
+              icon: Store,
+            },
+            {
+              id: "dashboard",
+              href: "/agents/dashboard",
+              label: t("builder:workspaceNav.dashboard"),
+              icon: LayoutDashboard,
+            },
+          ]}
+        />
+        {workspaceTab === "create" ? (
+          <Button
+            className="w-full justify-start gap-2 rounded-2xl"
+            variant="secondary"
+            onClick={() => void handleNewAgent()}
+            disabled={!activeWorkspaceId || creating || createAgent.isPending}
+            aria-busy={creating}
+          >
+            {creating ? (
+              <LogoMark className="size-4 animate-pulse" />
+            ) : (
+              <Plus className="size-4" aria-hidden="true" />
+            )}
+            {creating ? t("builder:sidebar.creatingAgent") : t("builder:sidebar.newAgent")}
+          </Button>
+        ) : null}
       </div>
 
-      <p className="px-6 pt-2 pb-1.5 font-mono text-[11px] tracking-[0.18em] text-muted-foreground/70 uppercase">
-        {t("builder:sidebar.agentsTitle")}
-      </p>
+      {workspaceTab === "create" ? (
+        <>
+          <p className="w-full px-4 pt-2 pb-1.5 font-mono text-[11px] tracking-[0.18em] text-muted-foreground/70 uppercase">
+            {t("builder:sidebar.agentsTitle")}
+          </p>
 
-      <ScrollArea className="min-h-0 flex-1 px-3">
-        <div className="space-y-1 pb-4">
-          {agents && agents.length > 0 ? (
-            agents.map((agent) => (
-              <AgentRow
-                key={agent.id}
-                agent={agent}
-                isActive={agent.id === params.agentId}
-                onNavigate={onNavigate}
-              />
-            ))
-          ) : (
-            <p className="px-3 py-6 text-sm text-muted-foreground">
-              {t("builder:sidebar.empty")}
-            </p>
-          )}
-        </div>
-      </ScrollArea>
+          <ScrollArea className="min-h-0 w-full flex-1 px-3">
+            <div className="space-y-1 pb-4">
+              {agents && agents.length > 0 ? (
+                agents.map((agent) => (
+                  <AgentRow
+                    key={agent.id}
+                    agent={agent}
+                    isActive={agent.id === params.agentId}
+                    onNavigate={onNavigate}
+                  />
+                ))
+              ) : (
+                <p className="px-3 py-6 text-sm text-muted-foreground">
+                  {t("builder:sidebar.empty")}
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </>
+      ) : (
+        <div className="min-h-0 flex-1" />
+      )}
 
       <div className="border-t border-border p-3">
         <DropdownMenu>

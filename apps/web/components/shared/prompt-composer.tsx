@@ -11,13 +11,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTranslation } from "@/hooks/use-translation";
+import {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_MAX_FILES,
+  resolveAttachmentMimeType,
+} from "@/lib/chat/attachment-allowlist";
 import { readComposerDraft, writeComposerDraft } from "@/lib/chat/composer-draft";
 import { cn } from "@/lib/utils";
-
-const ACCEPTED =
-  "image/*,.pdf,.txt,.md,.csv,.json,.py,.ts,.tsx,.js,.jsx,.html,.css,.yml,.yaml";
-const MAX_FILE_BYTES = 8 * 1024 * 1024;
-const MAX_FILES = 5;
 
 export type ComposerAttachment = {
   id: string;
@@ -118,9 +119,11 @@ function useTypewriter(examples: string[] | undefined, enabled: boolean): string
 }
 
 async function fileToAttachment(file: File): Promise<ComposerAttachment | null> {
-  if (file.size > MAX_FILE_BYTES) return null;
+  if (file.size <= 0 || file.size > ATTACHMENT_MAX_BYTES) return null;
+  const mime = resolveAttachmentMimeType({ name: file.name, type: file.type });
+  if (!mime) return null;
+
   const id = `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 8)}`;
-  const mime = file.type || "application/octet-stream";
   const isImage = mime.startsWith("image/");
   if (isImage) {
     const previewUrl = URL.createObjectURL(file);
@@ -136,38 +139,27 @@ async function fileToAttachment(file: File): Promise<ComposerAttachment | null> 
       modelText: "",
     };
   }
-  // Text-like files — read content for the model
-  const textLike =
-    mime.startsWith("text/") ||
-    /\.(txt|md|csv|json|py|ts|tsx|js|jsx|html|css|ya?ml|toml|xml)$/i.test(file.name);
-  if (textLike) {
-    const text = (await file.text()).slice(0, 40_000);
+  if (mime === "application/pdf") {
     return {
       id,
       name: file.name,
       mimeType: mime,
       size: file.size,
       kind: "file",
-      modelText: `[Attached file: ${file.name}]\n\`\`\`\n${text}\n\`\`\``,
-    };
-  }
-  if (mime === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-    return {
-      id,
-      name: file.name,
-      mimeType: mime || "application/pdf",
-      size: file.size,
-      kind: "file",
+      file,
       modelText: `[Attached PDF: ${file.name} (${file.size} bytes) — content not extracted yet; use knowledge upload for deep PDF reading.]`,
     };
   }
+  // Text-like / code files — read content for the model
+  const text = (await file.text()).slice(0, 40_000);
   return {
     id,
     name: file.name,
     mimeType: mime,
     size: file.size,
     kind: "file",
-    modelText: `[Attached file: ${file.name} (${mime}, ${file.size} bytes)]`,
+    file,
+    modelText: `[Attached file: ${file.name}]\n\`\`\`\n${text}\n\`\`\``,
   };
 }
 
@@ -277,13 +269,13 @@ export function PromptComposer({
     const list = Array.from(files);
     if (!list.length) return;
     const next: ComposerAttachment[] = [];
-    for (const file of list.slice(0, MAX_FILES)) {
+    for (const file of list.slice(0, ATTACHMENT_MAX_FILES)) {
       const att = await fileToAttachment(file);
       if (att) next.push(att);
     }
     if (!next.length) return;
     setAttachments((prev) => {
-      const merged = [...prev, ...next].slice(0, MAX_FILES);
+      const merged = [...prev, ...next].slice(0, ATTACHMENT_MAX_FILES);
       return merged;
     });
   }, []);
@@ -557,7 +549,7 @@ export function PromptComposer({
               ref={fileInputRef}
               type="file"
               className="hidden"
-              accept={ACCEPTED}
+              accept={ATTACHMENT_ACCEPT}
               multiple
               onChange={(e) => {
                 if (e.target.files) void addFiles(e.target.files);

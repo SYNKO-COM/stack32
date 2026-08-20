@@ -180,7 +180,24 @@ class InstallationService:
                 "limit": "1",
             },
         )
-        return rows[0] if rows else None
+        if not rows:
+            return None
+        agent = rows[0]
+        visibility = agent.get("listing_visibility")
+        # Missing column (legacy) or explicit public listing: anyone can install.
+        if visibility in (None, "public"):
+            return agent
+        approved = await self.db._select(
+            "agent_access_requests",
+            {
+                "agent_id": f"eq.{agent_id}",
+                "requester_id": f"eq.{user_id}",
+                "status": "eq.approved",
+                "select": "id",
+                "limit": "1",
+            },
+        )
+        return agent if approved else None
 
 
 async def get_or_create_installation(

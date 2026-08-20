@@ -429,7 +429,12 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
               : rec.kind === "webhook"
                 ? "webhook"
                 : "chat";
-        return { kind, enabled: rec.enabled !== false };
+        return {
+          kind,
+          enabled: rec.enabled !== false,
+          cron: typeof rec.cron === "string" ? rec.cron : null,
+          timezone: typeof rec.timezone === "string" ? rec.timezone : null,
+        };
       },
     );
     const identity = mapIdentity(raw.identity);
@@ -493,6 +498,18 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
           memory.provider === "external_postgres" || memory.provider === "stack32"
             ? memory.provider
             : "stack32",
+        externalAppId:
+          typeof memory.external_app_id === "string"
+            ? memory.external_app_id
+            : typeof memory.externalAppId === "string"
+              ? memory.externalAppId
+              : undefined,
+        externalInstructions:
+          typeof memory.external_instructions === "string"
+            ? memory.external_instructions
+            : typeof memory.externalInstructions === "string"
+              ? memory.externalInstructions
+              : undefined,
       },
       rules,
       output: {
@@ -827,6 +844,10 @@ export function mapBuilderMessage(row: BuilderMessageRow): BuilderMessage | null
       return items.length > 0 ? items : undefined;
     })(),
     attachments: parseMessageAttachments(meta.attachments),
+    interactionMode:
+      meta.mode === "chat" || meta.mode === "build"
+        ? meta.mode
+        : undefined,
     createdAt: row.created_at,
   };
 }
