@@ -333,7 +333,9 @@ export async function createWhopCheckoutSession(input: {
           plan_type: "renewal",
           currency: "usd",
           billing_period: whopBillingPeriodDays(input.interval),
-          initial_price: priced.chargeUsd,
+          // Whop charges initial_price ON TOP of the first renewal_price.
+          // For a normal subscription, only renewal_price should be billed today.
+          initial_price: 0,
           renewal_price: priced.chargeUsd,
           title: planCheckoutTitle(input.planKey, input.interval, creditsMonthly),
           visibility: "hidden",

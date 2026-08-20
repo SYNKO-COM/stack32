@@ -7,6 +7,10 @@ import { PLANS } from "@/lib/billing/plans";
  * - Checkout uses an inline renewal plan attached to that product, priced from
  *   our credit tier math (so extras stay proportional without 66 static plans)
  * - Optional fixed base plan IDs for marketing / shareable links
+ *
+ * Pricing note: Whop `initial_price` is charged ON TOP of the first
+ * `renewal_price`. Standard Stack32 subscriptions must keep `initial_price: 0`
+ * and put the subscription amount only on `renewal_price`.
  */
 
 export type WhopProductKey = Exclude<PlanKey, "free">;

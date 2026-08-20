@@ -2,6 +2,8 @@
 
 Stack32 uses **3 Whop products** (Starter / Pro / Scale), each with monthly + annual base plans. Extra credit tiers are priced at checkout via an inline renewal plan attached to the same product ([Accept payments](https://docs.whop.com/developer/guides/accept-payments), [Checkout embed](https://docs.whop.com/payments/checkout-embed)).
 
+> **Important:** Whop’s `initial_price` is a one-time setup fee charged **on top of** the first `renewal_price`. For normal Stack32 subscriptions, always set `initial_price: 0` and put the subscription amount only on `renewal_price` (otherwise day-one total is doubled).
+
 ## What you must provide
 
 | Secret / ID | Where to get it | Used for |

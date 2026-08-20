@@ -78,7 +78,8 @@ async function main() {
       plan_type: "renewal",
       currency: "usd",
       billing_period: 30,
-      initial_price: spec.monthly,
+      // initial_price is additive on first charge — keep 0 for standard subscriptions.
+      initial_price: 0,
       renewal_price: spec.monthly,
       title: `${spec.key} monthly`.slice(0, 30),
       visibility: "visible",
@@ -99,7 +100,7 @@ async function main() {
       plan_type: "renewal",
       currency: "usd",
       billing_period: 365,
-      initial_price: spec.annualYearly,
+      initial_price: 0,
       renewal_price: spec.annualYearly,
       title: `${spec.key} annual`.slice(0, 30),
       visibility: "visible",
