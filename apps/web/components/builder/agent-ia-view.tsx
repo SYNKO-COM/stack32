@@ -50,9 +50,12 @@ function useIsLgViewport(): boolean {
 export function AgentIaView({
   agentId,
   mode = "owner",
+  installationId = null,
 }: {
   agentId: string;
   mode?: "owner" | "consumer";
+  /** Subscriber installation — scopes readiness/connections for public use. */
+  installationId?: string | null;
 }) {
   const { t } = useTranslation(["structure", "builder"]);
   const queryClient = useQueryClient();
@@ -68,7 +71,9 @@ export function AgentIaView({
   const [setupOpen, setSetupOpen] = useState(false);
   const [ignoredRunIds, setIgnoredRunIds] = useState<string[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
-  const readOnly = mode === "consumer";
+  const consumer = mode === "consumer";
+  const structureLocked = consumer;
+  const allowInstallationConfig = consumer;
 
   useEffect(() => {
     const supabase = requireSupabaseBrowserClient();
@@ -133,13 +138,13 @@ export function AgentIaView({
     liveRunId && !ignoredRunIds.includes(liveRunId) ? liveRunId : null;
 
   const connectionsQuery = useQuery({
-    queryKey: ["agent-connections", agentId],
+    queryKey: ["agent-connections", agentId, installationId ?? "default"],
     queryFn: () => listAgentConnections(agentId),
     staleTime: 15_000,
   });
 
   const readinessQuery = useQuery({
-    queryKey: ["agent-readiness", agentId],
+    queryKey: ["agent-readiness", agentId, installationId ?? "default"],
     queryFn: () => getAgentReadiness(agentId),
     staleTime: 15_000,
   });
@@ -360,22 +365,23 @@ export function AgentIaView({
       modelStatus={modelStatus}
       memoryStatus={memoryStatus}
       executionVisual={executionVisual}
-      readOnly={readOnly}
+      readOnly={structureLocked}
+      allowInstallationConfig={allowInstallationConfig}
       onConnectionsChanged={
-        readOnly
-          ? undefined
-          : () => {
+        allowInstallationConfig || !structureLocked
+          ? () => {
               void connectionsQuery.refetch();
               void readinessQuery.refetch();
             }
+          : undefined
       }
       onConfigChanged={
-        readOnly
-          ? undefined
-          : () => {
+        allowInstallationConfig || !structureLocked
+          ? () => {
               void connectionsQuery.refetch();
               void readinessQuery.refetch();
             }
+          : undefined
       }
     />
   ) : (
@@ -393,6 +399,7 @@ export function AgentIaView({
         <LiveView
           agentId={agentId}
           activeRunId={visualRunId}
+          hideStatusBadge={consumer}
           headerActions={
             <Button
               type="button"
@@ -523,7 +530,7 @@ export function AgentIaView({
             </span>
           ) : null}
           <div className="flex shrink-0 items-center gap-1">
-            {panelOpen && !readOnly ? (
+            {panelOpen && !structureLocked ? (
               <Button
                 variant="ghost"
                 size="icon-sm"

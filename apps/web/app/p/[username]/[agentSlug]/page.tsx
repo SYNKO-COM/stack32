@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { JsonLd } from "@/components/seo/json-ld";
+import { BrandLoader } from "@/components/shared/brand-loader";
 import { resolvePublishedAgentAction } from "@/lib/actions/public-agents";
 import { buildPageMetadata, publicAgentJsonLd, SITE_NAME } from "@/lib/seo";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -49,6 +51,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const description =
+    agent.tagline?.trim() ||
     agent.description?.trim() ||
     `${agent.name} — AI agent by @${agent.creatorUsername} on ${SITE_NAME}. Describe what you need; Stack32 builds agents you can use immediately.`;
 
@@ -74,18 +77,26 @@ export default async function PublicAgentPage({ params }: PageProps) {
         <JsonLd
           data={publicAgentJsonLd({
             name: agent.name,
-            description: agent.description,
+            description: agent.description ?? agent.tagline,
             path: `/@${agent.creatorUsername}/${agent.slug}`,
             creatorUsername: agent.creatorUsername,
           })}
         />
       ) : null}
-      <PublicAgentClient
-        agent={agent}
-        username={username}
-        agentSlug={agentSlug}
-        initialAuthenticated={initialAuthenticated}
-      />
+      <Suspense
+        fallback={
+          <div className="flex h-svh items-center justify-center">
+            <BrandLoader size="lg" />
+          </div>
+        }
+      >
+        <PublicAgentClient
+          agent={agent}
+          username={username}
+          agentSlug={agentSlug}
+          initialAuthenticated={initialAuthenticated}
+        />
+      </Suspense>
     </>
   );
 }

@@ -239,12 +239,15 @@ export function LiveView({
   agentId,
   activeRunId,
   headerActions,
+  hideStatusBadge = false,
 }: {
   agentId: string;
   /** Latest live run id from the parent (structure animation + stop). */
   activeRunId?: string | null;
   /** Extra controls in the header row (e.g. mobile modules sheet). */
   headerActions?: React.ReactNode;
+  /** Public consumer usage — no draft/published badge. */
+  hideStatusBadge?: boolean;
 }) {
   const { t } = useTranslation(["live", "builder"]);
   const queryClient = useQueryClient();
@@ -288,15 +291,17 @@ export function LiveView({
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
           {agent ? <AgentIcon icon={agent.icon} /> : null}
           <h1 className="truncate text-sm font-medium">{agentName}</h1>
-          <Badge
-            variant="outline"
-            className={cn(
-              "hidden border-border text-xs sm:inline-flex",
-              agent?.status === "published" ? "text-sky-300" : "text-zinc-300",
-            )}
-          >
-            {agent?.status === "published" ? t("live:badge.published") : t("live:badge.draft")}
-          </Badge>
+          {!hideStatusBadge ? (
+            <Badge
+              variant="outline"
+              className={cn(
+                "hidden border-border text-xs sm:inline-flex",
+                agent?.status === "published" ? "text-sky-300" : "text-zinc-300",
+              )}
+            >
+              {agent?.status === "published" ? t("live:badge.published") : t("live:badge.draft")}
+            </Badge>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {headerActions}

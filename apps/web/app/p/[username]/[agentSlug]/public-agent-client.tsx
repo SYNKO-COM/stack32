@@ -1,115 +1,328 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Heart, Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Heart, Loader2, Sparkles, Star, Workflow } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { AgentIaView } from "@/components/builder/agent-ia-view";
+import { AgentIcon } from "@/components/builder/agent-icon";
+import { PublicAgentChrome } from "@/components/marketplace/public-agent-chrome";
 import { ReviewForm, ReviewList } from "@/components/marketplace/review-form";
 import { AnimatedBackground } from "@/components/shared/animated-background";
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
-import { listAgentReviewsAction, requestAgentAccessAction } from "@/lib/actions/marketplace";
 import {
+  listAgentReviewsAction,
+  requestAgentAccessAction,
+} from "@/lib/actions/marketplace";
+import {
+  getPublishedAgentAudienceAction,
   openPublishedAgentAction,
+  subscribePublishedAgentAction,
   toggleFavoriteAction,
 } from "@/lib/actions/public-agents";
 import type { PublicAgentDto } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
-function PublicAgentGate({
-  agent,
-  username,
-  agentSlug,
-  initialAuthenticated,
-}: {
-  agent: PublicAgentDto;
-  username: string;
-  agentSlug: string;
-  initialAuthenticated: boolean;
-}) {
-  const { t } = useTranslation(["common", "errors"]);
-  const { data: user, isLoading: userLoading } = useCurrentUser();
-  const prettyPath = `/@${username}/${agentSlug}`;
-  const authenticated = user ? true : userLoading ? initialAuthenticated : false;
-
-  if (userLoading && !initialAuthenticated) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <BrandLoader label={t("common:loading")} size="lg" />
-      </div>
-    );
-  }
-
-  if (!authenticated) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {t("common:publicAgent.byline", { username: agent.creatorUsername })}
-        </p>
-        <h1 className="mt-3 max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl">
-          {agent.name}
-        </h1>
-        {agent.description ? (
-          <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
-            {agent.description}
-          </p>
-        ) : (
-          <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
-            {t("common:publicAgent.defaultDescription")}
-          </p>
-        )}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Button asChild className="rounded-full">
-            <Link href={`/login?next=${encodeURIComponent(prettyPath)}`}>
-              {t("common:publicAgent.signInToUse")}
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="rounded-full">
-            <Link href={`/signup?next=${encodeURIComponent(prettyPath)}`}>
-              {t("common:actions.getStarted")}
-            </Link>
-          </Button>
-        </div>
-        <p className="mt-6 text-xs text-muted-foreground">
-          <Link href="/" className="underline-offset-2 hover:underline">
-            {t("common:actions.backHome")}
-          </Link>
-        </p>
-      </div>
-    );
-  }
-
-  return <PublicAgentContent agent={agent} username={username} agentSlug={agentSlug} />;
+function formatRating(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toFixed(1);
 }
 
-function PublicAgentContent({
+function PublicAgentLanding({
   agent,
   username,
   agentSlug,
+  onUse,
 }: {
   agent: PublicAgentDto;
   username: string;
   agentSlug: string;
+  onUse: () => void;
 }) {
   const { t } = useTranslation(["common", "errors"]);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: user, isLoading: userLoading } = useCurrentUser();
+  const prettyPath = `/@${username}/${agentSlug}`;
+  const [pending, startTransition] = useTransition();
+  const [favoriteOverride, setFavoriteOverride] = useState<boolean | null>(null);
 
-  const query = useQuery({
-    queryKey: ["public-agent", username, agentSlug],
-    queryFn: () => openPublishedAgentAction(username, agentSlug),
-    retry: false,
+  const audience = useQuery({
+    queryKey: ["public-agent-audience", username, agentSlug],
+    queryFn: () => getPublishedAgentAudienceAction(username, agentSlug),
+    enabled: !userLoading,
   });
 
-  const [favoriteOverride, setFavoriteOverride] = useState<boolean | null>(null);
-  const [pending, startTransition] = useTransition();
-  const favorited = favoriteOverride ?? query.data?.favorited ?? false;
   const reviews = useQuery({
-    queryKey: ["agent-reviews", query.data?.agent.agentId ?? agent.agentId],
-    queryFn: () => listAgentReviewsAction(query.data!.agent.agentId),
-    enabled: Boolean(query.data?.agent.agentId && !query.data.needsAccess),
+    queryKey: ["agent-reviews", agent.agentId],
+    queryFn: () => listAgentReviewsAction(agent.agentId),
+  });
+
+  const favorited = favoriteOverride ?? audience.data?.favorited ?? false;
+  const subscribed = audience.data?.subscribed ?? false;
+  const needsAccess = audience.data?.needsAccess ?? agent.listingVisibility === "private";
+  const accessStatus = audience.data?.accessStatus ?? "none";
+  const isOwner = audience.data?.isOwner ?? false;
+
+  const goAuth = (mode: "login" | "signup") => {
+    router.push(`/${mode}?next=${encodeURIComponent(prettyPath)}`);
+  };
+
+  const handleSubscribe = () => {
+    if (!user) {
+      goAuth("signup");
+      return;
+    }
+    startTransition(async () => {
+      const next = await subscribePublishedAgentAction(username, agentSlug);
+      await queryClient.invalidateQueries({
+        queryKey: ["public-agent-audience", username, agentSlug],
+      });
+      if (!next.needsAccess) {
+        // Stay on landing with Utiliser CTA — user chooses when to enter.
+      }
+    });
+  };
+
+  const handleUse = () => {
+    if (!user) {
+      goAuth("login");
+      return;
+    }
+    startTransition(async () => {
+      if (!subscribed) {
+        await subscribePublishedAgentAction(username, agentSlug);
+        await queryClient.invalidateQueries({
+          queryKey: ["public-agent-audience", username, agentSlug],
+        });
+      }
+      onUse();
+    });
+  };
+
+  const handleFavorite = () => {
+    if (!user) {
+      goAuth("login");
+      return;
+    }
+    startTransition(async () => {
+      const result = await toggleFavoriteAction(agent.agentId, favorited);
+      setFavoriteOverride(result.favorited);
+    });
+  };
+
+  const description =
+    agent.tagline?.trim() ||
+    agent.description?.trim() ||
+    t("common:publicAgent.defaultDescription");
+
+  return (
+    <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-4 py-10 md:px-6 md:py-14">
+        <section className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-4">
+              <AgentIcon
+                icon={agent.iconKey || "bot"}
+                className="size-16 rounded-3xl md:size-[4.5rem]"
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {t("common:publicAgent.byline", { username: agent.creatorUsername })}
+                </p>
+                <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
+                  {agent.name}
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                  {description}
+                </p>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {(agent.reviewCount ?? 0) > 0
+                    ? t("common:publicAgent.ratingLabel", {
+                        rating: formatRating(agent.avgRating),
+                        count: agent.reviewCount ?? 0,
+                      })
+                    : t("common:publicAgent.ratingEmpty")}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2 md:flex-col md:items-stretch">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 rounded-full"
+              disabled={pending}
+              onClick={handleFavorite}
+            >
+              {pending ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Heart
+                  className={cn("size-3.5", favorited && "fill-current text-brand")}
+                  aria-hidden="true"
+                />
+              )}
+              {favorited ? t("common:myAgents.unfavorite") : t("common:myAgents.favorite")}
+            </Button>
+
+            {needsAccess && !isOwner ? (
+              <>
+                <p className="max-w-xs text-sm text-muted-foreground md:text-right">
+                  {accessStatus === "pending"
+                    ? t("common:liveAccess.pending")
+                    : accessStatus === "denied"
+                      ? t("common:liveAccess.denied")
+                      : t("common:liveAccess.privateBody")}
+                </p>
+                {accessStatus === "none" || accessStatus === "denied" ? (
+                  <Button
+                    className="rounded-full"
+                    disabled={pending || !user}
+                    onClick={() => {
+                      if (!user) {
+                        goAuth("signup");
+                        return;
+                      }
+                      startTransition(async () => {
+                        await requestAgentAccessAction(agent.agentId);
+                        await audience.refetch();
+                      });
+                    }}
+                  >
+                    {t("common:liveAccess.request")}
+                  </Button>
+                ) : null}
+              </>
+            ) : subscribed ? (
+              <Button className="rounded-full" disabled={pending} onClick={handleUse}>
+                {pending ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : null}
+                {t("common:publicAgent.use")}
+              </Button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <Button className="rounded-full" disabled={pending} onClick={handleSubscribe}>
+                  {pending ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  ) : null}
+                  {t("common:publicAgent.subscribe")}
+                </Button>
+                {!user ? (
+                  <p className="max-w-xs text-xs text-muted-foreground md:text-right">
+                    {t("common:publicAgent.signInRequired")}{" "}
+                    <button
+                      type="button"
+                      className="underline-offset-2 hover:underline"
+                      onClick={() => goAuth("login")}
+                    >
+                      {t("common:actions.signIn")}
+                    </button>
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-border/80 bg-background/60 p-5 backdrop-blur-sm md:p-6">
+          <div className="flex items-center gap-2">
+            <Workflow className="size-4 text-brand" aria-hidden="true" />
+            <h2 className="text-sm font-semibold">{t("common:publicAgent.structureTitle")}</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("common:publicAgent.structureHint")}
+          </p>
+          {agent.modules && agent.modules.length > 0 ? (
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {agent.modules.map((mod) => (
+                <li
+                  key={mod.label}
+                  className="rounded-full border border-border bg-foreground/[0.03] px-3 py-1.5 text-xs font-medium"
+                >
+                  {mod.label}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              {t("common:publicAgent.modulesEmpty")}
+            </p>
+          )}
+        </section>
+
+        <section className="grid gap-8 md:grid-cols-2">
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <Star className="size-4 text-brand" aria-hidden="true" />
+              <h2 className="text-sm font-semibold">{t("common:publicAgent.reviewsTitle")}</h2>
+            </div>
+            <ReviewList reviews={reviews.data ?? []} />
+          </div>
+          {user && !isOwner ? (
+            <ReviewForm
+              agentId={agent.agentId}
+              existing={reviews.data?.find((r) => r.isMine)}
+              onSaved={() => void reviews.refetch()}
+            />
+          ) : !user ? (
+            <div className="rounded-2xl border border-dashed border-border/80 p-4 text-sm text-muted-foreground">
+              {t("common:publicAgent.signInRequired")}
+            </div>
+          ) : null}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function CreateOwnAgentCard() {
+  const { t } = useTranslation("common");
+  return (
+    <Link
+      href="/agents"
+      className="group fixed bottom-4 right-4 z-30 max-w-[220px] rounded-2xl border border-border bg-background/95 p-3 shadow-lg backdrop-blur-md transition hover:border-brand/40 hover:shadow-xl sm:bottom-6 sm:right-6"
+    >
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
+          <Sparkles className="size-4" aria-hidden="true" />
+        </span>
+        <span>
+          <span className="block text-sm font-semibold leading-snug group-hover:text-brand">
+            {t("publicAgent.createOwnAgent")}
+          </span>
+          <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+            {t("publicAgent.createOwnAgentHint")}
+          </span>
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function PublicAgentUseView({
+  agent,
+  username,
+  agentSlug,
+  onBack,
+}: {
+  agent: PublicAgentDto;
+  username: string;
+  agentSlug: string;
+  onBack: () => void;
+}) {
+  const { t } = useTranslation(["common", "errors"]);
+  const query = useQuery({
+    queryKey: ["public-agent-open", username, agentSlug],
+    queryFn: () => openPublishedAgentAction(username, agentSlug),
+    retry: false,
   });
 
   if (query.isLoading) {
@@ -120,100 +333,43 @@ function PublicAgentContent({
     );
   }
 
-  if (query.isError || !query.data) {
+  if (query.isError || !query.data || query.data.needsAccess) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t("errors:agentNotFound.title")}
-        </h1>
-        <p className="mt-3 max-w-md text-sm text-muted-foreground">
-          {t("errors:agentNotFound.subtitle")}
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+        <h2 className="text-xl font-semibold">{t("common:liveAccess.privateTitle")}</h2>
+        <p className="max-w-md text-sm text-muted-foreground">
+          {query.data?.accessStatus === "pending"
+            ? t("common:liveAccess.pending")
+            : t("common:liveAccess.privateBody")}
         </p>
+        <Button variant="outline" className="rounded-full" onClick={onBack}>
+          {t("common:publicAgent.backToListing")}
+        </Button>
       </div>
     );
   }
 
-  const liveAgent: PublicAgentDto = query.data.agent;
-
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-6">
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 md:px-6">
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold">{liveAgent.name}</h1>
+          <p className="truncate text-sm font-medium">{agent.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            @{liveAgent.creatorUsername}/{liveAgent.slug}
+            @{agent.creatorUsername}/{agent.slug}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 rounded-full"
-          disabled={pending}
-          onClick={() => {
-            startTransition(async () => {
-              const result = await toggleFavoriteAction(liveAgent.agentId, favorited);
-              setFavoriteOverride(result.favorited);
-            });
-          }}
-        >
-          {pending ? (
-            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          ) : (
-            <Heart
-              className={cn("size-3.5", favorited && "fill-current text-brand")}
-              aria-hidden="true"
-            />
-          )}
-          {favorited ? t("common:myAgents.unfavorite") : t("common:myAgents.favorite")}
+        <Button variant="ghost" size="sm" className="rounded-full" onClick={onBack}>
+          {t("common:publicAgent.backToListing")}
         </Button>
-      </header>
-      {query.data.needsAccess ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <h2 className="text-xl font-semibold">{t("common:liveAccess.privateTitle")}</h2>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            {query.data.accessStatus === "pending"
-              ? t("common:liveAccess.pending")
-              : query.data.accessStatus === "denied"
-                ? t("common:liveAccess.denied")
-                : t("common:liveAccess.privateBody")}
-          </p>
-          {query.data.accessStatus === "none" || query.data.accessStatus === "denied" ? (
-            <Button
-              className="mt-6 rounded-full"
-              disabled={pending}
-              onClick={() => {
-                startTransition(async () => {
-                  await requestAgentAccessAction(liveAgent.agentId);
-                  await query.refetch();
-                });
-              }}
-            >
-              {t("common:liveAccess.request")}
-            </Button>
-          ) : null}
-        </div>
-      ) : (
-        <>
-          <div className="min-h-0 flex-1">
-            <AgentIaView agentId={liveAgent.agentId} mode="consumer" />
-          </div>
-          <div className="border-t border-border px-4 py-4 md:px-6">
-            <div className="mx-auto grid max-w-3xl gap-6 md:grid-cols-2">
-              {query.data.isOwner ? null : (
-                <ReviewForm
-                  agentId={liveAgent.agentId}
-                  existing={reviews.data?.find((r) => r.isMine)}
-                  onSaved={() => void reviews.refetch()}
-                />
-              )}
-              <div className={query.data.isOwner ? "md:col-span-2" : undefined}>
-                <p className="mb-2 text-sm font-medium">{t("common:review.title")}</p>
-                <ReviewList reviews={reviews.data ?? []} />
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      </div>
+      <div className="min-h-0 flex-1">
+        <AgentIaView
+          agentId={query.data.agent.agentId}
+          mode="consumer"
+          installationId={query.data.installationId}
+        />
+      </div>
+      <CreateOwnAgentCard />
     </div>
   );
 }
@@ -230,37 +386,65 @@ export function PublicAgentClient({
   initialAuthenticated: boolean;
 }) {
   const { t } = useTranslation(["common", "errors"]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const prettyPath = `/@${username}/${agentSlug}`;
+  const useMode = searchParams.get("use") === "1";
+
+  const enterUse = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("use", "1");
+    router.push(`${prettyPath}?${params.toString()}`);
+  };
+
+  const leaveUse = () => {
+    router.push(prettyPath);
+  };
 
   if (!agent) {
     return (
       <div className="relative flex h-svh overflow-hidden">
         <AnimatedBackground variant="editor" />
-        <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t("errors:agentNotFound.title")}
-          </h1>
-          <p className="mt-3 max-w-md text-sm text-muted-foreground">
-            {t("errors:agentNotFound.subtitle")}
-          </p>
-          <Button asChild className="mt-8 rounded-full">
-            <Link href="/">{t("common:actions.backHome")}</Link>
-          </Button>
-        </div>
+        <PublicAgentChrome loginNext={prettyPath}>
+          <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {t("errors:agentNotFound.title")}
+            </h1>
+            <p className="mt-3 max-w-md text-sm text-muted-foreground">
+              {t("errors:agentNotFound.subtitle")}
+            </p>
+            <Button asChild className="mt-8 rounded-full">
+              <Link href="/">{t("common:actions.backHome")}</Link>
+            </Button>
+          </div>
+        </PublicAgentChrome>
       </div>
     );
   }
 
+  // Avoid unused warning while keeping SSR auth hint available for future gates.
+  void initialAuthenticated;
+
   return (
     <div className="relative flex h-svh overflow-hidden">
       <AnimatedBackground variant="editor" />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <PublicAgentGate
-          agent={agent}
-          username={username}
-          agentSlug={agentSlug}
-          initialAuthenticated={initialAuthenticated}
-        />
-      </div>
+      <PublicAgentChrome loginNext={prettyPath} accountMode="workspace">
+        {useMode ? (
+          <PublicAgentUseView
+            agent={agent}
+            username={username}
+            agentSlug={agentSlug}
+            onBack={leaveUse}
+          />
+        ) : (
+          <PublicAgentLanding
+            agent={agent}
+            username={username}
+            agentSlug={agentSlug}
+            onUse={enterUse}
+          />
+        )}
+      </PublicAgentChrome>
     </div>
   );
 }

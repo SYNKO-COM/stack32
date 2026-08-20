@@ -480,12 +480,17 @@ export interface PublicAgentDto {
   name: string;
   slug: string;
   description?: string;
+  tagline?: string;
   iconKey?: string;
+  listingVisibility?: "public" | "private";
   creatorUsername: string;
   creatorUserId: string;
   deploymentId: string;
   versionId?: string;
   publishedAt?: string;
+  avgRating?: number | null;
+  reviewCount?: number;
+  modules?: Array<{ label: string; kind?: string }>;
 }
 
 export interface PublishResult {

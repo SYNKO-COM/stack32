@@ -100,9 +100,19 @@ async def bind_connection(
 @router.get("/agents/{agent_id}/connections")
 async def list_agent_bindings(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
     mgr = ConnectionManager()
+    from agent_service.installations.service import InstallationService
+
+    install = await InstallationService().get_or_create(
+        user_id=user.user_id, agent_id=str(agent_id)
+    )
     return {
-        "bindings": await mgr.list_bindings(user_id=user.user_id, agent_id=str(agent_id)),
+        "bindings": await mgr.list_bindings(
+            user_id=user.user_id,
+            agent_id=str(agent_id),
+            installation_id=str(install["id"]),
+        ),
         "connections": await mgr.list_connections(user_id=user.user_id),
+        "installation_id": str(install["id"]),
     }
 
 

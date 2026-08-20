@@ -121,9 +121,9 @@ test("unauthenticated users are redirected away from protected routes", async ({
   await page.waitForURL("**/login**", { timeout: 15_000 });
 });
 
-test("logged-out public agent path preserves next through login", async ({ page }) => {
+test("logged-out public agent landing stays public (not a forced login)", async ({ page }) => {
   await page.goto("/@missinguser/missing-agent");
-  await page.waitForURL("**/login**", { timeout: 15_000 });
-  const url = new URL(page.url());
-  expect(url.searchParams.get("next")).toBe("/@missinguser/missing-agent");
+  await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 15_000 });
+  // Missing agent → not-found UI with Stack32 chrome (login available, no forced redirect).
+  await expect(page).not.toHaveURL(/\/login/);
 });

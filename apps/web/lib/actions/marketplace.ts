@@ -1,6 +1,10 @@
 "use server";
 
 import { getOrCreateInstallation } from "@/lib/actions/installations";
+import {
+  isListingBillingInterval,
+  type ListingBillingInterval,
+} from "@/lib/marketplace/slug";
 import { clampReviewRating, shuffleArray } from "@/lib/marketplace/shuffle";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -17,6 +21,7 @@ export interface MarketplaceAgentCard {
   creatorUserId: string;
   priceCents: number;
   currency: string;
+  billingInterval?: ListingBillingInterval;
   publicPath: string;
   avgRating?: number;
   reviewCount?: number;
@@ -31,8 +36,10 @@ export interface AgentListingSettings {
   tagline: string;
   priceCents: number;
   currency: string;
+  billingInterval: ListingBillingInterval;
   publicPath?: string;
   published: boolean;
+  username?: string;
 }
 
 export interface AccessRequestRow {
@@ -117,9 +124,12 @@ export async function getAgentListingSettingsAction(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("not_authenticated");
 
-  const { data: agent, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listing_billing_interval pending codegen
+  const { data: agent, error } = await (supabase as any)
     .from("agents")
-    .select("id, name, slug, status, listing_visibility, listing_tagline, listing_price_cents, listing_currency")
+    .select(
+      "id, name, slug, status, listing_visibility, listing_tagline, listing_price_cents, listing_currency, listing_billing_interval",
+    )
     .eq("id", agentId)
     .eq("user_id", user.id)
     .is("deleted_at", null)
@@ -141,6 +151,11 @@ export async function getAgentListingSettingsAction(
   const visibility: ListingVisibility =
     row.listing_visibility === "public" ? "public" : "private";
   const published = row.status === "published";
+  const billingRaw =
+    typeof row.listing_billing_interval === "string" ? row.listing_billing_interval : "one_time";
+  const billingInterval: ListingBillingInterval = isListingBillingInterval(billingRaw)
+    ? billingRaw
+    : "one_time";
 
   return {
     agentId: String(row.id),
@@ -151,10 +166,32 @@ export async function getAgentListingSettingsAction(
     tagline: typeof row.listing_tagline === "string" ? row.listing_tagline : "",
     priceCents: typeof row.listing_price_cents === "number" ? row.listing_price_cents : 0,
     currency: typeof row.listing_currency === "string" ? row.listing_currency : "eur",
+    billingInterval,
     publicPath:
       published && username ? `/@${username}/${String(row.slug ?? "")}` : undefined,
     published,
+    username,
   };
+}
+
+async function allocateUniqueSlug(
+  supabase: Awaited<ReturnType<typeof requireSupabaseServerClient>>,
+  userId: string,
+  desired: string,
+  excludeAgentId: string,
+): Promise<string> {
+  const { nextAvailableSlug } = await import("@/lib/marketplace/slug");
+  return nextAvailableSlug(desired, async (candidate) => {
+    const { data } = await supabase
+      .from("agents")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("slug", candidate)
+      .is("deleted_at", null)
+      .neq("id", excludeAgentId)
+      .maybeSingle();
+    return Boolean(data);
+  });
 }
 
 export async function updateAgentListingAction(input: {
@@ -162,6 +199,8 @@ export async function updateAgentListingAction(input: {
   visibility: ListingVisibility;
   tagline: string;
   priceCents: number;
+  billingInterval?: ListingBillingInterval;
+  slug?: string;
 }): Promise<AgentListingSettings> {
   const supabase = await requireSupabaseServerClient();
   const {
@@ -171,18 +210,26 @@ export async function updateAgentListingAction(input: {
   if (input.visibility !== "public" && input.visibility !== "private") {
     throw new Error("invalid_visibility");
   }
-  const priceCents = Number.isFinite(input.priceCents)
-    ? Math.max(0, Math.round(input.priceCents))
-    : 0;
   const tagline = input.tagline.trim().slice(0, 160);
+  // Paid listings are not enabled yet — force free / one-time.
+  const priceCents = 0;
+  const billingInterval: ListingBillingInterval = "one_time";
 
-  const { error } = await supabase
+  const patch: Record<string, unknown> = {
+    listing_visibility: input.visibility,
+    listing_tagline: input.visibility === "public" ? tagline || null : null,
+    listing_price_cents: priceCents,
+    listing_billing_interval: billingInterval,
+  };
+
+  if (typeof input.slug === "string" && input.slug.trim()) {
+    patch.slug = await allocateUniqueSlug(supabase, user.id, input.slug, input.agentId);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listing_billing_interval pending codegen
+  const { error } = await (supabase as any)
     .from("agents")
-    .update({
-      listing_visibility: input.visibility,
-      listing_tagline: tagline || null,
-      listing_price_cents: priceCents,
-    })
+    .update(patch)
     .eq("id", input.agentId)
     .eq("user_id", user.id);
   if (error) throw error;
@@ -276,7 +323,6 @@ export async function listAgentReviewsAction(agentId: string): Promise<AgentRevi
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("not_authenticated");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC
   const { data, error } = await (supabase as any).rpc("list_agent_reviews", {
     p_agent_id: agentId,
@@ -285,14 +331,15 @@ export async function listAgentReviewsAction(agentId: string): Promise<AgentRevi
   const rows = Array.isArray(data) ? data : [];
   return rows.map((raw: unknown) => {
     const row = asRecord(raw);
+    const userId = String(row.userId ?? "");
     return {
       id: String(row.id ?? ""),
-      userId: String(row.userId ?? ""),
+      userId,
       authorName: typeof row.authorName === "string" ? row.authorName : "User",
       rating: typeof row.rating === "number" ? row.rating : 0,
       body: typeof row.body === "string" ? row.body : "",
       createdAt: String(row.createdAt ?? ""),
-      isMine: Boolean(row.isMine) || String(row.userId ?? "") === user.id,
+      isMine: Boolean(row.isMine) || (user ? userId === user.id : false),
     };
   });
 }

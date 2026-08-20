@@ -89,8 +89,13 @@ export interface ProductAgentGraphProps {
   executionVisual?: ExecutionVisualState;
   onConnectionsChanged?: () => void;
   onConfigChanged?: () => void;
-  /** Consumer / public view: structure is inspectable but not editable. */
+  /**
+   * Structure locked (no definition edits). Installation config drawers can still
+   * open when `allowInstallationConfig` is true (public subscribers).
+   */
   readOnly?: boolean;
+  /** Allow connecting tools / model / memory for this user's installation. */
+  allowInstallationConfig?: boolean;
 }
 
 export function ProductAgentGraph(props: ProductAgentGraphProps) {
@@ -128,8 +133,10 @@ function ProductAgentGraphCanvas({
   onConnectionsChanged,
   onConfigChanged,
   readOnly = false,
+  allowInstallationConfig = false,
 }: ProductAgentGraphProps) {
   const { t } = useTranslation("structure");
+  const canConfigure = !readOnly || allowInstallationConfig;
   const [selected, setSelected] = useState<ProductNode | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -396,7 +403,7 @@ function ProductAgentGraphCanvas({
       </p>
 
       <IntegrationDrawer
-        open={!readOnly && selected?.kind === "integration"}
+        open={canConfigure && selected?.kind === "integration"}
         onOpenChange={(open) => !open && setSelected(null)}
         node={selected}
         agentId={agentId}
@@ -407,7 +414,7 @@ function ProductAgentGraphCanvas({
         executionError={errorForSelectedNode(selected, executionVisual)}
       />
       <AgentDrawer
-        open={selected?.kind === "agent"}
+        open={!readOnly && selected?.kind === "agent"}
         onOpenChange={(open) => !open && setSelected(null)}
         node={selected}
         agentId={agentId}
@@ -418,7 +425,10 @@ function ProductAgentGraphCanvas({
         onSaved={onConfigChanged}
       />
       <TriggerDrawer
-        open={selected?.kind === "trigger_chat" || selected?.kind === "trigger_schedule"}
+        open={
+          !readOnly &&
+          (selected?.kind === "trigger_chat" || selected?.kind === "trigger_schedule")
+        }
         onOpenChange={(open) => !open && setSelected(null)}
         node={selected}
         agentId={agentId}
@@ -427,7 +437,7 @@ function ProductAgentGraphCanvas({
       />
       <GenericDrawer
         open={
-          !readOnly &&
+          canConfigure &&
           selected !== null &&
           selected.kind !== "integration" &&
           selected.kind !== "agent" &&

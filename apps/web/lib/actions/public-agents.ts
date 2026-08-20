@@ -1,8 +1,13 @@
 "use server";
 
 import { openMarketplaceAgentAction } from "@/lib/actions/marketplace";
+import { getOrCreateInstallation } from "@/lib/actions/installations";
 import type { PublicAgentDto } from "@/lib/domain/types";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
+
+function asRecord(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+}
 
 function mapPublicAgent(raw: unknown): PublicAgentDto | null {
   if (!raw || typeof raw !== "object") return null;
@@ -17,17 +22,39 @@ function mapPublicAgent(raw: unknown): PublicAgentDto | null {
   if (!agentId || !name || !slug || !creatorUsername || !creatorUserId || !deploymentId) {
     return null;
   }
+  const modulesRaw = Array.isArray(row.modules) ? row.modules : [];
+  const modules: Array<{ label: string; kind?: string }> = [];
+  for (const m of modulesRaw) {
+    const mod = asRecord(m);
+    const label = typeof mod.label === "string" ? mod.label : "";
+    if (!label) continue;
+    modules.push({
+      label,
+      kind: typeof mod.kind === "string" ? mod.kind : undefined,
+    });
+  }
+
+  const visibility =
+    row.listingVisibility === "public" || row.listingVisibility === "private"
+      ? row.listingVisibility
+      : undefined;
+
   return {
     agentId,
     name,
     slug,
     description: typeof row.description === "string" ? row.description : undefined,
+    tagline: typeof row.tagline === "string" ? row.tagline : undefined,
     iconKey: typeof row.iconKey === "string" ? row.iconKey : undefined,
+    listingVisibility: visibility,
     creatorUsername,
     creatorUserId,
     deploymentId,
     versionId: typeof row.versionId === "string" ? row.versionId : undefined,
     publishedAt: typeof row.publishedAt === "string" ? row.publishedAt : undefined,
+    avgRating: typeof row.avgRating === "number" ? row.avgRating : null,
+    reviewCount: typeof row.reviewCount === "number" ? row.reviewCount : 0,
+    modules,
   };
 }
 
@@ -43,6 +70,127 @@ export async function resolvePublishedAgentAction(
   });
   if (error) throw error;
   return mapPublicAgent(data);
+}
+
+export type PublicAgentAudienceState = {
+  favorited: boolean;
+  subscribed: boolean;
+  needsAccess: boolean;
+  accessStatus: "none" | "pending" | "approved" | "denied";
+  isOwner: boolean;
+  installationId: string | null;
+};
+
+/** Landing-safe audience state — never auto-installs. */
+export async function getPublishedAgentAudienceAction(
+  username: string,
+  agentSlug: string,
+): Promise<PublicAgentAudienceState> {
+  const agent = await resolvePublishedAgentAction(username, agentSlug);
+  if (!agent) throw new Error("not_found");
+
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      favorited: false,
+      subscribed: false,
+      needsAccess: agent.listingVisibility === "private",
+      accessStatus: "none",
+      isOwner: false,
+      installationId: null,
+    };
+  }
+
+  const isOwner = agent.creatorUserId === user.id;
+  const visibility = agent.listingVisibility === "public" ? "public" : "private";
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pending supabase codegen
+  const favorites = (supabase as any).from("agent_favorites");
+  const { data: fav } = await favorites
+    .select("agent_id")
+    .eq("user_id", user.id)
+    .eq("agent_id", agent.agentId)
+    .maybeSingle();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pending supabase codegen
+  const installations = (supabase as any).from("agent_installations");
+  const { data: install } = await installations
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("agent_id", agent.agentId)
+    .maybeSingle();
+
+  if (isOwner || visibility === "public") {
+    return {
+      favorited: Boolean(fav),
+      subscribed: Boolean(install) || isOwner,
+      needsAccess: false,
+      accessStatus: "approved",
+      isOwner,
+      installationId: install ? String(install.id) : null,
+    };
+  }
+
+  const { getMyAccessStatusAction } = await import("@/lib/actions/marketplace");
+  const accessStatus = await getMyAccessStatusAction(agent.agentId);
+  return {
+    favorited: Boolean(fav),
+    subscribed: Boolean(install) && accessStatus === "approved",
+    needsAccess: accessStatus !== "approved",
+    accessStatus,
+    isOwner,
+    installationId: install && accessStatus === "approved" ? String(install.id) : null,
+  };
+}
+
+/** Explicit subscribe (create installation) — requires auth. */
+export async function subscribePublishedAgentAction(
+  username: string,
+  agentSlug: string,
+): Promise<PublicAgentAudienceState> {
+  const opened = await openMarketplaceAgentAction(username, agentSlug);
+  if (opened.needsAccess) {
+    return {
+      favorited: false,
+      subscribed: false,
+      needsAccess: true,
+      accessStatus: opened.accessStatus,
+      isOwner: opened.isOwner,
+      installationId: null,
+    };
+  }
+
+  const installation =
+    opened.installationId != null
+      ? { id: opened.installationId }
+      : await getOrCreateInstallation(opened.agentId);
+
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("not_authenticated");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pending supabase codegen
+  const favorites = (supabase as any).from("agent_favorites");
+  const { data: fav } = await favorites
+    .select("agent_id")
+    .eq("user_id", user.id)
+    .eq("agent_id", opened.agentId)
+    .maybeSingle();
+
+  return {
+    favorited: Boolean(fav),
+    subscribed: true,
+    needsAccess: false,
+    accessStatus: "approved",
+    isOwner: opened.isOwner,
+    installationId: String(installation.id),
+  };
 }
 
 export async function openPublishedAgentAction(
