@@ -18,6 +18,8 @@ const securityHeaders = [
     value: "camera=(), microphone=(), geolocation=(), payment=()",
   },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  // Required for Pipedream Connect popups (same-origin COOP breaks window.open).
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
   // Report-Only first: enforce only after verifying Next/Supabase/Whop/hCaptcha/Pipedream.
   {
     key: "Content-Security-Policy-Report-Only",

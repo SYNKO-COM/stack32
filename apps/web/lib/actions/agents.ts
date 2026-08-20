@@ -154,6 +154,23 @@ export async function publishAgentAction(
     return { ok: false, code: "PLAN_PUBLISH_REQUIRED" };
   }
 
+  // Public URLs need @username — check before calling Agent Service so the UI
+  // can open Settings instead of a generic "service unavailable" dialog.
+  const { data: profileForPublish } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", user.id)
+    .maybeSingle();
+  const usernameForPublish =
+    profileForPublish &&
+    typeof profileForPublish.username === "string" &&
+    profileForPublish.username.trim()
+      ? profileForPublish.username.trim()
+      : null;
+  if (!usernameForPublish) {
+    return { ok: false, code: "USERNAME_REQUIRED" };
+  }
+
   let publicPath: string | undefined;
 
   try {
@@ -172,30 +189,23 @@ export async function publishAgentAction(
       if (typeof result.publicPath === "string") publicPath = result.publicPath;
     } else {
       if (!owned.draft_version_id) return { ok: false, code: "no_draft_version" };
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
-      const username =
-        profile && "username" in profile && typeof profile.username === "string"
-          ? profile.username
-          : null;
-      if (!username) {
-        return { ok: false, code: "USERNAME_REQUIRED" };
-      }
       const { error } = await supabase
         .from("agents")
         .update({ status: "published", published_version_id: owned.draft_version_id })
         .eq("id", agentId);
       if (error) return { ok: false, code: "PUBLISH_FAILED" };
-      publicPath = `/@${username}/${owned.slug}`;
+      publicPath = `/@${usernameForPublish}/${owned.slug}`;
     }
   } catch (error) {
-    if (error instanceof AgentServiceError) {
-      return { ok: false, code: error.code || "PUBLISH_FAILED" };
-    }
-    return { ok: false, code: "PUBLISH_FAILED" };
+    const codeFromObj =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code?: string }).code || "")
+        : "";
+    const mapped =
+      error instanceof AgentServiceError
+        ? error.code || "PUBLISH_FAILED"
+        : codeFromObj || "PUBLISH_FAILED";
+    return { ok: false, code: mapped };
   }
 
   const { data: agent, error: readError } = await supabase

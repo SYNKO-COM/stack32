@@ -77,7 +77,9 @@ export class SupabaseLiveRepository implements LiveRepository {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("not_authenticated");
 
-    // Free plan: lifetime Live message cap (before insert).
+    // Free plan: lifetime Live message cap.
+    // Match agent-service: persist the tipping message, then gate the run
+    // (count > max after insert). Further attempts keep the composer draft.
     const { PLANS, isPlanKey } = await import("@/lib/billing/plans");
     const { PlanLimitError } = await import("@/lib/billing/plan-limit");
     const { data: ent } = await supabase.rpc("resolve_user_entitlements", {
@@ -89,14 +91,15 @@ export class SupabaseLiveRepository implements LiveRepository {
         ? String((entRow as { plan_key: string }).plan_key)
         : "free";
     const plan = isPlanKey(planKeyRaw) ? PLANS[planKeyRaw] : PLANS.free;
+    let usedLiveMessages = 0;
     if (plan.maxLiveMessages !== null) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("live_user_message_count")
         .eq("id", user.id)
         .maybeSingle();
-      const used = Number(profile?.live_user_message_count ?? 0);
-      if (used >= plan.maxLiveMessages) {
+      usedLiveMessages = Number(profile?.live_user_message_count ?? 0);
+      if (usedLiveMessages > plan.maxLiveMessages) {
         throw new PlanLimitError("PLAN_LIVE_MESSAGE_LIMIT");
       }
     }
@@ -138,6 +141,11 @@ export class SupabaseLiveRepository implements LiveRepository {
     });
     if (error) throw error;
 
+    // At/over free Live cap: keep the user bubble, skip the agent run.
+    if (plan.maxLiveMessages !== null && usedLiveMessages >= plan.maxLiveMessages) {
+      throw new PlanLimitError("PLAN_LIVE_MESSAGE_LIMIT", undefined, { persisted: true });
+    }
+
     const promptForModel =
       text ||
       (prepared.imagePayloads.length
@@ -149,6 +157,18 @@ export class SupabaseLiveRepository implements LiveRepository {
       threadId,
       prompt: promptForModel,
       images: prepared.imagePayloads,
+    }).catch(async (err) => {
+      const { AgentServiceError } = await import("@/lib/ai/agent-service-errors");
+      if (err instanceof AgentServiceError && err.code === "PLAN_LIVE_MESSAGE_LIMIT") {
+        throw new PlanLimitError("PLAN_LIVE_MESSAGE_LIMIT", undefined, { persisted: true });
+      }
+      if (
+        err instanceof AgentServiceError &&
+        (err.code === "BUDGET_EXCEEDED" || err.code === "MODEL_BUDGET_EXCEEDED")
+      ) {
+        throw err;
+      }
+      throw err;
     });
   }
 

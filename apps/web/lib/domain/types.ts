@@ -252,6 +252,8 @@ export interface Agent {
   id: string;
   workspaceId: string;
   name: string;
+  /** URL segment for /@username/{slug} public links. */
+  slug: string;
   icon: string;
   status: AgentStatus;
   draftVersionId?: string;

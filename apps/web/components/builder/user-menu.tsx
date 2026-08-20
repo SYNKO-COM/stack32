@@ -26,8 +26,8 @@ export function UserMenu() {
   const signOut = useSignOut();
   const openDialog = useUiStore((s) => s.openDialog);
   const credits = {
-    used: creditUsage?.used ?? 0,
-    limit: Math.max(1, creditUsage?.limit ?? 25),
+    used: Math.round(creditUsage?.used ?? 0),
+    limit: Math.max(1, Math.round(creditUsage?.limit ?? 25)),
   };
 
   return (

@@ -759,6 +759,7 @@ export function mapAgent(row: AgentRow): Agent {
     id: row.id,
     workspaceId: row.workspace_id,
     name: row.name,
+    slug: row.slug,
     icon: row.icon_key ?? "sparkles",
     status: mapAgentStatus(row.status),
     draftVersionId: row.draft_version_id ?? undefined,

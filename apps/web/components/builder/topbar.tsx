@@ -1,9 +1,19 @@
 "use client";
 
-import { Check, Copy, ExternalLink, Hammer, Menu, Rocket, Settings, Sparkles } from "lucide-react";
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  Hammer,
+  Menu,
+  Rocket,
+  Settings,
+  Share2,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { UserMenu } from "@/components/builder/user-menu";
 import { SegmentedTabs } from "@/components/shared/segmented-tabs";
@@ -18,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAgent, usePublishAgent } from "@/hooks/use-agents";
+import { useProfile } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import { AgentServiceError, agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import { isPlanLimitError } from "@/lib/billing/plan-limit";
@@ -54,11 +65,16 @@ function ViewTabs({ agentId }: { agentId: string }) {
 
 function publishErrorKey(error: unknown): string {
   if (isPlanLimitError(error)) return "errors:publish.planRequired";
-  if (error instanceof AgentServiceError) return agentServiceErrorKey(error);
-  if (error && typeof error === "object" && "code" in error) {
-    const code = String((error as { code?: string }).code ?? "");
-    if (code === "USERNAME_REQUIRED") return "errors:publish.usernameRequired";
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: string }).code ?? "")
+      : error instanceof Error
+        ? error.message
+        : "";
+  if (code === "USERNAME_REQUIRED" || /USERNAME_REQUIRED/i.test(code)) {
+    return "errors:publish.usernameRequired";
   }
+  if (error instanceof AgentServiceError) return agentServiceErrorKey(error);
   if (error instanceof Error && /USERNAME_REQUIRED/i.test(error.message)) {
     return "errors:publish.usernameRequired";
   }
@@ -68,16 +84,28 @@ function publishErrorKey(error: unknown): string {
 export function Topbar({ agentId }: { agentId: string }) {
   const { t } = useTranslation(["builder", "common", "errors"]);
   const { data: agent } = useAgent(agentId);
+  const { data: profile } = useProfile();
   const publishAgent = usePublishAgent();
   const openDialog = useUiStore((s) => s.openDialog);
   const setMobileSidebarOpen = useUiStore((s) => s.setMobileSidebarOpen);
 
   const [publishOpen, setPublishOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [publishedOpen, setPublishedOpen] = useState(false);
   const [usernameRequiredOpen, setUsernameRequiredOpen] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const isPublished = agent?.status === "published";
+
+  const resolvedPublicUrl = useMemo(() => {
+    const username = profile?.username?.trim();
+    const slug = agent?.slug?.trim();
+    if (!username || !slug) return null;
+    const origin = SITE_URL.replace(/\/$/, "");
+    return `${origin}/@${username}/${slug}`;
+  }, [agent?.slug, profile?.username]);
 
   const handlePublish = async () => {
     setPublishOpen(false);
@@ -86,7 +114,7 @@ export function Topbar({ agentId }: { agentId: string }) {
       const result = await publishAgent.mutateAsync(agentId);
       const path = result.publicPath ?? "";
       const origin = SITE_URL.replace(/\/$/, "");
-      setPublicUrl(path ? `${origin}${path}` : null);
+      setPublicUrl(path ? `${origin}${path}` : resolvedPublicUrl);
       setPublishedOpen(true);
     } catch (error) {
       if (isPlanLimitError(error)) {
@@ -102,16 +130,29 @@ export function Topbar({ agentId }: { agentId: string }) {
     }
   };
 
+  const openShare = () => {
+    if (!profile?.username) {
+      setUsernameRequiredOpen(true);
+      return;
+    }
+    setPublicUrl(resolvedPublicUrl);
+    setCopied(false);
+    setShareOpen(true);
+  };
+
   const copyLink = async () => {
-    if (!publicUrl) return;
+    const url = publicUrl ?? resolvedPublicUrl;
+    if (!url) return;
     try {
-      await navigator.clipboard.writeText(publicUrl);
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       // ignore
     }
   };
+
+  const displayUrl = publicUrl ?? resolvedPublicUrl;
 
   return (
     <header className="flex items-center justify-between gap-3 px-4 py-3 md:px-6">
@@ -139,22 +180,36 @@ export function Topbar({ agentId }: { agentId: string }) {
 
         <ThemeToggle />
 
-        <Button
-          size="sm"
-          className="gap-1.5 rounded-full px-2.5 sm:px-3"
-          onClick={() => setPublishOpen(true)}
-          disabled={publishAgent.isPending || agent?.status === "building"}
-          aria-label={
-            publishAgent.isPending
-              ? t("builder:topbar.publishing")
-              : t("builder:topbar.publish")
-          }
-        >
-          <Rocket className="size-3.5" aria-hidden="true" />
-          <span className="hidden sm:inline">
-            {publishAgent.isPending ? t("builder:topbar.publishing") : t("builder:topbar.publish")}
-          </span>
-        </Button>
+        {isPublished ? (
+          <Button
+            size="sm"
+            className="gap-1.5 rounded-full px-2.5 sm:px-3"
+            onClick={openShare}
+            aria-label={t("builder:topbar.share")}
+          >
+            <Share2 className="size-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">{t("builder:topbar.share")}</span>
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            className="gap-1.5 rounded-full px-2.5 sm:px-3"
+            onClick={() => setPublishOpen(true)}
+            disabled={publishAgent.isPending || agent?.status === "building"}
+            aria-label={
+              publishAgent.isPending
+                ? t("builder:topbar.publishing")
+                : t("builder:topbar.publish")
+            }
+          >
+            <Rocket className="size-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">
+              {publishAgent.isPending
+                ? t("builder:topbar.publishing")
+                : t("builder:topbar.publish")}
+            </span>
+          </Button>
+        )}
 
         <UserMenu />
       </div>
@@ -176,6 +231,47 @@ export function Topbar({ agentId }: { agentId: string }) {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="glass-strong border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="size-5 text-brand" aria-hidden="true" />
+              {t("builder:publishDialog.shareTitle")}
+            </DialogTitle>
+            <DialogDescription>{t("builder:publishDialog.shareBody")}</DialogDescription>
+          </DialogHeader>
+          {displayUrl ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">{t("builder:publishDialog.publicUrl")}</p>
+              <p className="break-all rounded-xl bg-foreground/[0.04] px-3 py-2 font-mono text-xs">
+                {displayUrl}
+              </p>
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {displayUrl ? (
+                <>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void copyLink()}>
+                    <Copy className="size-3.5" aria-hidden="true" />
+                    {copied ? t("common:actions.copied") : t("common:actions.copyLink")}
+                  </Button>
+                  <Button asChild size="sm" className="gap-1.5">
+                    <Link href={displayUrl.replace(/^https?:\/\/[^/]+/i, "") || "/"}>
+                      <ExternalLink className="size-3.5" aria-hidden="true" />
+                      {t("common:actions.openAgent")}
+                    </Link>
+                  </Button>
+                </>
+              ) : null}
+            </div>
+            <Button variant="ghost" onClick={() => setShareOpen(false)}>
+              {t("common:actions.gotIt")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={publishedOpen} onOpenChange={setPublishedOpen}>
         <DialogContent className="glass-strong border-border sm:max-w-md">
           <DialogHeader>
@@ -185,24 +281,24 @@ export function Topbar({ agentId }: { agentId: string }) {
             </DialogTitle>
             <DialogDescription>{t("builder:publishDialog.successBody")}</DialogDescription>
           </DialogHeader>
-          {publicUrl ? (
+          {displayUrl ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">{t("builder:publishDialog.publicUrl")}</p>
               <p className="break-all rounded-xl bg-foreground/[0.04] px-3 py-2 font-mono text-xs">
-                {publicUrl}
+                {displayUrl}
               </p>
             </div>
           ) : null}
           <DialogFooter className="gap-2 sm:justify-between">
             <div className="flex flex-wrap gap-2">
-              {publicUrl ? (
+              {displayUrl ? (
                 <>
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void copyLink()}>
                     <Copy className="size-3.5" aria-hidden="true" />
                     {copied ? t("common:actions.copied") : t("common:actions.copyLink")}
                   </Button>
                   <Button asChild size="sm" className="gap-1.5">
-                    <Link href={publicUrl.replace(/^https?:\/\/[^/]+/i, "") || "/"}>
+                    <Link href={displayUrl.replace(/^https?:\/\/[^/]+/i, "") || "/"}>
                       <ExternalLink className="size-3.5" aria-hidden="true" />
                       {t("common:actions.openAgent")}
                     </Link>

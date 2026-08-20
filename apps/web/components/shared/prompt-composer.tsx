@@ -45,7 +45,7 @@ interface PromptComposerProps {
     value: string,
     attachments?: ComposerAttachment[],
     options?: PromptComposerSubmitOptions,
-  ) => void;
+  ) => void | boolean | Promise<void | boolean>;
   onStop?: () => void;
   placeholder?: string;
   animatedPlaceholders?: string[];
@@ -339,10 +339,23 @@ export function PromptComposer({
     // Keep File + previewUrl on the snapshot for optimistic UI / upload.
     // Do not revoke object URLs here — the handoff owns them briefly.
     const snapshot = attachments.map((a) => ({ ...a }));
-    onSubmit(payload, snapshot, showModeSelector ? { mode } : undefined);
-    setValue("");
-    setAttachments([]);
-    if (draftKey) writeComposerDraft(draftKey, "");
+    const clearDraft = () => {
+      setValue("");
+      setAttachments([]);
+      if (draftKey) writeComposerDraft(draftKey, "");
+    };
+    void (async () => {
+      try {
+        const result = await Promise.resolve(
+          onSubmit(payload, snapshot, showModeSelector ? { mode } : undefined),
+        );
+        // Callers return false (or throw) to keep the typed text — e.g. plan limit.
+        if (result === false) return;
+        clearDraft();
+      } catch {
+        // Keep the draft so the user does not lose their message on limit / network errors.
+      }
+    })();
   };
 
   const stopTracks = () => {

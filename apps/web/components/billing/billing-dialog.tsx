@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,9 +18,9 @@ import { useUiStore } from "@/store/ui-store";
 
 export function BillingDialog() {
   const { t, i18n } = useTranslation(["billing", "common"]);
+  const router = useRouter();
   const activeDialog = useUiStore((s) => s.activeDialog);
   const closeDialog = useUiStore((s) => s.closeDialog);
-  const openDialog = useUiStore((s) => s.openDialog);
   const { data: subscription } = useSubscription();
 
   const status = subscription?.status ?? "inactive";
@@ -27,6 +29,11 @@ export function BillingDialog() {
         new Date(subscription.currentPeriodEnd),
       )
     : null;
+
+  const openPlans = () => {
+    closeDialog();
+    router.push("/billing/plans");
+  };
 
   return (
     <Dialog open={activeDialog === "billing"} onOpenChange={(o) => (!o ? closeDialog() : undefined)}>
@@ -60,11 +67,7 @@ export function BillingDialog() {
 
           <Separator className="bg-border" />
 
-          <Button
-            className="w-full rounded-xl"
-            variant="outline"
-            onClick={() => openDialog("upgrade")}
-          >
+          <Button className="w-full rounded-xl" variant="outline" onClick={openPlans}>
             {t("billing:status.manage")}
           </Button>
 

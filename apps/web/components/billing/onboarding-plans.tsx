@@ -7,7 +7,7 @@ import { Check } from "lucide-react";
 import { CreditSelect } from "@/components/billing/credit-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useActivatePlan } from "@/hooks/use-billing";
+import { useActivatePlan, useSubscription } from "@/hooks/use-billing";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   creditOptionsForPlan,
@@ -35,13 +35,22 @@ function formatCredits(n: number, locale: string): string {
 
 const PAID_PLAN_KEYS = PLAN_KEYS.filter((key): key is Exclude<PlanKey, "free"> => key !== "free");
 
+const PLAN_RANK: Record<PlanKey, number> = {
+  free: 0,
+  starter: 1,
+  pro: 2,
+  scale: 3,
+};
+
 /**
  * Post-onboarding paywall: paid plans only, plus a small free CTA underneath.
+ * When the user already has a paid plan, the current tier is marked and locked.
  */
 export function OnboardingPlans() {
   const { t, i18n } = useTranslation(["billing", "marketing"]);
   const router = useRouter();
   const activate = useActivatePlan();
+  const { data: subscription } = useSubscription();
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [creditByPlan, setCreditByPlan] = useState<Record<Exclude<PlanKey, "free">, number>>({
     starter: PLANS.starter.baseCredits,
@@ -49,6 +58,14 @@ export function OnboardingPlans() {
     scale: PLANS.scale.baseCredits,
   });
   const locale = i18n.language || "en";
+
+  const currentPlanKey: PlanKey =
+    subscription?.planKey && PLAN_KEYS.includes(subscription.planKey)
+      ? subscription.planKey
+      : "free";
+  const hasPaidPlan =
+    (subscription?.status === "active" || subscription?.status === "trialing") &&
+    currentPlanKey !== "free";
 
   const plans = useMemo(
     () =>
@@ -61,14 +78,29 @@ export function OnboardingPlans() {
           ...(Array.isArray(featureItems) ? featureItems : []),
           t(`marketing:pricing.${id}.${PLANS[id].integrationsLabelKey}`),
         ];
+        const isCurrent = hasPaidPlan && id === currentPlanKey;
+        const isUpgrade = hasPaidPlan && PLAN_RANK[id] > PLAN_RANK[currentPlanKey];
+        const isDowngrade = hasPaidPlan && PLAN_RANK[id] < PLAN_RANK[currentPlanKey];
         return {
           id,
           name: t(`marketing:pricing.${id}.name`),
           description: t(`marketing:pricing.${id}.description`),
           features,
-          cta: t(`marketing:pricing.${id}.cta`),
-          badge: id === "pro" ? t("marketing:pricing.pro.badge") : null,
-          popular: id === "pro",
+          cta: isCurrent
+            ? t("billing:plans.currentPlan")
+            : isUpgrade
+              ? t("billing:plans.upgradeTo", { plan: t(`marketing:pricing.${id}.name`) })
+              : isDowngrade
+                ? t("billing:plans.downgradeTo", { plan: t(`marketing:pricing.${id}.name`) })
+                : t(`marketing:pricing.${id}.cta`),
+          badge: isCurrent
+            ? t("billing:plans.currentPlan")
+            : id === "pro"
+              ? t("marketing:pricing.pro.badge")
+              : null,
+          popular: id === "pro" && !isCurrent,
+          isCurrent,
+          isDowngrade,
           creditsMonthly: priced.creditsMonthly,
           creditOptions: creditOptionsForPlan(id),
           displayPrice: formatUsd(priced.displayMonthlyUsd, locale),
@@ -83,10 +115,11 @@ export function OnboardingPlans() {
           }),
         };
       }),
-    [creditByPlan, interval, locale, t],
+    [creditByPlan, currentPlanKey, hasPaidPlan, interval, locale, t],
   );
 
   const goCheckout = (planKey: Exclude<PlanKey, "free">) => {
+    if (hasPaidPlan && planKey === currentPlanKey) return;
     const qs = new URLSearchParams({
       plan: planKey,
       interval,
@@ -96,6 +129,7 @@ export function OnboardingPlans() {
   };
 
   const startFree = async () => {
+    if (hasPaidPlan) return;
     await activate.mutateAsync({
       planKey: "free",
       interval: "monthly",
@@ -111,7 +145,7 @@ export function OnboardingPlans() {
           {t("billing:plans.title")}
         </h1>
         <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
-          {t("billing:plans.subtitle")}
+          {hasPaidPlan ? t("billing:plans.subtitleManage") : t("billing:plans.subtitle")}
         </p>
 
         <div
@@ -158,10 +192,16 @@ export function OnboardingPlans() {
             className={cn(
               "relative flex flex-col rounded-[22px] border border-border/70 bg-background/70 p-5 sm:rounded-[28px] sm:p-6",
               plan.popular && "border-brand/40 shadow-glow-sm lg:-mt-1 lg:mb-1 lg:p-7",
+              plan.isCurrent && "border-brand/50 ring-1 ring-brand/30",
             )}
           >
             {plan.badge ? (
-              <Badge className="absolute -top-3 left-5 bg-brand text-white sm:left-6">
+              <Badge
+                className={cn(
+                  "absolute -top-3 left-5 sm:left-6",
+                  plan.isCurrent ? "bg-foreground text-background" : "bg-brand text-white",
+                )}
+              >
                 {plan.badge}
               </Badge>
             ) : null}
@@ -207,6 +247,7 @@ export function OnboardingPlans() {
                   t("marketing:pricing.creditOption", { count: formatCredits(n, locale) })
                 }
                 needMoreLabel={t("marketing:pricing.needMoreCredits")}
+                disabled={plan.isCurrent}
               />
               <p className="text-[11px] text-muted-foreground/80">{plan.creditsLabel}</p>
             </div>
@@ -221,26 +262,33 @@ export function OnboardingPlans() {
             </ul>
             <Button
               className="mt-8 w-full rounded-full"
-              variant={plan.popular ? "default" : "outline"}
-              disabled={activate.isPending}
+              variant={plan.isCurrent ? "secondary" : plan.popular ? "default" : "outline"}
+              disabled={activate.isPending || plan.isCurrent}
               onClick={() => goCheckout(plan.id)}
             >
               {plan.cta}
             </Button>
+            {plan.isDowngrade ? (
+              <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                {t("billing:plans.downgradeHint")}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>
 
-      <div className="mt-8 text-center sm:mt-10">
-        <button
-          type="button"
-          className="text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
-          disabled={activate.isPending}
-          onClick={() => void startFree()}
-        >
-          {t("billing:plans.startFree")}
-        </button>
-      </div>
+      {!hasPaidPlan ? (
+        <div className="mt-8 text-center sm:mt-10">
+          <button
+            type="button"
+            className="text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
+            disabled={activate.isPending}
+            onClick={() => void startFree()}
+          >
+            {t("billing:plans.startFree")}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

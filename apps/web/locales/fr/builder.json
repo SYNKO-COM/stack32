@@ -104,6 +104,7 @@
   "topbar": {
     "publish": "Publier",
     "publishing": "Publication…",
+    "share": "Partager",
     "menu": {
       "settings": "Paramètres",
       "billing": "Facturation",
@@ -118,6 +119,8 @@
     "successTitle": "Agent publié",
     "successBody": "Votre agent est en ligne. Partagez le lien ci-dessous — vous pouvez continuer à améliorer des brouillons sans casser la version publiée.",
     "publicUrl": "Lien public",
+    "shareTitle": "Partager cet agent",
+    "shareBody": "Envoyez ce lien public pour que d’autres puissent utiliser votre agent.",
     "usernameRequiredTitle": "Nom d'utilisateur requis",
     "usernameRequiredBody": "Choisissez un nom d'utilisateur Stack32 avant de publier. Les liens publics utilisent @username/nom-agent.",
     "goToSettings": "Choisir un nom d'utilisateur",
@@ -363,6 +366,9 @@
     "waitingBody": "Terminez la connexion dans l’autre fenêtre. Stack32 reprendra automatiquement une fois le compte lié.",
     "waitingHint": "Compte pas encore détecté… Terminez la connexion, puis cliquez sur « J’ai connecté ».",
     "iveConnected": "J’ai connecté",
+    "reopenWindow": "Rouvrir la fenêtre",
+    "cancelWaiting": "Annuler",
+    "popupBlocked": "Le navigateur a bloqué la fenêtre de connexion. Ouvrez le lien ci-dessous, terminez la connexion, puis cliquez sur « J’ai connecté ».",
     "notYetLinked": "Aucun nouveau compte détecté. Terminez la connexion, puis réessayez.",
     "error": "Impossible de démarrer la connexion. Réessayez dans un instant.",
     "disconnectError": "Impossible de déconnecter ce compte.",

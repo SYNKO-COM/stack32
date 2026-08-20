@@ -22,7 +22,7 @@ import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
 import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-button";
 import { gatherSupportDiagnostic } from "@/lib/actions/support-diagnostic";
 import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
-import { isPlanLimitError } from "@/lib/billing/plan-limit";
+import { isUpgradeGateError, PlanLimitError } from "@/lib/billing/plan-limit";
 import type { LiveMessage } from "@/lib/domain/types";
 import { useUiStore } from "@/store/ui-store";
 import { cn } from "@/lib/utils";
@@ -377,11 +377,19 @@ export function LiveView({
           className="mx-auto max-w-3xl"
           placeholder={t("live:composer.placeholder")}
           draftKey={`live:${agentId}`}
-          onSubmit={(value, attachments) => {
-            if (busy) return;
-            void sendMessage.mutateAsync({ content: value, attachments }).catch((error) => {
-              if (isPlanLimitError(error)) openDialog("upgrade");
-            });
+          onSubmit={async (value, attachments) => {
+            if (busy) return false;
+            try {
+              await sendMessage.mutateAsync({ content: value, attachments });
+            } catch (error) {
+              if (isUpgradeGateError(error)) {
+                openDialog("upgrade");
+                // Persisted tipping message stays in the thread — clear the draft.
+                if (error instanceof PlanLimitError && error.persisted) return;
+                return false;
+              }
+              throw error;
+            }
           }}
           onStop={() => {
             void cancelRun.mutateAsync(runId);

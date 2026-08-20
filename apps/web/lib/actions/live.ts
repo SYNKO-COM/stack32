@@ -69,6 +69,14 @@ export async function executeLiveTurn(input: {
       images: input.images,
     });
   } catch (err) {
+    if (
+      err instanceof AgentServiceError &&
+      (err.code === "PLAN_LIVE_MESSAGE_LIMIT" ||
+        err.code === "BUDGET_EXCEEDED" ||
+        err.code === "MODEL_BUDGET_EXCEEDED")
+    ) {
+      throw err;
+    }
     const admin = requireSupabaseAdminClient();
     const contentKey =
       err instanceof AgentServiceError && err.code === "AGENT_SERVICE_UNAVAILABLE"

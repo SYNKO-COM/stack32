@@ -42,7 +42,22 @@ export async function getBillingStatusAction(): Promise<Subscription | null> {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const access = await getSubscriptionAccess();
+  // Self-heal: if UI would show Free, pull Whop once so a missed webhook cannot stick.
+  let access = await getSubscriptionAccess();
+  const looksFree =
+    !access.subscription ||
+    access.subscription.plan_key === "free" ||
+    access.subscription.status !== "active";
+  if (looksFree) {
+    try {
+      const { refreshBillingStatusAction } = await import("@/lib/billing/reconcile");
+      await refreshBillingStatusAction();
+      access = await getSubscriptionAccess();
+    } catch {
+      /* keep current access */
+    }
+  }
+
   if (access.subscription) {
     const mapped = mapSubscription(access.subscription);
     const planKey = isPlanKey(access.subscription.plan_key)

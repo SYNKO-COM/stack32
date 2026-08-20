@@ -14,11 +14,18 @@ export type PlanLimitCode = (typeof PLAN_LIMIT_CODES)[number];
 
 export class PlanLimitError extends Error {
   readonly code: PlanLimitCode;
+  /** True when the user turn was already persisted (keep it in the thread). */
+  readonly persisted: boolean;
 
-  constructor(code: PlanLimitCode, message?: string) {
+  constructor(
+    code: PlanLimitCode,
+    message?: string,
+    options?: { persisted?: boolean },
+  ) {
     super(message ?? code);
     this.name = "PlanLimitError";
     this.code = code;
+    this.persisted = Boolean(options?.persisted);
   }
 }
 
@@ -60,6 +67,16 @@ export function planLimitCodeFromUnknown(error: unknown): PlanLimitCode | null {
 
 export function isPlanLimitError(error: unknown): boolean {
   return planLimitCodeFromUnknown(error) !== null;
+}
+
+/** Plan gates + monthly budget exhaustion — open the upgrade dialog. */
+export function isUpgradeGateError(error: unknown): boolean {
+  if (isPlanLimitError(error)) return true;
+  if (error && typeof error === "object" && "code" in error) {
+    const code = String((error as { code?: string }).code ?? "");
+    if (code === "BUDGET_EXCEEDED" || code === "MODEL_BUDGET_EXCEEDED") return true;
+  }
+  return /BUDGET_EXCEEDED|MODEL_BUDGET_EXCEEDED|budget exceeded/i.test(errorBlob(error));
 }
 
 /** Throw PlanLimitError when the underlying error is a plan gate; otherwise rethrow. */

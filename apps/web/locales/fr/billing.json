@@ -16,7 +16,12 @@
   "plans": {
     "title": "Choisissez votre plan",
     "subtitle": "Trois offres pour publier et faire grandir vos agents. Vous pourrez aussi commencer gratuitement.",
-    "startFree": "Commencer gratuitement"
+    "subtitleManage": "Changez de plan quand vous voulez. Votre offre actuelle est indiquée clairement.",
+    "startFree": "Commencer gratuitement",
+    "currentPlan": "Plan actuel",
+    "upgradeTo": "Passer à {{plan}}",
+    "downgradeTo": "Passer à {{plan}}",
+    "downgradeHint": "Le changement prend effet au prochain cycle de facturation via le paiement sécurisé."
   },
   "checkout": {
     "title": "Finaliser votre abonnement",

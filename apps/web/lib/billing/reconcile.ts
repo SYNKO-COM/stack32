@@ -2,6 +2,10 @@ import "server-only";
 
 import { getCurrentUser } from "@/lib/auth/guards";
 import { parseCheckoutMetadata } from "@/lib/billing/whop-catalog";
+import {
+  isWhopActivateEvent,
+  isWhopPaymentSucceeded,
+} from "@/lib/billing/whop-event-types";
 import { fulfillMembershipFromWhop } from "@/lib/billing/whop-fulfillment";
 import { getWhopCompanyId, getWhopSdk } from "@/lib/billing/whop-sdk";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -39,13 +43,14 @@ async function pullWhopMembershipForUser(userId: string): Promise<void> {
   const companyId = getWhopCompanyId();
   if (!whop || !companyId) return;
 
-  const createdAfter = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+  // Look back 7 days so a missed webhook after checkout still self-heals.
+  const createdAfter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   try {
     const page = await whop.memberships.list({
       company_id: companyId,
       created_after: createdAfter,
       statuses: ["active", "completed", "trialing"],
-      first: 25,
+      first: 40,
       order: "created_at",
       direction: "desc",
     });
@@ -92,6 +97,79 @@ export async function refreshBillingStatusAction(): Promise<{
 }
 
 /**
+ * Cron safety net: fulfill recent active Whop memberships missing in Stack32.
+ */
+export async function syncOrphanWhopMemberships(limit = 40): Promise<{
+  scanned: number;
+  fulfilled: number;
+  errors: number;
+}> {
+  const whop = getWhopSdk();
+  const companyId = getWhopCompanyId();
+  const admin = createSupabaseAdminClient();
+  if (!whop || !companyId || !admin) {
+    return { scanned: 0, fulfilled: 0, errors: 0 };
+  }
+
+  const createdAfter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  let scanned = 0;
+  let fulfilled = 0;
+  let errors = 0;
+
+  try {
+    const page = await whop.memberships.list({
+      company_id: companyId,
+      created_after: createdAfter,
+      statuses: ["active", "completed", "trialing"],
+      first: limit,
+      order: "created_at",
+      direction: "desc",
+    });
+
+    for await (const membership of page) {
+      scanned += 1;
+      const meta = parseCheckoutMetadata(membership.metadata);
+      const userId = meta.stack32_user_id;
+      if (!userId || !meta.plan_key) continue;
+
+      const { data: existing } = await admin
+        .from("subscriptions")
+        .select("plan_key, status, provider_membership_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const alreadyPaid =
+        existing?.status === "active" &&
+        existing.plan_key &&
+        existing.plan_key !== "free" &&
+        existing.provider_membership_id === membership.id;
+
+      if (alreadyPaid) continue;
+
+      try {
+        await fulfillMembershipFromWhop(membership);
+        fulfilled += 1;
+      } catch (err) {
+        errors += 1;
+        console.warn(
+          "[billing] orphan sync failed",
+          membership.id,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+  } catch (err) {
+    errors += 1;
+    console.warn(
+      "[billing] orphan membership list failed",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  return { scanned, fulfilled, errors };
+}
+
+/**
  * Replay failed / stuck Whop webhook events (cron / internal).
  */
 export async function reconcileFailedWhopWebhooks(limit = 20): Promise<{
@@ -124,15 +202,10 @@ export async function reconcileFailedWhopWebhooks(limit = 20): Promise<{
       const eventType = row.event_type || payload?.type || "unknown";
       const data = payload?.data ?? payload;
 
-      if (
-        eventType === "membership.activated" ||
-        eventType === "membership.went_valid" ||
-        eventType === "payment.succeeded"
-      ) {
-        const membership =
-          eventType === "payment.succeeded"
-            ? ((data as { membership?: unknown } | null)?.membership ?? data)
-            : data;
+      if (isWhopActivateEvent(eventType) || isWhopPaymentSucceeded(eventType)) {
+        const membership = isWhopPaymentSucceeded(eventType)
+          ? ((data as { membership?: unknown } | null)?.membership ?? data)
+          : data;
         if (membership) await fulfillMembershipFromWhop(membership);
       }
 

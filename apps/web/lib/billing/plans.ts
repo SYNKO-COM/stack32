@@ -45,7 +45,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     baseBudgetUsd: 0.2,
     maxWorkspaces: 1,
     maxAgents: 1,
-    maxLiveMessages: 2,
+    maxLiveMessages: 3,
     canPublish: false,
     canMonetize: false,
     betaAccess: false,

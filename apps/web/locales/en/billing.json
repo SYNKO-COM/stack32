@@ -16,7 +16,12 @@
   "plans": {
     "title": "Choose your plan",
     "subtitle": "Three plans to publish and grow your agents. You can also start for free.",
-    "startFree": "Start for free"
+    "subtitleManage": "Switch plans anytime. Your current plan is clearly marked.",
+    "startFree": "Start for free",
+    "currentPlan": "Current plan",
+    "upgradeTo": "Upgrade to {{plan}}",
+    "downgradeTo": "Switch to {{plan}}",
+    "downgradeHint": "Changes apply on the next billing cycle through secure checkout."
   },
   "checkout": {
     "title": "Complete your subscription",

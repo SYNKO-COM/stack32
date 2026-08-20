@@ -6,6 +6,13 @@ import {
   fulfillMembershipFromWhop,
   markMembershipPastDueFromWhop,
 } from "@/lib/billing/whop-fulfillment";
+import {
+  isWhopActivateEvent,
+  isWhopDeactivateEvent,
+  isWhopPaymentFailed,
+  isWhopPaymentSucceeded,
+  isWhopRefundCreated,
+} from "@/lib/billing/whop-event-types";
 import { getWhopSdk } from "@/lib/billing/whop-sdk";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
@@ -16,36 +23,76 @@ type WhopEvent = { id?: string; type?: string; data?: unknown };
 
 type AdminClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
 
+async function resolveMembershipPayload(data: unknown): Promise<unknown> {
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const nested =
+    record.membership && typeof record.membership === "object"
+      ? (record.membership as Record<string, unknown>)
+      : null;
+  const candidate = nested ?? record;
+  const meta = candidate.metadata;
+  const hasMeta =
+    meta &&
+    typeof meta === "object" &&
+    Boolean((meta as { stack32_user_id?: string }).stack32_user_id);
+
+  if (hasMeta) return candidate;
+
+  const membershipId =
+    typeof candidate.id === "string"
+      ? candidate.id
+      : typeof record.membership_id === "string"
+        ? record.membership_id
+        : null;
+  if (!membershipId?.startsWith("mem_")) return candidate;
+
+  const whop = getWhopSdk();
+  if (!whop) return candidate;
+  try {
+    return await whop.memberships.retrieve(membershipId);
+  } catch {
+    return candidate;
+  }
+}
+
 async function fulfillWhopEvent(
   admin: AdminClient,
   event: WhopEvent,
   providerEventId: string,
-  eventType: string,
+  eventTypeRaw: string,
 ): Promise<void> {
   try {
-    const isMembershipActivate =
-      eventType === "membership.activated" || eventType === "membership.went_valid";
-    const isMembershipDeactivate =
-      eventType === "membership.deactivated" ||
-      eventType === "membership.went_invalid";
+    const activate = isWhopActivateEvent(eventTypeRaw);
+    const deactivate = isWhopDeactivateEvent(eventTypeRaw);
+    const paymentOk = isWhopPaymentSucceeded(eventTypeRaw);
+    const paymentFail = isWhopPaymentFailed(eventTypeRaw);
+    const refund = isWhopRefundCreated(eventTypeRaw);
 
-    if (isMembershipActivate || eventType === "payment.succeeded") {
+    if (activate || paymentOk) {
       const data = event.data;
-      const membership = isMembershipActivate
-        ? data
-        : ((data as { membership?: unknown } | null)?.membership ?? data);
+      const membership = activate
+        ? await resolveMembershipPayload(data)
+        : await resolveMembershipPayload(
+            (data as { membership?: unknown } | null)?.membership ?? data,
+          );
       if (membership) {
         await fulfillMembershipFromWhop(membership);
       }
     }
 
-    if (isMembershipDeactivate) {
+    if (deactivate) {
       await deactivateMembershipFromWhop(event.data);
     }
 
-    if (eventType === "payment.failed") {
-      // Do not suspend yet — Whop may still consider the membership active.
+    if (paymentFail) {
       await markMembershipPastDueFromWhop(event.data);
+    }
+
+    if (refund) {
+      const data = event.data;
+      const membership =
+        (data as { membership?: unknown } | null)?.membership ?? data;
+      await deactivateMembershipFromWhop(membership);
     }
 
     await admin
@@ -61,7 +108,7 @@ async function fulfillWhopEvent(
     const message = err instanceof Error ? err.message : "fulfillment_failed";
     console.error("[whop webhook] fulfillment failed", {
       providerEventId,
-      eventType,
+      eventType: eventTypeRaw,
       message,
     });
     await admin

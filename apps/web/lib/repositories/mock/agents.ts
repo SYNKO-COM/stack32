@@ -83,6 +83,11 @@ export class MockAgentRepository implements AgentRepository {
       id: generateId("agent"),
       workspaceId: input?.workspaceId ?? DEFAULT_MOCK_WORKSPACE_ID,
       name: input?.name ?? "",
+      slug:
+        (input?.name ?? "agent")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "") || "agent",
       icon: "sparkles",
       status: "draft",
       createdAt: nowIso(),

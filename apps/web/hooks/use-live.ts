@@ -51,7 +51,50 @@ export function useSendLiveMessage(agentId: string) {
       const attachments = typeof input === "string" ? undefined : input.attachments;
       return getLiveRepository().sendMessage(agentId, content, attachments);
     },
-    onError: () => {
+    onMutate: async (input) => {
+      const content = typeof input === "string" ? input : input.content;
+      const attachments = typeof input === "string" ? undefined : input.attachments;
+      await queryClient.cancelQueries({ queryKey: ["live", agentId] });
+      const previous = queryClient.getQueryData<LiveThread>(["live", agentId]);
+      if (previous) {
+        const optimisticId = `optimistic-${Date.now()}`;
+        const optimisticAttachments = attachments?.length
+          ? attachments.map((a) => ({
+              id: a.id,
+              name: a.name,
+              mimeType: a.mimeType,
+              kind: a.kind,
+              url: a.previewUrl,
+              sizeBytes: a.size,
+            }))
+          : undefined;
+        queryClient.setQueryData<LiveThread>(["live", agentId], {
+          ...previous,
+          messages: [
+            ...previous.messages,
+            {
+              id: optimisticId,
+              threadId: previous.id,
+              role: "user",
+              content,
+              attachments: optimisticAttachments,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        });
+      }
+      return { previous };
+    },
+    onError: (error, _vars, context) => {
+      // Drop optimistic bubble unless the limit gate already persisted the turn.
+      const persisted =
+        error &&
+        typeof error === "object" &&
+        "persisted" in error &&
+        Boolean((error as { persisted?: boolean }).persisted);
+      if (!persisted && context?.previous) {
+        queryClient.setQueryData(["live", agentId], context.previous);
+      }
       void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
     },
     onSuccess: () => {

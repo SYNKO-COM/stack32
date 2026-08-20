@@ -31,6 +31,28 @@ export interface IntegrationConnectionCardProps {
   className?: string;
 }
 
+/** Named popup so sequential Connect clicks reuse the same window. */
+const CONNECT_POPUP_NAME = "stack32_pipedream_connect";
+const CONNECT_POPUP_FEATURES =
+  "popup=yes,width=560,height=720,scrollbars=yes,resizable=yes";
+
+/**
+ * Open a blank shell *synchronously* inside the click handler.
+ * Browsers block window.open() after await (lost user gesture).
+ */
+function openConnectPopupShell(): Window | null {
+  const popup = window.open("about:blank", CONNECT_POPUP_NAME, CONNECT_POPUP_FEATURES);
+  if (!popup) return null;
+  try {
+    popup.document.title = "Stack32";
+    popup.document.body.innerHTML =
+      '<p style="font-family:system-ui,sans-serif;padding:1.5rem;color:#555">Opening secure connection…</p>';
+  } catch {
+    // Some browsers restrict writes to about:blank briefly — navigation still works.
+  }
+  return popup;
+}
+
 function humanizeAppSlug(raw: string): string {
   const slug = raw.trim().toLowerCase();
   const known: Record<string, string> = {
@@ -80,6 +102,7 @@ export function IntegrationConnectionCard({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [waitingForOauth, setWaitingForOauth] = useState(false);
+  const [popupBlocked, setPopupBlocked] = useState(false);
   /** Optimistic override so Disconnect feels instant and survives stale refetch. */
   const [localOverride, setLocalOverride] = useState<"connected" | "disconnected" | null>(
     null,
@@ -91,6 +114,8 @@ export function IntegrationConnectionCard({
   } | null>(null);
   const accountsBeforeRef = useRef(0);
   const finishedRef = useRef(false);
+  const connectLinkUrlRef = useRef<string | null>(null);
+  const popupRef = useRef<Window | null>(null);
 
   const normalized = (provider || "native").toLowerCase();
   const googleProductApps = new Set([
@@ -180,8 +205,16 @@ export function IntegrationConnectionCard({
     }
     finishedRef.current = true;
     setWaitingForOauth(false);
+    setPopupBlocked(false);
+    setPipedreamFallback(null);
     setLocalOverride("connected");
     setError(null);
+    try {
+      popupRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    popupRef.current = null;
     onConnected?.();
     onChanged?.();
     return true;
@@ -235,6 +268,13 @@ export function IntegrationConnectionCard({
   const connectPipedream = () => {
     setError(null);
     setPipedreamFallback(null);
+
+    // Must run in the same turn as the click — before any await.
+    const popup = openConnectPopupShell();
+    popupRef.current = popup;
+    const blocked = !popup || popup.closed;
+    setPopupBlocked(blocked);
+
     startTransition(async () => {
       try {
         // Baseline *without* toolIds so we don't auto-bind / resume on click.
@@ -246,18 +286,50 @@ export function IntegrationConnectionCard({
         finishedRef.current = false;
 
         const result = await getConnectToken(appId || undefined);
-        if (result.connectLinkUrl && !result.degraded) {
-          window.open(result.connectLinkUrl, "_blank", "noopener,noreferrer");
-          setWaitingForOauth(true);
+        const url = result.connectLinkUrl?.trim() || null;
+        connectLinkUrlRef.current = url;
+
+        if (!url || result.degraded) {
+          try {
+            popup?.close();
+          } catch {
+            /* ignore */
+          }
+          popupRef.current = null;
+          setPipedreamFallback({
+            token: result.token,
+            connectLinkUrl: url,
+            message: result.message,
+          });
+          setWaitingForOauth(Boolean(url));
           return;
         }
+
+        if (popup && !popup.closed) {
+          popup.location.href = url;
+          setWaitingForOauth(true);
+          setPopupBlocked(false);
+          return;
+        }
+
+        // Popup blocked: keep waiting UI + in-page link (user click = allowed gesture).
+        setPopupBlocked(true);
         setPipedreamFallback({
           token: result.token,
-          connectLinkUrl: result.connectLinkUrl,
-          message: result.message,
+          connectLinkUrl: url,
+          message: t("connections.popupBlocked", {
+            defaultValue:
+              "Your browser blocked the connect window. Open the link below, finish connecting, then click “I’ve connected”.",
+          }),
         });
-        setWaitingForOauth(Boolean(result.connectLinkUrl));
+        setWaitingForOauth(true);
       } catch {
+        try {
+          popup?.close();
+        } catch {
+          /* ignore */
+        }
+        popupRef.current = null;
         setError(
           t("connections.pipedreamError", {
             defaultValue: "Could not start Pipedream Connect.",
@@ -274,6 +346,20 @@ export function IntegrationConnectionCard({
       return;
     }
     connectGoogle();
+  };
+
+  const cancelWaiting = () => {
+    setWaitingForOauth(false);
+    setPopupBlocked(false);
+    setPipedreamFallback(null);
+    setError(null);
+    finishedRef.current = false;
+    try {
+      popupRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    popupRef.current = null;
   };
 
   const disconnect = () => {
@@ -306,6 +392,8 @@ export function IntegrationConnectionCard({
       }
     });
   };
+
+  const fallbackUrl = pipedreamFallback?.connectLinkUrl || connectLinkUrlRef.current;
 
   return (
     <div className={cn("rounded-xl border border-border p-4 space-y-3", className)}>
@@ -349,33 +437,69 @@ export function IntegrationConnectionCard({
       {waitingForOauth && !connected ? (
         <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs text-amber-950 dark:text-amber-100">
           <p>
-            {t("connections.waitingBody", {
-              defaultValue:
-                "Finish connecting in the other window. Stack32 will continue automatically once the account is linked.",
-            })}
+            {popupBlocked
+              ? t("connections.popupBlocked", {
+                  defaultValue:
+                    "Your browser blocked the connect window. Open the link below, finish connecting, then click “I’ve connected”.",
+                })
+              : t("connections.waitingBody", {
+                  defaultValue:
+                    "Finish connecting in the other window. Stack32 will continue automatically once the account is linked.",
+                })}
           </p>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={pending}
-            onClick={() => {
-              startTransition(async () => {
-                const ok = await finishIfLinked({ allowExistingBind: true });
-                if (!ok) {
-                  setError(
-                    t("connections.notYetLinked", {
-                      defaultValue:
-                        "No new account detected yet. Complete the connection, then try again.",
-                    }),
-                  );
-                }
-              });
-            }}
-          >
-            {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
-            {t("connections.iveConnected", { defaultValue: "I’ve connected" })}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              onClick={() => {
+                startTransition(async () => {
+                  const ok = await finishIfLinked({ allowExistingBind: true });
+                  if (!ok) {
+                    setError(
+                      t("connections.notYetLinked", {
+                        defaultValue:
+                          "No new account detected yet. Complete the connection, then try again.",
+                      }),
+                    );
+                  }
+                });
+              }}
+            >
+              {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
+              {t("connections.iveConnected", { defaultValue: "I’ve connected" })}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={pending}
+              onClick={handleConnect}
+            >
+              {t("connections.reopenWindow", {
+                defaultValue: "Reopen connect window",
+              })}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={cancelWaiting}>
+              {t("connections.cancelWaiting", { defaultValue: "Cancel" })}
+            </Button>
+          </div>
+          {fallbackUrl ? (
+            <a
+              href={fallbackUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
+              onClick={() => {
+                setPopupBlocked(false);
+                setWaitingForOauth(true);
+              }}
+            >
+              <ExternalLink className="size-3" aria-hidden="true" />
+              {t("connections.continuePipedream", { defaultValue: "Continue connecting" })}
+            </a>
+          ) : null}
         </div>
       ) : null}
 
@@ -390,12 +514,12 @@ export function IntegrationConnectionCard({
               {t("connections.change", { defaultValue: "Change" })}
             </Button>
           </>
-        ) : (
+        ) : waitingForOauth ? null : (
           <Button
             type="button"
             size="sm"
             className="rounded-full bg-brand text-white hover:bg-brand/90"
-            disabled={pending || waitingForOauth}
+            disabled={pending}
             onClick={handleConnect}
           >
             {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
@@ -404,7 +528,7 @@ export function IntegrationConnectionCard({
         )}
       </div>
 
-      {pipedreamFallback ? (
+      {pipedreamFallback && !waitingForOauth ? (
         <div className="space-y-2 rounded-lg border border-border/70 bg-foreground/[0.02] p-3 text-xs text-muted-foreground">
           <p>
             {pipedreamFallback.message ||

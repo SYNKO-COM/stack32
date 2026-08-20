@@ -34,6 +34,7 @@ import { summarizeActivity, useRunActivity } from "@/hooks/use-run-activity";
 import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-button";
 import { gatherSupportDiagnostic } from "@/lib/actions/support-diagnostic";
 import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
+import { isUpgradeGateError } from "@/lib/billing/plan-limit";
 import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
 import { useTranslation } from "@/hooks/use-translation";
 import { playAgentReadyChime } from "@/lib/audio/agent-ready-chime";
@@ -45,6 +46,7 @@ import type { BuilderAction, BuilderMessage } from "@/lib/domain/types";
 import { consumePendingPrompt, consumePrefillPayload, takePrefillSending } from "@/lib/pending-prompt";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/store/ui-store";
 import type { BuilderOperation } from "@/components/builder/builder-working-panel";
 
 /** Intermediate builder acks — must not clear the working UI or end the turn. */
@@ -681,6 +683,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     forcePoll: awaitingReply || pendingToken !== null,
   });
   const sendMessage = useSendBuilderMessage(agentId);
+  const openDialog = useUiStore((s) => s.openDialog);
   const sendMutateRef = useRef(sendMessage.mutateAsync);
   sendMutateRef.current = sendMessage.mutateAsync;
   const threadRef = useRef(thread);
@@ -1024,9 +1027,14 @@ export function BuildView({ agentId }: { agentId: string }) {
         attachments,
         mode: sentMode,
       });
-    } catch {
+    } catch (error) {
       setPendingToken(null);
       setAwaitingReply(false);
+      if (isUpgradeGateError(error)) {
+        openDialog("upgrade");
+      }
+      // Re-throw so PromptComposer keeps the typed draft.
+      throw error;
     }
   };
 
@@ -1380,7 +1388,7 @@ export function BuildView({ agentId }: { agentId: string }) {
                 ? t("builder:composer.chatPlaceholder")
                 : t("builder:composer.placeholder")
           }
-          onSubmit={(value, attachments, options) => void handleSend(value, attachments, options)}
+          onSubmit={(value, attachments, options) => handleSend(value, attachments, options)}
           onStop={handleStop}
           busy={composerBusy}
           disabled={waitingOnForm}

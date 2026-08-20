@@ -77,6 +77,13 @@ export class SupabaseBuilderRepository implements BuilderRepository {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("not_authenticated");
 
+    // Gate exhausted credits before insert so the typed draft stays in the composer.
+    const { data: usage } = await supabase.rpc("get_my_credit_usage");
+    if (usage && typeof usage === "object" && Boolean((usage as { exhausted?: boolean }).exhausted)) {
+      const { AgentServiceError } = await import("@/lib/ai/agent-service-errors");
+      throw new AgentServiceError("BUDGET_EXCEEDED", "Monthly AI budget exceeded.", 402);
+    }
+
     const messageId = crypto.randomUUID();
     const text = content.trim();
     const prepared =

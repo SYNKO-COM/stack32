@@ -138,7 +138,11 @@ export function useSendBuilderMessage(agentId: string) {
       }
       return { previous };
     },
-    onError: () => {
+    onError: (_error, _vars, context) => {
+      // Restore immediately so a blocked send does not flash then vanish.
+      if (context?.previous) {
+        queryClient.setQueryData(["builder", agentId], context.previous);
+      }
       void queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
       void queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
     },

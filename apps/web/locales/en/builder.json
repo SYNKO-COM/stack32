@@ -104,6 +104,7 @@
   "topbar": {
     "publish": "Publish",
     "publishing": "Publishing…",
+    "share": "Share",
     "menu": {
       "settings": "Settings",
       "billing": "Billing",
@@ -118,6 +119,8 @@
     "successTitle": "Agent published",
     "successBody": "Your agent is live. Share the link below — you can keep improving drafts without breaking the published version.",
     "publicUrl": "Public link",
+    "shareTitle": "Share this agent",
+    "shareBody": "Send this public link so others can use your agent.",
     "usernameRequiredTitle": "Username required",
     "usernameRequiredBody": "Choose a Stack32 username before publishing. Public links use @username/agent-name.",
     "goToSettings": "Choose username",
@@ -363,6 +366,9 @@
     "waitingBody": "Finish connecting in the other window. Stack32 will continue automatically once the account is linked.",
     "waitingHint": "Still waiting for the account… Finish connecting in the other window, then click “I’ve connected”.",
     "iveConnected": "I’ve connected",
+    "reopenWindow": "Reopen connect window",
+    "cancelWaiting": "Cancel",
+    "popupBlocked": "Your browser blocked the connect window. Open the link below, finish connecting, then click “I’ve connected”.",
     "notYetLinked": "No new account detected yet. Complete the connection, then try again.",
     "error": "Could not start the connection. Try again in a moment.",
     "disconnectError": "Could not disconnect this account.",

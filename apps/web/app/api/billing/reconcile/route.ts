@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { reconcileFailedWhopWebhooks } from "@/lib/billing/reconcile";
+import { reconcileFailedWhopWebhooks, syncOrphanWhopMemberships } from "@/lib/billing/reconcile";
 
 export const runtime = "nodejs";
 
@@ -28,14 +28,18 @@ function authorize(request: NextRequest): NextResponse | null {
 }
 
 /**
- * Cron / Cloud Scheduler target: replay failed Whop webhook fulfillments.
+ * Cron / Cloud Scheduler target: replay failed Whop webhooks + sync orphan memberships.
  * Vercel Cron uses GET; Cloud Scheduler / manual callers may use POST.
  */
 async function handle(request: NextRequest) {
   const denied = authorize(request);
   if (denied) return denied;
 
-  const result = await reconcileFailedWhopWebhooks(25);
+  const [webhooks, orphans] = await Promise.all([
+    reconcileFailedWhopWebhooks(25),
+    syncOrphanWhopMemberships(40),
+  ]);
+  const result = { webhooks, orphans };
   console.info("[billing reconcile]", result);
   return NextResponse.json(result);
 }
