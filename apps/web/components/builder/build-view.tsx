@@ -44,6 +44,11 @@ import type {
 } from "@/components/shared/prompt-composer";
 import type { BuilderAction, BuilderMessage } from "@/lib/domain/types";
 import { consumePendingPrompt, consumePrefillPayload, takePrefillSending } from "@/lib/pending-prompt";
+import {
+  clearBuilderStop,
+  readBuilderStop,
+  writeBuilderStop,
+} from "@/lib/builder/stop-persistence";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
@@ -670,7 +675,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   /** Epoch ms of the in-flight send — survives stale refetches & duplicate prompt text. */
   const [pendingToken, setPendingToken] = useState<number | null>(null);
   /** User hit Stop — free the composer even if the in-flight HTTP turn is still pending. */
-  const [userStopped, setUserStopped] = useState(false);
+  const [userStopped, setUserStopped] = useState(() => Boolean(readBuilderStop(agentId)));
   const [modeOverride, setModeOverride] = useState<{
     agentId: string;
     mode: BuilderInteractionMode;
@@ -716,9 +721,30 @@ export function BuildView({ agentId }: { agentId: string }) {
   const revealPauseRef = useRef<number | null>(null);
   /** Run ids the user stopped this session — hide their progress immediately.
    *  Held in state (not a ref) because it drives message filtering during render. */
-  const [stoppedRunIds, setStoppedRunIds] = useState<Set<string>>(() => new Set());
+  const [stoppedRunIds, setStoppedRunIds] = useState<Set<string>>(() => {
+    const stop = readBuilderStop(agentId);
+    return stop?.runId ? new Set([stop.runId]) : new Set();
+  });
   /** Message IDs present on first thread snapshot — no typewriter on refresh. */
   const [baselineIds, setBaselineIds] = useState<Set<string> | null>(null);
+
+  // Keep Stop sticky across refresh for this agent tab.
+  useEffect(() => {
+    const stop = readBuilderStop(agentId);
+    if (!stop) {
+      setUserStopped(false);
+      return;
+    }
+    setUserStopped(true);
+    if (stop.runId) {
+      setStoppedRunIds((prev) => {
+        if (prev.has(stop.runId!)) return prev;
+        const next = new Set(prev);
+        next.add(stop.runId!);
+        return next;
+      });
+    }
+  }, [agentId]);
 
   const messages = useMemo(() => thread?.messages ?? [], [thread?.messages]);
   const lastMessageAt = messages.at(-1)?.createdAt;
@@ -920,13 +946,24 @@ export function BuildView({ agentId }: { agentId: string }) {
 
   // Resume local "turn in progress" UI after refresh when the server still has a build.
   // Skip while a form is open — that is intentional waiting, not an in-flight compile.
+  // Never revive a turn the user already stopped (session flag or cancel notice).
   useEffect(() => {
     if (!serverBuildRunId) return;
-    if (userStopped) return;
+    if (userStopped || readBuilderStop(agentId)) return;
     if (hasOpenBuilderForm) return;
+    const last = messages.at(-1);
+    if (isCancelNoticeContent(last?.content)) return;
+    if (stoppedRunIds.has(serverBuildRunId)) return;
     setAwaitingReply(true);
     setPendingToken((prev) => prev ?? Date.now());
-  }, [serverBuildRunId, userStopped, hasOpenBuilderForm]);
+  }, [
+    serverBuildRunId,
+    userStopped,
+    hasOpenBuilderForm,
+    agentId,
+    messages,
+    stoppedRunIds,
+  ]);
 
   const activityEnabled =
     Boolean(activeRunId) &&
@@ -1058,6 +1095,7 @@ export function BuildView({ agentId }: { agentId: string }) {
         return next;
       });
     }
+    writeBuilderStop(agentId, runToStop);
     // Free UI immediately — with QUEUE_INLINE, sendMessage stays pending until the
     // server finishes, which made Stop look broken.
     setUserStopped(true);
@@ -1075,6 +1113,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   ) => {
     // eslint-disable-next-line react-hooks/purity -- event handler; epoch token pairs the in-flight turn with its clear effect
     const token = Date.now();
+    clearBuilderStop(agentId);
     setUserStopped(false);
     setPendingToken(token);
     setAwaitingReply(true);

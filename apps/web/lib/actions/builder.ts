@@ -577,57 +577,67 @@ async function localCancelBuilderRun(input: {
   userId: string;
 }): Promise<{ status: string; id?: string }> {
   const admin = requireSupabaseAdminClient();
-  const { data: active } = await admin
+  const { data: actives } = await admin
     .from("runs")
     .select("id,thread_id,status")
     .eq("agent_id", input.agentId)
     .eq("user_id", input.userId)
     .eq("run_type", "build")
-    .in("status", ["queued", "running"])
+    .in("status", ["queued", "running", "waiting_for_input"])
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
 
-  if (!active?.id) {
-    // Still clear agent building state + any leased queue leftovers.
+  const rows = actives ?? [];
+  if (rows.length === 0) {
     await admin
       .from("agents")
-      .update({ status: "needs_attention" })
+      .update({ status: "draft" })
       .eq("id", input.agentId)
       .eq("user_id", input.userId)
-      .eq("status", "building");
+      .in("status", ["building", "waiting_for_input"]);
     return { status: "idle" };
   }
 
-  await admin
-    .from("runs")
-    .update({ status: "canceled", completed_at: new Date().toISOString() })
-    .eq("id", active.id)
-    .eq("user_id", input.userId);
+  let lastId: string | undefined;
+  let threadId: string | null = null;
+  for (const active of rows) {
+    if (!active?.id) continue;
+    lastId = active.id;
+    threadId = active.thread_id ?? threadId;
+    await admin
+      .from("runs")
+      .update({
+        status: "canceled",
+        completed_at: new Date().toISOString(),
+        error_code: null,
+      })
+      .eq("id", active.id)
+      .eq("user_id", input.userId);
 
-  await admin
-    .from("run_queue")
-    .update({ status: "dead", last_error: "canceled_by_user" })
-    .eq("run_id", active.id)
-    .in("status", ["pending", "leased"]);
+    await admin
+      .from("run_queue")
+      .update({ status: "dead", last_error: "canceled_by_user" })
+      .eq("run_id", active.id)
+      .in("status", ["pending", "leased"]);
+  }
 
   await admin
     .from("agents")
-    .update({ status: "needs_attention" })
+    .update({ status: "draft" })
     .eq("id", input.agentId)
     .eq("user_id", input.userId)
-    .eq("status", "building");
+    .in("status", ["building", "waiting_for_input"]);
 
-  if (active.thread_id) {
+  if (threadId && lastId) {
     await admin.from("builder_messages").insert({
-      thread_id: active.thread_id,
+      thread_id: threadId,
       agent_id: input.agentId,
       user_id: input.userId,
       role: "assistant",
       content: "builder:errors.canceledDetail",
-      metadata: { tone: "normal", interrupt_run_id: active.id } as unknown as Json,
+      metadata: { tone: "normal", interrupt_run_id: lastId } as unknown as Json,
     });
   }
 
-  return { status: "canceled", id: active.id };
+  return { status: "canceled", id: lastId };
 }

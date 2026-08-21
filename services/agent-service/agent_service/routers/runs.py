@@ -45,6 +45,10 @@ async def _cancel_run_impl(
             status_code=409,
             detail={"code": "RUN_CANCELED", "message": "Run cannot be canceled."},
         )
+    try:
+        await db.clear_builder_interrupt(run_id, user.user_id)
+    except Exception:  # noqa: BLE001
+        pass
     await db.emit_event(run_id, "run.canceled", {"mapping_key": "live.status.canceled"})
     agent_id = run.get("agent_id")
     thread_id = run.get("thread_id")
@@ -102,12 +106,26 @@ async def cancel_active_live_run(
 
 @router.post("/agents/{agent_id}/builder/cancel")
 async def cancel_active_builder_run(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
-    """Cancel the latest in-flight build run for this agent (Stop button)."""
+    """Cancel every in-flight build run for this agent (Stop button)."""
     db = get_persistence()
-    active = await db.get_latest_active_build_run(agent_id=str(agent_id), user_id=user.user_id)
-    if not active:
+    actives = await db.list_active_build_runs(
+        agent_id=str(agent_id), user_id=user.user_id
+    )
+    if not actives:
+        # Fallback for older persistence without list helper.
+        active = await db.get_latest_active_build_run(
+            agent_id=str(agent_id), user_id=user.user_id
+        )
+        actives = [active] if active else []
+    if not actives:
         return {"status": "idle"}
-    return await _cancel_run_impl(str(active["id"]), user, silent=False)
+    last: dict[str, Any] | None = None
+    for row in actives:
+        try:
+            last = await _cancel_run_impl(str(row["id"]), user, silent=False)
+        except HTTPException:
+            continue
+    return last or {"status": "idle"}
 
 
 @router.get("/runs/{run_id}/events")

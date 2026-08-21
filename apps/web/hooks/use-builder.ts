@@ -163,7 +163,24 @@ export function useCancelBuilderRun(agentId: string) {
     mutationFn: () => cancelBuilderRun({ agentId }),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ["builder", agentId] });
+      await queryClient.cancelQueries({ queryKey: ["active-build-run", agentId] });
       const previous = queryClient.getQueryData<BuilderThread>(["builder", agentId]);
+      queryClient.setQueryData(["active-build-run", agentId], null);
+      queryClient.setQueryData(["agents", agentId], (old: { status?: string } | undefined) =>
+        old && (old.status === "building" || old.status === "waiting_for_input")
+          ? { ...old, status: "draft" }
+          : old,
+      );
+      queryClient.setQueryData(["agents"], (old: Array<{ id: string; status?: string }> | undefined) =>
+        Array.isArray(old)
+          ? old.map((a) =>
+              a.id === agentId &&
+              (a.status === "building" || a.status === "waiting_for_input")
+                ? { ...a, status: "draft" }
+                : a,
+            )
+          : old,
+      );
       if (previous) {
         const terminalSteps = (steps: BuilderMessage["steps"]) =>
           steps?.map((s) => ({
@@ -197,6 +214,8 @@ export function useCancelBuilderRun(agentId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["builder", agentId] });
       queryClient.invalidateQueries({ queryKey: ["agents"] });
+      queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
+      queryClient.invalidateQueries({ queryKey: ["active-build-run", agentId] });
     },
   });
 }

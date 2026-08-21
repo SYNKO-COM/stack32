@@ -106,6 +106,7 @@ class SupabaseRepository:
                 json={
                     "status": "canceled",
                     "completed_at": datetime.now(UTC).isoformat(),
+                    "error_code": None,
                 },
             )
             # Drop any queue lease so a crashed/restarted worker cannot resume this turn.
@@ -177,8 +178,12 @@ class Persistence(SupabaseRepository):
         if status == "waiting_for_input":
             payload["status"] = "running"
             payload["error_code"] = "BUILDER_INTERRUPTED"
+        params: dict[str, str] = {"id": f"eq.{run_id}"}
+        # Never revive a user-canceled run (QUEUE_INLINE can still be executing).
+        if status not in ("canceled", "failed", "completed", "succeeded"):
+            params["status"] = "neq.canceled"
         async with get_supabase_admin_client() as client:
-            await client.patch("/runs", params={"id": f"eq.{run_id}"}, json=payload)
+            await client.patch("/runs", params=params, json=payload)
 
     async def complete_run(self, run_id: str) -> None:
         await self.update_run_status(run_id, "completed")
@@ -451,6 +456,24 @@ class Persistence(SupabaseRepository):
         )
         return rows if isinstance(rows, list) else []
 
+    async def list_active_build_runs(
+        self, *, agent_id: str, user_id: str
+    ) -> list[dict[str, Any]]:
+        """All non-terminal build runs (Stop must kill every in-flight turn)."""
+        rows = await self._select(
+            "runs",
+            {
+                "agent_id": f"eq.{agent_id}",
+                "user_id": f"eq.{user_id}",
+                "run_type": "eq.build",
+                "status": "in.(queued,running,waiting_for_input)",
+                "select": "id,status,created_at,error_code",
+                "order": "created_at.desc",
+                "limit": "20",
+            },
+        )
+        return rows if isinstance(rows, list) else []
+
     async def find_pending_live_message(self, *, run_id: str) -> dict[str, Any] | None:
         rows = await self._select(
             "live_messages",
@@ -604,6 +627,9 @@ class Persistence(SupabaseRepository):
         # Merge into existing input — never replace the whole JSON or we wipe
         # top-level ``prompt`` / ``mode`` and Cloud Tasks resumes skip the run.
         run = await self.get_owned_run(run_id, user_id)
+        if run and run.get("status") == "canceled":
+            # Stop won the race — do not reopen a form on a canceled turn.
+            return
         meta = dict((run or {}).get("input") or {})
         clipped = prompt[:8000]
         meta["prompt"] = clipped
@@ -618,7 +644,11 @@ class Persistence(SupabaseRepository):
         async with get_supabase_admin_client() as client:
             await client.patch(
                 "/runs",
-                params={"id": f"eq.{run_id}", "user_id": f"eq.{user_id}"},
+                params={
+                    "id": f"eq.{run_id}",
+                    "user_id": f"eq.{user_id}",
+                    "status": "neq.canceled",
+                },
                 json={
                     "error_code": "BUILDER_INTERRUPTED",
                     "input": meta,

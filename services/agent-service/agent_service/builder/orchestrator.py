@@ -209,6 +209,25 @@ class BuilderOrchestrator:
         self.gateway = get_model_gateway()
         self.settings = get_settings()
 
+    async def _run_was_canceled(self, run_id: str, user_id: str) -> bool:
+        current = await self.db.get_owned_run(run_id, user_id)
+        return bool(current and current.get("status") == "canceled")
+
+    async def _finish_canceled_build(
+        self, run_id: str, user_id: str, agent_id: str
+    ) -> dict[str, Any]:
+        """Stop cooperatively after the user hit Stop — never reopen forms."""
+        try:
+            await self.db.clear_builder_interrupt(run_id, user_id)
+        except Exception:  # noqa: BLE001
+            logger.debug("clear_interrupt_on_cancel_failed", exc_info=True)
+        agent_row = await self.db.get_owned_agent(agent_id, user_id)
+        restore = (
+            "ready" if agent_row and agent_row.get("first_ready_celebrated") else "draft"
+        )
+        await self.db.update_agent_status(agent_id, user_id, restore)
+        return {"status": "canceled", "run_id": run_id}
+
     async def handle_message(
         self,
         *,
@@ -299,6 +318,10 @@ class BuilderOrchestrator:
         await self.db.update_run_status(run_id, "running")
         await self.db.emit_event(run_id, "run.started", {"mapping_key": "builder.progress.started"})
         await self.db.tag_thinking_with_run(thread_id=thread_id, run_id=run_id)
+        # Sidebar + UI must agree: as soon as a build turn runs, show "building"
+        # (forms later flip to waiting_for_input — never leave a grey "draft" while work is live).
+        if str(mode or "").strip().lower() != "chat":
+            await self.db.update_agent_status(agent_id, user_id, "building")
         # Platform-wide learning: every Builder turn (esp. Try to fix) enriches shared memory.
         try:
             from agent_service.learning import (
@@ -320,8 +343,6 @@ class BuilderOrchestrator:
                 )
         except Exception:  # noqa: BLE001
             logger.debug("builder_turn_observation_failed", exc_info=True)
-        # Keep draft until identity/setup is done — "building" is reserved for the real compile.
-
         try:
             if str(mode or "").strip().lower() == "chat":
                 return await self._handle_chat_turn(
@@ -333,6 +354,9 @@ class BuilderOrchestrator:
                     agent=agent,
                     locale=locale,
                 )
+
+            if await self._run_was_canceled(run_id, user_id):
+                return await self._finish_canceled_build(run_id, user_id, agent_id)
 
             await self.db.emit_event(
                 run_id, "builder.analysis.started", {"mapping_key": "builder.progress.understanding"}
@@ -366,10 +390,15 @@ class BuilderOrchestrator:
             if intent in (BuilderIntent.CREATE, BuilderIntent.MODIFY) and needs_identity:
                 import asyncio
 
-                # Let the thinking bubble stay visible briefly for realism.
+                # Short beat so "Demande comprise" is readable — keep cancel-aware.
                 draft_task = asyncio.create_task(self._suggest_identity(content))
-                await asyncio.sleep(1.6)
+                await asyncio.sleep(0.35)
+                if await self._run_was_canceled(run_id, user_id):
+                    draft_task.cancel()
+                    return await self._finish_canceled_build(run_id, user_id, agent_id)
                 draft = await draft_task
+                if await self._run_was_canceled(run_id, user_id):
+                    return await self._finish_canceled_build(run_id, user_id, agent_id)
                 await self.db.clear_thinking_messages(thread_id=thread_id)
                 await self.db.emit_event(
                     run_id,
@@ -409,6 +438,8 @@ class BuilderOrchestrator:
                         ],
                     }
                 }
+                if await self._run_was_canceled(run_id, user_id):
+                    return await self._finish_canceled_build(run_id, user_id, agent_id)
                 await self.db.insert_assistant_message(
                     thread_id=thread_id,
                     agent_id=agent_id,
@@ -426,7 +457,7 @@ class BuilderOrchestrator:
                     interrupt_type="identity",
                 )
                 await self.db.update_run_status(run_id, "waiting_for_input")
-                await self.db.update_agent_status(agent_id, user_id, "draft")
+                await self.db.update_agent_status(agent_id, user_id, "waiting_for_input")
                 return {"status": "interrupted", "run_id": run_id, "reason": "identity"}
 
             await self.db.clear_thinking_messages(thread_id=thread_id)
@@ -617,7 +648,7 @@ class BuilderOrchestrator:
             interrupt_type="secret",
         )
         await self.db.update_run_status(run_id, "waiting_for_input")
-        await self.db.update_agent_status(agent_id, user_id, "draft")
+        await self.db.update_agent_status(agent_id, user_id, "waiting_for_input")
         return {"status": "interrupted", "run_id": run_id, "reason": "secret"}
 
     async def resume_with_secret(
@@ -916,7 +947,7 @@ class BuilderOrchestrator:
             interrupt_type="capabilities",
         )
         await self.db.update_run_status(run_id, "waiting_for_input")
-        await self.db.update_agent_status(agent_id, user_id, "draft")
+        await self.db.update_agent_status(agent_id, user_id, "waiting_for_input")
         return {"status": "interrupted", "run_id": run_id, "reason": "capabilities"}
 
     def _analyze_dynamic_questions(
@@ -1007,7 +1038,7 @@ class BuilderOrchestrator:
             interrupt_type="questions",
         )
         await self.db.update_run_status(run_id, "waiting_for_input")
-        await self.db.update_agent_status(agent_id, user_id, "draft")
+        await self.db.update_agent_status(agent_id, user_id, "waiting_for_input")
         return {"status": "interrupted", "run_id": run_id, "reason": "questions"}
 
     async def resume_with_questions(
@@ -1393,7 +1424,7 @@ class BuilderOrchestrator:
             interrupt_type="provider_clarification",
         )
         await self.db.update_run_status(run_id, "waiting_for_input")
-        await self.db.update_agent_status(agent_id, user_id, "draft")
+        await self.db.update_agent_status(agent_id, user_id, "waiting_for_input")
         return {"status": "interrupted", "run_id": run_id, "reason": "provider_clarification"}
 
     async def _maybe_interrupt_for_tool_review(
@@ -1505,7 +1536,7 @@ class BuilderOrchestrator:
             interrupt_type="tool_review",
         )
         await self.db.update_run_status(run_id, "waiting_for_input")
-        await self.db.update_agent_status(agent_id, user_id, "draft")
+        await self.db.update_agent_status(agent_id, user_id, "waiting_for_input")
         return {"status": "interrupted", "run_id": run_id, "reason": "tool_review"}
 
     async def resume_with_tool_review(
