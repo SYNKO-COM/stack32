@@ -22,6 +22,8 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   bot: Bot,
 };
 
+export const AGENT_ICON_KEYS = Object.keys(ICONS);
+
 export function AgentIcon({ icon, className }: { icon: string; className?: string }) {
   const Icon = ICONS[icon] ?? Bot;
   return (

@@ -3,9 +3,11 @@
 import { getOrCreateInstallation } from "@/lib/actions/installations";
 import {
   isListingBillingInterval,
+  slugifyAgentName,
   type ListingBillingInterval,
 } from "@/lib/marketplace/slug";
 import { clampReviewRating, shuffleArray } from "@/lib/marketplace/shuffle";
+import type { Json } from "@/lib/supabase/database.types";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ListingVisibility = "private" | "public";
@@ -40,6 +42,12 @@ export interface AgentListingSettings {
   publicPath?: string;
   published: boolean;
   username?: string;
+  /** Lucide icon key shown on listings and the public page. */
+  iconKey: string;
+  role: string;
+  goal: string;
+  instructions: string;
+  rules: string[];
 }
 
 export interface AccessRequestRow {
@@ -115,6 +123,113 @@ export async function recordAgentViewAction(agentId: string): Promise<void> {
   });
 }
 
+function extractRulesFromSpec(raw: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(trimmed);
+  };
+
+  if (Array.isArray(raw.rules)) {
+    for (const item of raw.rules) {
+      if (typeof item === "string") {
+        push(item);
+      } else {
+        const row = asRecord(item);
+        const text =
+          (typeof row.text === "string" && row.text) ||
+          (typeof row.rule === "string" && row.rule) ||
+          (typeof row.body === "string" && row.body) ||
+          "";
+        if (text) push(text);
+      }
+    }
+  }
+
+  const instructions = asRecord(raw.instructions);
+  if (Array.isArray(instructions.behavioral_rules)) {
+    for (const item of instructions.behavioral_rules) {
+      if (typeof item === "string") push(item);
+      else {
+        const row = asRecord(item);
+        if (typeof row.text === "string") push(row.text);
+      }
+    }
+  }
+
+  return out.slice(0, 24);
+}
+
+function extractBriefFromSpec(raw: Record<string, unknown>): {
+  role: string;
+  goal: string;
+  instructions: string;
+  rules: string[];
+} {
+  const identity = asRecord(raw.identity);
+  const instructionsRaw = raw.instructions;
+  let instructions = "";
+  if (typeof instructionsRaw === "string") {
+    instructions = instructionsRaw;
+  } else {
+    const obj = asRecord(instructionsRaw);
+    if (typeof obj.system === "string") instructions = obj.system;
+  }
+  return {
+    role: typeof identity.role === "string" ? identity.role : "",
+    goal: typeof raw.goal === "string" ? raw.goal : "",
+    instructions,
+    rules: extractRulesFromSpec(raw),
+  };
+}
+
+/** Patch identity/brief fields without wiping model, tools, graph, etc. */
+function patchSpecBrief(
+  raw: Record<string, unknown>,
+  fields: {
+    name: string;
+    role: string;
+    goal: string;
+    instructions: string;
+    rules: string[];
+  },
+): Record<string, unknown> {
+  const identity = asRecord(raw.identity);
+  const nextInstructions =
+    raw.instructions !== null &&
+    typeof raw.instructions === "object" &&
+    !Array.isArray(raw.instructions)
+      ? {
+          ...asRecord(raw.instructions),
+          system: fields.instructions,
+          behavioral_rules: fields.rules,
+        }
+      : {
+          system: fields.instructions,
+          tone: "professional",
+          language: "auto",
+          behavioral_rules: fields.rules,
+        };
+
+  return {
+    ...raw,
+    name: fields.name,
+    goal: fields.goal,
+    identity: {
+      ...identity,
+      name: fields.name,
+      role: fields.role,
+    },
+    instructions: nextInstructions,
+    rules: fields.rules,
+  };
+}
+
 export async function getAgentListingSettingsAction(
   agentId: string,
 ): Promise<AgentListingSettings> {
@@ -128,7 +243,7 @@ export async function getAgentListingSettingsAction(
   const { data: agent, error } = await (supabase as any)
     .from("agents")
     .select(
-      "id, name, slug, status, listing_visibility, listing_tagline, listing_price_cents, listing_currency, listing_billing_interval",
+      "id, name, slug, status, icon_key, description, draft_version_id, published_version_id, listing_visibility, listing_tagline, listing_price_cents, listing_currency, listing_billing_interval",
     )
     .eq("id", agentId)
     .eq("user_id", user.id)
@@ -157,6 +272,26 @@ export async function getAgentListingSettingsAction(
     ? billingRaw
     : "one_time";
 
+  const versionId =
+    (typeof row.draft_version_id === "string" && row.draft_version_id) ||
+    (typeof row.published_version_id === "string" && row.published_version_id) ||
+    null;
+
+  let brief = { role: "", goal: "", instructions: "", rules: [] as string[] };
+  if (versionId) {
+    const { data: version } = await supabase
+      .from("agent_versions")
+      .select("spec")
+      .eq("id", versionId)
+      .maybeSingle();
+    if (version?.spec) {
+      brief = extractBriefFromSpec(asRecord(version.spec));
+    }
+  }
+  if (!brief.goal && typeof row.description === "string") {
+    brief.goal = row.description;
+  }
+
   return {
     agentId: String(row.id),
     name: String(row.name ?? ""),
@@ -171,6 +306,11 @@ export async function getAgentListingSettingsAction(
       published && username ? `/@${username}/${String(row.slug ?? "")}` : undefined,
     published,
     username,
+    iconKey: typeof row.icon_key === "string" && row.icon_key ? row.icon_key : "bot",
+    role: brief.role,
+    goal: brief.goal,
+    instructions: brief.instructions,
+    rules: brief.rules,
   };
 }
 
@@ -194,6 +334,73 @@ async function allocateUniqueSlug(
   });
 }
 
+async function assertUniqueAgentName(
+  supabase: Awaited<ReturnType<typeof requireSupabaseServerClient>>,
+  userId: string,
+  agentId: string,
+  name: string,
+): Promise<void> {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) throw new Error("invalid_name");
+
+  const { data, error } = await supabase
+    .from("agents")
+    .select("id, name")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .neq("id", agentId);
+  if (error) throw error;
+
+  const clash = (data ?? []).some(
+    (row) => String(row.name ?? "").trim().toLowerCase() === normalized,
+  );
+  if (clash) throw new Error("duplicate_name");
+}
+
+async function patchOwnedAgentVersionsBrief(
+  supabase: Awaited<ReturnType<typeof requireSupabaseServerClient>>,
+  agent: {
+    draft_version_id?: string | null;
+    published_version_id?: string | null;
+  },
+  fields: {
+    name: string;
+    role: string;
+    goal: string;
+    instructions: string;
+    rules: string[];
+  },
+): Promise<void> {
+  const versionIds = new Set<string>();
+  if (typeof agent.draft_version_id === "string" && agent.draft_version_id) {
+    versionIds.add(agent.draft_version_id);
+  }
+  if (typeof agent.published_version_id === "string" && agent.published_version_id) {
+    versionIds.add(agent.published_version_id);
+  }
+  if (versionIds.size === 0) return;
+
+  for (const versionId of versionIds) {
+    const { data: version, error } = await supabase
+      .from("agent_versions")
+      .select("id, spec")
+      .eq("id", versionId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!version) continue;
+    const nextSpec = patchSpecBrief(asRecord(version.spec), fields);
+    const { error: updateError } = await supabase
+      .from("agent_versions")
+      .update({ spec: nextSpec as Json })
+      .eq("id", versionId);
+    if (updateError) throw updateError;
+  }
+}
+
+export type UpdateAgentListingResult =
+  | { ok: true; settings: AgentListingSettings; slugAdjusted?: boolean }
+  | { ok: false; code: "duplicate_name" | "invalid_name" | "not_found" | "save_failed" };
+
 export async function updateAgentListingAction(input: {
   agentId: string;
   visibility: ListingVisibility;
@@ -201,29 +408,90 @@ export async function updateAgentListingAction(input: {
   priceCents: number;
   billingInterval?: ListingBillingInterval;
   slug?: string;
-}): Promise<AgentListingSettings> {
+  name?: string;
+  iconKey?: string;
+  role?: string;
+  goal?: string;
+  instructions?: string;
+  rules?: string[];
+}): Promise<UpdateAgentListingResult> {
   const supabase = await requireSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("not_authenticated");
+  if (!user) return { ok: false, code: "save_failed" };
   if (input.visibility !== "public" && input.visibility !== "private") {
-    throw new Error("invalid_visibility");
+    return { ok: false, code: "save_failed" };
   }
+
+  const { data: owned, error: ownedError } = await supabase
+    .from("agents")
+    .select("id, draft_version_id, published_version_id, name, slug")
+    .eq("id", input.agentId)
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (ownedError) return { ok: false, code: "save_failed" };
+  if (!owned) return { ok: false, code: "not_found" };
+
   const tagline = input.tagline.trim().slice(0, 160);
   // Paid listings are not enabled yet — force free / one-time.
   const priceCents = 0;
   const billingInterval: ListingBillingInterval = "one_time";
 
+  const name =
+    typeof input.name === "string" ? input.name.trim().slice(0, 80) : String(owned.name ?? "");
+  if (!name) return { ok: false, code: "invalid_name" };
+
+  try {
+    await assertUniqueAgentName(supabase, user.id, input.agentId, name);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message === "duplicate_name") return { ok: false, code: "duplicate_name" };
+    if (message === "invalid_name") return { ok: false, code: "invalid_name" };
+    return { ok: false, code: "save_failed" };
+  }
+
+  const allowedIcons = new Set([
+    "briefcase",
+    "search",
+    "life-buoy",
+    "pen-line",
+    "file-text",
+    "sparkles",
+    "bot",
+  ]);
+  const iconKey =
+    typeof input.iconKey === "string" && allowedIcons.has(input.iconKey)
+      ? input.iconKey
+      : "bot";
+
+  const role = typeof input.role === "string" ? input.role.trim().slice(0, 240) : "";
+  const goal = typeof input.goal === "string" ? input.goal.trim().slice(0, 4000) : "";
+  const instructions =
+    typeof input.instructions === "string" ? input.instructions.trim().slice(0, 12000) : "";
+  const rules = Array.isArray(input.rules)
+    ? input.rules
+        .map((rule) => rule.trim())
+        .filter(Boolean)
+        .slice(0, 24)
+        .map((rule) => rule.slice(0, 500))
+    : [];
+
   const patch: Record<string, unknown> = {
+    name,
+    icon_key: iconKey,
+    description: goal || null,
     listing_visibility: input.visibility,
     listing_tagline: input.visibility === "public" ? tagline || null : null,
     listing_price_cents: priceCents,
     listing_billing_interval: billingInterval,
   };
 
+  let resolvedSlug: string | undefined;
   if (typeof input.slug === "string" && input.slug.trim()) {
-    patch.slug = await allocateUniqueSlug(supabase, user.id, input.slug, input.agentId);
+    resolvedSlug = await allocateUniqueSlug(supabase, user.id, input.slug, input.agentId);
+    patch.slug = resolvedSlug;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listing_billing_interval pending codegen
@@ -232,8 +500,30 @@ export async function updateAgentListingAction(input: {
     .update(patch)
     .eq("id", input.agentId)
     .eq("user_id", user.id);
-  if (error) throw error;
-  return getAgentListingSettingsAction(input.agentId);
+  if (error) return { ok: false, code: "save_failed" };
+
+  try {
+    await patchOwnedAgentVersionsBrief(supabase, owned, {
+      name,
+      role,
+      goal,
+      instructions,
+      rules,
+    });
+  } catch {
+    return { ok: false, code: "save_failed" };
+  }
+
+  const settings = await getAgentListingSettingsAction(input.agentId);
+  const requestedSlug =
+    typeof input.slug === "string" && input.slug.trim()
+      ? slugifyAgentName(input.slug)
+      : "";
+  return {
+    ok: true,
+    settings,
+    slugAdjusted: Boolean(resolvedSlug && requestedSlug && resolvedSlug !== requestedSlug),
+  };
 }
 
 export async function listAccessRequestsAction(agentId: string): Promise<AccessRequestRow[]> {

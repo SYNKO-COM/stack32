@@ -4,13 +4,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AgentIcon, AGENT_ICON_KEYS } from "@/components/builder/agent-icon";
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { Button } from "@/components/ui/button";
 import { DaSelect } from "@/components/ui/da-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   getAgentListingSettingsAction,
@@ -21,6 +23,7 @@ import {
 } from "@/lib/actions/marketplace";
 import { slugifyAgentName } from "@/lib/marketplace/slug";
 import { SITE_URL } from "@/lib/site";
+import { cn } from "@/lib/utils";
 
 export default function AgentSettingsPage() {
   const params = useParams<{ agentId: string }>();
@@ -38,6 +41,12 @@ export default function AgentSettingsPage() {
     enabled: Boolean(agentId),
   });
 
+  const [name, setName] = useState("");
+  const [iconKey, setIconKey] = useState("bot");
+  const [role, setRole] = useState("");
+  const [goal, setGoal] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [rulesText, setRulesText] = useState("");
   const [visibility, setVisibility] = useState<ListingVisibility>("private");
   const [tagline, setTagline] = useState("");
   const [slug, setSlug] = useState("");
@@ -46,21 +55,32 @@ export default function AgentSettingsPage() {
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const slugFollowsName = useRef(true);
+  const loadedNameSlug = useRef({ name: "", slug: "" });
 
   useEffect(() => {
     if (!listing.data) return;
+    setName(listing.data.name);
+    setIconKey(listing.data.iconKey || "bot");
+    setRole(listing.data.role);
+    setGoal(listing.data.goal);
+    setInstructions(listing.data.instructions);
+    setRulesText(listing.data.rules.join("\n"));
     setVisibility(listing.data.visibility);
     setTagline(listing.data.tagline);
     const current = listing.data.slug || "";
     const fromName = slugifyAgentName(listing.data.name);
-    setSlug(
-      /^untitled-agent(-[0-9]+)?$/i.test(current) && fromName ? fromName : current || fromName,
-    );
+    const nextSlug =
+      /^untitled-agent(-[0-9]+)?$/i.test(current) && fromName ? fromName : current || fromName;
+    setSlug(nextSlug);
+    loadedNameSlug.current = { name: listing.data.name, slug: nextSlug };
+    slugFollowsName.current =
+      !nextSlug || nextSlug === fromName || nextSlug.startsWith(`${fromName}-`);
   }, [listing.data]);
 
   const username = listing.data?.username?.trim() || "";
   const origin = SITE_URL.replace(/\/$/, "");
-  const slugPreview = slugifyAgentName(slug || listing.data?.name || "agent");
+  const slugPreview = slugifyAgentName(slug || name || "agent");
   const publicPath =
     listing.data?.published && username ? `/@${username}/${slugPreview}` : null;
   const publicUrl = publicPath ? `${origin}${publicPath}` : null;
@@ -101,14 +121,14 @@ export default function AgentSettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto px-4 py-6 md:px-8">
-      <div className="mr-auto max-w-xl space-y-8">
+      <div className="mr-auto max-w-2xl space-y-8">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{t("agentSettings.title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t("agentSettings.subtitle")}</p>
         </div>
 
         <form
-          className="space-y-4"
+          className="space-y-5"
           onSubmit={(e) => {
             e.preventDefault();
             setSaving(true);
@@ -116,8 +136,18 @@ export default function AgentSettingsPage() {
             setSaved(false);
             setSlugAdjusted(false);
             const requestedSlug = slugPreview;
+            const rules = rulesText
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean);
             void updateAgentListingAction({
               agentId,
+              name: name.trim(),
+              iconKey,
+              role,
+              goal,
+              instructions,
+              rules,
               visibility,
               tagline,
               // Paid listings are not enabled yet — all agents stay free.
@@ -126,16 +156,36 @@ export default function AgentSettingsPage() {
               slug: requestedSlug,
             })
               .then((result) => {
-                setSaved(true);
-                if (result.slug && result.slug !== requestedSlug) {
-                  setSlug(result.slug);
-                  setSlugAdjusted(true);
-                } else if (result.slug) {
-                  setSlug(result.slug);
+                if (!result.ok) {
+                  if (result.code === "duplicate_name") {
+                    setSaveError(t("agentSettings.duplicateName"));
+                  } else if (result.code === "invalid_name") {
+                    setSaveError(t("agentSettings.invalidName"));
+                  } else {
+                    setSaveError(t("agentSettings.saveError"));
+                  }
+                  return;
                 }
+                const next = result.settings;
+                setSaved(true);
+                setName(next.name);
+                setIconKey(next.iconKey);
+                setRole(next.role);
+                setGoal(next.goal);
+                setInstructions(next.instructions);
+                setRulesText(next.rules.join("\n"));
+                if (result.slugAdjusted && next.slug) {
+                  setSlug(next.slug);
+                  setSlugAdjusted(true);
+                } else if (next.slug) {
+                  setSlug(next.slug);
+                }
+                loadedNameSlug.current = { name: next.name, slug: next.slug };
                 void queryClient.invalidateQueries({ queryKey: ["agent-listing", agentId] });
                 void queryClient.invalidateQueries({ queryKey: ["agents"] });
                 void queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
+                void queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
+                void queryClient.invalidateQueries({ queryKey: ["agents", agentId, "graph"] });
               })
               .catch(() => {
                 setSaveError(t("agentSettings.saveError"));
@@ -143,6 +193,107 @@ export default function AgentSettingsPage() {
               .finally(() => setSaving(false));
           }}
         >
+          <section className="space-y-4 rounded-2xl border border-border/70 bg-background/50 p-4 md:p-5">
+            <div>
+              <h2 className="text-sm font-semibold tracking-tight">
+                {t("agentSettings.profileTitle")}
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t("agentSettings.profileHint")}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-name">{t("agentSettings.name")}</Label>
+              <Input
+                id="agent-name"
+                value={name}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setName(next);
+                  if (slugFollowsName.current) {
+                    setSlug(slugifyAgentName(next || "agent"));
+                  }
+                }}
+                placeholder={t("agentSettings.namePlaceholder")}
+                maxLength={80}
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">{t("agentSettings.nameHint")}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{t("agentSettings.icon")}</Label>
+              <div className="flex flex-wrap gap-2">
+                {AGENT_ICON_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setIconKey(key)}
+                    className={cn(
+                      "rounded-2xl border p-1.5 transition",
+                      iconKey === key
+                        ? "border-brand bg-brand/10 ring-1 ring-brand/30"
+                        : "border-border/70 hover:border-border hover:bg-foreground/[0.03]",
+                    )}
+                    aria-label={key}
+                    aria-pressed={iconKey === key}
+                  >
+                    <AgentIcon icon={key} className="size-10 rounded-xl" />
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">{t("agentSettings.iconHint")}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-role">{t("agentSettings.role")}</Label>
+              <Input
+                id="agent-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                placeholder={t("agentSettings.rolePlaceholder")}
+                maxLength={240}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-goal">{t("agentSettings.goal")}</Label>
+              <Textarea
+                id="agent-goal"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                placeholder={t("agentSettings.goalPlaceholder")}
+                className="min-h-24"
+                maxLength={4000}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-instructions">{t("agentSettings.instructions")}</Label>
+              <Textarea
+                id="agent-instructions"
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder={t("agentSettings.instructionsPlaceholder")}
+                className="min-h-36"
+                maxLength={12000}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-rules">{t("agentSettings.rules")}</Label>
+              <Textarea
+                id="agent-rules"
+                value={rulesText}
+                onChange={(e) => setRulesText(e.target.value)}
+                placeholder={t("agentSettings.rulesPlaceholder")}
+                className="min-h-28 font-mono text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">{t("agentSettings.rulesHint")}</p>
+            </div>
+          </section>
+
           <div className="space-y-1.5">
             <Label htmlFor="visibility">{t("agentSettings.visibility")}</Label>
             <DaSelect
@@ -212,10 +363,13 @@ export default function AgentSettingsPage() {
               <Input
                 id="slug"
                 value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                onBlur={() => setSlug(slugifyAgentName(slug || listing.data.name))}
+                onChange={(e) => {
+                  slugFollowsName.current = false;
+                  setSlug(e.target.value);
+                }}
+                onBlur={() => setSlug(slugifyAgentName(slug || name))}
                 className="h-8 min-w-[10rem] flex-1 border-0 bg-transparent px-0 font-mono text-xs shadow-none focus-visible:ring-0"
-                placeholder={slugifyAgentName(listing.data.name)}
+                placeholder={slugifyAgentName(name)}
                 disabled={!listing.data.published}
               />
             </div>

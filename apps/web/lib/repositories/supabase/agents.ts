@@ -47,7 +47,21 @@ export class SupabaseAgentRepository implements AgentRepository {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    let slug = preferredAgentSlug(name);
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error("invalid_name");
+    if (user) {
+      const { data: siblings } = await supabase
+        .from("agents")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .is("deleted_at", null)
+        .neq("id", agentId);
+      const clash = (siblings ?? []).some(
+        (row) => String(row.name ?? "").trim().toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (clash) throw new Error("duplicate_name");
+    }
+    let slug = preferredAgentSlug(trimmed);
     if (user) {
       slug = await nextAvailableSlug(slug, async (candidate) => {
         const { data: clash } = await supabase
@@ -63,7 +77,7 @@ export class SupabaseAgentRepository implements AgentRepository {
     }
     const { data, error } = await supabase
       .from("agents")
-      .update({ name, slug })
+      .update({ name: trimmed, slug })
       .eq("id", agentId)
       .select("*")
       .single();
