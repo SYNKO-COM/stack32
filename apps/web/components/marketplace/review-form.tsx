@@ -85,10 +85,13 @@ const REVIEW_PAGE_SIZE = 4;
 export function ReviewCarousel({
   reviews,
   agentLabel,
+  dense = false,
 }: {
   reviews: AgentReviewRow[];
   /** Optional agent name shown on overview (aggregated) cards. */
   agentLabel?: (review: AgentReviewRow) => string | undefined;
+  /** Tighter grid for half-width columns (e.g. public landing). */
+  dense?: boolean;
 }) {
   const { t } = useTranslation("common");
   const [page, setPage] = useState(0);
@@ -122,8 +125,13 @@ export function ReviewCarousel({
             <ChevronLeft className="size-4" aria-hidden="true" />
           </Button>
         ) : null}
-        <ul className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {slice.map((review) => {
+        <ul
+          className={
+            dense
+              ? "grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2"
+              : "grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4"
+          }
+        >          {slice.map((review) => {
             const label = agentLabel?.(review);
             return (
               <li

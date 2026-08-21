@@ -403,48 +403,91 @@ function PublicAgentLanding({
           </div>
         </section>
 
-        {/* Brief + Structure */}
-        <section className="grid min-h-0 gap-5 lg:grid-cols-2 lg:gap-6 xl:gap-8">
-          <div className="flex min-h-[34rem] md:min-h-[36rem] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/70 p-5 backdrop-blur-md md:p-6">
-            <div className="mb-4 flex items-start gap-3">
-              <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand/12 text-brand">
-                <BookOpen className="size-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold tracking-tight">
-                  {t("common:publicAgent.briefTitle")}
-                </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+        {/* Brief + Reviews (left) · Structure (right, full height) */}
+        <section className="grid min-h-0 gap-5 lg:grid-cols-2 lg:items-stretch lg:gap-6 xl:gap-8">
+          <div className="flex min-w-0 flex-col gap-5 lg:gap-6">
+            <div className="flex min-h-[28rem] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/70 p-5 backdrop-blur-md md:p-6">
+              <div className="mb-4 flex items-start gap-3">
+                <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand/12 text-brand">
+                  <BookOpen className="size-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold tracking-tight">
+                    {t("common:publicAgent.briefTitle")}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t("common:publicAgent.briefHint")}
+                  </p>
+                </div>
+              </div>
+
+              {briefItems.length > 0 ? (
+                <div className="flex flex-1 flex-col gap-2.5">
+                  {briefItems.map((item) => (
+                    <BriefAccordionItem
+                      key={item.id}
+                      id={`${accordionBaseId}-${item.id}`}
+                      title={item.title}
+                      icon={item.icon}
+                      open={activeBriefId === item.id}
+                      onToggle={() =>
+                        setOpenBrief(activeBriefId === item.id ? null : item.id)
+                      }
+                    >
+                      {item.body}
+                    </BriefAccordionItem>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
                   {t("common:publicAgent.briefHint")}
                 </p>
-              </div>
+              )}
             </div>
 
-            {briefItems.length > 0 ? (
-              <div className="flex flex-1 flex-col gap-2.5">
-                {briefItems.map((item) => (
-                  <BriefAccordionItem
-                    key={item.id}
-                    id={`${accordionBaseId}-${item.id}`}
-                    title={item.title}
-                    icon={item.icon}
-                    open={activeBriefId === item.id}
-                    onToggle={() =>
-                      setOpenBrief(activeBriefId === item.id ? null : item.id)
-                    }
-                  >
-                    {item.body}
-                  </BriefAccordionItem>
-                ))}
+            <div className="rounded-[1.75rem] border border-border/70 bg-background/70 p-5 backdrop-blur-md md:p-6">
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand/12 text-brand">
+                    <Star className="size-4" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-semibold tracking-tight">
+                      {t("common:publicAgent.reviewsTitle")}
+                    </h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t("common:publicAgent.reviewsHint")}
+                    </p>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t("common:publicAgent.briefHint")}
-              </p>
-            )}
+
+              <ReviewCarousel reviews={reviews.data ?? []} dense />
+
+              <div className="mt-6 border-t border-border/60 pt-5">
+                {user && !isOwner ? (
+                  <ReviewForm
+                    agentId={agent.agentId}
+                    existing={reviews.data?.find((r) => r.isMine)}
+                    onSaved={() => void reviews.refetch()}
+                  />
+                ) : !user ? (
+                  <div className="rounded-2xl border border-dashed border-border/80 bg-foreground/[0.02] p-4 text-sm text-muted-foreground">
+                    {t("common:publicAgent.signInRequired")}{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-brand underline-offset-2 hover:underline"
+                      onClick={() => goAuth("login")}
+                    >
+                      {t("common:actions.signIn")}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
 
-          <div className="flex min-h-[34rem] md:min-h-[36rem] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/70 backdrop-blur-md">
+          <div className="flex min-h-[28rem] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/70 backdrop-blur-md lg:min-h-0">
             <div className="flex items-start gap-3 border-b border-border/60 px-5 py-4 md:px-6">
               <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand/12 text-brand">
                 <Workflow className="size-4" aria-hidden="true" />
@@ -458,51 +501,9 @@ function PublicAgentLanding({
                 </p>
               </div>
             </div>
-            <div className="relative min-h-0 flex-1 bg-[radial-gradient(circle_at_1px_1px,rgba(120,120,128,0.18)_1px,transparent_0)] [background-size:18px_18px]">
+            <div className="relative min-h-[20rem] flex-1 bg-[radial-gradient(circle_at_1px_1px,rgba(120,120,128,0.18)_1px,transparent_0)] [background-size:18px_18px]">
               <PublicAgentStructurePreview agent={agent} className="absolute inset-0" />
             </div>
-          </div>
-        </section>
-
-        {/* Reviews */}
-        <section className="rounded-[1.75rem] border border-border/70 bg-background/70 p-5 backdrop-blur-md md:p-6">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand/12 text-brand">
-                <Star className="size-4" aria-hidden="true" />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold tracking-tight">
-                  {t("common:publicAgent.reviewsTitle")}
-                </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {t("common:publicAgent.reviewsHint")}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <ReviewCarousel reviews={reviews.data ?? []} />
-
-          <div className="mt-6 border-t border-border/60 pt-5">
-            {user && !isOwner ? (
-              <ReviewForm
-                agentId={agent.agentId}
-                existing={reviews.data?.find((r) => r.isMine)}
-                onSaved={() => void reviews.refetch()}
-              />
-            ) : !user ? (
-              <div className="rounded-2xl border border-dashed border-border/80 bg-foreground/[0.02] p-4 text-sm text-muted-foreground">
-                {t("common:publicAgent.signInRequired")}{" "}
-                <button
-                  type="button"
-                  className="font-medium text-brand underline-offset-2 hover:underline"
-                  onClick={() => goAuth("login")}
-                >
-                  {t("common:actions.signIn")}
-                </button>
-              </div>
-            ) : null}
           </div>
         </section>
       </div>
