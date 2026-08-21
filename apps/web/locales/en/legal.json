@@ -97,7 +97,7 @@
       },
       {
         "title": "9. Termination",
-        "body": "You may stop using the service and delete your account at any time. Cancellation of a paid subscription follows the Subscription & Sales Terms (end of the current period, no refund of amounts already paid). We may suspend or terminate accounts in case of breach of these terms, with notice where reasonably possible."
+        "body": "You may stop using the service and delete your account at any time from settings. Account deletion erases your account, your agents (including published ones), your content and related access: they do not remain available under a platform account. Anonymized technical signals may be retained to improve Stack32, as described in the Privacy Policy. Cancellation of a paid subscription follows the Subscription & Sales Terms (end of the current period, no refund of amounts already paid). We may suspend or terminate accounts in case of breach of these terms, with notice where reasonably possible."
       },
       {
         "title": "10. Governing law and disputes",
@@ -123,38 +123,42 @@
       },
       {
         "title": "4. AI processing",
-        "body": "Your prompts and connected documents are processed by AI model providers acting as processors, strictly to generate your agents' answers. We do not use your private content to train our own models."
+        "body": "Your prompts and connected documents are processed by AI model providers acting as processors, strictly to generate your agents' answers while your account is active. After account deletion, we may retain anonymized excerpts (with no identity or contact details) useful for product improvement, as described in section 7."
       },
       {
         "title": "5. Sharing",
-        "body": "Data is shared only with processors necessary to run the service (IONOS hosting, database, AI model providers, payment provider) and, if you consent, analytics (PostHog) or advertising partners (Meta, TikTok), under data-processing or platform terms. We do not sell personal data for money. Advertising pixels can count as “sharing” under some US laws — see section 11."
+        "body": "Data is shared only with processors necessary to run the service (IONOS hosting, database, AI model providers, payment provider) and, if you consent, analytics (PostHog) or advertising partners (Meta, TikTok), under data-processing or platform terms. We do not sell personal data for money. Advertising pixels can count as “sharing” under some US laws — see section 12."
       },
       {
         "title": "6. Retention",
-        "body": "Account data is kept while your account is active, then deleted or anonymized within the legal limitation periods. You can request deletion at any time."
+        "body": "Account data is kept while your account is active. On account deletion, identifying personal data and your agents are erased (see section 7). Some data may be kept longer when a legal obligation requires it (e.g. billing)."
       },
       {
-        "title": "7. Your rights",
+        "title": "7. Account deletion — what is erased / what may be retained",
+        "body": "When you delete your account: (a) we erase your profile, credentials, agents (published or not), account-linked conversations, stored files, connections, secrets, favorites, product-side subscriptions and any related public access — agents do not remain available under @stack32 or any other platform account; (b) we may retain, in anonymized or pseudonymized form and with no link to your identity, signals useful to improve Stack32: prompts / technical instructions, agent structures and briefs (role, goal, instructions, rules, tools without secrets), execution error patterns, and usage aggregates. Legal basis: legitimate interest in making the product more reliable. These archives are not used to re-identify you or to reactivate your account."
+      },
+      {
+        "title": "8. Your rights",
         "body": "You have rights of access, rectification, erasure, portability, restriction and objection, and the right to lodge a complaint with the CNIL (French supervisory authority). To exercise your rights, contact {{contactEmail}}."
       },
       {
-        "title": "8. Security",
+        "title": "9. Security",
         "body": "We apply appropriate technical and organizational measures: encryption in transit, access controls, isolation of customer data and least-privilege access."
       },
       {
-        "title": "9. Transfers outside the EU",
+        "title": "10. Transfers outside the EU",
         "body": "Some processors may be located outside the European Union. In that case, transfers are protected by appropriate safeguards such as the European Commission's standard contractual clauses."
       },
       {
-        "title": "10. Cookies and similar technologies",
+        "title": "11. Cookies and similar technologies",
         "body": "Strictly necessary cookies (session, security, language, theme, consent record) run without extra consent because the service cannot work without them. Analytics (PostHog, including session replay with form fields masked) and advertising pixels (Meta, TikTok) load only after you accept them in the cookie banner. You can accept all, reject all, or customise categories, and change your mind at any time from the footer or the cookie policy. See the Cookie policy for the full list."
       },
       {
-        "title": "11. Rights in the United States (CCPA/CPRA)",
+        "title": "12. Rights in the United States (CCPA/CPRA)",
         "body": "If you are a California resident (and, where applicable, a resident of other US states with similar laws), you may request access, correction, deletion, and information about data we collected. We do not sell personal information for money. Advertising pixels, if you enable them, can qualify as “sharing” for cross-context behavioural advertising. Use “Do not sell or share my data” in the footer, or reject marketing cookies, to opt out. We honour Global Privacy Control (GPC) as an opt-out of advertising cookies. To exercise other rights, contact {{contactEmail}}."
       },
       {
-        "title": "12. Rights in Canada (PIPEDA and Quebec Law 25)",
+        "title": "13. Rights in Canada (PIPEDA and Quebec Law 25)",
         "body": "If you are in Canada, you may request access, correction, and withdrawal of consent for optional processing, and you may complain to the Office of the Privacy Commissioner of Canada or, in Quebec, the Commission d’accès à l’information. Optional analytics and advertising cookies are off until you opt in. To exercise your rights, contact {{contactEmail}}."
       }
     ]

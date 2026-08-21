@@ -97,7 +97,7 @@
       },
       {
         "title": "9. Résiliation",
-        "body": "Vous pouvez cesser d'utiliser le service et supprimer votre compte à tout moment. La résiliation d'un abonnement payant suit les règles des Conditions d'abonnement et de vente (fin de période en cours, sans remboursement des sommes déjà versées). Nous pouvons suspendre ou résilier un compte en cas de manquement aux présentes conditions, avec préavis lorsque cela est raisonnablement possible."
+        "body": "Vous pouvez cesser d'utiliser le service et supprimer votre compte à tout moment depuis les paramètres. La suppression du compte efface votre compte, vos agents (y compris ceux publiés), vos contenus et l'accès associé : ils ne restent pas disponibles sous un compte plateforme. Des signaux techniques anonymisés peuvent être conservés pour améliorer Stack32, dans les conditions décrites dans la Politique de confidentialité. La résiliation d'un abonnement payant suit les règles des Conditions d'abonnement et de vente (fin de période en cours, sans remboursement des sommes déjà versées). Nous pouvons suspendre ou résilier un compte en cas de manquement aux présentes conditions, avec préavis lorsque cela est raisonnablement possible."
       },
       {
         "title": "10. Droit applicable et litiges",
@@ -123,38 +123,42 @@
       },
       {
         "title": "4. Traitement par l'IA",
-        "body": "Vos prompts et documents connectés sont traités par des fournisseurs de modèles d'IA agissant comme sous-traitants, strictement pour générer les réponses de vos agents. Nous n'utilisons pas vos contenus privés pour entraîner nos propres modèles."
+        "body": "Vos prompts et documents connectés sont traités par des fournisseurs de modèles d'IA agissant comme sous-traitants, strictement pour générer les réponses de vos agents pendant que votre compte est actif. Après suppression du compte, nous pouvons conserver des extraits anonymisés (sans identité ni coordonnées) utiles à l'amélioration du produit, comme décrit à la section 7."
       },
       {
         "title": "5. Partage",
-        "body": "Les données ne sont partagées qu'avec les sous-traitants nécessaires au fonctionnement du service (hébergement IONOS, base de données, fournisseurs de modèles d'IA, prestataire de paiement) et, si vous y consentez, la mesure d’audience (PostHog) ou des partenaires publicitaires (Meta, TikTok), dans le cadre d’accords de sous-traitance ou des conditions de ces plateformes. Nous ne vendons pas de données personnelles contre paiement. Les pixels publicitaires peuvent constituer un « partage » selon certaines lois américaines — voir la section 11."
+        "body": "Les données ne sont partagées qu'avec les sous-traitants nécessaires au fonctionnement du service (hébergement IONOS, base de données, fournisseurs de modèles d'IA, prestataire de paiement) et, si vous y consentez, la mesure d’audience (PostHog) ou des partenaires publicitaires (Meta, TikTok), dans le cadre d’accords de sous-traitance ou des conditions de ces plateformes. Nous ne vendons pas de données personnelles contre paiement. Les pixels publicitaires peuvent constituer un « partage » selon certaines lois américaines — voir la section 12."
       },
       {
         "title": "6. Durées de conservation",
-        "body": "Les données de compte sont conservées tant que votre compte est actif, puis supprimées ou anonymisées dans les délais légaux de prescription. Vous pouvez demander la suppression à tout moment."
+        "body": "Les données de compte sont conservées tant que votre compte est actif. À la suppression du compte, les données personnelles identifiantes et vos agents sont effacés (voir section 7). Certaines données peuvent être conservées plus longtemps lorsqu'une obligation légale l'impose (par ex. facturation)."
       },
       {
-        "title": "7. Vos droits",
+        "title": "7. Suppression de compte — ce qui est effacé / ce qui peut être conservé",
+        "body": "Lorsque vous supprimez votre compte : (a) nous effaçons votre profil, identifiants, agents (publiés ou non), conversations liées au compte, fichiers stockés, connexions, secrets, favoris, abonnements côté produit et tout accès public associé — les agents ne restent pas disponibles sous @stack32 ni sous un autre compte plateforme ; (b) nous pouvons conserver, de façon anonymisée ou pseudonymisée et sans lien avec votre identité, des signaux utiles à l'amélioration de Stack32 : prompts / consignes techniques, structures et briefs d'agents (rôle, objectif, instructions, règles, outils sans secrets), motifs d'erreurs d'exécution, et agrégats d'usage. Base légale : intérêt légitime à fiabiliser et enrichir le produit. Ces archives ne sont pas utilisées pour vous réidentifier ni pour réactiver votre compte."
+      },
+      {
+        "title": "8. Vos droits",
         "body": "Vous disposez des droits d'accès, de rectification, d'effacement, de portabilité, de limitation et d'opposition, ainsi que du droit d'introduire une réclamation auprès de la CNIL. Pour exercer vos droits, contactez {{contactEmail}}."
       },
       {
-        "title": "8. Sécurité",
+        "title": "9. Sécurité",
         "body": "Nous appliquons des mesures techniques et organisationnelles appropriées : chiffrement en transit, contrôles d'accès, isolation des données clients et principe du moindre privilège."
       },
       {
-        "title": "9. Transferts hors UE",
+        "title": "10. Transferts hors UE",
         "body": "Certains sous-traitants peuvent être situés en dehors de l'Union européenne. Dans ce cas, les transferts sont encadrés par des garanties appropriées telles que les clauses contractuelles types de la Commission européenne."
       },
       {
-        "title": "10. Cookies et technologies similaires",
+        "title": "11. Cookies et technologies similaires",
         "body": "Les cookies strictement nécessaires (session, sécurité, langue, thème, enregistrement du consentement) fonctionnent sans consentement supplémentaire, le service ne pouvant pas marcher sans eux. La mesure d’audience (PostHog, y compris le replay de session avec champs de formulaire masqués) et les pixels publicitaires (Meta, TikTok) ne se chargent qu’après acceptation dans le bandeau. Vous pouvez tout accepter, tout refuser ou personnaliser les catégories, et changer d’avis à tout moment depuis le pied de page ou la politique de cookies. La liste complète figure dans la politique de cookies."
       },
       {
-        "title": "11. Droits aux États-Unis (CCPA/CPRA)",
+        "title": "12. Droits aux États-Unis (CCPA/CPRA)",
         "body": "Si vous résidez en Californie (et, le cas échéant, dans d’autres États américains disposant de lois similaires), vous pouvez demander l’accès, la correction, la suppression et des informations sur les données collectées. Nous ne vendons pas de données personnelles contre paiement. Les pixels publicitaires, si vous les activez, peuvent constituer un « partage » au sens de la publicité comportementale inter-contextes. Utilisez « Ne pas vendre ni partager mes données » dans le pied de page, ou refusez les cookies marketing, pour vous y opposer. Nous traitons le signal Global Privacy Control (GPC) comme un refus des cookies publicitaires. Pour les autres droits, contactez {{contactEmail}}."
       },
       {
-        "title": "12. Droits au Canada (LPRPDE et Loi 25 du Québec)",
+        "title": "13. Droits au Canada (LPRPDE et Loi 25 du Québec)",
         "body": "Si vous êtes au Canada, vous pouvez demander l’accès, la correction et le retrait du consentement pour les traitements optionnels, et introduire une plainte auprès du Commissariat à la protection de la vie privée du Canada ou, au Québec, de la Commission d’accès à l’information. Les cookies optionnels de mesure et de publicité restent désactivés tant que vous n’avez pas opté pour leur activation. Pour exercer vos droits, contactez {{contactEmail}}."
       }
     ]

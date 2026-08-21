@@ -1,5 +1,6 @@
-// Deletes the authenticated caller's account after reclaiming published agents
-// to the platform (@stack32). Invoked from the web app Settings dialog.
+// Deletes the authenticated caller's account. All agents and personal data are
+// removed (auth.users cascade). Before that, prepare_account_deletion archives
+// anonymized product-learning signals (prompts, briefs, errors, usage counts).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -10,9 +11,9 @@ const corsHeaders: Record<string, string> = {
 };
 
 type PrepareResult = {
-  platformUserId?: string;
-  transferredAgentIds?: string[];
-  transferredCount?: number;
+  archivedCount?: number;
+  agentCount?: number;
+  mode?: string;
 };
 
 Deno.serve(async (req) => {
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // 1) Reclaim published agents → @stack32 (atomic SQL).
+  // 1) Unpublish agents + archive anonymized learning signals.
   const { data: prepareData, error: prepareError } = await admin.rpc(
     "prepare_account_deletion",
     { p_user_id: user.id },
@@ -70,29 +71,11 @@ Deno.serve(async (req) => {
   }
 
   const prepared = (prepareData ?? {}) as PrepareResult;
-  const platformUserId = prepared.platformUserId;
-  const transferredAgentIds = prepared.transferredAgentIds ?? [];
 
-  // 2) Move storage for transferred agents, then wipe the rest of the user tree.
+  // 2) Wipe the caller's storage trees (no transfer — agents are deleted).
   try {
-    if (platformUserId && transferredAgentIds.length > 0) {
-      for (const agentId of transferredAgentIds) {
-        await moveStoragePrefix(
-          admin,
-          "agent-knowledge",
-          `${user.id}/${agentId}`,
-          `${platformUserId}/${agentId}`,
-        );
-        await moveStoragePrefix(
-          admin,
-          "attachments",
-          `${user.id}/${agentId}`,
-          `${platformUserId}/${agentId}`,
-        );
-      }
-    }
-
     await emptyStoragePrefix(admin, "avatars", user.id);
+    await emptyStoragePrefix(admin, "agent-avatars", user.id);
     await emptyStoragePrefix(admin, "agent-knowledge", user.id);
     await emptyStoragePrefix(admin, "attachments", user.id);
   } catch (storageError) {
@@ -100,7 +83,7 @@ Deno.serve(async (req) => {
     // Continue — auth delete + DB cascade is the source of truth.
   }
 
-  // 3) Hard-delete auth user → cascades remaining personal rows.
+  // 3) Hard-delete auth user → cascades agents and remaining personal rows.
   const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
   if (deleteError) {
     console.error("[delete-account] auth delete failed", deleteError);
@@ -112,7 +95,9 @@ Deno.serve(async (req) => {
 
   return json({
     ok: true,
-    transferredCount: prepared.transferredCount ?? transferredAgentIds.length,
+    mode: prepared.mode ?? "full_purge",
+    agentCount: prepared.agentCount ?? 0,
+    archivedCount: prepared.archivedCount ?? 0,
   });
 });
 
@@ -164,23 +149,6 @@ async function emptyStoragePrefix(
     const { error } = await admin.storage.from(bucket).remove(chunk);
     if (error) {
       console.error(`[delete-account] remove ${bucket}/${prefix}`, error);
-    }
-  }
-}
-
-async function moveStoragePrefix(
-  admin: ReturnType<typeof createClient>,
-  bucket: string,
-  fromPrefix: string,
-  toPrefix: string,
-): Promise<void> {
-  const paths = await listAllFiles(admin, bucket, fromPrefix);
-  for (const path of paths) {
-    if (!path.startsWith(fromPrefix)) continue;
-    const dest = `${toPrefix}${path.slice(fromPrefix.length)}`;
-    const { error } = await admin.storage.from(bucket).move(path, dest);
-    if (error) {
-      console.error(`[delete-account] move ${bucket}/${path} → ${dest}`, error);
     }
   }
 }

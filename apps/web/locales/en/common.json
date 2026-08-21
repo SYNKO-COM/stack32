@@ -270,7 +270,7 @@
     "dangerZone": "Danger zone",
     "deleteAccount": "Delete my account",
     "deleteConfirmTitle": "Delete your account?",
-    "deleteConfirmBody": "Are you sure you want to delete your account? This cannot be undone. Your personal data will be erased. Agents you published will remain available under @stack32.",
+    "deleteConfirmBody": "Are you sure you want to delete your account? This cannot be undone. All of your personal data and agents will be erased and will no longer be accessible.",
     "deleteConfirmAction": "Yes, delete my account",
     "deleting": "Deleting…",
     "deleteError": "Could not delete the account. Try again or contact support."

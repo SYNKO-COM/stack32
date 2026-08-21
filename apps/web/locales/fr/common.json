@@ -270,7 +270,7 @@
     "dangerZone": "Zone de danger",
     "deleteAccount": "Supprimer mon compte",
     "deleteConfirmTitle": "Supprimer votre compte ?",
-    "deleteConfirmBody": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est définitive. Vos données personnelles seront effacées. Les agents que vous avez publiés resteront disponibles sous @stack32.",
+    "deleteConfirmBody": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est définitive. Toutes vos données personnelles et vos agents seront effacés et ne seront plus accessibles.",
     "deleteConfirmAction": "Oui, supprimer mon compte",
     "deleting": "Suppression…",
     "deleteError": "Impossible de supprimer le compte. Réessayez ou contactez le support."
