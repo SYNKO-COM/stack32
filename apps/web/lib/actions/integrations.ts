@@ -448,6 +448,7 @@ export async function getIntegrationTriggerComponent(componentId: string): Promi
     required: boolean;
     description?: string;
     type?: string;
+    remote_options?: boolean;
   }>;
 }> {
   if (currentAiExecutionMode() !== "agent-service" || !componentId) {
@@ -473,8 +474,28 @@ export async function getIntegrationTriggerComponent(componentId: string): Promi
       required: p.required === true,
       description: typeof p.description === "string" ? p.description : undefined,
       type: typeof p.type === "string" ? p.type : undefined,
+      remote_options: p.remote_options === true || p.remoteOptions === true,
     })).filter((p) => p.name),
   };
+}
+
+export async function getTriggerDynamicOptions(input: {
+  componentId: string;
+  prop: string;
+  agentId?: string;
+  appId?: string;
+}): Promise<{ options: Array<{ value: unknown; label?: string }> }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { options: [] };
+  }
+  const accessToken = await requireAccessToken();
+  const params = new URLSearchParams({ prop: input.prop });
+  if (input.agentId) params.set("agent_id", input.agentId);
+  if (input.appId) params.set("app_id", input.appId);
+  return agentServiceFetch(
+    `/v1/integrations/triggers/${encodeURIComponent(input.componentId)}/options?${params}`,
+    { method: "GET", accessToken },
+  );
 }
 
 export async function getAgentReadiness(agentId: string): Promise<{

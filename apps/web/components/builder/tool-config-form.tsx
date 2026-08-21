@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
+import {
+  PipedreamPropFields,
+  type PipedreamPropDef,
+} from "@/components/builder/pipedream-prop-fields";
 import { Button } from "@/components/ui/button";
+import { DaSelect } from "@/components/ui/da-select";
+import { Label } from "@/components/ui/label";
+import { useTranslation } from "@/hooks/use-translation";
 import {
   bindIntegrationConnection,
   getToolConfig,
@@ -16,6 +23,13 @@ type FieldSchema = {
   description?: string;
   enum?: unknown[];
   default?: unknown;
+  title?: string;
+};
+
+type HintRow = {
+  keys?: string[];
+  label?: string;
+  why?: string;
 };
 
 export function ToolConfigForm({
@@ -29,6 +43,7 @@ export function ToolConfigForm({
   appId?: string;
   onSaved?: () => void;
 }) {
+  const { t } = useTranslation("structure");
   const [pending, startTransition] = useTransition();
   const [values, setValues] = useState<Record<string, string>>({});
   const [fields, setFields] = useState<Record<string, FieldSchema>>({});
@@ -36,13 +51,18 @@ export function ToolConfigForm({
   const [remoteOptions, setRemoteOptions] = useState<
     Record<string, Array<{ value: string; label: string }>>
   >({});
+  const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
   const [accounts, setAccounts] = useState<
     Array<{ connectionId: string; accountEmail?: string | null; appId?: string }>
   >([]);
   const [connectionId, setConnectionId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [hintMeta, setHintMeta] = useState<Record<string, { label?: string; why?: string }>>(
+    {},
+  );
   const [hintKeys, setHintKeys] = useState<string[]>([]);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,16 +105,20 @@ export function ToolConfigForm({
             : "";
         setConnectionId(storedConn || acctRows[0]?.connectionId || "");
 
-        // Keep hint keys for required markers only — never surface builder/tech copy in UI.
         const fromHints: string[] = [];
+        const meta: Record<string, { label?: string; why?: string }> = {};
         const hints = Array.isArray(appHint?.required_static_hints)
-          ? appHint.required_static_hints
+          ? (appHint.required_static_hints as HintRow[])
           : [];
         for (const h of hints) {
-          if (h && typeof h === "object" && Array.isArray((h as { keys?: unknown }).keys)) {
-            for (const k of (h as { keys: unknown[] }).keys) {
-              if (typeof k === "string") fromHints.push(k);
-            }
+          if (!h || typeof h !== "object" || !Array.isArray(h.keys)) continue;
+          for (const k of h.keys) {
+            if (typeof k !== "string") continue;
+            fromHints.push(k);
+            meta[k] = {
+              label: typeof h.label === "string" ? h.label : undefined,
+              why: typeof h.why === "string" ? h.why : undefined,
+            };
           }
         }
         for (const pb of playbooks) {
@@ -106,125 +130,145 @@ export function ToolConfigForm({
           }
         }
         setHintKeys([...new Set(fromHints)]);
+        setHintMeta(meta);
         setLoaded(true);
-        for (const [key, meta] of Object.entries(props)) {
-          if (meta.enum && meta.enum.length > 0) continue;
-          void getToolDynamicOptions({ toolId, prop: key, agentId }).then((res) => {
-            if (cancelled) return;
-            setRemoteOptions((prev) => ({
-              ...prev,
-              [key]: (res.options ?? []).map((o) => ({
-                value: String(o.value),
-                label: String(o.label ?? o.value),
-              })),
-            }));
-          });
+
+        const loading: Record<string, boolean> = {};
+        for (const [key, fieldMeta] of Object.entries(props)) {
+          if (fieldMeta.enum && fieldMeta.enum.length > 0) continue;
+          loading[key] = true;
+        }
+        setLoadingOptions(loading);
+        for (const key of Object.keys(loading)) {
+          void getToolDynamicOptions({ toolId, prop: key, agentId })
+            .then((res) => {
+              if (cancelled) return;
+              setRemoteOptions((prev) => ({
+                ...prev,
+                [key]: (res.options ?? []).map((o) => ({
+                  value: String(o.value),
+                  label: String(o.label ?? o.value),
+                })),
+              }));
+            })
+            .finally(() => {
+              if (cancelled) return;
+              setLoadingOptions((prev) => ({ ...prev, [key]: false }));
+            });
         }
       } catch {
-        if (!cancelled) setError("Could not load tool configuration.");
+        if (!cancelled) setError(t("panel.toolConfigLoadError"));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [agentId, toolId, appId]);
+  }, [agentId, toolId, appId, t]);
+
+  const orderedProps = useMemo(() => {
+    const keys = Object.keys(fields);
+    const score = (key: string) => {
+      if (required.includes(key)) return 0;
+      if (hintKeys.includes(key)) return 1;
+      return 2;
+    };
+    return [...keys].sort((a, b) => score(a) - score(b) || a.localeCompare(b));
+  }, [fields, required, hintKeys]);
+
+  const propDefs: PipedreamPropDef[] = useMemo(
+    () =>
+      orderedProps.map((key) => {
+        const meta = fields[key] ?? {};
+        return {
+          name: key,
+          label: typeof meta.title === "string" ? meta.title : undefined,
+          type: meta.type,
+          required: required.includes(key) || hintKeys.includes(key),
+          description: meta.description,
+          enum: meta.enum,
+          options: remoteOptions[key],
+          optionsLoading: Boolean(loadingOptions[key]),
+          hintLabel: hintMeta[key]?.label,
+          hintWhy: hintMeta[key]?.why,
+        };
+      }),
+    [
+      orderedProps,
+      fields,
+      required,
+      hintKeys,
+      remoteOptions,
+      loadingOptions,
+      hintMeta,
+    ],
+  );
 
   if (!loaded && !error) {
-    return <p className="text-xs text-muted-foreground">Loading configuration…</p>;
+    return <p className="text-xs text-muted-foreground">{t("panel.toolConfigLoading")}</p>;
   }
 
-  const hasFields = Object.keys(fields).length > 0;
+  const hasFields = propDefs.length > 0;
   const hasAccounts = accounts.length > 0;
 
   if (!hasFields && !hasAccounts) {
     return (
-      <p className="text-xs text-muted-foreground">
-        No extra configuration required for this tool.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("panel.toolConfigEmpty")}</p>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {hasAccounts ? (
-        <label className="block space-y-1 text-xs">
-          <span className="font-medium text-foreground">Account</span>
-          <select
-            className="w-full rounded-md border border-border bg-background px-2 py-1.5"
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">{t("panel.toolConfigAccount")}</Label>
+          <p className="text-[11px] text-muted-foreground">
+            {t("panel.toolConfigAccountHint")}
+          </p>
+          <DaSelect
             value={connectionId}
-            onChange={(e) => setConnectionId(e.target.value)}
-          >
-            <option value="">Select account…</option>
-            {accounts.map((a) => (
-              <option key={a.connectionId} value={a.connectionId}>
-                {a.accountEmail || a.appId || a.connectionId.slice(0, 8)}
-              </option>
-            ))}
-          </select>
-        </label>
+            searchable={accounts.length > 4}
+            placeholder={t("panel.toolConfigAccountPlaceholder")}
+            options={accounts.map((a) => ({
+              value: a.connectionId,
+              label: a.accountEmail || a.appId || a.connectionId.slice(0, 8),
+            }))}
+            onChange={setConnectionId}
+          />
+        </div>
       ) : null}
 
-      {Object.entries(fields).map(([key, meta]) => {
-        const options =
-          (meta.enum ?? []).map((v) => ({ value: String(v), label: String(v) })) ||
-          remoteOptions[key] ||
-          [];
-        const remote = remoteOptions[key] ?? [];
-        const selectOptions = options.length > 0 ? options : remote;
-        return (
-          <label key={key} className="block space-y-1 text-xs">
-            <span className="font-medium text-foreground">
-              {key}
-              {required.includes(key) || hintKeys.includes(key) ? " *" : ""}
-            </span>
-            {meta.description ? (
-              <span className="block text-muted-foreground">{meta.description}</span>
-            ) : null}
-            {selectOptions.length > 0 ? (
-              <select
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5"
-                value={values[key] ?? ""}
-                onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-              >
-                <option value="">Select…</option>
-                {selectOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            ) : meta.type === "boolean" ? (
-              <input
-                type="checkbox"
-                checked={values[key] === "true"}
-                onChange={(e) =>
-                  setValues((v) => ({ ...v, [key]: e.target.checked ? "true" : "false" }))
-                }
-              />
-            ) : (
-              <input
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5"
-                value={values[key] ?? ""}
-                onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-              />
-            )}
-          </label>
-        );
-      })}
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <PipedreamPropFields
+        props={propDefs}
+        values={values}
+        disabled={pending}
+        selectPlaceholder={t("panel.toolConfigSelect")}
+        searchPlaceholder={t("panel.toolConfigSearch")}
+        onChange={(name, value) => {
+          setSaved(false);
+          setValues((prev) => ({ ...prev, [name]: value }));
+        }}
+      />
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {saved ? (
+        <p className="text-sm text-emerald-700 dark:text-emerald-300">{t("panel.saved")}</p>
+      ) : null}
+
       <Button
-        size="sm"
+        type="button"
         disabled={pending}
         onClick={() => {
           setError(null);
+          setSaved(false);
           startTransition(async () => {
             try {
               const payload: Record<string, unknown> = {};
               for (const [k, v] of Object.entries(values)) {
                 if (v === "") continue;
                 if (fields[k]?.type === "boolean") payload[k] = v === "true";
-                else if (fields[k]?.type === "integer") payload[k] = Number(v);
-                else payload[k] = v;
+                else if (fields[k]?.type === "integer" || fields[k]?.type === "number") {
+                  payload[k] = Number(v);
+                } else payload[k] = v;
               }
               if (connectionId) {
                 await bindIntegrationConnection({
@@ -233,20 +277,16 @@ export function ToolConfigForm({
                   toolIds: [toolId],
                 });
               }
-              await saveToolConfig(
-                agentId,
-                toolId,
-                payload,
-                connectionId || undefined,
-              );
+              await saveToolConfig(agentId, toolId, payload, connectionId || undefined);
+              setSaved(true);
               onSaved?.();
             } catch {
-              setError("Could not save configuration.");
+              setError(t("panel.toolConfigSaveError"));
             }
           });
         }}
       >
-        {pending ? "Saving…" : "Save configuration"}
+        {pending ? t("panel.saving") : t("panel.save")}
       </Button>
     </div>
   );

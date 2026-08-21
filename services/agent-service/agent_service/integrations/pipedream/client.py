@@ -387,17 +387,24 @@ class PipedreamClient:
         }
         if version:
             body["version"] = version
-        data = await self._request(
-            "POST",
+        # Actions and triggers share the same Connect configure shape; try actions
+        # first, then components (triggers / sources).
+        for path in (
             f"/connect/{self._project_id()}/actions/configure",
-            json=body,
-        )
-        if not data:
-            return []
-        if isinstance(data, list):
-            return data
-        options = data.get("options") or data.get("data") or data.get("stringOptions") or []
-        return options if isinstance(options, list) else []
+            f"/connect/{self._project_id()}/components/configure",
+        ):
+            data = await self._request("POST", path, json=body)
+            if not data:
+                continue
+            if isinstance(data, list) and data:
+                return data
+            if isinstance(data, dict):
+                options = (
+                    data.get("options") or data.get("data") or data.get("stringOptions") or []
+                )
+                if isinstance(options, list) and options:
+                    return options
+        return []
 
     async def list_accounts(
         self, *, external_user_id: str, app: str | None = None, include_credentials: bool = False

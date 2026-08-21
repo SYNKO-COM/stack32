@@ -8,8 +8,8 @@
       "auth_prop_guess": "notion",
       "summary": "Notion Connect actions usually operate on an existing page/database — creation of arbitrary pages is limited; prefer update/append/comment on a configured page.",
       "required_static_hints": [
-        {"keys": ["pageId", "page_id", "parentPageId"], "label": "Target page", "why": "Most write tools need a page (or database) the connected workspace can edit."},
-        {"keys": ["databaseId", "database_id"], "label": "Database", "why": "Query/create-row style actions need a database id."}
+        {"keys": ["pageId", "page_id", "parentPageId"], "label": "Page Notion", "why": "La page que l’agent doit lire ou mettre à jour."},
+        {"keys": ["databaseId", "database_id"], "label": "Base Notion", "why": "La base (tableau) Notion concernée."}
       ],
       "builder_guidance": "When adding Notion tools, ask the user to pick a page or database in Structure after Connect. Do not assume blank-workspace page creation works for every action."
     },
@@ -17,7 +17,7 @@
       "auth_prop_guess": "slack",
       "summary": "Messaging requires a channel (or user) destination in addition to account connection.",
       "required_static_hints": [
-        {"keys": ["channel", "channelId", "conversation"], "label": "Channel", "why": "Send-message actions need a channel ID or name the bot can post to."}
+        {"keys": ["channel", "channelId", "conversation"], "label": "Canal Slack", "why": "Le canal où l’agent peut écrire ou lire."}
       ],
       "builder_guidance": "After Slack Connect, prompt for default channel in tool config. Prefer remoteOptions for channel pickers."
     },
@@ -25,7 +25,7 @@
       "auth_prop_guess": "slack",
       "summary": "Slack v2 app slug — same channel requirements as slack.",
       "required_static_hints": [
-        {"keys": ["channel", "channelId", "conversation"], "label": "Channel", "why": "Channel required for posts."}
+        {"keys": ["channel", "channelId", "conversation"], "label": "Canal Slack", "why": "Le canal où l’agent peut écrire ou lire."}
       ],
       "builder_guidance": "Treat like slack; bind channel in tool_config."
     },
@@ -33,7 +33,7 @@
       "auth_prop_guess": "discord",
       "summary": "Bot posts need a guild channel; invite the bot with correct permissions.",
       "required_static_hints": [
-        {"keys": ["channelId", "channel", "channel_id"], "label": "Channel", "why": "Message actions require a channel the bot can access."}
+        {"keys": ["channelId", "channel", "channel_id"], "label": "Canal Discord", "why": "Le salon où le bot peut écrire."}
       ],
       "builder_guidance": "Surface channel picker after Connect; warn about missing bot permissions."
     },
@@ -41,7 +41,7 @@
       "auth_prop_guess": "googleCalendar",
       "summary": "Create-event expects eventStartDate/eventEndDate strings (or quick-add text), not Google API start/end objects, when using Pipedream actions.",
       "required_static_hints": [
-        {"keys": ["calendarId"], "label": "Calendar", "why": "Defaults to primary; allow override when the user has multiple calendars."}
+        {"keys": ["calendarId"], "label": "Agenda", "why": "Quel calendrier Google l’agent doit utiliser (souvent « principal »)."}
       ],
       "builder_guidance": "Prefer native calendar_* tools with Pipedream OAuth fallback. Never use slug google_calendar as the auth prop key."
     },
@@ -55,8 +55,8 @@
       "auth_prop_guess": "canva",
       "summary": "canva-create-design uses reloadProps: designType preset|custom then dynamic name/width/height. Must reload props and pass dynamic_props_id.",
       "required_static_hints": [
-        {"keys": ["designType"], "label": "Design type", "why": "preset vs custom unlocks name vs width/height."},
-        {"keys": ["name"], "label": "Preset name", "why": "When designType=preset: doc|presentation|whiteboard|email."}
+        {"keys": ["designType"], "label": "Type de design", "why": "Modèle prêt à l’emploi, ou taille personnalisée."},
+        {"keys": ["name"], "label": "Modèle Canva", "why": "Quel format (document, présentation, e-mail…)."}
       ],
       "builder_guidance": "Default designType=preset and name=doc if the model omits them; always reload dynamic props before run."
     },
@@ -64,22 +64,26 @@
       "auth_prop_guess": "stripe",
       "summary": "Many Stripe actions are account-scoped; Connect accounts / Stripe Connect platforms may need account or customer ids.",
       "required_static_hints": [
-        {"keys": ["customer", "customerId", "account", "stripeAccount"], "label": "Customer / connected account", "why": "Charges, invoices, and Connect operations often need a customer or connected account id."}
+        {"keys": ["customer", "customerId", "account", "stripeAccount"], "label": "Client ou compte Stripe", "why": "Le client ou le compte Connect concerné par l’opération."}
       ],
       "builder_guidance": "After Stripe Connect, inspect the action schema for customer/account props and mark them static when the agent always uses one account."
     },
     "hubspot": {
       "auth_prop_guess": "hubspot",
       "summary": "CRM writes need object type + properties; association ids often required.",
-      "required_static_hints": [],
-      "builder_guidance": "Prefer remoteOptions for owners/pipelines; keep property maps in tool_config when stable."
+      "required_static_hints": [
+        {"keys": ["inboxId"], "label": "Boîte de réception", "why": "Quelle boîte HubSpot (inbox) l’agent doit utiliser pour les messages."},
+        {"keys": ["channelId"], "label": "Canal", "why": "Le canal de messagerie HubSpot concerné."},
+        {"keys": ["threadId"], "label": "Fil de discussion", "why": "La conversation précise dans la boîte (si l’agent doit répondre à un fil)."}
+      ],
+      "builder_guidance": "Prefer remoteOptions for owners/pipelines; keep property maps in tool_config when stable. Ask which inbox/channel the agent should use."
     },
     "airtable": {
       "auth_prop_guess": "airtable",
       "summary": "Base + table (+ optional view) are almost always required before row ops.",
       "required_static_hints": [
-        {"keys": ["baseId", "base"], "label": "Base", "why": "Airtable bases are the top-level container."},
-        {"keys": ["tableId", "table"], "label": "Table", "why": "Row create/update need a table."}
+        {"keys": ["baseId", "base"], "label": "Base Airtable", "why": "L’espace Airtable (base) où lire ou écrire."},
+        {"keys": ["tableId", "table"], "label": "Table", "why": "La table (feuille) dans cette base."}
       ],
       "builder_guidance": "Chain remoteOptions: base → table → fields. Treat as reloadProps-heavy."
     },
@@ -87,9 +91,14 @@
       "auth_prop_guess": "googleSheets",
       "summary": "Classic dynamic-props example: spreadsheet then worksheet then headers/columns; requires dynamic_props_id.",
       "required_static_hints": [
-        {"keys": ["sheetId", "spreadsheetId"], "label": "Spreadsheet", "why": "First selection before worksheet/columns."}
+        {"keys": ["drive", "driveId"], "label": "Drive", "why": "Mon Drive, ou un Drive partagé de l’équipe."},
+        {"keys": ["sheetId", "spreadsheetId"], "label": "Fichier Google Sheets", "why": "Le classeur (fichier) que l’agent doit utiliser."},
+        {"keys": ["worksheetId", "worksheetIds"], "label": "Feuille", "why": "L’onglet à l’intérieur du fichier (ex. Feuille 1)."},
+        {"keys": ["hasHeaders"], "label": "La première ligne contient des titres", "why": "Oui si la ligne du haut nomme les colonnes."},
+        {"keys": ["headerRowNumber"], "label": "Ligne des titres", "why": "Numéro de la ligne qui contient les noms de colonnes (souvent 1)."},
+        {"keys": ["watchDrive"], "label": "Surveiller tout le Drive", "why": "Oui = réagir aux changements dans le Drive entier."}
       ],
-      "builder_guidance": "Always reload props after sheetId; never drop dynamic_props_id."
+      "builder_guidance": "Always reload props after sheetId; never drop dynamic_props_id. Prefer a specific spreadsheet + worksheet for the agent goal."
     },
     "google_docs": {
       "auth_prop_guess": "googleDocs",

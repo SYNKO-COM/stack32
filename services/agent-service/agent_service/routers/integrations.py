@@ -380,6 +380,72 @@ async def get_integration_trigger(
     }
 
 
+@router.get("/integrations/triggers/{component_id}/options")
+async def trigger_dynamic_options(
+    component_id: str,
+    user: CurrentUser,
+    prop: str = Query(..., max_length=128),
+    agent_id: str | None = Query(default=None),
+    app_id: str | None = Query(default=None, max_length=128),
+) -> dict[str, Any]:
+    """Remote options for a trigger / source prop (same Connect configure API)."""
+    client = PipedreamClient()
+    configured: dict[str, Any] = {}
+    if agent_id and app_id:
+        try:
+            from agent_service.connections.manager import ConnectionManager
+            from agent_service.integrations.pipedream.knowledge import hint_for_app
+            from agent_service.integrations.pipedream.accounts import (
+                _apps_equivalent,
+            )
+
+            mgr = ConnectionManager()
+            connections = await mgr.list_connections(user_id=user.user_id)
+            auth_id = None
+            for conn in connections or []:
+                if conn.get("provider") != "pipedream":
+                    continue
+                meta = conn.get("provider_metadata") or {}
+                conn_app = meta.get("app_id") if isinstance(meta, dict) else None
+                if not _apps_equivalent(str(conn_app or ""), app_id):
+                    continue
+                status = str(conn.get("status") or "").lower()
+                if status not in {"active", "connected", "ok", "needs_reauth", ""}:
+                    continue
+                auth_id = conn.get("external_account_id")
+                if auth_id:
+                    break
+            if auth_id:
+                auth_block = {"authProvisionId": str(auth_id)}
+                configured[app_id] = auth_block
+                hint = hint_for_app(app_id)
+                guess = hint.get("auth_prop_guess") if isinstance(hint, dict) else None
+                if isinstance(guess, str) and guess.strip():
+                    configured[guess.strip()] = auth_block
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        rows = await client.configure_prop(
+            action_id=component_id,
+            prop_name=prop,
+            external_user_id=user.user_id,
+            configured_props=configured,
+        )
+    except Exception:  # noqa: BLE001
+        rows = []
+    options: list[dict[str, Any]] = []
+    for row in rows or []:
+        if isinstance(row, dict):
+            value = row.get("value") if "value" in row else row.get("id")
+            label = row.get("label") or row.get("name") or value
+            if value is None:
+                continue
+            options.append({"value": value, "label": label})
+        else:
+            options.append({"value": row, "label": str(row)})
+    return {"options": options}
+
+
 @router.get("/integrations/tools/search")
 async def search_integration_tools(
     user: CurrentUser,

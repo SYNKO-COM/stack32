@@ -273,6 +273,15 @@
     "waitingApprovalTitle": "En attente de votre approbation",
     "waitingApprovalBody": "Cet outil est bien connecté. Le jaune signifie que l’agent a mis en pause une action sensible — approuvez ou refusez dans le chat.",
     "waitingConnectionTitle": "Connexion requise pour cette exécution",
-    "waitingConnectionBody": "L’agent a besoin d’un compte connecté pour utiliser cet outil. Connectez-vous ci-dessous, puis continuez dans le chat."
+    "waitingConnectionBody": "L’agent a besoin d’un compte connecté pour utiliser cet outil. Connectez-vous ci-dessous, puis continuez dans le chat.",
+    "toolConfigLoading": "Chargement de la configuration…",
+    "toolConfigEmpty": "Rien de plus à régler pour cet outil — la connexion suffit.",
+    "toolConfigLoadError": "Impossible de charger la configuration.",
+    "toolConfigSaveError": "Impossible d’enregistrer. Réessayez.",
+    "toolConfigAccount": "Compte connecté",
+    "toolConfigAccountHint": "Si vous avez plusieurs comptes pour cette app, choisissez celui que l’agent doit utiliser.",
+    "toolConfigAccountPlaceholder": "Choisir un compte…",
+    "toolConfigSelect": "Choisir…",
+    "toolConfigSearch": "Rechercher…"
   }
 }

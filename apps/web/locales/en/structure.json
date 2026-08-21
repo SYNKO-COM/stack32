@@ -273,6 +273,15 @@
     "waitingApprovalTitle": "Waiting for your approval",
     "waitingApprovalBody": "This tool is connected. The yellow highlight means the agent paused before a sensitive action — approve or deny it in the chat.",
     "waitingConnectionTitle": "Connection needed for this run",
-    "waitingConnectionBody": "The agent needs an account connection before it can use this tool. Connect below, then continue in chat."
+    "waitingConnectionBody": "The agent needs an account connection before it can use this tool. Connect below, then continue in chat.",
+    "toolConfigLoading": "Loading configuration…",
+    "toolConfigEmpty": "Nothing else to set for this tool — the connection is enough.",
+    "toolConfigLoadError": "Could not load configuration.",
+    "toolConfigSaveError": "Could not save. Try again.",
+    "toolConfigAccount": "Connected account",
+    "toolConfigAccountHint": "If you have several accounts for this app, pick the one this agent should use.",
+    "toolConfigAccountPlaceholder": "Choose an account…",
+    "toolConfigSelect": "Choose…",
+    "toolConfigSearch": "Search…"
   }
 }

@@ -2,17 +2,22 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ToolTriggerPicker } from "@/components/builder/agent-structure/drawers/tool-trigger-picker";
+import {
+  PipedreamPropFields,
+} from "@/components/builder/pipedream-prop-fields";
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RoundCheck } from "@/components/ui/round-check";
 import { useTranslation } from "@/hooks/use-translation";
 import { updateAgentTriggers } from "@/lib/actions/builder";
-import { getIntegrationTriggerComponent } from "@/lib/actions/integrations";
+import {
+  getIntegrationTriggerComponent,
+  getTriggerDynamicOptions,
+} from "@/lib/actions/integrations";
 import type { AgentSpec } from "@/lib/domain/types";
 import { resolveAppDisplayName } from "@/lib/integrations/app-grouping";
 import { cn } from "@/lib/utils";
@@ -47,35 +52,45 @@ function TriggerPropFields({
   props,
   extraProps,
   setExtraProps,
+  remoteOptions,
+  loadingOptions,
+  disabled,
 }: {
   props: Array<{
     name: string;
     label: string;
     required: boolean;
     description?: string;
+    type?: string;
+    remote_options?: boolean;
   }>;
   extraProps: Record<string, string>;
   setExtraProps: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  remoteOptions: Record<string, Array<{ value: string; label: string }>>;
+  loadingOptions: Record<string, boolean>;
+  disabled?: boolean;
 }) {
+  const { t } = useTranslation("structure");
+  const defs = props.map((prop) => ({
+    name: prop.name,
+    label: prop.label,
+    type: prop.type,
+    required: prop.required,
+    description: prop.description,
+    options: remoteOptions[prop.name],
+    optionsLoading: Boolean(loadingOptions[prop.name]),
+  }));
   return (
-    <div className="space-y-2">
-      {props.map((prop) => (
-        <div key={prop.name} className="space-y-1">
-          <Label htmlFor={`tp-${prop.name}`}>
-            {prop.label}
-            {prop.required ? " *" : ""}
-          </Label>
-          <Input
-            id={`tp-${prop.name}`}
-            value={extraProps[prop.name] ?? ""}
-            onChange={(e) =>
-              setExtraProps((prev) => ({ ...prev, [prop.name]: e.target.value }))
-            }
-            placeholder={prop.description || prop.name}
-          />
-        </div>
-      ))}
-    </div>
+    <PipedreamPropFields
+      props={defs}
+      values={extraProps}
+      disabled={disabled}
+      selectPlaceholder={t("panel.toolConfigSelect")}
+      searchPlaceholder={t("panel.toolConfigSearch")}
+      onChange={(name, value) =>
+        setExtraProps((prev) => ({ ...prev, [name]: value }))
+      }
+    />
   );
 }
 
@@ -239,12 +254,57 @@ export function ToolTriggerConfigForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [remoteOptions, setRemoteOptions] = useState<
+    Record<string, Array<{ value: string; label: string }>>
+  >({});
+  const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
 
   const component = useQuery({
     queryKey: ["pd-trigger-component", componentId],
     queryFn: () => getIntegrationTriggerComponent(componentId),
     enabled: Boolean(componentId),
   });
+
+  useEffect(() => {
+    const props = component.data?.props ?? [];
+    if (!componentId || props.length === 0) {
+      setRemoteOptions({});
+      setLoadingOptions({});
+      return;
+    }
+    let cancelled = false;
+    const loading: Record<string, boolean> = {};
+    for (const prop of props) {
+      if (prop.remote_options !== true) continue;
+      loading[prop.name] = true;
+    }
+    setLoadingOptions(loading);
+    for (const name of Object.keys(loading)) {
+      void getTriggerDynamicOptions({
+        componentId,
+        prop: name,
+        agentId,
+        appId: appId || undefined,
+      })
+        .then((res) => {
+          if (cancelled) return;
+          setRemoteOptions((prev) => ({
+            ...prev,
+            [name]: (res.options ?? []).map((o) => ({
+              value: String(o.value),
+              label: String(o.label ?? o.value),
+            })),
+          }));
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoadingOptions((prev) => ({ ...prev, [name]: false }));
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [component.data?.props, componentId, agentId, appId]);
 
   const connection = useMemo(() => {
     const needle = appId.replace(/-/g, "_").toLowerCase();
@@ -340,6 +400,9 @@ export function ToolTriggerConfigForm({
           props={requiredProps}
           extraProps={extraProps}
           setExtraProps={setExtraProps}
+          remoteOptions={remoteOptions}
+          loadingOptions={loadingOptions}
+          disabled={saving}
         />
       ) : null}
 
@@ -366,6 +429,9 @@ export function ToolTriggerConfigForm({
                 props={optionalProps}
                 extraProps={extraProps}
                 setExtraProps={setExtraProps}
+                remoteOptions={remoteOptions}
+                loadingOptions={loadingOptions}
+                disabled={saving}
               />
             </div>
           ) : null}
