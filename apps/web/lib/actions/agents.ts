@@ -244,6 +244,62 @@ export async function publishAgentAction(
   return { agent: mapAgent(agent), publicPath };
 }
 
+export type UnpublishAgentResult =
+  | { ok: true }
+  | { ok: false; code: "not_authenticated" | "agent_not_found" | "UNPUBLISH_FAILED" };
+
+/** Take the agent offline: not public, link no longer resolves. */
+export async function unpublishAgentAction(agentId: string): Promise<UnpublishAgentResult> {
+  const supabase = await requireSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, code: "not_authenticated" };
+
+  const { data: owned } = await supabase
+    .from("agents")
+    .select("id, status")
+    .eq("id", agentId)
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!owned) return { ok: false, code: "agent_not_found" };
+
+  try {
+    if (currentAiExecutionMode() === "agent-service") {
+      const accessToken = await requireAccessToken();
+      await agentServiceFetch(`/v1/agents/${agentId}/unpublish`, {
+        method: "POST",
+        accessToken,
+        body: {},
+      });
+    } else {
+      const { error } = await supabase
+        .from("agents")
+        .update({ status: "built", published_version_id: null })
+        .eq("id", agentId)
+        .eq("user_id", user.id);
+      if (error) return { ok: false, code: "UNPUBLISH_FAILED" };
+    }
+  } catch {
+    return { ok: false, code: "UNPUBLISH_FAILED" };
+  }
+
+  // Keep marketplace listing private when the agent leaves the public web.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listing columns pending codegen
+  const { error: listingError } = await (supabase as any)
+    .from("agents")
+    .update({
+      listing_visibility: "private",
+      listing_tagline: null,
+    })
+    .eq("id", agentId)
+    .eq("user_id", user.id);
+  if (listingError) return { ok: false, code: "UNPUBLISH_FAILED" };
+
+  return { ok: true };
+}
+
 /** Fetches the execution graph for Structure view. */
 export async function getAgentGraphAction(agentId: string): Promise<AgentGraphResponse | null> {
   const supabase = await requireSupabaseServerClient();
