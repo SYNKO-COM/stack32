@@ -752,8 +752,17 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (!message.uiComponent && !message.formResolved) return false;
     const idx = messageIndex.get(message.id) ?? -1;
     if (idx < 0) return false;
-    // Any later message means this step already continued — lock the form.
-    return messages.slice(idx + 1).length > 0;
+    // Thinking / progress bubbles must not close an unanswered form (refresh mid-build).
+    return messages.slice(idx + 1).some(
+      (later) =>
+        later.role === "assistant" &&
+        later.card !== "thinking" &&
+        later.card !== "build_progress" &&
+        (later.formResolved ||
+          later.card === "ready" ||
+          later.card === "identity_confirmed" ||
+          Boolean(later.uiComponent && later.uiComponent.requestId !== message.uiComponent?.requestId)),
+    );
   };
   // Hide ephemeral thinking / progress only when a *later* turn superseded them —
   // never hide all future progress just because a Ready card exists in history.

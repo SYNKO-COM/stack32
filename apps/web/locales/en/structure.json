@@ -189,7 +189,7 @@
     "scheduleSubtitle": "When the agent runs on its own.",
     "toolTriggerSubtitle": "When an app event starts the agent.",
     "toolTriggerEnable": "Enable a tool trigger",
-    "toolTriggerEnableHint": "Shows the Tool module. Open it to pick the app, event, and connect the account.",
+    "toolTriggerEnableHint": "Pick the app and event below. After saving, open the Tool module to connect the account.",
     "toolTriggerDefaultLabel": "Event",
     "toolTriggerIntro": "Pick a Pipedream app, the event that should start the agent, then connect the account.",
     "toolTriggerApp": "App",

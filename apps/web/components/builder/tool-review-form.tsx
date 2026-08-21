@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2, Plus, Trash2, Wrench } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AppSearchField } from "@/components/builder/app-search-field";
@@ -9,16 +9,84 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/hooks/use-translation";
 import { submitBuilderToolReview } from "@/lib/actions/builder";
+import { lookupIntegrationAppIcons } from "@/lib/actions/integrations";
 import type { BuilderToolReviewEntry, BuilderUiComponent } from "@/lib/domain/types";
+import {
+  isProductFacingTool,
+  resolveAppDisplayName,
+  resolveAppKey,
+} from "@/lib/integrations/app-grouping";
+import {
+  cacheIntegrationIcon,
+  getCachedIntegrationIcon,
+} from "@/lib/integrations/icon-resolver";
 import { cn } from "@/lib/utils";
 
 type DraftTool = BuilderToolReviewEntry & { key: string };
 
-function seedFromComponent(ui: BuilderUiComponent): DraftTool[] {
-  return (ui.tools ?? []).map((tool, index) => ({
-    ...tool,
-    key: `${tool.toolId}-${index}`,
-  }));
+function looksLikeEnglishDefault(utility: string): boolean {
+  return /lets the agent use/i.test(utility) || /toward:/i.test(utility);
+}
+
+function seedFromComponent(
+  ui: BuilderUiComponent,
+  localize: (name: string) => string,
+): DraftTool[] {
+  const grouped = new Map<string, DraftTool>();
+  for (const [index, tool] of (ui.tools ?? []).entries()) {
+    if (!isProductFacingTool(tool.toolId)) continue;
+    const appKey = resolveAppKey(tool.toolId, {
+      appId: tool.appId,
+      provider: tool.provider,
+    });
+    const name = resolveAppDisplayName(appKey, tool.toolId) || tool.name;
+    const utility = looksLikeEnglishDefault(tool.utility) ? localize(name) : tool.utility;
+    const incomingIds = tool.toolIds?.length ? tool.toolIds : [tool.toolId];
+    const existing = grouped.get(appKey);
+    if (existing) {
+      const merged = new Set([...(existing.toolIds ?? [existing.toolId]), ...incomingIds]);
+      existing.toolIds = [...merged];
+      if (tool.change === "add") existing.change = "add";
+      continue;
+    }
+    grouped.set(appKey, {
+      ...tool,
+      key: `${appKey}-${index}`,
+      name,
+      appId: tool.appId || appKey,
+      provider: tool.provider || "pipedream",
+      utility,
+      toolIds: incomingIds,
+    });
+  }
+  return [...grouped.values()];
+}
+
+function AppLogo({ appId, name }: { appId?: string; name: string }) {
+  const src = appId ? getCachedIntegrationIcon(appId) : undefined;
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src, appId]);
+  if (src && !failed) {
+    return (
+      // Pipedream hosts logos off-origin.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        width={28}
+        height={28}
+        className="size-7 object-contain"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <span className="text-[11px] font-semibold uppercase tracking-wide text-brand">
+      {name.slice(0, 2)}
+    </span>
+  );
 }
 
 export function ToolReviewForm({
@@ -34,10 +102,14 @@ export function ToolReviewForm({
   const queryClient = useQueryClient();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [tools, setTools] = useState<DraftTool[]>(() => seedFromComponent(uiComponent));
+  const [tools, setTools] = useState<DraftTool[]>(() =>
+    seedFromComponent(uiComponent, (name) => t("toolReview.utilityDefault", { name })),
+  );
   const [addAppId, setAddAppId] = useState("");
+  const [addAppName, setAddAppName] = useState("");
   const [addUtility, setAddUtility] = useState("");
   const [adding, setAdding] = useState(false);
+  const [iconsVersion, setIconsVersion] = useState(0);
 
   const mode = uiComponent.mode === "modify" ? "modify" : "initial";
   const visible = useMemo(
@@ -48,6 +120,25 @@ export function ToolReviewForm({
     () => tools.filter((tool) => tool.change === "remove"),
     [tools],
   );
+  const appKeys = useMemo(
+    () => [...new Set(tools.map((tool) => tool.appId).filter(Boolean))] as string[],
+    [tools],
+  );
+
+  useEffect(() => {
+    if (appKeys.length === 0) return;
+    let cancelled = false;
+    void lookupIntegrationAppIcons(appKeys).then((icons) => {
+      if (cancelled) return;
+      for (const [key, src] of Object.entries(icons)) {
+        cacheIntegrationIcon(key, src);
+      }
+      if (Object.keys(icons).length > 0) setIconsVersion((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [appKeys]);
 
   const removeTool = (key: string) => {
     setTools((prev) => prev.filter((tool) => tool.key !== key));
@@ -83,10 +174,10 @@ export function ToolReviewForm({
     }
     setAdding(false);
     setError(null);
-    const name = appId
-      .replace(/_/g, " ")
-      .replace(/-/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+    const name =
+      addAppName.trim() ||
+      resolveAppDisplayName(appId) ||
+      appId.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     setTools((prev) => [
       ...prev,
       {
@@ -98,9 +189,11 @@ export function ToolReviewForm({
         utility: addUtility.trim(),
         change: "add",
         removable: true,
+        toolIds: [`app:${appId}`],
       },
     ]);
     setAddAppId("");
+    setAddAppName("");
     setAddUtility("");
   };
 
@@ -124,6 +217,7 @@ export function ToolReviewForm({
             appId: tool.appId,
             externalActionId: tool.externalActionId,
             utility: tool.utility.trim(),
+            toolIds: tool.toolIds,
           })),
         });
         void queryClient.invalidateQueries({ queryKey: ["builder"] });
@@ -152,7 +246,7 @@ export function ToolReviewForm({
           </p>
         ) : null}
 
-        <ul className="space-y-2.5">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {visible.map((tool) => (
             <li
               key={tool.key}
@@ -164,17 +258,15 @@ export function ToolReviewForm({
               )}
             >
               <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-brand">
-                  <Wrench className="size-3.5" aria-hidden="true" />
+                <span
+                  className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm ring-1 ring-border/60"
+                  data-icons={iconsVersion}
+                >
+                  <AppLogo appId={tool.appId} name={tool.name} />
                 </span>
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{tool.name}</p>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">
-                        {tool.appId || tool.toolId}
-                      </p>
-                    </div>
+                    <p className="truncate text-sm font-medium text-foreground">{tool.name}</p>
                     <div className="flex shrink-0 items-center gap-1.5">
                       {tool.change === "add" ? (
                         <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
@@ -203,10 +295,10 @@ export function ToolReviewForm({
                     <Textarea
                       value={tool.utility}
                       onChange={(e) => updateUtility(tool.key, e.target.value)}
-                      rows={2}
+                      rows={3}
                       disabled={pending}
                       placeholder={t("toolReview.utilityPlaceholder")}
-                      className="min-h-[58px] resize-none text-sm"
+                      className="min-h-[72px] resize-none text-sm"
                     />
                   </label>
                 </div>
@@ -220,15 +312,17 @@ export function ToolReviewForm({
             <p className="text-xs font-medium text-muted-foreground">
               {t("toolReview.proposedRemovals")}
             </p>
-            <ul className="space-y-2">
+            <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {proposedRemovals.map((tool) => (
                 <li
                   key={tool.key}
                   className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2.5"
                 >
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background ring-1 ring-border/60">
+                      <AppLogo appId={tool.appId} name={tool.name} />
+                    </span>
                     <p className="truncate text-sm font-medium text-foreground">{tool.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{tool.utility}</p>
                   </div>
                   <Button
                     type="button"
@@ -249,8 +343,16 @@ export function ToolReviewForm({
         {adding ? (
           <div className="space-y-2.5 rounded-xl border border-border/70 bg-foreground/[0.02] p-3">
             <AppSearchField
-              value={addAppId}
-              onChange={setAddAppId}
+              value={addAppName || addAppId}
+              onChange={() => {
+                setAddAppId("");
+                setAddAppName("");
+              }}
+              onSelect={(app) => {
+                setAddAppId(app.appId);
+                setAddAppName(app.name);
+                if (app.imgSrc) cacheIntegrationIcon(app.appId, app.imgSrc);
+              }}
               placeholder={t("toolReview.searchPlaceholder")}
             />
             <Textarea
@@ -268,6 +370,7 @@ export function ToolReviewForm({
                 onClick={() => {
                   setAdding(false);
                   setAddAppId("");
+                  setAddAppName("");
                   setAddUtility("");
                 }}
               >

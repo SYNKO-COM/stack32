@@ -4,21 +4,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { ToolTriggerPicker } from "@/components/builder/agent-structure/drawers/tool-trigger-picker";
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RoundCheck } from "@/components/ui/round-check";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   getAgentTriggerRuntime,
   startAgentTriggerListen,
   updateAgentTriggers,
 } from "@/lib/actions/builder";
-import {
-  getIntegrationTriggerComponent,
-  searchIntegrationApps,
-  searchIntegrationTriggers,
-} from "@/lib/actions/integrations";
+import { getIntegrationTriggerComponent } from "@/lib/actions/integrations";
 import type { AgentSpec } from "@/lib/domain/types";
 
 function schedulePayload(spec?: AgentSpec | null) {
@@ -35,6 +33,7 @@ function schedulePayload(spec?: AgentSpec | null) {
 }
 
 async function invalidateAgent(queryClient: ReturnType<typeof useQueryClient>, agentId: string) {
+  await queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
   await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
   await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "graph"] });
   await queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
@@ -116,30 +115,45 @@ export function AgentToolTriggerToggle({
 }) {
   const { t } = useTranslation("structure");
   const queryClient = useQueryClient();
-  const enabled = Boolean((spec?.triggers ?? []).find((row) => row.kind === "tool" && row.enabled));
+  const existing = (spec?.triggers ?? []).find((row) => row.kind === "tool");
+  const enabled = Boolean(existing?.enabled);
   const [on, setOn] = useState(enabled);
+  const [appId, setAppId] = useState(existing?.appId || "");
+  const [appName, setAppName] = useState(existing?.appId || "");
+  const [componentId, setComponentId] = useState(existing?.componentId || "");
+  const [componentLabel, setComponentLabel] = useState(existing?.label || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const toolReady = Boolean(appId && componentId);
+  const dirty =
+    on !== enabled ||
+    (on &&
+      (appId !== (existing?.appId || "") || componentId !== (existing?.componentId || "")));
+  const canSave = dirty && (!on || toolReady);
+
   async function save() {
+    if (on && !toolReady) {
+      setError(t("panel.toolTriggerRequired"));
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const tool = (spec?.triggers ?? []).find((row) => row.kind === "tool");
       await updateAgentTriggers({
         agentId,
         triggers: [
           { kind: "chat", enabled: true },
           ...schedulePayload(spec),
-                  ...(on
+          ...(on
             ? [
                 {
                   kind: "tool" as const,
                   enabled: true,
-                  appId: tool?.appId || "",
-                  componentId: tool?.componentId || "",
-                  label: tool?.label || t("panel.toolTriggerDefaultLabel"),
-                  extraProps: tool?.extraProps ?? {},
+                  appId,
+                  componentId,
+                  label: componentLabel || t("panel.toolTriggerDefaultLabel"),
+                  extraProps: existing?.extraProps ?? {},
                 },
               ]
             : []),
@@ -157,11 +171,12 @@ export function AgentToolTriggerToggle({
   return (
     <div className="space-y-3">
       <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/60 p-4">
-        <input
-          type="checkbox"
-          className="mt-1 size-4 accent-[var(--brand,#e36b2c)]"
+        <RoundCheck
           checked={on}
-          onChange={(e) => setOn(e.target.checked)}
+          onChange={(checked) => {
+            setOn(checked);
+            setError(null);
+          }}
         />
         <div className="space-y-1">
           <Label className="cursor-pointer text-sm font-medium">
@@ -170,8 +185,37 @@ export function AgentToolTriggerToggle({
           <p className="text-xs text-muted-foreground">{t("panel.toolTriggerEnableHint")}</p>
         </div>
       </label>
+      {on ? (
+        <div className="space-y-3 rounded-2xl border border-brand/25 bg-brand/[0.04] p-3.5">
+          <ToolTriggerPicker
+            appId={appId}
+            appName={appName}
+            componentId={componentId}
+            componentLabel={componentLabel}
+            disabled={saving}
+            onAppCleared={() => {
+              setAppId("");
+              setComponentId("");
+              setComponentLabel("");
+            }}
+            onAppSelect={(app) => {
+              setAppId(app.appId);
+              setAppName(app.name);
+              setComponentId("");
+              setComponentLabel("");
+            }}
+            onEventChange={(nextId, nextLabel) => {
+              setComponentId(nextId);
+              setComponentLabel(nextLabel);
+            }}
+          />
+          {!toolReady ? (
+            <p className="text-[11px] text-muted-foreground">{t("panel.toolTriggerRequired")}</p>
+          ) : null}
+        </div>
+      ) : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="button" disabled={saving || on === enabled} onClick={() => void save()}>
+      <Button type="button" disabled={saving || !canSave} onClick={() => void save()}>
         {saving ? t("panel.saving") : t("panel.save")}
       </Button>
     </div>
@@ -194,8 +238,8 @@ export function ToolTriggerConfigForm({
   const { t } = useTranslation("structure");
   const queryClient = useQueryClient();
   const existing = (spec?.triggers ?? []).find((row) => row.kind === "tool");
-  const [appQuery, setAppQuery] = useState(existing?.appId || "");
   const [appId, setAppId] = useState(existing?.appId || "");
+  const [appName, setAppName] = useState(existing?.appId || "");
   const [componentId, setComponentId] = useState(existing?.componentId || "");
   const [label, setLabel] = useState(existing?.label || "");
   const [extraProps, setExtraProps] = useState<Record<string, string>>(() => {
@@ -212,16 +256,6 @@ export function ToolTriggerConfigForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const apps = useQuery({
-    queryKey: ["pd-apps", appQuery],
-    queryFn: () => searchIntegrationApps(appQuery || appId || "gmail", 12),
-    enabled: true,
-  });
-  const triggers = useQuery({
-    queryKey: ["pd-triggers", appId],
-    queryFn: () => searchIntegrationTriggers("", appId, 80),
-    enabled: Boolean(appId),
-  });
   const component = useQuery({
     queryKey: ["pd-trigger-component", componentId],
     queryFn: () => getIntegrationTriggerComponent(componentId),
@@ -305,61 +339,28 @@ export function ToolTriggerConfigForm({
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t("panel.toolTriggerIntro")}</p>
 
-      <div className="space-y-1.5">
-        <Label>{t("panel.toolTriggerApp")}</Label>
-        <Input
-          value={appQuery}
-          onChange={(e) => setAppQuery(e.target.value)}
-          placeholder="Gmail, Google Sheets, Slack…"
-        />
-        <div className="flex max-h-36 flex-col gap-1 overflow-y-auto rounded-xl border border-border/60 p-1">
-          {(apps.data?.apps ?? []).slice(0, 8).map((app) => (
-            <button
-              key={app.appId}
-              type="button"
-              className={`rounded-lg px-2 py-1.5 text-left text-sm ${
-                appId === app.appId ? "bg-brand/15 font-medium" : "hover:bg-foreground/5"
-              }`}
-              onClick={() => {
-                setAppId(app.appId);
-                setAppQuery(app.name);
-                setComponentId("");
-              }}
-            >
-              {app.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {appId ? (
-        <div className="space-y-1.5">
-          <Label>{t("panel.toolTriggerEvent")}</Label>
-          <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-xl border border-border/60 p-1">
-            {(triggers.data?.triggers ?? []).map((row) => (
-              <button
-                key={row.triggerId}
-                type="button"
-                className={`rounded-lg px-2 py-1.5 text-left text-sm ${
-                  componentId === row.triggerId ? "bg-brand/15 font-medium" : "hover:bg-foreground/5"
-                }`}
-                onClick={() => {
-                  setComponentId(row.triggerId);
-                  setLabel(row.name);
-                }}
-              >
-                <span className="block">{row.name}</span>
-                {row.summary ? (
-                  <span className="block text-[11px] text-muted-foreground">{row.summary}</span>
-                ) : null}
-              </button>
-            ))}
-            {triggers.isLoading ? (
-              <p className="px-2 py-1 text-xs text-muted-foreground">{t("panel.saving")}</p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <ToolTriggerPicker
+        appId={appId}
+        appName={appName}
+        componentId={componentId}
+        componentLabel={label}
+        disabled={saving}
+        onAppCleared={() => {
+          setAppId("");
+          setComponentId("");
+          setLabel("");
+        }}
+        onAppSelect={(app) => {
+          setAppId(app.appId);
+          setAppName(app.name);
+          setComponentId("");
+          setLabel("");
+        }}
+        onEventChange={(nextId, nextLabel) => {
+          setComponentId(nextId);
+          setLabel(nextLabel);
+        }}
+      />
 
       {appId ? (
         <IntegrationConnectionCard

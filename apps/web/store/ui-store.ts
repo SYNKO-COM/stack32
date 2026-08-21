@@ -15,8 +15,11 @@ interface UiState {
   authDialogMode: "login" | "signup";
   /** Optional post-auth destination (e.g. checkout) preserved through onboarding. */
   authPreferredNext: string | null;
+  /** Shared confirm dialog for first publish / republish from topbar or Live badge. */
+  publishConfirmOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   setMobileSidebarOpen: (open: boolean) => void;
+  setPublishConfirmOpen: (open: boolean) => void;
   openDialog: (
     dialog: Exclude<ActiveDialog, null>,
     options?: { authMode?: "login" | "signup"; preferredNext?: string | null },
@@ -30,8 +33,10 @@ export const useUiStore = create<UiState>((set) => ({
   activeDialog: null,
   authDialogMode: "signup",
   authPreferredNext: null,
+  publishConfirmOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
+  setPublishConfirmOpen: (open) => set({ publishConfirmOpen: open }),
   openDialog: (dialog, options) =>
     set((state) => ({
       activeDialog: dialog,

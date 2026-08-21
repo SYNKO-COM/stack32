@@ -124,6 +124,7 @@ export function usePublishAgent() {
     onSuccess: (_data, agentId) => {
       queryClient.invalidateQueries({ queryKey: agentKeys.list });
       queryClient.invalidateQueries({ queryKey: agentKeys.detail(agentId) });
+      queryClient.invalidateQueries({ queryKey: agentKeys.spec(agentId) });
       queryClient.invalidateQueries({ queryKey: agentKeys.graph(agentId) });
     },
   });

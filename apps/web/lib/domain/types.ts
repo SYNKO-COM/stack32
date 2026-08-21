@@ -302,6 +302,8 @@ export interface BuilderToolReviewEntry {
   utility: string;
   change: "add" | "keep" | "remove";
   removable?: boolean;
+  /** All Pipedream actions under this app (Structure grouping). */
+  toolIds?: string[];
 }
 
 export interface BuilderUiComponent {

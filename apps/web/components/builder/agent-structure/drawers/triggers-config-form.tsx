@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { RoundCheck } from "@/components/ui/round-check";
 import { useTranslation } from "@/hooks/use-translation";
 import { updateAgentTriggers } from "@/lib/actions/builder";
 import type { AgentSpec } from "@/lib/domain/types";
@@ -48,6 +49,7 @@ function hasEnabledSchedule(spec?: AgentSpec | null): boolean {
 }
 
 async function invalidateAgent(queryClient: ReturnType<typeof useQueryClient>, agentId: string) {
+  await queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
   await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
   await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "graph"] });
   await queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
@@ -117,12 +119,10 @@ export function AgentScheduleToggle({
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t("panel.triggersIntro")}</p>
       <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/60 p-4">
-        <input
-          type="checkbox"
-          className="mt-1 size-4 accent-[var(--brand,#e36b2c)]"
+        <RoundCheck
           checked={on}
-          onChange={(e) => {
-            setOn(e.target.checked);
+          onChange={(checked) => {
+            setOn(checked);
             setSaved(false);
           }}
         />

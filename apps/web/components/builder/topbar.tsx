@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Hammer,
   Menu,
+  RefreshCw,
   Rocket,
   Settings,
   Share2,
@@ -32,6 +33,7 @@ import { useProfile } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import { AgentServiceError, agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import { isPlanLimitError } from "@/lib/billing/plan-limit";
+import { agentHasUnpublishedDraft } from "@/lib/domain/agent-publish";
 import { SITE_URL } from "@/lib/site";
 import { useUiStore } from "@/store/ui-store";
 
@@ -89,15 +91,18 @@ export function Topbar({ agentId }: { agentId: string }) {
   const openDialog = useUiStore((s) => s.openDialog);
   const setMobileSidebarOpen = useUiStore((s) => s.setMobileSidebarOpen);
 
-  const [publishOpen, setPublishOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [publishedOpen, setPublishedOpen] = useState(false);
   const [usernameRequiredOpen, setUsernameRequiredOpen] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [publishedAsUpdate, setPublishedAsUpdate] = useState(false);
+  const publishOpen = useUiStore((s) => s.publishConfirmOpen);
+  const setPublishOpen = useUiStore((s) => s.setPublishConfirmOpen);
 
   const isPublished = agent?.status === "published";
+  const hasUnpublishedDraft = agentHasUnpublishedDraft(agent);
 
   const resolvedPublicUrl = useMemo(() => {
     const username = profile?.username?.trim();
@@ -108,6 +113,7 @@ export function Topbar({ agentId }: { agentId: string }) {
   }, [agent?.slug, profile?.username]);
 
   const handlePublish = async () => {
+    const updating = hasUnpublishedDraft;
     setPublishOpen(false);
     setPublishError(null);
     try {
@@ -115,6 +121,7 @@ export function Topbar({ agentId }: { agentId: string }) {
       const path = result.publicPath ?? "";
       const origin = SITE_URL.replace(/\/$/, "");
       setPublicUrl(path ? `${origin}${path}` : resolvedPublicUrl);
+      setPublishedAsUpdate(updating);
       setPublishedOpen(true);
     } catch (error) {
       if (isPlanLimitError(error)) {
@@ -180,7 +187,26 @@ export function Topbar({ agentId }: { agentId: string }) {
 
         <ThemeToggle />
 
-        {isPublished ? (
+        {hasUnpublishedDraft ? (
+          <Button
+            size="sm"
+            className="gap-1.5 rounded-full px-2.5 sm:px-3"
+            onClick={() => setPublishOpen(true)}
+            disabled={publishAgent.isPending || agent?.status === "building"}
+            aria-label={
+              publishAgent.isPending
+                ? t("builder:topbar.updating")
+                : t("builder:topbar.update")
+            }
+          >
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">
+              {publishAgent.isPending
+                ? t("builder:topbar.updating")
+                : t("builder:topbar.update")}
+            </span>
+          </Button>
+        ) : isPublished ? (
           <Button
             size="sm"
             className="gap-1.5 rounded-full px-2.5 sm:px-3"
@@ -217,15 +243,25 @@ export function Topbar({ agentId }: { agentId: string }) {
       <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
         <DialogContent className="glass-strong border-border sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t("builder:publishDialog.title")}</DialogTitle>
-            <DialogDescription>{t("builder:publishDialog.body")}</DialogDescription>
+            <DialogTitle>
+              {hasUnpublishedDraft
+                ? t("builder:publishDialog.updateTitle")
+                : t("builder:publishDialog.title")}
+            </DialogTitle>
+            <DialogDescription>
+              {hasUnpublishedDraft
+                ? t("builder:publishDialog.updateBody")
+                : t("builder:publishDialog.body")}
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setPublishOpen(false)}>
               {t("common:actions.cancel")}
             </Button>
             <Button onClick={() => void handlePublish()}>
-              {t("builder:publishDialog.confirm")}
+              {hasUnpublishedDraft
+                ? t("builder:publishDialog.updateConfirm")
+                : t("builder:publishDialog.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -277,9 +313,15 @@ export function Topbar({ agentId }: { agentId: string }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Check className="size-5 text-emerald-400" aria-hidden="true" />
-              {t("builder:publishDialog.successTitle")}
+              {publishedAsUpdate
+                ? t("builder:publishDialog.updateSuccessTitle")
+                : t("builder:publishDialog.successTitle")}
             </DialogTitle>
-            <DialogDescription>{t("builder:publishDialog.successBody")}</DialogDescription>
+            <DialogDescription>
+              {publishedAsUpdate
+                ? t("builder:publishDialog.updateSuccessBody")
+                : t("builder:publishDialog.successBody")}
+            </DialogDescription>
           </DialogHeader>
           {displayUrl ? (
             <div className="space-y-2">

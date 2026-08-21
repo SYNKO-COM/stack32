@@ -189,7 +189,7 @@
     "scheduleSubtitle": "Quand l’agent tourne tout seul.",
     "toolTriggerSubtitle": "Quand un événement d’une app démarre l’agent.",
     "toolTriggerEnable": "Activer un déclencheur outil",
-    "toolTriggerEnableHint": "Affiche le module Outil. Ouvrez-le pour choisir l’app, l’événement et connecter le compte.",
+    "toolTriggerEnableHint": "Choisissez l’app et l’événement ci-dessous. Après enregistrement, ouvrez le module Outil pour connecter le compte.",
     "toolTriggerDefaultLabel": "Événement",
     "toolTriggerIntro": "Choisissez une app Pipedream, l’événement qui doit lancer l’agent, puis connectez le compte.",
     "toolTriggerApp": "Application",

@@ -98,6 +98,7 @@ export function ModelConfigForm({
     try {
       await updateAgentModel({ agentId, provider, modelId: resolvedModelId });
       setSaved(true);
+      await queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
       await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
       await queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
       await queryClient.invalidateQueries({ queryKey: ["connections", agentId] });

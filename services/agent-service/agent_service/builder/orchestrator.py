@@ -287,6 +287,15 @@ class BuilderOrchestrator:
 
         turn_images = [img for img in (images or []) if isinstance(img, dict)]
         self._turn_images: list[dict[str, Any]] = turn_images
+        run_guard = await self.db.get_owned_run(run_id, user_id)
+        interrupt_guard = ((run_guard or {}).get("input") or {}).get("interrupt")
+        if isinstance(interrupt_guard, dict) and interrupt_guard.get("status") == "open":
+            await self.db.update_run_status(run_id, "waiting_for_input")
+            return {
+                "status": "interrupted",
+                "run_id": run_id,
+                "reason": interrupt_guard.get("type") or "open",
+            }
         await self.db.update_run_status(run_id, "running")
         await self.db.emit_event(run_id, "run.started", {"mapping_key": "builder.progress.started"})
         await self.db.tag_thinking_with_run(thread_id=thread_id, run_id=run_id)
@@ -1400,11 +1409,16 @@ class BuilderOrchestrator:
         if not tools_changed(proposed=list(spec.tools or []), current=current_spec.tools if current_spec else None):
             return None
 
+        run_row = await self.db.get_owned_run(run_id, user_id)
+        locale = str(((run_row or {}).get("input") or {}).get("locale") or "en")
         entries = build_tool_review_entries(
             proposed=list(spec.tools or []),
             current=list(current_spec.tools) if current_spec else None,
             goal=str(spec.goal or prompt or "")[:400],
+            locale=locale,
         )
+        if not entries:
+            return None
         mode = "initial" if current_spec is None else "modify"
         return await self._interrupt_tool_review_form(
             run_id=run_id,
@@ -2145,16 +2159,6 @@ class BuilderOrchestrator:
         board: dict[str, Any],
         tick,
     ) -> dict[str, Any]:
-        await tick(
-            steps=[
-                {"labelKey": "understanding", "state": "done"},
-                {"labelKey": "capabilities", "state": "running"},
-                {"labelKey": "building", "state": "pending"},
-                {"labelKey": "testing", "state": "pending"},
-            ],
-            focus=f"Planning next moves for {identity.name}",
-        )
-
         caps = dict(capabilities or {})
         confirmed_raw = caps.get("confirmed_spec")
         if isinstance(confirmed_raw, dict) and caps.get("tools_confirmed"):

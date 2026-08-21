@@ -379,7 +379,7 @@ export function AgentDrawer({
         />
         <div className="mt-3">
           <AgentToolTriggerToggle
-            key={`${agentId}:tool:${(spec?.triggers ?? []).some((t) => t.kind === "tool" && t.enabled)}`}
+            key={`${agentId}:tool:${(spec?.triggers ?? []).find((t) => t.kind === "tool" && t.enabled)?.componentId || "off"}`}
             agentId={agentId}
             spec={spec}
             onSaved={onSaved}

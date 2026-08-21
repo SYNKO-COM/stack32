@@ -498,6 +498,7 @@ export async function submitBuilderToolReview(input: {
     appId?: string;
     externalActionId?: string;
     utility: string;
+    toolIds?: string[];
   }>;
 }): Promise<void> {
   const supabase = await requireSupabaseServerClient();
@@ -519,6 +520,7 @@ export async function submitBuilderToolReview(input: {
         app_id: t.appId ?? null,
         external_action_id: t.externalActionId ?? null,
         utility: t.utility,
+        tool_ids: t.toolIds ?? [],
       })),
     },
   });

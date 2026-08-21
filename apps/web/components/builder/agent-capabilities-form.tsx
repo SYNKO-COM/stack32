@@ -12,6 +12,7 @@ import { submitBuilderCapabilities } from "@/lib/actions/builder";
 import { searchIntegrationTriggers } from "@/lib/actions/integrations";
 import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import type { BuilderUiComponent } from "@/lib/domain/types";
+import { translateTriggerLabel } from "@/lib/integrations/trigger-labels";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ export function AgentCapabilitiesForm({
   onSubmitted,
 }: CapabilitiesFormProps) {
   const queryClient = useQueryClient();
-  const { t } = useTranslation(["builder", "errors"]);
+  const { t, i18n } = useTranslation(["builder", "errors"]);
   const [scheduleHourly, setScheduleHourly] = useState(
     () => fieldDefault(uiComponent.fields, "schedule_hourly") === "true",
   );
@@ -197,7 +198,10 @@ export function AgentCapabilitiesForm({
                       : t("builder:capabilities.toolTriggerEventPlaceholder")
                     : t("builder:capabilities.toolTriggerPickAppFirst")
                 }
-                options={events}
+                options={events.map((row) => ({
+                  value: row.value,
+                  label: translateTriggerLabel(row.label, i18n.language),
+                }))}
                 onChange={(value) => {
                   setComponentId(value);
                   setComponentLabel(events.find((row) => row.value === value)?.label || value);
@@ -277,7 +281,7 @@ function TriggerOption({
     >
       <span
         className={cn(
-          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
           checked
             ? "border-brand bg-brand text-white shadow-sm"
             : "border-border/80 bg-background text-transparent",

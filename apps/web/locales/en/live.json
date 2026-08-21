@@ -40,7 +40,8 @@
   "actions": {
     "retry": "Retry",
     "stop": "Stop",
-    "clear": "Clear conversation"
+    "clear": "Clear conversation",
+    "update": "Update"
   },
   "citations": {
     "title": "Sources"

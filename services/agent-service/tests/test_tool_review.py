@@ -8,49 +8,79 @@ from agent_service.builder.tool_review import (
 from agent_service.models.agent_spec import ToolBinding
 
 
-def test_tools_changed_first_build():
+def test_tools_changed_first_build_with_app():
     proposed = [
         ToolBinding(tool_id="current_datetime", provider="native"),
-        ToolBinding(tool_id="web_search", provider="native"),
+        ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail"),
     ]
     assert tools_changed(proposed=proposed, current=None) is True
 
 
-def test_tools_changed_same_set_ignores_builtins():
-    current = [
+def test_tools_changed_natives_only_skips_review():
+    proposed = [
         ToolBinding(tool_id="current_datetime", provider="native"),
+        ToolBinding(tool_id="web_search", provider="native"),
+        ToolBinding(tool_id="calculator", provider="native"),
+    ]
+    assert tools_changed(proposed=proposed, current=None) is False
+
+
+def test_tools_changed_same_app_ignores_extra_actions():
+    current = [
+        ToolBinding(tool_id="gmail_list", provider="pipedream", app_id="gmail"),
         ToolBinding(tool_id="web_search", provider="native"),
     ]
     proposed = [
-        ToolBinding(tool_id="structured_output", provider="native"),
-        ToolBinding(tool_id="web_search", provider="native"),
+        ToolBinding(tool_id="gmail_list", provider="pipedream", app_id="gmail"),
+        ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail"),
+        ToolBinding(tool_id="calculator", provider="native"),
     ]
     assert tools_changed(proposed=proposed, current=current) is False
 
 
-def test_build_entries_marks_add_and_remove():
-    current = [ToolBinding(tool_id="notion_create_page", provider="pipedream", app_id="notion")]
-    proposed = [ToolBinding(tool_id="web_search", provider="native")]
-    entries = build_tool_review_entries(proposed=proposed, current=current, goal="Research")
-    by_id = {e["tool_id"]: e for e in entries}
-    assert by_id["web_search"]["change"] == "add"
-    assert by_id["notion_create_page"]["change"] == "remove"
-    assert "utility" in by_id["web_search"]
+def test_build_entries_groups_gmail_actions_and_hides_natives():
+    proposed = [
+        ToolBinding(tool_id="web_search", provider="native"),
+        ToolBinding(tool_id="calculator", provider="native"),
+        ToolBinding(tool_id="gmail_list", provider="pipedream", app_id="gmail"),
+        ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail"),
+        ToolBinding(tool_id="calendar_list", provider="pipedream", app_id="google_calendar"),
+    ]
+    entries = build_tool_review_entries(proposed=proposed, current=None, goal="Préparer un meeting")
+    ids = {e["app_id"] for e in entries}
+    assert ids == {"gmail", "google_calendar"}
+    gmail = next(e for e in entries if e["app_id"] == "gmail")
+    assert gmail["name"] == "Gmail"
+    assert set(gmail["tool_ids"]) == {"gmail_list", "gmail_send"}
+    assert gmail["change"] == "add"
 
 
-def test_apply_reviewed_tools_keeps_protected_and_utility():
+def test_build_entries_french_utility():
+    proposed = [ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail")]
+    entries = build_tool_review_entries(
+        proposed=proposed, current=None, goal="Préparer un meeting", locale="fr"
+    )
+    assert "sert à avancer" in entries[0]["utility"]
+    assert "Lets the agent" not in entries[0]["utility"]
+
+
+def test_apply_reviewed_tools_keeps_hidden_and_all_app_actions():
     pending = [
         ToolBinding(tool_id="current_datetime", provider="native"),
         ToolBinding(tool_id="web_search", provider="native"),
-        ToolBinding(tool_id="gmail_send", provider="native", app_id="gmail"),
+        ToolBinding(tool_id="gmail_list", provider="pipedream", app_id="gmail"),
+        ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail"),
+        ToolBinding(tool_id="calendar_list", provider="pipedream", app_id="google_calendar"),
     ]
     out = apply_reviewed_tools(
         pending_tools=pending,
         reviewed=[
             {
-                "tool_id": "web_search",
-                "provider": "native",
-                "utility": "Find sources",
+                "tool_id": "gmail_list",
+                "provider": "pipedream",
+                "app_id": "gmail",
+                "tool_ids": ["gmail_list", "gmail_send"],
+                "utility": "Envoyer le brief",
             }
         ],
     )
@@ -58,6 +88,8 @@ def test_apply_reviewed_tools_keeps_protected_and_utility():
     assert "current_datetime" in ids
     assert "structured_output" in ids
     assert "web_search" in ids
-    assert "gmail_send" not in ids
-    web = next(t for t in out if t.tool_id == "web_search")
-    assert web.config.get("utility") == "Find sources"
+    assert "gmail_list" in ids
+    assert "gmail_send" in ids
+    assert "calendar_list" not in ids
+    gmail = next(t for t in out if t.tool_id == "gmail_send")
+    assert gmail.config.get("utility") == "Envoyer le brief"

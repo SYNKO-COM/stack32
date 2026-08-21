@@ -380,6 +380,7 @@ export function AgentIaView({
           ? () => {
               void connectionsQuery.refetch();
               void readinessQuery.refetch();
+              void queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
             }
           : undefined
       }

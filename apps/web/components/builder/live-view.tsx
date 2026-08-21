@@ -23,6 +23,7 @@ import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-but
 import { gatherSupportDiagnostic } from "@/lib/actions/support-diagnostic";
 import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
 import { isUpgradeGateError, PlanLimitError } from "@/lib/billing/plan-limit";
+import { agentHasUnpublishedDraft } from "@/lib/domain/agent-publish";
 import type { LiveMessage } from "@/lib/domain/types";
 import { useUiStore } from "@/store/ui-store";
 import { cn } from "@/lib/utils";
@@ -252,6 +253,7 @@ export function LiveView({
   const { t } = useTranslation(["live", "builder"]);
   const queryClient = useQueryClient();
   const openDialog = useUiStore((s) => s.openDialog);
+  const setPublishConfirmOpen = useUiStore((s) => s.setPublishConfirmOpen);
   const { data: agent } = useAgent(agentId);
   const { data: spec } = useAgentSpec(agentId);
   const { data: thread } = useLiveThread(agentId);
@@ -280,6 +282,7 @@ export function LiveView({
     [...messages].reverse().find((m) => m.runId)?.runId ||
     null;
   const agentName = agent?.name || t("builder:sidebar.untitledAgent");
+  const hasUnpublishedDraft = agentHasUnpublishedDraft(agent);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -292,15 +295,32 @@ export function LiveView({
           {agent ? <AgentIcon icon={agent.icon} /> : null}
           <h1 className="truncate text-sm font-medium">{agentName}</h1>
           {!hideStatusBadge ? (
-            <Badge
-              variant="outline"
-              className={cn(
-                "hidden border-border text-xs sm:inline-flex",
-                agent?.status === "published" ? "text-sky-300" : "text-zinc-300",
-              )}
-            >
-              {agent?.status === "published" ? t("live:badge.published") : t("live:badge.draft")}
-            </Badge>
+            <div className="hidden min-w-0 items-center gap-1.5 sm:flex">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "border-border text-xs",
+                  agent?.status === "published" ? "text-sky-300" : "text-zinc-300",
+                )}
+              >
+                {agent?.status === "published" ? t("live:badge.published") : t("live:badge.draft")}
+              </Badge>
+              {hasUnpublishedDraft ? (
+                <>
+                  <Badge variant="outline" className="border-border text-xs text-zinc-300">
+                    {t("live:badge.draft")}
+                  </Badge>
+                  <Button
+                    size="xs"
+                    className="h-6 rounded-full px-2.5 text-[11px] font-medium"
+                    onClick={() => setPublishConfirmOpen(true)}
+                    disabled={agent?.status === "building"}
+                  >
+                    {t("live:actions.update")}
+                  </Button>
+                </>
+              ) : null}
+            </div>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">

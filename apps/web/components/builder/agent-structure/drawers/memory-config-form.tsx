@@ -7,6 +7,7 @@ import { IntegrationConnectionCard } from "@/components/builder/integration-conn
 import { Button } from "@/components/ui/button";
 import { DaSelect } from "@/components/ui/da-select";
 import { Label } from "@/components/ui/label";
+import { RoundCheck } from "@/components/ui/round-check";
 import { Textarea } from "@/components/ui/textarea";
 import { updateAgentMemorySettings } from "@/lib/actions/builder";
 import { listAgentConnections } from "@/lib/actions/connections";
@@ -115,6 +116,7 @@ export function MemoryConfigForm({
           });
         }
         setSaved(true);
+        await queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
         await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
         await queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
         await queryClient.invalidateQueries({ queryKey: ["connections", agentId] });
@@ -170,15 +172,13 @@ export function MemoryConfigForm({
         <div className="space-y-3 rounded-2xl border border-border/60 p-4">
           <p className="text-sm font-medium">{t("panel.memoryWhat")}</p>
           <label className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
+            <RoundCheck
               checked={conversationEnabled}
-              onChange={(e) => {
-                setConversationEnabled(e.target.checked);
+              disabled={pending}
+              onChange={(checked) => {
+                setConversationEnabled(checked);
                 setSaved(false);
               }}
-              disabled={pending}
             />
             <span>
               <span className="font-medium">{t("panel.memoryConversation")}</span>
@@ -188,15 +188,13 @@ export function MemoryConfigForm({
             </span>
           </label>
           <label className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
+            <RoundCheck
               checked={semanticEnabled}
-              onChange={(e) => {
-                setSemanticEnabled(e.target.checked);
+              disabled={pending}
+              onChange={(checked) => {
+                setSemanticEnabled(checked);
                 setSaved(false);
               }}
-              disabled={pending}
             />
             <span>
               <span className="font-medium">{t("panel.memorySemantic")}</span>

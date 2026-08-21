@@ -40,7 +40,8 @@
   "actions": {
     "retry": "Réessayer",
     "stop": "Arrêter",
-    "clear": "Effacer la conversation"
+    "clear": "Effacer la conversation",
+    "update": "Mettre à jour"
   },
   "citations": {
     "title": "Sources"

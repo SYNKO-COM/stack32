@@ -390,6 +390,7 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
         utility: string;
         change: "add" | "keep" | "remove";
         removable?: boolean;
+        toolIds?: string[];
       }>
     | undefined;
   let mode: "initial" | "modify" | undefined;
@@ -416,6 +417,7 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
               utility: string;
               change: "add" | "keep" | "remove";
               removable?: boolean;
+              toolIds?: string[];
             } = {
               toolId,
               name:
@@ -442,6 +444,13 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
               change,
               removable: row.removable !== false,
             };
+            const toolIdsRaw = Array.isArray(row.tool_ids)
+              ? row.tool_ids
+              : Array.isArray(row.toolIds)
+                ? row.toolIds
+                : [];
+            const toolIds = toolIdsRaw.filter((id): id is string => typeof id === "string" && Boolean(id));
+            if (toolIds.length > 0) mapped.toolIds = toolIds;
             return mapped;
           })
           .filter((t): t is NonNullable<typeof t> => t !== null)

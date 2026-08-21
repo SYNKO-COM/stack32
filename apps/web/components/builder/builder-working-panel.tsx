@@ -104,7 +104,10 @@ export function BuilderWorkingPanel({
         active: op.state === "running",
       }));
     if (!lines.some((l) => l.active)) {
-      lines = [...lines, { id: "planning", text: t("working.planning"), active: true }];
+      const last = lines.at(-1);
+      lines = last
+        ? lines.map((line, i) => ({ ...line, active: i === lines.length - 1 }))
+        : lines;
     }
   } else if (resumeMode) {
     // Refresh mid-build before events hydrate: show prior steps as done, no cascade replay.

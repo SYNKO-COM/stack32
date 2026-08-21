@@ -60,6 +60,7 @@ class BuilderToolReviewItem(BaseModel):
     app_id: str | None = Field(default=None, max_length=128)
     external_action_id: str | None = Field(default=None, max_length=256)
     utility: str = Field(default="", max_length=500)
+    tool_ids: list[str] = Field(default_factory=list, max_length=40)
 
 
 class BuilderToolReviewResumeRequest(BaseModel):
