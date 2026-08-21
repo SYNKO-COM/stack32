@@ -239,4 +239,26 @@ export class SupabaseAuthRepository implements AuthRepository {
       reason: typeof row.reason === "string" ? row.reason : null,
     };
   }
+
+  async deleteAccount(): Promise<void> {
+    const supabase = requireSupabaseBrowserClient();
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean;
+      error?: string;
+      detail?: string;
+    }>("delete-account", {
+      method: "POST",
+      body: {},
+    });
+
+    if (error) {
+      throw new AuthUiError("common:account.deleteError");
+    }
+    if (data?.error) {
+      throw new AuthUiError("common:account.deleteError");
+    }
+
+    // Auth user is already gone; clear local session without hitting the API.
+    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+  }
 }

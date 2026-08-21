@@ -36,17 +36,116 @@ const CONNECT_POPUP_NAME = "stack32_pipedream_connect";
 const CONNECT_POPUP_FEATURES =
   "popup=yes,width=560,height=720,scrollbars=yes,resizable=yes";
 
+type ConnectPopupCopy = {
+  title: string;
+  heading: string;
+  body: string;
+  hint: string;
+};
+
 /**
  * Open a blank shell *synchronously* inside the click handler.
  * Browsers block window.open() after await (lost user gesture).
  */
-function openConnectPopupShell(): Window | null {
+function openConnectPopupShell(copy: ConnectPopupCopy): Window | null {
   const popup = window.open("about:blank", CONNECT_POPUP_NAME, CONNECT_POPUP_FEATURES);
   if (!popup) return null;
   try {
-    popup.document.title = "Stack32";
-    popup.document.body.innerHTML =
-      '<p style="font-family:system-ui,sans-serif;padding:1.5rem;color:#555">Opening secure connection…</p>';
+    const title = copy.title.replace(/</g, "&lt;");
+    const heading = copy.heading.replace(/</g, "&lt;");
+    const body = copy.body.replace(/</g, "&lt;");
+    const hint = copy.hint.replace(/</g, "&lt;");
+    popup.document.open();
+    popup.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(252, 184, 2, 0.22), transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, rgba(250, 114, 11, 0.16), transparent 50%),
+        #faf9f7;
+      color: #1c1917;
+    }
+    .card {
+      width: min(100%, 380px);
+      text-align: center;
+      padding: 28px 24px 26px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(28, 25, 23, 0.08);
+      box-shadow: 0 18px 40px rgba(28, 25, 23, 0.08);
+      backdrop-filter: blur(8px);
+    }
+    .mark {
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 16px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #fcb802 0%, #fa720b 100%);
+      box-shadow: 0 8px 18px rgba(250, 138, 11, 0.35);
+    }
+    .brand {
+      margin: 0 0 18px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #78716c;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.2rem;
+      line-height: 1.35;
+      font-weight: 650;
+    }
+    p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      color: #57534e;
+    }
+    .hint {
+      margin-top: 14px;
+      font-size: 0.85rem;
+      color: #a8a29e;
+    }
+    .spinner {
+      width: 28px;
+      height: 28px;
+      margin: 22px auto 0;
+      border-radius: 999px;
+      border: 2.5px solid rgba(250, 138, 11, 0.2);
+      border-top-color: #fa8a0b;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card" role="status" aria-live="polite">
+    <div class="mark" aria-hidden="true"></div>
+    <p class="brand">Stack32</p>
+    <h1>${heading}</h1>
+    <p>${body}</p>
+    <p class="hint">${hint}</p>
+    <div class="spinner" aria-hidden="true"></div>
+  </div>
+</body>
+</html>`);
+    popup.document.close();
   } catch {
     // Some browsers restrict writes to about:blank briefly — navigation still works.
   }
@@ -270,22 +369,37 @@ export function IntegrationConnectionCard({
     setPipedreamFallback(null);
 
     // Must run in the same turn as the click — before any await.
-    const popup = openConnectPopupShell();
+    const popup = openConnectPopupShell({
+      title: t("connections.popupTitle", { defaultValue: "Stack32" }),
+      heading: t("connections.popupHeading", {
+        defaultValue: "Preparing a secure connection",
+      }),
+      body: t("connections.popupBody", {
+        defaultValue:
+          "Please keep this window open and don’t close it. The app connection screen will open here in a moment.",
+      }),
+      hint: t("connections.popupHint", {
+        defaultValue: "This usually takes just a few seconds.",
+      }),
+    });
     popupRef.current = popup;
     const blocked = !popup || popup.closed;
     setPopupBlocked(blocked);
 
     startTransition(async () => {
       try {
-        // Baseline *without* toolIds so we don't auto-bind / resume on click.
-        const before = await syncIntegrationAccounts({
+        finishedRef.current = false;
+        // Start token fetch immediately — sync baseline can finish after redirect.
+        const tokenPromise = getConnectToken(appId || undefined);
+        const syncPromise = syncIntegrationAccounts({
           appId: appId || undefined,
           agentId,
+        }).then((before) => {
+          accountsBeforeRef.current = before.accounts?.length ?? 0;
+          return before;
         });
-        accountsBeforeRef.current = before.accounts?.length ?? 0;
-        finishedRef.current = false;
 
-        const result = await getConnectToken(appId || undefined);
+        const result = await tokenPromise;
         const url = result.connectLinkUrl?.trim() || null;
         connectLinkUrlRef.current = url;
 
@@ -296,6 +410,7 @@ export function IntegrationConnectionCard({
             /* ignore */
           }
           popupRef.current = null;
+          await syncPromise.catch(() => undefined);
           setPipedreamFallback({
             token: result.token,
             connectLinkUrl: url,
@@ -309,10 +424,12 @@ export function IntegrationConnectionCard({
           popup.location.href = url;
           setWaitingForOauth(true);
           setPopupBlocked(false);
+          void syncPromise.catch(() => undefined);
           return;
         }
 
         // Popup blocked: keep waiting UI + in-page link (user click = allowed gesture).
+        await syncPromise.catch(() => undefined);
         setPopupBlocked(true);
         setPipedreamFallback({
           token: result.token,

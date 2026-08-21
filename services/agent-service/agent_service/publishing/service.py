@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -28,6 +29,63 @@ class PublishService:
             return username.strip().lower()
         return None
 
+    @staticmethod
+    def _slugify_public(value: str) -> str:
+        """Hyphen slug matching the web public URL format."""
+        import unicodedata
+
+        raw = unicodedata.normalize("NFKD", value or "")
+        raw = "".join(ch for ch in raw if not unicodedata.combining(ch))
+        raw = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")[:64]
+        return raw or "agent"
+
+    async def _ensure_unique_public_slug(
+        self,
+        *,
+        user_id: str,
+        agent_id: str,
+        agent: dict[str, Any],
+    ) -> str:
+        """Guarantee a free per-user slug; append -2, -3… when taken."""
+        current = str(agent.get("slug") or "").strip()
+        name = str(agent.get("name") or "agent").strip()
+        if not current or re.match(r"^untitled-agent(-\d+)?$", current, re.I):
+            desired = self._slugify_public(name)
+        else:
+            desired = self._slugify_public(current)
+
+        candidate = desired
+        suffix = 2
+        while True:
+            rows = await self.db._select(
+                "agents",
+                {
+                    "user_id": f"eq.{user_id}",
+                    "slug": f"eq.{candidate}",
+                    "deleted_at": "is.null",
+                    "id": f"neq.{agent_id}",
+                    "select": "id",
+                    "limit": "1",
+                },
+            )
+            if not rows:
+                break
+            candidate = f"{desired}-{suffix}"
+            suffix += 1
+            if suffix > 50:
+                candidate = f"{desired}-{int(datetime.now(UTC).timestamp())}"
+                break
+
+        if candidate != current:
+            async with get_supabase_admin_client() as client:
+                await client.patch(
+                    "/agents",
+                    params={"id": f"eq.{agent_id}", "user_id": f"eq.{user_id}"},
+                    json={"slug": candidate},
+                )
+            agent["slug"] = candidate
+        return candidate
+
     async def publish(self, *, user_id: str, agent_id: str) -> dict[str, Any]:
         agent = await self.db.get_owned_agent(agent_id, user_id)
         if not agent:
@@ -45,6 +103,10 @@ class PublishService:
         username = await self._require_username(user_id)
         if not username:
             return {"error": "USERNAME_REQUIRED", "code": "USERNAME_REQUIRED"}
+
+        slug = await self._ensure_unique_public_slug(
+            user_id=user_id, agent_id=agent_id, agent=agent
+        )
 
         spec = await self.db.load_draft_spec(agent_id, user_id)
         if not spec:
@@ -287,7 +349,7 @@ class PublishService:
             "status": "active",
             "deployment_id": deployment_id,
             "agent_version_id": version_id,
-            "publicPath": f"/@{username}/{agent.get('slug')}",
+            "publicPath": f"/@{username}/{slug}",
             "stages": report.to_dict(),
         }
 

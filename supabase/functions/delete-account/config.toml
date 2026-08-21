@@ -1,0 +1,3 @@
+# Delete-account Edge Function — JWT required (caller's session).
+[functions.delete-account]
+verify_jwt = true

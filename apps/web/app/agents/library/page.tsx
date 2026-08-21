@@ -107,19 +107,11 @@ export default function LibraryPage() {
     return mine.data.favorites;
   }, [mine.data, market.data, tab, query]);
 
-  const tabs: { id: TabId; label: string; count: number }[] = [
-    { id: "created", label: t("myAgents.tabs.created"), count: mine.data?.created.length ?? 0 },
-    { id: "using", label: t("myAgents.tabs.using"), count: mine.data?.using.length ?? 0 },
-    {
-      id: "favorites",
-      label: t("myAgents.tabs.favorites"),
-      count: mine.data?.favorites.length ?? 0,
-    },
-    {
-      id: "marketplace",
-      label: t("myAgents.tabs.marketplace"),
-      count: market.data?.length ?? 0,
-    },
+  const tabs: { id: TabId; label: string }[] = [
+    { id: "created", label: t("myAgents.tabs.created") },
+    { id: "using", label: t("myAgents.tabs.using") },
+    { id: "favorites", label: t("myAgents.tabs.favorites") },
+    { id: "marketplace", label: t("myAgents.tabs.marketplace") },
   ];
 
   const loading = tab === "marketplace" ? market.isLoading : mine.isLoading;
@@ -128,7 +120,7 @@ export default function LibraryPage() {
     <div className="flex min-h-0 flex-1 flex-col">
       <WorkspaceChrome title={t("myAgents.title")} subtitle={t("myAgents.subtitle")} />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
-        <div className="glass mb-4 flex flex-wrap gap-1 rounded-full p-1">
+        <div className="glass mb-4 inline-flex w-fit max-w-full flex-wrap gap-1 rounded-full p-1">
           {tabs.map((item) => (
             <button
               key={item.id}
@@ -142,7 +134,6 @@ export default function LibraryPage() {
               )}
             >
               {item.label}
-              <span className="ml-1.5 text-xs opacity-70">{item.count}</span>
             </button>
           ))}
         </div>

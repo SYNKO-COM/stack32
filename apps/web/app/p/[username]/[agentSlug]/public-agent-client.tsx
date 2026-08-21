@@ -388,7 +388,6 @@ function CreateOwnAgentCard() {
 }
 
 function PublicAgentUseView({
-  agent,
   username,
   agentSlug,
   onBack,
@@ -431,17 +430,6 @@ function PublicAgentUseView({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 md:px-6">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{agent.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            @{agent.creatorUsername}/{agent.slug}
-          </p>
-        </div>
-        <Button variant="ghost" size="sm" className="rounded-full" onClick={onBack}>
-          {t("common:publicAgent.backToListing")}
-        </Button>
-      </div>
       <div className="min-h-0 flex-1">
         <AgentIaView
           agentId={query.data.agent.agentId}
@@ -508,7 +496,11 @@ export function PublicAgentClient({
   return (
     <div className="relative flex h-svh overflow-hidden">
       <AnimatedBackground variant="editor" />
-      <PublicAgentChrome loginNext={prettyPath} accountMode="workspace">
+      <PublicAgentChrome
+        loginNext={prettyPath}
+        accountMode="workspace"
+        onBack={useMode ? leaveUse : undefined}
+      >
         {useMode ? (
           <PublicAgentUseView
             agent={agent}

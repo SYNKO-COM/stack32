@@ -78,3 +78,6 @@ enabled = true
 # which is not supported by colima on macOS.
 [analytics]
 enabled = false
+
+[functions.delete-account]
+verify_jwt = true

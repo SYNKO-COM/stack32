@@ -152,7 +152,7 @@ export class MockAuthRepository implements AuthRepository {
     const state = readState();
     if (!state.profile) throw new AuthUiError("errors:generic");
     const normalized = username.trim().toLowerCase();
-    if (!/^[a-z][a-z0-9_]{2,29}$/.test(normalized)) {
+    if (!/^[a-z][a-z0-9_]{2,29}$/.test(normalized) || normalized.includes("stack32")) {
       throw new AuthUiError("onboarding:username.invalid");
     }
     const profile: Profile = { ...state.profile, username: normalized };
@@ -175,7 +175,7 @@ export class MockAuthRepository implements AuthRepository {
       return { normalizedUsername: normalized, available: false, valid: false, reason: "invalid" };
     }
     const reserved = new Set(["admin", "api", "login", "signup", "settings", "stack32"]);
-    if (reserved.has(normalized)) {
+    if (reserved.has(normalized) || normalized.includes("stack32")) {
       return { normalizedUsername: normalized, available: false, valid: false, reason: "reserved" };
     }
     const taken = readState().profile?.username === normalized;
@@ -185,6 +185,12 @@ export class MockAuthRepository implements AuthRepository {
       valid: true,
       reason: taken ? "taken" : null,
     };
+  }
+
+  async deleteAccount(): Promise<void> {
+    await delay(400);
+    removeStore(KEY);
+    emitMockChange();
   }
 }
 

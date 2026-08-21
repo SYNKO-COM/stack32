@@ -134,10 +134,34 @@ export async function publishAgentAction(
 
   const { data: owned } = await supabase
     .from("agents")
-    .select("id, draft_version_id, slug")
+    .select("id, draft_version_id, slug, name")
     .eq("id", agentId)
     .maybeSingle();
   if (!owned) return { ok: false, code: "agent_not_found" };
+
+  // Ensure public slug is unique among this user's agents (name-based, with -2 / -3…).
+  const { nextAvailableSlug, preferredAgentSlug } = await import("@/lib/marketplace/slug");
+  const desiredSlug = preferredAgentSlug(owned.name || "agent", owned.slug);
+  const uniqueSlug = await nextAvailableSlug(desiredSlug, async (candidate) => {
+    const { data } = await supabase
+      .from("agents")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("slug", candidate)
+      .is("deleted_at", null)
+      .neq("id", agentId)
+      .maybeSingle();
+    return Boolean(data);
+  });
+  if (uniqueSlug !== owned.slug) {
+    const { error: slugError } = await supabase
+      .from("agents")
+      .update({ slug: uniqueSlug })
+      .eq("id", agentId)
+      .eq("user_id", user.id);
+    if (slugError) return { ok: false, code: "SLUG_CONFLICT" };
+    owned.slug = uniqueSlug;
+  }
 
   // Server-side publish gate — do not rely on UI alone.
   const { data: ent } = await supabase.rpc("resolve_user_entitlements", {
@@ -214,6 +238,9 @@ export async function publishAgentAction(
     .eq("id", agentId)
     .single();
   if (readError || !agent) return { ok: false, code: "agent_not_found" };
+  const finalSlug =
+    typeof agent.slug === "string" && agent.slug.trim() ? agent.slug.trim() : owned.slug;
+  publicPath = `/@${usernameForPublish}/${finalSlug}`;
   return { agent: mapAgent(agent), publicPath };
 }
 

@@ -155,11 +155,13 @@ export function OnboardingFlow() {
   const [workspaceName, setWorkspaceName] = useState("");
 
   const normalizedUsername = username.trim().toLowerCase();
-  const usernameLocalStatus: "idle" | "invalid" | null = !normalizedUsername
+  const usernameLocalStatus: "idle" | "invalid" | "reserved" | null = !normalizedUsername
     ? "idle"
-    : !USERNAME_FORMAT.test(normalizedUsername)
-      ? "invalid"
-      : null;
+    : normalizedUsername.includes("stack32")
+      ? "reserved"
+      : !USERNAME_FORMAT.test(normalizedUsername)
+        ? "invalid"
+        : null;
   const usernameStatus =
     usernameLocalStatus ??
     (usernameRemote?.forValue === normalizedUsername

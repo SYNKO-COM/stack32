@@ -43,9 +43,27 @@ export class SupabaseAgentRepository implements AgentRepository {
 
   async renameAgent(agentId: string, name: string): Promise<Agent> {
     const supabase = requireSupabaseBrowserClient();
+    const { nextAvailableSlug, preferredAgentSlug } = await import("@/lib/marketplace/slug");
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    let slug = preferredAgentSlug(name);
+    if (user) {
+      slug = await nextAvailableSlug(slug, async (candidate) => {
+        const { data: clash } = await supabase
+          .from("agents")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("slug", candidate)
+          .is("deleted_at", null)
+          .neq("id", agentId)
+          .maybeSingle();
+        return Boolean(clash);
+      });
+    }
     const { data, error } = await supabase
       .from("agents")
-      .update({ name })
+      .update({ name, slug })
       .eq("id", agentId)
       .select("*")
       .single();

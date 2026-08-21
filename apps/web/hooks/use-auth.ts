@@ -141,3 +141,11 @@ export function useSetUsername() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
   });
 }
+
+export function useDeleteAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => getAuthRepository().deleteAccount(),
+    onSuccess: () => queryClient.clear(),
+  });
+}

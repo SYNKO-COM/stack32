@@ -67,6 +67,8 @@ export interface AuthRepository {
     valid: boolean;
     reason: string | null;
   }>;
+  /** Permanently deletes the current account (and personal data). */
+  deleteAccount(): Promise<void>;
 }
 
 export interface AgentRepository {
