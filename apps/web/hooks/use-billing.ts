@@ -4,8 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   activatePlanAction,
+  cancelSubscriptionAction,
   createCheckoutAction,
   getCreditUsageAction,
+  resumeSubscriptionAction,
   type ActivatePlanInput,
 } from "@/lib/actions/billing";
 import type { BillingInterval } from "@/lib/billing/plans";
@@ -50,6 +52,26 @@ export function useActivatePlan() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: ActivatePlanInput) => activatePlanAction(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["billing"] });
+    },
+  });
+}
+
+export function useCancelSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => cancelSubscriptionAction(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["billing"] });
+    },
+  });
+}
+
+export function useResumeSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => resumeSubscriptionAction(),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["billing"] });
     },

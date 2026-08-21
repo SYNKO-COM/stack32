@@ -5,9 +5,11 @@ import {
   deactivateMembershipFromWhop,
   fulfillMembershipFromWhop,
   markMembershipPastDueFromWhop,
+  syncMembershipCancelFlagFromWhop,
 } from "@/lib/billing/whop-fulfillment";
 import {
   isWhopActivateEvent,
+  isWhopCancelAtPeriodEndChanged,
   isWhopDeactivateEvent,
   isWhopPaymentFailed,
   isWhopPaymentSucceeded,
@@ -67,6 +69,7 @@ async function fulfillWhopEvent(
     const paymentOk = isWhopPaymentSucceeded(eventTypeRaw);
     const paymentFail = isWhopPaymentFailed(eventTypeRaw);
     const refund = isWhopRefundCreated(eventTypeRaw);
+    const cancelFlag = isWhopCancelAtPeriodEndChanged(eventTypeRaw);
 
     if (activate || paymentOk) {
       const data = event.data;
@@ -93,6 +96,11 @@ async function fulfillWhopEvent(
       const membership =
         (data as { membership?: unknown } | null)?.membership ?? data;
       await deactivateMembershipFromWhop(membership);
+    }
+
+    if (cancelFlag) {
+      const membership = await resolveMembershipPayload(event.data);
+      await syncMembershipCancelFlagFromWhop(membership);
     }
 
     await admin

@@ -31,3 +31,11 @@ export function isWhopPaymentFailed(raw: string): boolean {
 export function isWhopRefundCreated(raw: string): boolean {
   return whopEventKey(raw) === "refundcreated";
 }
+
+export function isWhopCancelAtPeriodEndChanged(raw: string): boolean {
+  const key = whopEventKey(raw);
+  return (
+    key === "membershipcancelatperiodendchanged" ||
+    key === "membershipcancelatperiodend"
+  );
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isWhopActivateEvent,
+  isWhopCancelAtPeriodEndChanged,
   isWhopDeactivateEvent,
   isWhopPaymentFailed,
   isWhopPaymentSucceeded,
@@ -25,6 +26,9 @@ describe("whop-event-types", () => {
     expect(isWhopPaymentSucceeded("payment.succeeded")).toBe(true);
     expect(isWhopPaymentFailed("payment.failed")).toBe(true);
     expect(isWhopRefundCreated("refund.created")).toBe(true);
+    expect(isWhopCancelAtPeriodEndChanged("membership.cancel_at_period_end_changed")).toBe(
+      true,
+    );
     expect(isWhopActivateEvent("payment.failed")).toBe(false);
   });
 });

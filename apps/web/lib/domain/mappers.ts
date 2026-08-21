@@ -27,6 +27,7 @@ import type {
   TriggerKind,
   User,
 } from "@/lib/domain/types";
+import { pricePlanSelection } from "@/lib/billing/plans";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
 function parseMessageAttachments(raw: unknown): MessageAttachment[] | undefined {
@@ -1024,6 +1025,30 @@ export function mapSubscription(row: SubscriptionRow): Subscription {
       : "free";
   const name =
     planKey === "free" ? "Free" : planKey.charAt(0).toUpperCase() + planKey.slice(1);
+  const interval = row.billing_interval === "annual" ? "annual" : "monthly";
+  const creditsMonthly = row.credits_monthly ?? undefined;
+  const cancelAtPeriodEnd = Boolean(row.cancel_at_period_end);
+  let pricePaidUsd: number | undefined;
+  let nextPriceUsd: number | undefined;
+
+  const raw =
+    row.raw_payload && typeof row.raw_payload === "object"
+      ? (row.raw_payload as Record<string, unknown>)
+      : {};
+  const rawPlan =
+    raw.plan && typeof raw.plan === "object" ? (raw.plan as Record<string, unknown>) : {};
+  const fromWhop =
+    typeof rawPlan.renewal_price === "number"
+      ? rawPlan.renewal_price
+      : typeof raw.renewal_price === "number"
+        ? raw.renewal_price
+        : null;
+
+  if (planKey !== "free" && creditsMonthly) {
+    const priced = pricePlanSelection(planKey, interval, creditsMonthly);
+    pricePaidUsd = fromWhop != null && fromWhop >= 0 ? fromWhop : priced.chargeUsd;
+    nextPriceUsd = cancelAtPeriodEnd ? 0 : pricePaidUsd;
+  }
   return {
     id: row.id,
     userId: row.user_id,
@@ -1032,8 +1057,14 @@ export function mapSubscription(row: SubscriptionRow): Subscription {
     planName: name,
     status: row.status as SubscriptionStatus,
     currentPeriodEnd: row.current_period_end ?? undefined,
+    currentPeriodStart: row.current_period_start ?? undefined,
     planKey,
-    billingInterval: row.billing_interval === "annual" ? "annual" : "monthly",
-    creditsMonthly: row.credits_monthly ?? undefined,
+    billingInterval: interval,
+    creditsMonthly,
+    membershipId: row.provider_membership_id ?? undefined,
+    providerPlanId: row.provider_plan_id ?? undefined,
+    cancelAtPeriodEnd,
+    pricePaidUsd,
+    nextPriceUsd,
   };
 }

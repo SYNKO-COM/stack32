@@ -380,3 +380,107 @@ export async function createWhopCheckoutSession(input: {
     creditsMonthly,
   };
 }
+
+/**
+ * Cancel auto-renewal at period end. Access stays until current_period_end;
+ * Whop then fires deactivated → free + agent suspension.
+ */
+export async function cancelSubscriptionAction(): Promise<
+  { ok: true; cancelAtPeriodEnd: true } | { ok: false; error: string }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "UNAUTHENTICATED" };
+
+  const access = await getSubscriptionAccess();
+  const sub = access.subscription;
+  if (!sub || sub.plan_key === "free" || !["active", "trialing"].includes(sub.status)) {
+    return { ok: false, error: "NO_ACTIVE_SUBSCRIPTION" };
+  }
+  const membershipId = sub.provider_membership_id?.trim();
+  if (!membershipId) return { ok: false, error: "MISSING_MEMBERSHIP" };
+
+  if (getBillingMode() === "mock" || !isWhopLiveConfigured()) {
+    const admin = createSupabaseAdminClient();
+    if (!admin) return { ok: false, error: "NOT_CONFIGURED" };
+    const { error } = await admin
+      .from("subscriptions")
+      .update({
+        cancel_at_period_end: true,
+        canceled_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id)
+      .eq("provider_membership_id", membershipId);
+    if (error) return { ok: false, error: "UPDATE_FAILED" };
+    return { ok: true, cancelAtPeriodEnd: true };
+  }
+
+  try {
+    const whop = requireWhopSdk();
+    const membership = await whop.memberships.cancel(membershipId, {
+      cancellation_mode: "at_period_end",
+    });
+    const { syncMembershipCancelFlagFromWhop } = await import(
+      "@/lib/billing/whop-fulfillment"
+    );
+    await syncMembershipCancelFlagFromWhop({
+      ...membership,
+      cancel_at_period_end: true,
+    });
+    return { ok: true, cancelAtPeriodEnd: true };
+  } catch (err) {
+    console.error("[billing] cancel failed", err instanceof Error ? err.message : err);
+    return { ok: false, error: "CANCEL_FAILED" };
+  }
+}
+
+/**
+ * Undo a pending at-period-end cancellation (resume auto-renew).
+ */
+export async function resumeSubscriptionAction(): Promise<
+  { ok: true; cancelAtPeriodEnd: false } | { ok: false; error: string }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "UNAUTHENTICATED" };
+
+  const access = await getSubscriptionAccess();
+  const sub = access.subscription;
+  if (!sub || sub.plan_key === "free" || !["active", "trialing"].includes(sub.status)) {
+    return { ok: false, error: "NO_ACTIVE_SUBSCRIPTION" };
+  }
+  if (!sub.cancel_at_period_end) {
+    return { ok: true, cancelAtPeriodEnd: false };
+  }
+  const membershipId = sub.provider_membership_id?.trim();
+  if (!membershipId) return { ok: false, error: "MISSING_MEMBERSHIP" };
+
+  if (getBillingMode() === "mock" || !isWhopLiveConfigured()) {
+    const admin = createSupabaseAdminClient();
+    if (!admin) return { ok: false, error: "NOT_CONFIGURED" };
+    const { error } = await admin
+      .from("subscriptions")
+      .update({
+        cancel_at_period_end: false,
+        canceled_at: null,
+      })
+      .eq("user_id", user.id)
+      .eq("provider_membership_id", membershipId);
+    if (error) return { ok: false, error: "UPDATE_FAILED" };
+    return { ok: true, cancelAtPeriodEnd: false };
+  }
+
+  try {
+    const whop = requireWhopSdk();
+    const membership = await whop.memberships.uncancel(membershipId);
+    const { syncMembershipCancelFlagFromWhop } = await import(
+      "@/lib/billing/whop-fulfillment"
+    );
+    await syncMembershipCancelFlagFromWhop({
+      ...membership,
+      cancel_at_period_end: false,
+    });
+    return { ok: true, cancelAtPeriodEnd: false };
+  } catch (err) {
+    console.error("[billing] resume failed", err instanceof Error ? err.message : err);
+    return { ok: false, error: "RESUME_FAILED" };
+  }
+}

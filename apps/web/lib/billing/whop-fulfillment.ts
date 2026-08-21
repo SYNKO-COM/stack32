@@ -162,6 +162,7 @@ export async function deactivateMembershipFromWhop(payload: unknown): Promise<vo
       status: "canceled",
       plan_key: "free",
       credits_monthly: PLANS.free.baseCredits,
+      cancel_at_period_end: false,
       canceled_at: new Date().toISOString(),
       raw_payload: data as Json,
     })
@@ -173,6 +174,34 @@ export async function deactivateMembershipFromWhop(payload: unknown): Promise<vo
   if (sub?.user_id) {
     await suspendAgentsForBilling(sub.user_id);
   }
+}
+
+/**
+ * Sync cancel_at_period_end without revoking access (user paid through period end).
+ */
+export async function syncMembershipCancelFlagFromWhop(payload: unknown): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new Error("Supabase admin client unavailable");
+
+  const data = asRecord(payload);
+  const membershipId = pickString(data.id, data.membership_id, asRecord(data.membership).id);
+  if (!membershipId) return;
+
+  const cancelAtPeriodEnd = Boolean(data.cancel_at_period_end);
+  const { error } = await admin
+    .from("subscriptions")
+    .update({
+      cancel_at_period_end: cancelAtPeriodEnd,
+      canceled_at: cancelAtPeriodEnd
+        ? pickIsoDate(data.canceled_at) ?? new Date().toISOString()
+        : null,
+      raw_payload: data as Json,
+    })
+    .eq("provider", "whop")
+    .eq("provider_membership_id", membershipId)
+    .in("status", ["active", "trialing", "past_due"]);
+
+  if (error) throw error;
 }
 
 /**

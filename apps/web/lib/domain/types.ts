@@ -70,9 +70,20 @@ export interface Subscription {
   planName: string;
   status: SubscriptionStatus;
   currentPeriodEnd?: string;
+  currentPeriodStart?: string;
   planKey?: import("@/lib/billing/plans").PlanKey;
   billingInterval?: import("@/lib/billing/plans").BillingInterval;
   creditsMonthly?: number;
+  /** Whop membership id (mem_…). */
+  membershipId?: string;
+  /** Whop plan id (plan_…). */
+  providerPlanId?: string;
+  /** True when auto-renew is off; access continues until currentPeriodEnd. */
+  cancelAtPeriodEnd?: boolean;
+  /** Amount charged for the current period (USD). */
+  pricePaidUsd?: number;
+  /** Next renewal charge (USD); 0 when cancelAtPeriodEnd. */
+  nextPriceUsd?: number;
 }
 
 /** Product workspace — a container for agents. */
