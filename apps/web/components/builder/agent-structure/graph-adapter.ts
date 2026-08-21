@@ -1,10 +1,12 @@
 import {
+  appsEquivalent,
   groupToolsByApp,
   isProductFacingTool,
   resolveAppDisplayName,
   toolActionLabel,
 } from "@/lib/integrations/app-grouping";
 import { resolveIntegrationIcon } from "@/lib/integrations/icon-resolver";
+import { triggerExtraConfigReady } from "@/lib/integrations/prop-labels";
 import type {
   ConfigurationStatus,
   IntegrationModule,
@@ -173,23 +175,17 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
   if (toolTrigger) {
     const appKey = String(toolTrigger.appId || "").trim();
     const appName = appKey ? resolveAppDisplayName(appKey) : "Outil";
-    const aliases = appKey
-      ? new Set([
-          appKey.toLowerCase(),
-          appKey.replace(/_/g, "-").toLowerCase(),
-          appKey.replace(/-/g, "_").toLowerCase(),
-        ])
-      : new Set<string>();
     const connected =
-      aliases.size > 0 &&
-      [...(boundAppIds ?? [])].some((id) => aliases.has(String(id).toLowerCase()));
+      Boolean(appKey) &&
+      [...(boundAppIds ?? [])].some((id) => appsEquivalent(id, appKey));
+    const propsReady = triggerExtraConfigReady(appKey, toolTrigger.extraProps);
+    const triggerReady = Boolean(toolTrigger.componentId) && connected && propsReady;
     nodes.push({
       id: "trigger:tool",
       kind: "trigger_tool",
       label: `Trigger ${appName}`,
       subtitle: toolTrigger.componentId || undefined,
-      configurationStatus:
-        toolTrigger.componentId && connected ? "ready" : "setup_required",
+      configurationStatus: triggerReady ? "ready" : "setup_required",
       ...(appKey
         ? {
             integration: {
@@ -199,8 +195,7 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
               toolIds: [],
               actions: [],
               connectionStatus: connected ? "connected" : "needs_setup",
-              configurationStatus:
-                toolTrigger.componentId && connected ? "ready" : "setup_required",
+              configurationStatus: triggerReady ? "ready" : "setup_required",
             },
           }
         : {}),

@@ -196,6 +196,35 @@ async def _build_configured_props(
     return configured
 
 
+async def _missing_required_static(
+    *,
+    component_id: str,
+    extra_props: dict[str, Any] | None,
+    client: PipedreamClient,
+) -> list[str]:
+    component = await client.get_trigger_component(component_id)
+    schema = normalize_configurable_props(
+        component,
+        tool_id=f"pd:{component_id}",
+        action_id=component_id,
+    )
+    extras = extra_props or {}
+    missing: list[str] = []
+    for prop in schema.props:
+        if prop.kind != "static" or not prop.required:
+            continue
+        value = extras.get(prop.name)
+        empty = (
+            value is None
+            or value == ""
+            or value == []
+            or value == {}
+        )
+        if empty:
+            missing.append(prop.label or prop.name)
+    return missing
+
+
 async def _deploy_source(
     *,
     user_id: str,
@@ -217,6 +246,16 @@ async def _deploy_source(
     )
     if not auth_id:
         raise TriggerServiceError("CONNECTION_REQUIRED", "Connect the app to listen for events.")
+    missing = await _missing_required_static(
+        component_id=component_id,
+        extra_props=extra_props,
+        client=pd,
+    )
+    if missing:
+        raise TriggerServiceError(
+            "CONFIG_REQUIRED",
+            "Configure required fields: " + ", ".join(missing[:6]),
+        )
     configured = await _build_configured_props(
         component_id=component_id,
         app_id=app_id,
@@ -225,13 +264,20 @@ async def _deploy_source(
         client=pd,
     )
     webhook_url = public_webhook_url(str(trigger_row["id"]))
-    deployed = await pd.deploy_trigger(
-        external_user_id=user_id,
-        trigger_id=component_id,
-        configured_props=configured,
-        webhook_url=webhook_url,
-        emit_on_deploy=False,
-    )
+    try:
+        deployed = await pd.deploy_trigger(
+            external_user_id=user_id,
+            trigger_id=component_id,
+            configured_props=configured,
+            webhook_url=webhook_url,
+            emit_on_deploy=False,
+        )
+    except PipedreamError as exc:
+        logger.warning("pipedream_deploy_trigger_failed err=%s", exc)
+        raise TriggerServiceError(
+            "DEPLOY_FAILED",
+            str(exc) or "Pipedream deploy failed.",
+        ) from exc
     inner = _unwrap_pd(deployed)
     source_id = str(inner.get("id") or deployed.get("id") or "")
     webhook_meta = inner.get("webhook") if isinstance(inner.get("webhook"), dict) else {}
@@ -480,6 +526,37 @@ async def teardown_tool_triggers(*, user_id: str, agent_id: str, client: Any) ->
                 "deployed_source_id": None,
             },
         )
+
+
+async def stop_tool_trigger_listen(
+    *,
+    user_id: str,
+    agent_id: str,
+    client: Any,
+) -> dict[str, Any]:
+    """Stop draft listening without disabling the saved trigger config."""
+    rows = await _list_agent_tool_rows(client, user_id=user_id, agent_id=agent_id)
+    stopped = False
+    for row in rows:
+        mode = str(row.get("mode") or "")
+        status = str(row.get("status") or "")
+        # Do not tear down a published persistent deploy from the Structure stop button.
+        if mode == "persistent" and status == "active":
+            continue
+        await _delete_source(user_id=user_id, deployed_source_id=row.get("deployed_source_id"))
+        await _patch_trigger(
+            client,
+            str(row["id"]),
+            {
+                "status": "idle",
+                "mode": "listen",
+                "listening_until": None,
+                "deployed_source_id": None,
+                "last_error": None,
+            },
+        )
+        stopped = True
+    return {"status": "idle", "stopped": stopped}
 
 
 async def runtime_status(*, user_id: str, agent_id: str, client: Any) -> dict[str, Any]:

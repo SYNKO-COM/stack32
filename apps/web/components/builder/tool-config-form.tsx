@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import {
@@ -17,6 +18,12 @@ import {
   listIntegrationAccounts,
   saveToolConfig,
 } from "@/lib/actions/integrations";
+import {
+  isPropValueFilled,
+  isStructureRequiredProp,
+  resolvePropCopy,
+} from "@/lib/integrations/prop-labels";
+import { cn } from "@/lib/utils";
 
 type FieldSchema = {
   type?: string;
@@ -63,6 +70,7 @@ export function ToolConfigForm({
   );
   const [hintKeys, setHintKeys] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,7 +191,13 @@ export function ToolConfigForm({
           name: key,
           label: typeof meta.title === "string" ? meta.title : undefined,
           type: meta.type,
-          required: required.includes(key) || hintKeys.includes(key),
+          required:
+            required.includes(key) ||
+            hintKeys.includes(key) ||
+            isStructureRequiredProp({
+              name: key,
+              required: required.includes(key),
+            }),
           description: meta.description,
           enum: meta.enum,
           options: remoteOptions[key],
@@ -202,6 +216,9 @@ export function ToolConfigForm({
       hintMeta,
     ],
   );
+
+  const requiredPropDefs = propDefs.filter((p) => isStructureRequiredProp(p));
+  const optionalPropDefs = propDefs.filter((p) => !isStructureRequiredProp(p));
 
   if (!loaded && !error) {
     return <p className="text-xs text-muted-foreground">{t("panel.toolConfigLoading")}</p>;
@@ -237,17 +254,54 @@ export function ToolConfigForm({
         </div>
       ) : null}
 
-      <PipedreamPropFields
-        props={propDefs}
-        values={values}
-        disabled={pending}
-        selectPlaceholder={t("panel.toolConfigSelect")}
-        searchPlaceholder={t("panel.toolConfigSearch")}
-        onChange={(name, value) => {
-          setSaved(false);
-          setValues((prev) => ({ ...prev, [name]: value }));
-        }}
-      />
+      {requiredPropDefs.length > 0 ? (
+        <PipedreamPropFields
+          props={requiredPropDefs}
+          values={values}
+          disabled={pending}
+          selectPlaceholder={t("panel.toolConfigSelect")}
+          searchPlaceholder={t("panel.toolConfigSearch")}
+          onChange={(name, value) => {
+            setSaved(false);
+            setValues((prev) => ({ ...prev, [name]: value }));
+          }}
+        />
+      ) : null}
+
+      {optionalPropDefs.length > 0 ? (
+        <div className="space-y-2">
+          <button
+            type="button"
+            className="group flex w-full items-center gap-1.5 py-0.5 text-left text-[11px] text-muted-foreground/70 transition-colors hover:text-muted-foreground"
+            onClick={() => setAdvancedOpen((open) => !open)}
+            aria-expanded={advancedOpen}
+          >
+            <span>{t("panel.toolTriggerAdvanced")}</span>
+            <ChevronDown
+              className={cn(
+                "size-3.5 opacity-70 transition-transform",
+                advancedOpen && "rotate-180",
+              )}
+              aria-hidden="true"
+            />
+          </button>
+          {advancedOpen ? (
+            <div className="rounded-2xl border border-border/40 bg-muted/20 p-3">
+              <PipedreamPropFields
+                props={optionalPropDefs}
+                values={values}
+                disabled={pending}
+                selectPlaceholder={t("panel.toolConfigSelect")}
+                searchPlaceholder={t("panel.toolConfigSearch")}
+                onChange={(name, value) => {
+                  setSaved(false);
+                  setValues((prev) => ({ ...prev, [name]: value }));
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {saved ? (
@@ -260,6 +314,26 @@ export function ToolConfigForm({
         onClick={() => {
           setError(null);
           setSaved(false);
+          const missing = requiredPropDefs.filter(
+            (prop) => !isPropValueFilled(values[prop.name]),
+          );
+          if (missing.length > 0) {
+            const labels = missing
+              .slice(0, 3)
+              .map((prop) =>
+                resolvePropCopy(prop.name, {
+                  label: prop.label,
+                  hintLabel: prop.hintLabel,
+                }).label,
+              );
+            setError(
+              t("panel.toolTriggerMissingFields", {
+                fields: labels.join(", "),
+                defaultValue: `Renseignez : ${labels.join(", ")}`,
+              }),
+            );
+            return;
+          }
           startTransition(async () => {
             try {
               const payload: Record<string, unknown> = {};

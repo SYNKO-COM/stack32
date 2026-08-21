@@ -92,3 +92,39 @@ def test_number_bool_array_options() -> None:
     assert by_name["enabled"].json_type == "boolean"
     assert by_name["tags"].json_type == "array"
     assert by_name["mode"].enum == ["a", "b"]
+
+
+def test_critical_static_forced_required_even_if_optional() -> None:
+    component = {
+        "key": "google_sheets-new-row-added",
+        "app": {"name_slug": "google_sheets"},
+        "configurable_props": [
+            {"name": "googleSheets", "type": "app", "app": "google_sheets"},
+            {
+                "name": "sheetId",
+                "type": "string",
+                "label": "Spreadsheet",
+                "remoteOptions": True,
+                "optional": True,
+            },
+            {
+                "name": "worksheetId",
+                "type": "string",
+                "label": "Worksheet",
+                "remoteOptions": True,
+                "optional": True,
+            },
+            {
+                "name": "hasHeaders",
+                "type": "boolean",
+                "optional": True,
+                "default": True,
+            },
+        ],
+    }
+    schema = normalize_configurable_props(component, tool_id="pd:sheets-row")
+    by_name = {p.name: p for p in schema.props}
+    assert by_name["sheetId"].kind == "static"
+    assert by_name["sheetId"].required is True
+    assert by_name["worksheetId"].required is True
+    assert by_name["hasHeaders"].required is False

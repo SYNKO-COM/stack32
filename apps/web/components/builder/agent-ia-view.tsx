@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, PanelRightClose, PanelRightOpen, Play, RefreshCw, Workflow } from "lucide-react";
+import { Loader2, PanelRightClose, PanelRightOpen, Play, RefreshCw, Square, Workflow } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { ProductAgentGraph } from "@/components/builder/agent-structure/product-agent-graph";
@@ -23,12 +23,14 @@ import { cancelLiveRun } from "@/lib/actions/live";
 import {
   getAgentTriggerRuntime,
   startAgentTriggerListen,
+  stopAgentTriggerListen,
 } from "@/lib/actions/builder";
 import { listAgentConnections } from "@/lib/actions/connections";
 import { getAgentReadiness } from "@/lib/actions/integrations";
 import type { ExecutionVisualState } from "@/lib/domain/execution-state";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ApprovalMode } from "@/lib/domain/types";
+import { appsEquivalent } from "@/lib/integrations/app-grouping";
 import { cn } from "@/lib/utils";
 
 const DRAFT_WAKE_MS = 10 * 60 * 1000;
@@ -216,8 +218,7 @@ export function AgentIaView({
     if (spec?.memory?.provider === "external_postgres") {
       const appId = (spec.memory.externalAppId || "").toLowerCase();
       if (!appId) return "setup_required" as const;
-      const aliases = new Set([appId, appId.replace(/_/g, "-"), appId.replace(/-/g, "_")]);
-      const connected = [...boundAppIds].some((id) => aliases.has(id.toLowerCase()));
+      const connected = [...boundAppIds].some((id) => appsEquivalent(id, appId));
       if (connected) return "ready" as const;
       if (memoryCheck !== undefined) {
         return memoryCheck.ok ? ("ready" as const) : ("setup_required" as const);
@@ -329,12 +330,33 @@ export function AgentIaView({
       setWakeUntilMs(until);
       setNowMs(Date.now());
       if (!toolTriggerConfigured) return;
-      try {
-        await startAgentTriggerListen(agentId);
-        await queryClient.invalidateQueries({ queryKey: ["agent-trigger-runtime", agentId] });
-      } catch {
-        setWakeError(t("structure:panel.toolTriggerListenError"));
+      const result = await startAgentTriggerListen(agentId);
+      if (!result.ok) {
+        setWakeUntilMs(null);
+        const key = `structure:panel.toolTriggerListenError_${result.code}`;
+        setWakeError(
+          t(key, {
+            defaultValue: t("structure:panel.toolTriggerListenError"),
+            message: result.message,
+          }),
+        );
+        return;
       }
+      await queryClient.invalidateQueries({ queryKey: ["agent-trigger-runtime", agentId] });
+    });
+  };
+
+  const stopDraftWake = () => {
+    if (consumer || agentPublished || structureLocked) return;
+    startWake(async () => {
+      setWakeError(null);
+      setWakeUntilMs(null);
+      try {
+        await stopAgentTriggerListen(agentId);
+      } catch {
+        // Best-effort stop.
+      }
+      await queryClient.invalidateQueries({ queryKey: ["agent-trigger-runtime", agentId] });
     });
   };
 
@@ -635,11 +657,17 @@ export function AgentIaView({
           <div className="flex shrink-0 items-center gap-1">
             {panelOpen && !structureLocked && !agentPublished ? (
               <Button
-                variant="ghost"
+                type="button"
                 size="icon-sm"
-                onClick={startDraftWake}
-                disabled={waking || draftAwake}
-                aria-label={t("structure:panel.toolTriggerPlay")}
+                onClick={draftAwake ? stopDraftWake : startDraftWake}
+                disabled={waking}
+                aria-label={
+                  draftAwake
+                    ? t("structure:panel.toolTriggerStop", {
+                        defaultValue: "Arrêter l’écoute",
+                      })
+                    : t("structure:panel.toolTriggerPlay")
+                }
                 title={
                   draftAwake && wakeUntilMs
                     ? t("structure:panel.toolTriggerPlaying", {
@@ -647,15 +675,19 @@ export function AgentIaView({
                       })
                     : t("structure:panel.toolTriggerPlayHint")
                 }
+                className={cn(
+                  "size-8 shrink-0 text-white hover:text-white",
+                  draftAwake
+                    ? "rounded-md bg-brand hover:bg-brand/90"
+                    : "rounded-md bg-brand hover:bg-brand/90",
+                )}
               >
                 {waking ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  <Loader2 className="size-4 animate-spin text-white" aria-hidden="true" />
+                ) : draftAwake ? (
+                  <Square className="size-3.5 fill-white text-white" aria-hidden="true" />
                 ) : (
-                  <Play
-                    className={cn("size-4", draftAwake && "text-brand")}
-                    fill={draftAwake ? "currentColor" : "none"}
-                    aria-hidden="true"
-                  />
+                  <Play className="size-4 fill-white text-white" aria-hidden="true" />
                 )}
               </Button>
             ) : null}

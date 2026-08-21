@@ -26,11 +26,15 @@ _STATIC_NAME_HINTS = frozenset(
         "spreadsheetid",
         "sheet",
         "sheetid",
+        "sheetname",
         "worksheet",
+        "worksheetid",
+        "worksheetids",
         "database",
         "databaseid",
         "page",
         "pageid",
+        "parentpageid",
         "pipeline",
         "pipelineid",
         "board",
@@ -41,6 +45,47 @@ _STATIC_NAME_HINTS = frozenset(
         "repository",
         "baseid",
         "tableid",
+        "documentid",
+        "docid",
+        "folderid",
+        "fileid",
+        "inboxid",
+        "designtype",
+    }
+)
+
+# Structure UX: treat these pickers as required even when Pipedream marks optional.
+_CRITICAL_REQUIRED_STATIC = frozenset(
+    {
+        "channel",
+        "channelid",
+        "conversation",
+        "conversationid",
+        "spreadsheet",
+        "spreadsheetid",
+        "sheet",
+        "sheetid",
+        "sheetname",
+        "worksheet",
+        "worksheetid",
+        "worksheetids",
+        "database",
+        "databaseid",
+        "page",
+        "pageid",
+        "parentpageid",
+        "baseid",
+        "tableid",
+        "documentid",
+        "docid",
+        "folderid",
+        "fileid",
+        "inboxid",
+        "repo",
+        "repository",
+        "owner",
+        "designtype",
+        "calendarid",
     }
 )
 
@@ -261,6 +306,12 @@ def normalize_configurable_props(
         else:
             # Auth app props are required for execution but never LLM-facing
             prop.required = prop.kind == "connection"
+
+        # Resource pickers (sheet, channel, table…) must be configured in Structure
+        # even when Pipedream marks them optional — deploy fails without them.
+        compact = prop.name.lower().replace("_", "").replace("-", "")
+        if prop.kind == "static" and compact in _CRITICAL_REQUIRED_STATIC:
+            prop.required = True
 
     return NormalizedToolSchema(
         tool_id=tool_id or (f"pd:{action_id}" if action_id else "pd:unknown"),

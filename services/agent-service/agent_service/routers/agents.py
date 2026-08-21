@@ -515,6 +515,29 @@ async def start_trigger_listen(agent_id: UUID, user: CurrentUser) -> dict[str, A
         ) from exc
 
 
+@router.post("/{agent_id}/triggers/listen/stop")
+async def stop_trigger_listen(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    from agent_service.supabase_client import get_supabase_admin_client
+    from agent_service.triggers.service import TriggerServiceError, stop_tool_trigger_listen
+
+    db: Persistence = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise _not_found()
+    try:
+        async with get_supabase_admin_client() as client:
+            return await stop_tool_trigger_listen(
+                user_id=user.user_id,
+                agent_id=str(agent_id),
+                client=client,
+            )
+    except TriggerServiceError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": exc.code, "message": str(exc) or exc.code},
+        ) from exc
+
+
 async def _sync_schedule_rows(
     *,
     user_id: str,

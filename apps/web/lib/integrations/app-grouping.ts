@@ -109,6 +109,43 @@ function matchNativeApp(toolId: string): (typeof NATIVE_APP_PREFIXES)[number] | 
   return undefined;
 }
 
+/** Normalize Pipedream / product app slugs for comparison. */
+export function normalizeAppSlug(value: string | null | undefined): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_")
+    .replace(/\s+/g, "_");
+}
+
+/**
+ * Match app ids the same way as agent-service `_apps_equivalent`
+ * (google_sheets ↔ sheets, slack_v2 ↔ slack, …).
+ */
+export function appsEquivalent(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  const na = normalizeAppSlug(a);
+  const nb = normalizeAppSlug(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const aliases: Record<string, Set<string>> = {
+    google_calendar: new Set(["calendar", "googlecalendar"]),
+    google_docs: new Set(["docs", "googledocs"]),
+    google_sheets: new Set(["sheets", "googlesheets"]),
+    google_drive: new Set(["drive", "googledrive"]),
+    gmail: new Set(["google_mail", "googlemail"]),
+    slack_v2: new Set(["slack"]),
+    microsoft_outlook: new Set(["outlook"]),
+  };
+  for (const [root, alts] of Object.entries(aliases)) {
+    const group = new Set([root, ...alts]);
+    if (group.has(na) && group.has(nb)) return true;
+  }
+  return false;
+}
+
 /** Resolve a stable app key from tool id + optional binding metadata. */
 export function resolveAppKey(
   toolId: string,

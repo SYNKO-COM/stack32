@@ -19,7 +19,12 @@ import {
   getTriggerDynamicOptions,
 } from "@/lib/actions/integrations";
 import type { AgentSpec } from "@/lib/domain/types";
-import { resolveAppDisplayName } from "@/lib/integrations/app-grouping";
+import { resolveAppDisplayName, appsEquivalent } from "@/lib/integrations/app-grouping";
+import {
+  isPropValueFilled,
+  isStructureRequiredProp,
+  resolvePropCopy,
+} from "@/lib/integrations/prop-labels";
 import { cn } from "@/lib/utils";
 
 function schedulePayload(spec?: AgentSpec | null) {
@@ -307,10 +312,9 @@ export function ToolTriggerConfigForm({
   }, [component.data?.props, componentId, agentId, appId]);
 
   const connection = useMemo(() => {
-    const needle = appId.replace(/-/g, "_").toLowerCase();
     return connections.find((c) => {
-      const slug = String(c.app_id || "").replace(/-/g, "_").toLowerCase();
-      return slug === needle || slug.includes(needle) || needle.includes(slug);
+      const slug = String(c.app_id || "");
+      return appsEquivalent(slug, appId);
     });
   }, [appId, connections]);
 
@@ -319,12 +323,33 @@ export function ToolTriggerConfigForm({
   );
 
   const allProps = component.data?.props ?? [];
-  const requiredProps = allProps.filter((prop) => prop.required);
-  const optionalProps = allProps.filter((prop) => !prop.required);
+  const requiredProps = allProps.filter((prop) => isStructureRequiredProp(prop));
+  const optionalProps = allProps.filter((prop) => !isStructureRequiredProp(prop));
 
   async function save() {
     if (!appId || !componentId) {
       setError(t("panel.toolTriggerRequired"));
+      return;
+    }
+    const missing = requiredProps.filter(
+      (prop) => !isPropValueFilled(extraProps[prop.name]),
+    );
+    if (missing.length > 0) {
+      const labels = missing
+        .slice(0, 3)
+        .map((prop) => resolvePropCopy(prop.name, { label: prop.label }).label);
+      setError(
+        t("panel.toolTriggerMissingFields", {
+          fields: labels.join(", "),
+          defaultValue: `Renseignez : ${labels.join(", ")}`,
+        }),
+      );
+      return;
+    }
+    if (!connected) {
+      setError(t("panel.toolTriggerNeedConnection", {
+        defaultValue: "Connectez l’application avant d’enregistrer.",
+      }));
       return;
     }
     setSaving(true);

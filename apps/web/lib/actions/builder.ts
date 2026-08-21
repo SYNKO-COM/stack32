@@ -339,28 +339,72 @@ export async function getAgentTriggerRuntime(agentId: string): Promise<{
 }
 
 export async function startAgentTriggerListen(agentId: string): Promise<{
+  ok: true;
   status: string;
   mode: string;
   listeningUntil?: string | null;
   windowSeconds?: number;
+} | {
+  ok: false;
+  code: string;
+  message: string;
 }> {
   await requireOwnedAgent(agentId);
   if (currentAiExecutionMode() !== "agent-service") {
-    throw new Error("triggers_require_agent_service");
+    return { ok: false, code: "triggers_require_agent_service", message: "Agent service required" };
   }
   const accessToken = await requireAccessToken();
-  const result = await agentServiceFetch<{
-    status?: string;
-    mode?: string;
-    listening_until?: string | null;
-    window_seconds?: number;
-  }>(`/v1/agents/${agentId}/triggers/listen`, { method: "POST", accessToken, body: {} });
-  return {
-    status: result.status || "listening",
-    mode: result.mode || "listen",
-    listeningUntil: result.listening_until,
-    windowSeconds: result.window_seconds,
-  };
+  try {
+    const result = await agentServiceFetch<{
+      status?: string;
+      mode?: string;
+      listening_until?: string | null;
+      window_seconds?: number;
+    }>(`/v1/agents/${agentId}/triggers/listen`, { method: "POST", accessToken, body: {} });
+    return {
+      ok: true,
+      status: result.status || "listening",
+      mode: result.mode || "listen",
+      listeningUntil: result.listening_until,
+      windowSeconds: result.window_seconds,
+    };
+  } catch (err) {
+    if (err instanceof AgentServiceError) {
+      return { ok: false, code: err.code, message: err.message };
+    }
+    return {
+      ok: false,
+      code: "LISTEN_FAILED",
+      message: err instanceof Error ? err.message : "Listen failed",
+    };
+  }
+}
+
+export async function stopAgentTriggerListen(agentId: string): Promise<{
+  status: string;
+  stopped?: boolean;
+}> {
+  await requireOwnedAgent(agentId);
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { status: "idle", stopped: false };
+  }
+  const accessToken = await requireAccessToken();
+  try {
+    const result = await agentServiceFetch<{
+      status?: string;
+      stopped?: boolean;
+    }>(`/v1/agents/${agentId}/triggers/listen/stop`, {
+      method: "POST",
+      accessToken,
+      body: {},
+    });
+    return {
+      status: result.status || "idle",
+      stopped: result.stopped === true,
+    };
+  } catch {
+    return { status: "idle", stopped: false };
+  }
 }
 
 /** Persist memory settings from Structure (conversation / semantic / provider). */

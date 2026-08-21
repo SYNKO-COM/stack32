@@ -201,3 +201,106 @@ export function resolvePropCopy(
     plainHint(opts?.description);
   return { label, hint };
 }
+
+/**
+ * Resource pickers the user must set in Structure (sheet, channel, table…).
+ * Pipedream often marks these `optional: true` even though deploy fails without them.
+ */
+const CRITICAL_STRUCTURE_PROPS = new Set([
+  "sheetid",
+  "spreadsheetid",
+  "worksheetid",
+  "worksheetids",
+  "sheetname",
+  "channel",
+  "channelid",
+  "conversation",
+  "conversationid",
+  "calendarid",
+  "pageid",
+  "parentpageid",
+  "databaseid",
+  "inboxid",
+  "baseid",
+  "base",
+  "tableid",
+  "table",
+  "documentid",
+  "docid",
+  "folderid",
+  "fileid",
+  "repo",
+  "repository",
+  "owner",
+  "designtype",
+]);
+
+/** Optional / advanced even when present in PROP_COPY. */
+const ADVANCED_ONLY_PROPS = new Set([
+  "hasheaders",
+  "headerrownumber",
+  "watchdrive",
+  "drive",
+  "driveid",
+  "timer",
+  "as_user",
+  "asuser",
+]);
+
+function compactPropName(name: string): string {
+  return name.toLowerCase().replace(/[_-]/g, "");
+}
+
+/** True when this prop must be filled before Enregistrer / listen. */
+export function isStructureRequiredProp(prop: {
+  name: string;
+  required?: boolean;
+}): boolean {
+  const compact = compactPropName(prop.name);
+  if (ADVANCED_ONLY_PROPS.has(compact)) return false;
+  if (prop.required === true) return true;
+  return CRITICAL_STRUCTURE_PROPS.has(compact);
+}
+
+export function isPropValueFilled(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "boolean" || typeof value === "number") return true;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value as object).length > 0;
+  return Boolean(value);
+}
+
+/**
+ * Heuristic readiness for tool triggers when we only have saved extraProps
+ * (no live component schema on the canvas).
+ */
+export function triggerExtraConfigReady(
+  appId: string | null | undefined,
+  extraProps: Record<string, unknown> | null | undefined,
+): boolean {
+  const app = String(appId || "")
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const extras = extraProps || {};
+  const anyFilled = (...keys: string[]) =>
+    keys.some((k) => isPropValueFilled(extras[k]));
+
+  if (app.includes("sheet") || app === "googlesheets") {
+    return anyFilled("sheetId", "spreadsheetId");
+  }
+  if (app.includes("slack")) {
+    return anyFilled("channel", "channelId", "conversation", "conversationId");
+  }
+  if (app.includes("airtable")) {
+    return anyFilled("baseId", "base") && anyFilled("tableId", "table");
+  }
+  if (app.includes("notion")) {
+    return anyFilled("pageId", "page_id", "databaseId", "database_id", "parentPageId");
+  }
+  if (app.includes("hubspot")) {
+    // Many HubSpot triggers work after connect alone
+    return true;
+  }
+  return true;
+}
