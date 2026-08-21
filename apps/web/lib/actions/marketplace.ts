@@ -1,6 +1,7 @@
 "use server";
 
 import { getOrCreateInstallation } from "@/lib/actions/installations";
+import { isAllowedAgentIconValue } from "@/lib/marketplace/agent-avatar";
 import {
   isListingBillingInterval,
   slugifyAgentName,
@@ -452,17 +453,8 @@ export async function updateAgentListingAction(input: {
     return { ok: false, code: "save_failed" };
   }
 
-  const allowedIcons = new Set([
-    "briefcase",
-    "search",
-    "life-buoy",
-    "pen-line",
-    "file-text",
-    "sparkles",
-    "bot",
-  ]);
   const iconKey =
-    typeof input.iconKey === "string" && allowedIcons.has(input.iconKey)
+    typeof input.iconKey === "string" && isAllowedAgentIconValue(input.iconKey)
       ? input.iconKey
       : "bot";
 

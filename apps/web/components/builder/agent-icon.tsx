@@ -10,6 +10,10 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import {
+  AGENT_PRESET_ICON_KEYS,
+  isAgentIconImageUrl,
+} from "@/lib/marketplace/agent-avatar";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -22,9 +26,24 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   bot: Bot,
 };
 
-export const AGENT_ICON_KEYS = Object.keys(ICONS);
+export const AGENT_ICON_KEYS = [...AGENT_PRESET_ICON_KEYS];
 
 export function AgentIcon({ icon, className }: { icon: string; className?: string }) {
+  if (isAgentIconImageUrl(icon)) {
+    return (
+      <span
+        className={cn(
+          "relative flex size-8 shrink-0 overflow-hidden rounded-xl bg-foreground/[0.05]",
+          className,
+        )}
+        aria-hidden="true"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- remote agent avatars from storage */}
+        <img src={icon} alt="" className="size-full object-cover" />
+      </span>
+    );
+  }
+
   const Icon = ICONS[icon] ?? Bot;
   return (
     <span
