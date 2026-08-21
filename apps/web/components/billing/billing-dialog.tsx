@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -103,6 +104,7 @@ export function BillingDialog() {
   };
 
   return (
+    <>
     <Dialog
       open={activeDialog === "billing"}
       onOpenChange={(o) => {
@@ -196,42 +198,14 @@ export function BillingDialog() {
           </Button>
 
           {isPaid && !cancelAtPeriodEnd ? (
-            confirmCancel ? (
-              <div className="space-y-2 rounded-xl border border-border/70 p-3">
-                <p className="text-xs text-muted-foreground">
-                  {t("billing:status.cancelConfirm", {
-                    date: periodEnd ?? "—",
-                  })}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1 rounded-xl"
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => setConfirmCancel(false)}
-                  >
-                    {t("billing:status.keepSubscription")}
-                  </Button>
-                  <Button
-                    className="flex-1 rounded-xl"
-                    variant="destructive"
-                    disabled={busy}
-                    onClick={onCancel}
-                  >
-                    {busy ? t("billing:status.cancelingAction") : t("billing:status.confirmCancel")}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Button
-                className="w-full rounded-xl"
-                variant="ghost"
-                disabled={busy}
-                onClick={() => setConfirmCancel(true)}
-              >
-                {t("billing:status.cancelSubscription")}
-              </Button>
-            )
+            <Button
+              className="w-full rounded-xl"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setConfirmCancel(true)}
+            >
+              {t("billing:status.cancelSubscription")}
+            </Button>
           ) : null}
 
           {isPaid && cancelAtPeriodEnd ? (
@@ -250,6 +224,42 @@ export function BillingDialog() {
           ) : null}
         </div>
       </DialogContent>
+
+      <Dialog
+        open={confirmCancel}
+        onOpenChange={(open) => {
+          if (!open && !busy) setConfirmCancel(false);
+        }}
+      >
+        <DialogContent className="glass-strong border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("billing:status.cancelConfirmTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("billing:status.cancelConfirm", {
+                date: periodEnd ?? "—",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              className="flex-1 rounded-xl"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => setConfirmCancel(false)}
+            >
+              {t("billing:status.keepSubscription")}
+            </Button>
+            <Button
+              className="flex-1 rounded-xl"
+              variant="destructive"
+              disabled={busy}
+              onClick={onCancel}
+            >
+              {busy ? t("billing:status.cancelingAction") : t("billing:status.confirmCancel")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
