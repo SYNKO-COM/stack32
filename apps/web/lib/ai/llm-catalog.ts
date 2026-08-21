@@ -19,7 +19,8 @@ export type LiveLlmProviderId = (typeof LIVE_LLM_PROVIDERS)[number];
 export const LIVE_LLM_PIPEDREAM_APP: Record<LiveLlmProviderId, string> = {
   openai: "openai",
   anthropic: "anthropic",
-  xai: "xai",
+  // Official Pipedream name_slug is x_ai (API key app), not "xai".
+  xai: "x_ai",
   mistral: "mistral_ai",
 };
 

@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 LLM_PROVIDER_PIPEDREAM_APPS: dict[str, list[str]] = {
     "openai": ["openai"],
     "anthropic": ["anthropic"],
-    "xai": ["xai"],
+    # Official Pipedream name_slug is x_ai; keep "xai" as legacy alias.
+    "xai": ["x_ai", "xai"],
     "mistral": ["mistral_ai", "mistral"],
 }
 

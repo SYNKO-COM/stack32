@@ -26,7 +26,9 @@ def test_extract_api_key_variants():
 def test_provider_app_maps():
     assert "openai" in pipedream_apps_for_provider("openai")
     assert "mistral_ai" in pipedream_apps_for_provider("mistral")
+    assert "x_ai" in pipedream_apps_for_provider("xai")
     assert provider_for_pipedream_app("anthropic") == "anthropic"
+    assert provider_for_pipedream_app("x_ai") == "xai"
     assert provider_for_pipedream_app("xai") == "xai"
     assert provider_for_pipedream_app("mistral_ai") == "mistral"
 

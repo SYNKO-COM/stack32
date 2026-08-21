@@ -167,6 +167,11 @@ function humanizeAppSlug(raw: string): string {
     google_docs: "Google Docs",
     google_sheets: "Google Sheets",
     microsoft_outlook: "Outlook",
+    x_ai: "xAI",
+    xai: "xAI",
+    mistral_ai: "Mistral",
+    openai: "OpenAI",
+    anthropic: "Anthropic",
   };
   if (known[slug]) return known[slug];
   return slug

@@ -60,9 +60,12 @@ export function ModelConfigForm({
   const connection = useMemo(() => {
     const list = connectionPayload?.connections ?? [];
     const aliases = new Set(
-      [appId, provider, ...(provider === "mistral" ? ["mistral_ai", "mistral"] : [])].map((s) =>
-        s.toLowerCase(),
-      ),
+      [
+        appId,
+        provider,
+        ...(provider === "xai" ? ["x_ai", "xai"] : []),
+        ...(provider === "mistral" ? ["mistral_ai", "mistral"] : []),
+      ].map((s) => s.toLowerCase()),
     );
     return list.find((c) => {
       const status = String(c.status || "").toLowerCase();

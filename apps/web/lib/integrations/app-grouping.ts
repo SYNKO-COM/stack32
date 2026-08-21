@@ -138,6 +138,8 @@ export function appsEquivalent(
     gmail: new Set(["google_mail", "googlemail"]),
     slack_v2: new Set(["slack"]),
     microsoft_outlook: new Set(["outlook"]),
+    x_ai: new Set(["xai"]),
+    mistral_ai: new Set(["mistral"]),
   };
   for (const [root, alts] of Object.entries(aliases)) {
     const group = new Set([root, ...alts]);

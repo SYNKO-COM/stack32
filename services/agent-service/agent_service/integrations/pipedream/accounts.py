@@ -31,6 +31,8 @@ def _apps_equivalent(a: str | None, b: str | None) -> bool:
         "gmail": {"google_mail", "googlemail"},
         "slack_v2": {"slack"},
         "microsoft_outlook": {"outlook"},
+        "x_ai": {"xai"},
+        "mistral_ai": {"mistral"},
     }
     for root, alts in aliases.items():
         group = {root, *alts}

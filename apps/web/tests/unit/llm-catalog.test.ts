@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { LLM_MODELS, LLM_PROVIDERS } from "@/lib/ai/llm-catalog";
+import {
+  LLM_MODELS,
+  LLM_PROVIDERS,
+  pipedreamAppForLlmProvider,
+} from "@/lib/ai/llm-catalog";
 import { statusToTone } from "@/components/builder/agent-structure/structure-icon";
 import {
   llmProviderIconSrc,
@@ -13,6 +17,13 @@ describe("llm-catalog", () => {
       expect(LLM_MODELS[provider].length).toBeGreaterThan(0);
       expect(LLM_MODELS[provider].length).toBeLessThanOrEqual(20);
     }
+  });
+
+  it("maps Live providers to official Pipedream Connect app slugs", () => {
+    expect(pipedreamAppForLlmProvider("openai")).toBe("openai");
+    expect(pipedreamAppForLlmProvider("anthropic")).toBe("anthropic");
+    expect(pipedreamAppForLlmProvider("xai")).toBe("x_ai");
+    expect(pipedreamAppForLlmProvider("mistral")).toBe("mistral_ai");
   });
 });
 

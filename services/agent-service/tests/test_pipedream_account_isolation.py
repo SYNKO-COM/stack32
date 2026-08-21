@@ -8,6 +8,8 @@ from agent_service.integrations.pipedream.accounts import _apps_equivalent, _nor
 def test_app_slug_normalization():
     assert _normalize_app_slug("google-calendar") == "google_calendar"
     assert _apps_equivalent("google-calendar", "google_calendar")
+    assert _apps_equivalent("x_ai", "xai")
+    assert _apps_equivalent("mistral_ai", "mistral")
     assert not _apps_equivalent("notion", "google_calendar")
     assert not _apps_equivalent("canva", "notion")
 
