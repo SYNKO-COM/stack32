@@ -1,6 +1,7 @@
 import {
   groupToolsByApp,
   isProductFacingTool,
+  resolveAppDisplayName,
   toolActionLabel,
 } from "@/lib/integrations/app-grouping";
 import { resolveIntegrationIcon } from "@/lib/integrations/icon-resolver";
@@ -170,12 +171,39 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
     });
   }
   if (toolTrigger) {
+    const appKey = String(toolTrigger.appId || "").trim();
+    const appName = appKey ? resolveAppDisplayName(appKey) : "Outil";
+    const aliases = appKey
+      ? new Set([
+          appKey.toLowerCase(),
+          appKey.replace(/_/g, "-").toLowerCase(),
+          appKey.replace(/-/g, "_").toLowerCase(),
+        ])
+      : new Set<string>();
+    const connected =
+      aliases.size > 0 &&
+      [...(boundAppIds ?? [])].some((id) => aliases.has(String(id).toLowerCase()));
     nodes.push({
       id: "trigger:tool",
       kind: "trigger_tool",
-      label: toolTrigger.label || "Outil",
-      subtitle: toolTrigger.appId || undefined,
-      configurationStatus: toolTrigger.componentId ? "ready" : "setup_required",
+      label: `Trigger ${appName}`,
+      subtitle: toolTrigger.componentId || undefined,
+      configurationStatus:
+        toolTrigger.componentId && connected ? "ready" : "setup_required",
+      ...(appKey
+        ? {
+            integration: {
+              appKey,
+              appName,
+              provider: "pipedream",
+              toolIds: [],
+              actions: [],
+              connectionStatus: connected ? "connected" : "needs_setup",
+              configurationStatus:
+                toolTrigger.componentId && connected ? "ready" : "setup_required",
+            },
+          }
+        : {}),
     });
   }
 

@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 
 import { Input } from "@/components/ui/input";
 import { searchIntegrationApps, type IntegrationAppHit } from "@/lib/actions/integrations";
-import { cacheIntegrationIcon } from "@/lib/integrations/icon-resolver";
+import { cacheIntegrationIcon, getCachedIntegrationIcon } from "@/lib/integrations/icon-resolver";
 import { rankIntegrationApps } from "@/lib/integrations/rank-apps";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,8 @@ export function AppSearchField({
   seedQuery,
   placeholder,
   disabled,
+  iconSrc,
+  selectedAppId,
 }: {
   value: string;
   onChange: (appId: string) => void;
@@ -51,6 +53,10 @@ export function AppSearchField({
   seedQuery?: string;
   placeholder?: string;
   disabled?: boolean;
+  /** Logo shown inside the closed/selected field. */
+  iconSrc?: string | null;
+  /** When set, treat `value` as a confirmed selection (logo stays visible). */
+  selectedAppId?: string;
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -59,9 +65,19 @@ export function AppSearchField({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [apps, setApps] = useState<IntegrationAppHit[]>([]);
+  const [pickedIcon, setPickedIcon] = useState<string | null>(iconSrc ?? null);
   const [menuBox, setMenuBox] = useState<{ top: number; left: number; width: number } | null>(
     null,
   );
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (iconSrc) setPickedIcon(iconSrc);
+    else if (selectedAppId) setPickedIcon(getCachedIntegrationIcon(selectedAppId) ?? null);
+  }, [iconSrc, selectedAppId]);
 
   useEffect(() => {
     if (!open) return;
@@ -123,6 +139,9 @@ export function AppSearchField({
     return () => window.removeEventListener("pointerdown", onPointer);
   }, []);
 
+  const showLogo = Boolean(pickedIcon || selectedAppId) && Boolean(query.trim());
+  const logoSrc = pickedIcon ?? (selectedAppId ? getCachedIntegrationIcon(selectedAppId) : null);
+
   const menu =
     open && menuBox && typeof document !== "undefined"
       ? createPortal(
@@ -143,16 +162,20 @@ export function AppSearchField({
               </li>
             ) : null}
             {apps.map((app) => (
-              <li key={app.appId} role="option" aria-selected={app.appId === value}>
+              <li key={app.appId} role="option" aria-selected={app.appId === selectedAppId}>
                 <button
                   type="button"
                   className={cn(
                     "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors",
                     "hover:bg-brand/15",
-                    app.appId === value && "bg-brand/20",
+                    app.appId === selectedAppId && "bg-brand/20",
                   )}
                   onClick={() => {
                     setQuery(app.name);
+                    if (app.imgSrc) {
+                      cacheIntegrationIcon(app.appId, app.imgSrc);
+                      setPickedIcon(app.imgSrc);
+                    }
                     onChange(app.appId);
                     onSelect?.(app);
                     setOpen(false);
@@ -180,6 +203,11 @@ export function AppSearchField({
 
   return (
     <div ref={rootRef} className="relative">
+      {showLogo ? (
+        <span className="pointer-events-none absolute left-3 top-1/2 z-[1] -translate-y-1/2">
+          <AppMark src={logoSrc ?? undefined} name={query || "A"} />
+        </span>
+      ) : null}
       <Input
         role="combobox"
         aria-expanded={open}
@@ -189,11 +217,12 @@ export function AppSearchField({
         disabled={disabled}
         value={query}
         placeholder={placeholder}
-        className="h-10 rounded-xl bg-background/80"
+        className={cn("h-10 rounded-xl bg-background/80", showLogo && "pl-11")}
         onFocus={() => setOpen(true)}
         onChange={(event) => {
           const next = event.target.value;
           setQuery(next);
+          setPickedIcon(null);
           onChange(next);
           setOpen(true);
         }}
@@ -206,6 +235,10 @@ export function AppSearchField({
             event.preventDefault();
             const hit = apps[0];
             setQuery(hit.name);
+            if (hit.imgSrc) {
+              cacheIntegrationIcon(hit.appId, hit.imgSrc);
+              setPickedIcon(hit.imgSrc);
+            }
             onChange(hit.appId);
             onSelect?.(hit);
             setOpen(false);

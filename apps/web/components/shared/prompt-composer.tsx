@@ -339,21 +339,25 @@ export function PromptComposer({
     // Keep File + previewUrl on the snapshot for optimistic UI / upload.
     // Do not revoke object URLs here — the handoff owns them briefly.
     const snapshot = attachments.map((a) => ({ ...a }));
-    const clearDraft = () => {
-      setValue("");
-      setAttachments([]);
-      if (draftKey) writeComposerDraft(draftKey, "");
-    };
+    const draftText = value;
+    // Clear immediately so the typed message does not linger while the turn runs.
+    setValue("");
+    setAttachments([]);
+    if (draftKey) writeComposerDraft(draftKey, "");
     void (async () => {
+      const restoreDraft = () => {
+        setValue(draftText);
+        setAttachments(snapshot);
+        if (draftKey) writeComposerDraft(draftKey, draftText);
+      };
       try {
         const result = await Promise.resolve(
           onSubmit(payload, snapshot, showModeSelector ? { mode } : undefined),
         );
-        // Callers return false (or throw) to keep the typed text — e.g. plan limit.
-        if (result === false) return;
-        clearDraft();
+        // Callers return false to keep the typed text — e.g. plan limit / busy.
+        if (result === false) restoreDraft();
       } catch {
-        // Keep the draft so the user does not lose their message on limit / network errors.
+        restoreDraft();
       }
     })();
   };

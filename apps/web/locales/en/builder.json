@@ -276,9 +276,19 @@
     "formClosed": "Triggers saved. Building now."
   },
   "providers": {
-    "prompt": "I found more than one matching app for a tool you mentioned. Search and pick the exact one — you can also paste the website URL. No account linking yet.",
-    "searchPlaceholder": "Start typing to search apps…",
-    "saved": "Got it — I'll wire those apps into your agent definition."
+    "prompt": "To wire the right tool, pick the app you actually use (Gmail, Stripe, HubSpot…). You can also paste the website URL. No account linking yet.",
+    "promptEmail": "I’ll help you connect email. Choose your mailbox (Gmail, Outlook…). No account linking yet.",
+    "promptCrm": "I’ll help you connect your CRM. Pick the one you use (HubSpot, Salesforce, Pipedrive…). No account linking yet.",
+    "promptAmbiguous": "Several apps match what you mentioned. Pick the right one — or paste the website URL. No account linking yet.",
+    "searchPlaceholder": "Search an app (e.g. Gmail, Stripe…)",
+    "saved": "Got it — I'll wire those apps into your agent definition.",
+    "formClosed": "Choice saved. Continuing the build.",
+    "fields": {
+      "email_service": "Choose your mailbox",
+      "crm": "Choose your CRM",
+      "tool_website": "Website URL (optional)",
+      "ambiguousApp": "Choose the app for “{{query}}”"
+    }
   },
   "toolReview": {
     "prompt": "Here are the apps this agent can use. Keep the ones you need, remove the rest, or add one.",
@@ -320,8 +330,8 @@
       "knowledge_scope": "Which documents or topics should it know?",
       "connection_intent": "Does it need an external account (email, calendar…)?",
       "audience": "Who will use this agent?",
-      "email_service": "Which email service?",
-      "crm": "Which CRM?",
+      "email_service": "Choose your mailbox",
+      "crm": "Choose your CRM",
       "tool_website": "Tool website URL (optional)",
       "app_canva": "Which design tool did you mean?"
     },

@@ -1236,7 +1236,7 @@ class BuilderOrchestrator:
                     "key": "email_service",
                     "type": "text",
                     "required": True,
-                    "label": "Email service",
+                    "label": "Choose your mailbox",
                     "suggested_value": "",
                 }
             )
@@ -1249,7 +1249,7 @@ class BuilderOrchestrator:
                     "key": "crm",
                     "type": "text",
                     "required": True,
-                    "label": "CRM",
+                    "label": "Choose your CRM",
                     "suggested_value": "",
                 }
             )
@@ -1311,7 +1311,7 @@ class BuilderOrchestrator:
                 "key": key,
                 "type": "select" if options else "text",
                 "required": True,
-                "label": f"Which app did you mean by “{query}”?",
+                "label": f"Choose the app for “{query}”",
                 "suggested_value": options[0] if options else query,
             }
             if options:
@@ -1323,7 +1323,7 @@ class BuilderOrchestrator:
                 "key": "tool_website",
                 "type": "text",
                 "required": False,
-                "label": "Or paste the tool website URL",
+                "label": "Or paste the website URL (optional)",
                 "suggested_value": "",
             }
         )
@@ -1352,11 +1352,20 @@ class BuilderOrchestrator:
         fields: list[dict[str, Any]],
         original_goal: str,
     ) -> dict[str, Any]:
+        field_keys = {str(f.get("key") or "") for f in fields}
+        if field_keys <= {"email_service", "tool_website"} or field_keys == {"email_service"}:
+            prompt_key = "builder:providers.promptEmail"
+        elif field_keys <= {"crm", "tool_website"} or field_keys == {"crm"}:
+            prompt_key = "builder:providers.promptCrm"
+        elif any(k.startswith("app_") for k in field_keys):
+            prompt_key = "builder:providers.promptAmbiguous"
+        else:
+            prompt_key = "builder:providers.prompt"
         await self.db.insert_assistant_message(
             thread_id=thread_id,
             agent_id=agent_id,
             user_id=user_id,
-            content="builder:providers.prompt",
+            content=prompt_key,
             metadata={
                 "tone": "normal",
                 "interrupt_run_id": run_id,

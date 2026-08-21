@@ -220,7 +220,7 @@ function ProductAgentGraphCanvas({
   const integrationAppKeySignature = useMemo(
     () =>
       productGraph.nodes
-        .filter((n) => n.kind === "integration")
+        .filter((n) => n.kind === "integration" || n.kind === "trigger_tool")
         .map((n) => n.integration?.appKey)
         .filter((key): key is string => Boolean(key))
         .sort()

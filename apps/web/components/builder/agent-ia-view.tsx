@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PanelRightClose, PanelRightOpen, RefreshCw, Workflow } from "lucide-react";
+import { Loader2, PanelRightClose, PanelRightOpen, Play, RefreshCw, Workflow } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { ProductAgentGraph } from "@/components/builder/agent-structure/product-agent-graph";
@@ -14,17 +14,24 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useAgentGraph, useAgentSpec } from "@/hooks/use-agents";
+import { useAgent, useAgentGraph, useAgentSpec } from "@/hooks/use-agents";
 import { useLiveExecutionState } from "@/hooks/use-live-execution";
 import { useLiveThread } from "@/hooks/use-live";
 import { useRunEventStream } from "@/hooks/use-run-sse";
 import { useTranslation } from "@/hooks/use-translation";
 import { cancelLiveRun } from "@/lib/actions/live";
+import {
+  getAgentTriggerRuntime,
+  startAgentTriggerListen,
+} from "@/lib/actions/builder";
 import { listAgentConnections } from "@/lib/actions/connections";
 import { getAgentReadiness } from "@/lib/actions/integrations";
+import type { ExecutionVisualState } from "@/lib/domain/execution-state";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ApprovalMode } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
+
+const DRAFT_WAKE_MS = 10 * 60 * 1000;
 
 const DEFAULT_CHAT_PCT = 45;
 const MIN_CHAT_PCT = 28;
@@ -59,6 +66,7 @@ export function AgentIaView({
 }) {
   const { t } = useTranslation(["structure", "builder"]);
   const queryClient = useQueryClient();
+  const { data: agent } = useAgent(agentId);
   const { data: graphResponse } = useAgentGraph(agentId);
   const { data: spec } = useAgentSpec(agentId);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -68,12 +76,17 @@ export function AgentIaView({
   const isLg = useIsLgViewport();
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshing, startRefresh] = useTransition();
+  const [waking, startWake] = useTransition();
   const [setupOpen, setSetupOpen] = useState(false);
   const [ignoredRunIds, setIgnoredRunIds] = useState<string[]>([]);
+  const [wakeUntilMs, setWakeUntilMs] = useState<number | null>(null);
+  const [wakeError, setWakeError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const rootRef = useRef<HTMLDivElement>(null);
   const consumer = mode === "consumer";
   const structureLocked = consumer;
   const allowInstallationConfig = consumer;
+  const agentPublished = agent?.status === "published";
 
   useEffect(() => {
     const supabase = requireSupabaseBrowserClient();
@@ -239,6 +252,92 @@ export function AgentIaView({
     productGraph,
   );
 
+  const toolTriggerConfigured = Boolean(
+    (spec?.triggers ?? []).find((row) => row.kind === "tool" && row.enabled && row.componentId),
+  );
+
+  const triggerRuntime = useQuery({
+    queryKey: ["agent-trigger-runtime", agentId],
+    queryFn: () => getAgentTriggerRuntime(agentId),
+    enabled: Boolean(agentId) && !consumer && toolTriggerConfigured,
+    refetchInterval: (query) =>
+      query.state.data?.status === "listening" ? 2500 : false,
+  });
+
+  useEffect(() => {
+    if (!wakeUntilMs) return;
+    const tick = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, [wakeUntilMs]);
+
+  useEffect(() => {
+    if (!wakeUntilMs) return;
+    if (nowMs < wakeUntilMs) return;
+    setWakeUntilMs(null);
+  }, [nowMs, wakeUntilMs]);
+
+  useEffect(() => {
+    const until = triggerRuntime.data?.listeningUntil;
+    if (triggerRuntime.data?.status !== "listening" || !until) return;
+    const ms = new Date(until).getTime();
+    if (!Number.isFinite(ms)) return;
+    setWakeUntilMs((prev) => (prev && prev > ms ? prev : ms));
+  }, [triggerRuntime.data?.status, triggerRuntime.data?.listeningUntil]);
+
+  const draftAwake =
+    !agentPublished &&
+    !consumer &&
+    ((wakeUntilMs != null && nowMs < wakeUntilMs) ||
+      triggerRuntime.data?.status === "listening");
+
+  const wakeExecutionVisual = useMemo((): ExecutionVisualState | undefined => {
+    if (visualRunId || !draftAwake) return executionVisual;
+    const nodes: ExecutionVisualState["nodes"] = {};
+    const edges: ExecutionVisualState["edges"] = {};
+    const legacy: ExecutionVisualState["legacy"] = {};
+    for (const node of productGraph.nodes) {
+      if (
+        node.kind !== "trigger_chat" &&
+        node.kind !== "trigger_schedule" &&
+        node.kind !== "trigger_tool"
+      ) {
+        continue;
+      }
+      nodes[node.id] = { executionStatus: "running" };
+      legacy[node.id] = "running";
+      const edge = productGraph.edges.find(
+        (row) => row.source === node.id && row.target === "agent",
+      );
+      if (edge) {
+        edges[edge.id] = { executionStatus: "running" };
+      }
+    }
+    return {
+      runStatus: "running",
+      nodes,
+      edges,
+      legacy,
+      error: null,
+    };
+  }, [draftAwake, executionVisual, productGraph.edges, productGraph.nodes, visualRunId]);
+
+  const startDraftWake = () => {
+    if (consumer || agentPublished || structureLocked) return;
+    setWakeError(null);
+    startWake(async () => {
+      const until = Date.now() + DRAFT_WAKE_MS;
+      setWakeUntilMs(until);
+      setNowMs(Date.now());
+      if (!toolTriggerConfigured) return;
+      try {
+        await startAgentTriggerListen(agentId);
+        await queryClient.invalidateQueries({ queryKey: ["agent-trigger-runtime", agentId] });
+      } catch {
+        setWakeError(t("structure:panel.toolTriggerListenError"));
+      }
+    });
+  };
+
   useRunEventStream({
     agentId,
     runId: visualRunId,
@@ -296,6 +395,8 @@ export function AgentIaView({
 
   const resetStructureExecution = () => {
     startRefresh(async () => {
+      setWakeUntilMs(null);
+      setWakeError(null);
       if (liveRunId) {
         setIgnoredRunIds((prev) =>
           prev.includes(liveRunId) ? prev : [...prev, liveRunId],
@@ -319,6 +420,7 @@ export function AgentIaView({
       void queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
       void queryClient.invalidateQueries({ queryKey: ["agents", agentId, "graph"] });
       void queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
+      void queryClient.invalidateQueries({ queryKey: ["agent-trigger-runtime", agentId] });
     });
   };
 
@@ -364,7 +466,7 @@ export function AgentIaView({
       boundAppIds={boundAppIds}
       modelStatus={modelStatus}
       memoryStatus={memoryStatus}
-      executionVisual={executionVisual}
+      executionVisual={wakeExecutionVisual ?? executionVisual}
       readOnly={structureLocked}
       allowInstallationConfig={allowInstallationConfig}
       onConnectionsChanged={
@@ -531,6 +633,32 @@ export function AgentIaView({
             </span>
           ) : null}
           <div className="flex shrink-0 items-center gap-1">
+            {panelOpen && !structureLocked && !agentPublished ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={startDraftWake}
+                disabled={waking || draftAwake}
+                aria-label={t("structure:panel.toolTriggerPlay")}
+                title={
+                  draftAwake && wakeUntilMs
+                    ? t("structure:panel.toolTriggerPlaying", {
+                        until: new Date(wakeUntilMs).toLocaleTimeString(),
+                      })
+                    : t("structure:panel.toolTriggerPlayHint")
+                }
+              >
+                {waking ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Play
+                    className={cn("size-4", draftAwake && "text-brand")}
+                    fill={draftAwake ? "currentColor" : "none"}
+                    aria-hidden="true"
+                  />
+                )}
+              </Button>
+            ) : null}
             {panelOpen && !structureLocked ? (
               <Button
                 variant="ghost"
@@ -566,6 +694,12 @@ export function AgentIaView({
             </Button>
           </div>
         </div>
+
+        {wakeError && panelOpen ? (
+          <p className="shrink-0 border-b border-border px-3 py-1.5 text-xs text-destructive">
+            {wakeError}
+          </p>
+        ) : null}
 
         {panelOpen ? (
           <div className="min-h-0 flex-1">{modulesGraph}</div>

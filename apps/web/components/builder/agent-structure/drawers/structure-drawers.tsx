@@ -15,7 +15,6 @@ import {
 import {
   AgentToolTriggerToggle,
   ToolTriggerConfigForm,
-  ToolTriggerListenButton,
 } from "@/components/builder/agent-structure/drawers/tool-trigger-form";
 import type { ExecutionErrorInfo } from "@/lib/domain/execution-state";
 import {
@@ -386,14 +385,6 @@ export function AgentDrawer({
           />
         </div>
       </DetailBlock>
-
-      <ToolTriggerListenButton
-        agentId={agentId}
-        published={published}
-        configured={Boolean(
-          (spec?.triggers ?? []).find((t) => t.kind === "tool" && t.enabled && t.componentId),
-        )}
-      />
 
       <p className="text-sm text-muted-foreground">{t("panel.agentReadOnlyHint")}</p>
 

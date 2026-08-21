@@ -246,7 +246,7 @@ export function ToolReviewForm({
           </p>
         ) : null}
 
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-3">
           {visible.map((tool) => (
             <li
               key={tool.key}
@@ -312,7 +312,7 @@ export function ToolReviewForm({
             <p className="text-xs font-medium text-muted-foreground">
               {t("toolReview.proposedRemovals")}
             </p>
-            <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <ul className="grid grid-cols-1 gap-2">
               {proposedRemovals.map((tool) => (
                 <li
                   key={tool.key}

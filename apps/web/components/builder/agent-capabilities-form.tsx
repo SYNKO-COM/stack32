@@ -12,7 +12,6 @@ import { submitBuilderCapabilities } from "@/lib/actions/builder";
 import { searchIntegrationTriggers } from "@/lib/actions/integrations";
 import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import type { BuilderUiComponent } from "@/lib/domain/types";
-import { translateTriggerLabel } from "@/lib/integrations/trigger-labels";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +31,7 @@ export function AgentCapabilitiesForm({
   onSubmitted,
 }: CapabilitiesFormProps) {
   const queryClient = useQueryClient();
-  const { t, i18n } = useTranslation(["builder", "errors"]);
+  const { t } = useTranslation(["builder", "errors"]);
   const [scheduleHourly, setScheduleHourly] = useState(
     () => fieldDefault(uiComponent.fields, "schedule_hourly") === "true",
   );
@@ -200,7 +199,7 @@ export function AgentCapabilitiesForm({
                 }
                 options={events.map((row) => ({
                   value: row.value,
-                  label: translateTriggerLabel(row.label, i18n.language),
+                  label: row.label,
                 }))}
                 onChange={(value) => {
                   setComponentId(value);

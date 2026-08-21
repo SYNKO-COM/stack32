@@ -19,7 +19,7 @@ from agent_service.triggers.signature import WebhookSignatureError, verify_webho
 
 logger = logging.getLogger(__name__)
 
-LISTEN_WINDOW_SECONDS = 300
+LISTEN_WINDOW_SECONDS = 600
 DEFAULT_POLL_SECONDS = 60
 
 

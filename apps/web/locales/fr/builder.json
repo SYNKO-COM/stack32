@@ -276,9 +276,19 @@
     "formClosed": "Déclencheurs enregistrés. Construction en cours."
   },
   "providers": {
-    "prompt": "J’ai trouvé plusieurs applications possibles pour un outil que vous avez mentionné. Cherchez et choisissez la bonne — vous pouvez aussi coller le lien du site. Pas de connexion de compte pour l’instant.",
-    "searchPlaceholder": "Tapez pour rechercher une app…",
-    "saved": "Compris — j'intègre ces apps dans la définition de l'agent."
+    "prompt": "Pour brancher le bon outil, choisissez l’app que vous utilisez vraiment (Gmail, Stripe, HubSpot…). Vous pouvez aussi coller le lien du site. Pas besoin de connecter le compte pour l’instant.",
+    "promptEmail": "Je vous aide à brancher la messagerie. Choisissez votre boîte mail (Gmail, Outlook…). Pas besoin de connecter le compte pour l’instant.",
+    "promptCrm": "Je vous aide à brancher le CRM. Choisissez celui que vous utilisez (HubSpot, Salesforce, Pipedrive…). Pas besoin de connecter le compte pour l’instant.",
+    "promptAmbiguous": "Plusieurs apps correspondent à ce que vous avez cité. Choisissez la bonne — ou collez le lien du site. Pas besoin de connecter le compte pour l’instant.",
+    "searchPlaceholder": "Rechercher une app (ex. Gmail, Stripe…)",
+    "saved": "Compris — j'intègre ces apps dans la définition de l'agent.",
+    "formClosed": "Choix enregistré. Je continue la construction.",
+    "fields": {
+      "email_service": "Choisissez votre boîte mail",
+      "crm": "Choisissez votre CRM",
+      "tool_website": "Lien du site (optionnel)",
+      "ambiguousApp": "Choisissez l’app pour « {{query}} »"
+    }
   },
   "toolReview": {
     "prompt": "Voici les apps que l’agent pourra utiliser. Gardez celles qui servent, retirez les autres, ou ajoutez-en une.",
@@ -320,8 +330,8 @@
       "knowledge_scope": "Quels documents ou sujets doit-il connaître ?",
       "connection_intent": "A-t-il besoin d’un compte externe (email, agenda…) ?",
       "audience": "Qui utilisera cet agent ?",
-      "email_service": "Quel service e-mail ?",
-      "crm": "Quel CRM ?",
+      "email_service": "Choisissez votre boîte mail",
+      "crm": "Choisissez votre CRM",
       "tool_website": "Lien du site de l’outil (optionnel)",
       "app_canva": "Quel outil design voulez-vous ?"
     },

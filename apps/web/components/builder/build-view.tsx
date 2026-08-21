@@ -280,6 +280,14 @@ function BuilderBubble({
     content = t("builder:secrets.formClosed");
   } else if (formLocked && contentKey === "builder:toolReview.prompt") {
     content = t("builder:toolReview.formClosed");
+  } else if (
+    formLocked &&
+    (contentKey === "builder:providers.prompt" ||
+      contentKey === "builder:providers.promptEmail" ||
+      contentKey === "builder:providers.promptCrm" ||
+      contentKey === "builder:providers.promptAmbiguous")
+  ) {
+    content = t("builder:providers.formClosed");
   } else if (contentKey) {
     // Never show raw keys like "connection.prompt" to users.
     const friendlyFallback: Record<string, string> = {

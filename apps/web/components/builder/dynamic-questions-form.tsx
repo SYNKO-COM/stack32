@@ -12,7 +12,70 @@ import { useTranslation } from "@/hooks/use-translation";
 import { submitBuilderQuestions, submitBuilderProviders } from "@/lib/actions/builder";
 import type { BuilderUiComponent } from "@/lib/domain/types";
 
-function fieldLabel(
+function seedQueryForField(key: string, label?: string): string {
+  if (key === "email_service") return "email";
+  if (key === "crm") return "crm";
+  if (key.startsWith("app_")) return key.replace(/^app_/, "").replace(/_/g, " ");
+  if (label) {
+    return label
+      .replace(/which app did you mean by/i, "")
+      .replace(/choose the app for/i, "")
+      .replace(/[“”"«»]/g, "")
+      .trim();
+  }
+  return "";
+}
+
+function isWebsiteField(key: string): boolean {
+  return key.includes("website") || key.includes("url");
+}
+
+function extractAmbiguousQuery(key: string, label?: string): string {
+  const fromKey = key.startsWith("app_")
+    ? key.replace(/^app_/, "").replace(/_/g, " ").trim()
+    : "";
+  if (fromKey) return fromKey;
+  const match = (label || "").match(/[“"«](.+?)[”"»]/);
+  return match?.[1]?.trim() || label || "app";
+}
+
+function providerFieldLabel(
+  t: (key: string, opts?: Record<string, string>) => string,
+  key: string,
+  fallback?: string,
+): string {
+  if (key === "email_service") {
+    return t("providers.fields.email_service", {
+      defaultValue: t("questions.fields.email_service", {
+        defaultValue: "Choisissez votre boîte mail",
+      }),
+    });
+  }
+  if (key === "crm") {
+    return t("providers.fields.crm", {
+      defaultValue: t("questions.fields.crm", { defaultValue: "Choisissez votre CRM" }),
+    });
+  }
+  if (isWebsiteField(key)) {
+    return t("providers.fields.tool_website", {
+      defaultValue: t("questions.fields.tool_website", {
+        defaultValue: "Lien du site (optionnel)",
+      }),
+    });
+  }
+  if (key.startsWith("app_")) {
+    const query = extractAmbiguousQuery(key, fallback);
+    return t("providers.fields.ambiguousApp", {
+      query,
+      defaultValue: `Choisissez l’app pour « ${query} »`,
+    });
+  }
+  return t(`questions.fields.${key}`, {
+    defaultValue: fallback && !fallback.includes("_") ? fallback : key,
+  });
+}
+
+function questionFieldLabel(
   t: (key: string, opts?: Record<string, string>) => string,
   key: string,
   fallback?: string,
@@ -30,18 +93,6 @@ function optionLabel(
   return t(`questions.options.${fieldKey}.${option}`, {
     defaultValue: t(`questions.options.${option}`, { defaultValue: option }),
   });
-}
-
-function seedQueryForField(key: string, label?: string): string {
-  if (key === "email_service") return "email";
-  if (key === "crm") return "crm";
-  if (key.startsWith("app_")) return key.replace(/^app_/, "").replace(/_/g, " ");
-  if (label) return label.replace(/which app did you mean by/i, "").replace(/[“”"]/g, "").trim();
-  return "";
-}
-
-function isWebsiteField(key: string): boolean {
-  return key.includes("website") || key.includes("url");
 }
 
 export function DynamicQuestionsForm({
@@ -96,12 +147,14 @@ export function DynamicQuestionsForm({
       )}
       {uiComponent.fields.map((field) => {
         const useAppSearch = variant === "providers" && !isWebsiteField(field.key);
+        const label =
+          variant === "providers"
+            ? providerFieldLabel(t, field.key, field.label)
+            : questionFieldLabel(t, field.key, field.label);
         return (
           <label key={field.key} className="block space-y-1.5">
             <span className="text-sm font-medium text-foreground/90">
-              {field.label && !field.label.includes("_")
-                ? field.label
-                : fieldLabel(t, field.key, field.label)}
+              {label}
               {field.required ? " *" : ""}
             </span>
             {field.type === "textarea" ? (
@@ -133,7 +186,8 @@ export function DynamicQuestionsForm({
                 value={values[field.key] ?? ""}
                 onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
                 placeholder={t(`questions.placeholders.${field.key}`, {
-                  defaultValue: variant === "providers" ? t("questions.placeholders.tool_website") : "",
+                  defaultValue:
+                    variant === "providers" ? t("questions.placeholders.tool_website") : "",
                 })}
                 className="h-10 rounded-xl bg-background/80"
               />
