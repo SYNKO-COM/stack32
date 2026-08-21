@@ -178,13 +178,17 @@ export interface AgentSpec {
   triggers?: AgentTrigger[];
 }
 
-export type TriggerKind = "chat" | "schedule" | "manual" | "webhook";
+export type TriggerKind = "chat" | "schedule" | "manual" | "webhook" | "tool";
 
 export interface AgentTrigger {
   kind: TriggerKind;
   enabled: boolean;
   cron?: string | null;
   timezone?: string | null;
+  appId?: string | null;
+  componentId?: string | null;
+  label?: string | null;
+  extraProps?: Record<string, unknown>;
 }
 
 export interface AgentIdentity {

@@ -245,8 +245,8 @@
     }
   },
   "capabilities": {
-    "prompt": "How should this agent start?\n\nChat is always on. You can also add an hourly schedule if you want it to run on its own.",
-    "promptAfterSecret": "Key saved — thank you.\n\nHow should this agent start?\n\nChat is always on. Optionally add an hourly schedule below.",
+    "prompt": "How should this agent start?\n\nChat is always on. You can also add a schedule, or a tool event (Gmail, Sheets, Slack…).",
+    "promptAfterSecret": "Key saved — thank you.\n\nHow should this agent start?\n\nChat is always on. Optionally add a schedule or a tool event below.",
     "hint": "Choose how this agent is triggered. Chat cannot be turned off.",
     "saved": "Got it.\n\nI'm building the first version now. This can take a moment.",
     "triggerChat": "Chat messages",
@@ -254,6 +254,16 @@
     "required": "Required",
     "scheduleHourly": "Also run every hour",
     "scheduleHourlyHint": "Adds an automatic hourly run when scheduling is available.",
+    "toolTrigger": "Tool event",
+    "toolTriggerHint": "Starts the agent when an app event arrives (new email, new row, message…).",
+    "toolTriggerApp": "Tool",
+    "toolTriggerSearch": "Search a Pipedream app…",
+    "toolTriggerEvent": "Event",
+    "toolTriggerEventPlaceholder": "Choose the event",
+    "toolTriggerPickAppFirst": "Pick a tool first",
+    "toolTriggerLoading": "Loading events…",
+    "toolTriggerEmpty": "No events found for this tool",
+    "toolTriggerRequired": "Choose a tool, then the event that should start the agent.",
     "continue": "Build my agent",
     "submitting": "Building…",
     "formClosed": "Triggers saved. Building now."

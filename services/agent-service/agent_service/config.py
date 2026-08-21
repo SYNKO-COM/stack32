@@ -103,6 +103,11 @@ class Settings(BaseSettings):
     PIPEDREAM_PROJECT_ID: str = ""
     PIPEDREAM_ENVIRONMENT: Literal["development", "production"] = "development"
     PIPEDREAM_ALLOWED_ORIGINS: list[str] = []
+    # Per-project Connect webhook signing key (optional; trigger-level keys preferred).
+    PIPEDREAM_WEBHOOK_SIGNING_KEY: str = ""
+    # Public base URL of this service (Cloud Run). Used for Pipedream webhook_url
+    # when APP_ORIGIN is localhost. Example: https://stack32-agent-api-….run.app
+    AGENT_SERVICE_PUBLIC_URL: str = ""
 
     # Fernet key or passphrase for BYOK secret encryption (required in production)
     SECRETS_ENCRYPTION_KEY: str = ""

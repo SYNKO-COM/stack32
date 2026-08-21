@@ -43,6 +43,10 @@ class BuilderCapabilitiesResumeRequest(BaseModel):
     memory_semantic: bool = False
     knowledge_enabled: bool = False
     schedule_hourly: bool = False
+    tool_trigger: bool = False
+    tool_trigger_app_id: str | None = Field(default=None, max_length=128)
+    tool_trigger_component_id: str | None = Field(default=None, max_length=256)
+    tool_trigger_label: str | None = Field(default=None, max_length=160)
     context_notes: str = Field(default="", max_length=2000)
 
 
@@ -256,6 +260,10 @@ async def submit_builder_capabilities(
         memory_semantic=body.memory_semantic,
         knowledge_enabled=body.knowledge_enabled,
         schedule_hourly=body.schedule_hourly,
+        tool_trigger=body.tool_trigger,
+        tool_trigger_app_id=body.tool_trigger_app_id,
+        tool_trigger_component_id=body.tool_trigger_component_id,
+        tool_trigger_label=body.tool_trigger_label,
         context_notes=body.context_notes,
     )
     if result.get("error") == "BUILDER_INTERRUPTED":

@@ -24,6 +24,25 @@ function scheduleTrigger(spec?: AgentSpec | null) {
   return (spec?.triggers ?? []).find((t) => t.kind === "schedule" && t.enabled);
 }
 
+function toolTrigger(spec?: AgentSpec | null) {
+  return (spec?.triggers ?? []).find((t) => t.kind === "tool" && t.enabled);
+}
+
+function toolTriggerPayload(spec?: AgentSpec | null) {
+  const tool = toolTrigger(spec);
+  if (!tool?.componentId) return [];
+  return [
+    {
+      kind: "tool" as const,
+      enabled: true,
+      appId: tool.appId,
+      componentId: tool.componentId,
+      label: tool.label,
+      extraProps: tool.extraProps,
+    },
+  ];
+}
+
 function hasEnabledSchedule(spec?: AgentSpec | null): boolean {
   return Boolean(scheduleTrigger(spec));
 }
@@ -75,12 +94,13 @@ export function AgentScheduleToggle({
               cron,
               timezone: timing.timezone || timezone,
             },
+            ...toolTriggerPayload(spec),
           ],
         });
       } else {
         await updateAgentTriggers({
           agentId,
-          triggers: [{ kind: "chat", enabled: true }],
+          triggers: [{ kind: "chat", enabled: true }, ...toolTriggerPayload(spec)],
         });
       }
       await invalidateAgent(queryClient, agentId);
@@ -198,6 +218,7 @@ export function ScheduleTimingForm({
         triggers: [
           { kind: "chat", enabled: true },
           { kind: "schedule", enabled: true, cron, timezone },
+          ...toolTriggerPayload(spec),
         ],
       });
       await invalidateAgent(queryClient, agentId);

@@ -472,15 +472,32 @@ class PipedreamToolProvider:
         }
 
     async def search_triggers(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]:
-        return []
+        return await self._client.search_triggers(query, limit=limit)
 
     async def deploy_trigger(
         self, *, user_id: str, trigger_id: str, config: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        return {"deployed": False, "triggers": []}
+        cfg = config or {}
+        webhook_url = str(cfg.get("webhook_url") or "")
+        if not webhook_url:
+            return {"deployed": False, "error": "webhook_url_required"}
+        data = await self._client.deploy_trigger(
+            external_user_id=user_id,
+            trigger_id=trigger_id,
+            configured_props=cfg.get("configured_props")
+            if isinstance(cfg.get("configured_props"), dict)
+            else {},
+            webhook_url=webhook_url,
+            emit_on_deploy=bool(cfg.get("emit_on_deploy", False)),
+        )
+        return {"deployed": True, "trigger": data}
 
     async def list_triggers(self, *, user_id: str) -> list[dict[str, Any]]:
+        _ = user_id
         return []
 
     async def delete_trigger(self, *, user_id: str, trigger_id: str) -> dict[str, Any]:
-        return {"deleted": False}
+        ok = await self._client.delete_deployed_trigger(
+            deployed_id=trigger_id, external_user_id=user_id
+        )
+        return {"deleted": ok}

@@ -365,6 +365,11 @@ class TriggerPatchItem(BaseModel):
     enabled: bool = True
     cron: str | None = Field(default=None, max_length=120)
     timezone: str | None = Field(default=None, max_length=64)
+    app_id: str | None = Field(default=None, max_length=128)
+    component_id: str | None = Field(default=None, max_length=256)
+    label: str | None = Field(default=None, max_length=160)
+    extra_props: dict[str, Any] = Field(default_factory=dict)
+    connection_id: str | None = Field(default=None, max_length=64)
 
 
 class TriggersPatchRequest(BaseModel):
@@ -395,6 +400,9 @@ async def patch_triggers(
     raw_triggers: list[dict[str, Any]]
     if body.schedule_hourly is not None and not body.triggers:
         raw_triggers = [{"kind": "chat", "enabled": True, "cron": None, "timezone": None}]
+        for existing in spec.triggers or []:
+            if existing.kind == "tool":
+                raw_triggers.append(existing.model_dump())
         if body.schedule_hourly:
             # Preserve existing schedule timing when re-enabling without explicit triggers.
             prior = next(
@@ -436,6 +444,27 @@ async def patch_triggers(
         agent_id=str(agent_id),
         schedule=schedule,
     )
+    tool = next((t for t in updated.triggers if t.kind == "tool" and t.enabled), None)
+    patch_tool = next(
+        (i for i in body.triggers if str(i.kind).lower() in {"tool", "webhook"}),
+        None,
+    )
+    from agent_service.supabase_client import get_supabase_admin_client
+    from agent_service.triggers.service import sync_tool_trigger_row
+
+    async with get_supabase_admin_client() as client:
+        await sync_tool_trigger_row(
+            user_id=user.user_id,
+            agent_id=str(agent_id),
+            enabled=bool(tool),
+            app_id=(tool.app_id if tool else None) or (patch_tool.app_id if patch_tool else None),
+            component_id=(tool.component_id if tool else None)
+            or (patch_tool.component_id if patch_tool else None),
+            extra_props=(tool.extra_props if tool else None)
+            or (patch_tool.extra_props if patch_tool else None),
+            connection_id=patch_tool.connection_id if patch_tool else None,
+            client=client,
+        )
 
     version = await db.persist_version(
         agent_id=str(agent_id),
@@ -448,6 +477,42 @@ async def patch_triggers(
         "version_id": version.get("id"),
         "triggers": [t.model_dump() for t in updated.triggers],
     }
+
+
+@router.get("/{agent_id}/triggers/runtime")
+async def get_trigger_runtime(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    from agent_service.supabase_client import get_supabase_admin_client
+    from agent_service.triggers.service import runtime_status
+
+    async with get_supabase_admin_client() as client:
+        return await runtime_status(
+            user_id=user.user_id, agent_id=str(agent_id), client=client
+        )
+
+
+@router.post("/{agent_id}/triggers/listen")
+async def start_trigger_listen(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
+    from agent_service.supabase_client import get_supabase_admin_client
+    from agent_service.triggers.service import TriggerServiceError, listen_tool_trigger
+
+    db: Persistence = get_persistence()
+    agent = await db.get_owned_agent(str(agent_id), user.user_id)
+    if not agent:
+        raise _not_found()
+    published = str(agent.get("status") or "") == "published"
+    try:
+        async with get_supabase_admin_client() as client:
+            return await listen_tool_trigger(
+                user_id=user.user_id,
+                agent_id=str(agent_id),
+                published=published,
+                client=client,
+            )
+    except TriggerServiceError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": exc.code, "message": str(exc) or exc.code},
+        ) from exc
 
 
 async def _sync_schedule_rows(

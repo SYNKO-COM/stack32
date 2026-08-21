@@ -233,9 +233,9 @@ class ApprovalPolicy(BaseModel):
     require_for_email_send: bool = True
 
 
-# MVP surface = Chat + Schedule. Legacy "manual"/"webhook" remain loadable but are
-# normalized on migration (manual -> chat, webhook -> dropped from the MVP surface).
-TriggerKind = Literal["chat", "schedule", "manual", "webhook"]
+# Chat + Schedule + tool (Pipedream event). Legacy "manual" maps to chat;
+# bare "webhook" without a component is dropped.
+TriggerKind = Literal["chat", "schedule", "manual", "webhook", "tool"]
 
 
 class TriggerConfig(BaseModel):
@@ -243,6 +243,10 @@ class TriggerConfig(BaseModel):
     enabled: bool = True
     cron: str | None = Field(default=None, max_length=120)
     timezone: str | None = Field(default=None, max_length=64)
+    app_id: str | None = Field(default=None, max_length=128)
+    component_id: str | None = Field(default=None, max_length=256)
+    label: str | None = Field(default=None, max_length=160)
+    extra_props: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentSpec(BaseModel):
@@ -341,10 +345,10 @@ def migrate_v3_to_v4(spec: AgentSpec | dict[str, Any]) -> AgentSpec:
 
 
 def normalize_triggers(raw_triggers: Any) -> list[dict[str, Any]]:
-    """Normalize legacy triggers to the MVP surface (Chat/Schedule).
+    """Normalize triggers to Chat / Schedule / tool.
 
-    manual -> chat, webhook -> dropped, unknown -> dropped. When nothing usable
-    remains, default to a single enabled Chat trigger.
+    manual -> chat. webhook without component_id is dropped; webhook with a
+    component becomes tool. Unknown kinds are dropped. Always keep Chat.
     """
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -354,22 +358,57 @@ def normalize_triggers(raw_triggers: Any) -> list[dict[str, Any]]:
         kind = str(item.get("kind") or "").strip().lower()
         if kind == "manual":
             kind = "chat"
-        if kind not in ("chat", "schedule"):
-            # webhook and unknown kinds are dropped from the MVP surface.
+        if kind == "webhook":
+            kind = "tool" if item.get("component_id") else ""
+        if kind not in ("chat", "schedule", "tool"):
             continue
         if kind in seen:
             continue
         seen.add(kind)
-        out.append(
+        extra = item.get("extra_props") if isinstance(item.get("extra_props"), dict) else {}
+        row: dict[str, Any] = {
+            "kind": kind,
+            "enabled": bool(item.get("enabled", True)),
+            "cron": item.get("cron") if kind == "schedule" else None,
+            "timezone": item.get("timezone") if kind == "schedule" else None,
+            "app_id": None,
+            "component_id": None,
+            "label": None,
+            "extra_props": {},
+        }
+        if kind == "tool":
+            row["app_id"] = str(item.get("app_id") or "").strip()[:128] or None
+            row["component_id"] = str(item.get("component_id") or "").strip()[:256] or None
+            row["label"] = str(item.get("label") or "").strip()[:160] or None
+            row["extra_props"] = extra
+        out.append(row)
+    if not any(t["kind"] == "chat" for t in out):
+        out.insert(
+            0,
             {
-                "kind": kind,
-                "enabled": bool(item.get("enabled", True)),
-                "cron": item.get("cron"),
-                "timezone": item.get("timezone"),
-            }
+                "kind": "chat",
+                "enabled": True,
+                "cron": None,
+                "timezone": None,
+                "app_id": None,
+                "component_id": None,
+                "label": None,
+                "extra_props": {},
+            },
         )
     if not out:
-        out.append({"kind": "chat", "enabled": True, "cron": None, "timezone": None})
+        out.append(
+            {
+                "kind": "chat",
+                "enabled": True,
+                "cron": None,
+                "timezone": None,
+                "app_id": None,
+                "component_id": None,
+                "label": None,
+                "extra_props": {},
+            }
+        )
     return out
 
 

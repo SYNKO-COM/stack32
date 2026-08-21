@@ -133,6 +133,27 @@ describe("graph-adapter", () => {
     expect(gmail?.integration?.actions).toHaveLength(3);
   });
 
+  it("renders a tool event trigger node", () => {
+    const spec = baseSpec([]);
+    spec.triggers = [
+      { kind: "chat", enabled: true },
+      {
+        kind: "tool",
+        enabled: true,
+        appId: "gmail",
+        componentId: "gmail-new-email",
+        label: "New email",
+      },
+    ];
+    const graph = buildProductAgentGraph({ definition: spec });
+    const tool = graph.nodes.find((n) => n.kind === "trigger_tool");
+    expect(tool?.label).toBe("New email");
+    expect(tool?.configurationStatus).toBe("ready");
+    expect(graph.edges.some((e) => e.source === "trigger:tool" && e.target === "agent")).toBe(
+      true,
+    );
+  });
+
   it("keeps the agent portrait node without a description", () => {
     const graph = buildProductAgentGraph({ definition: baseSpec([]) });
     const agent = graph.nodes.find((n) => n.kind === "agent");

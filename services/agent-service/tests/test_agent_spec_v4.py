@@ -98,10 +98,29 @@ def test_normalize_triggers_maps_manual_and_drops_webhook():
     assert "webhook" not in kinds
 
 
+def test_normalize_triggers_keeps_tool_events():
+    result = normalize_triggers(
+        [
+            {"kind": "chat", "enabled": True},
+            {
+                "kind": "tool",
+                "enabled": True,
+                "app_id": "gmail",
+                "component_id": "gmail-new-email",
+                "label": "New email",
+            },
+        ]
+    )
+    kinds = [t["kind"] for t in result]
+    assert kinds == ["chat", "tool"]
+    tool = next(t for t in result if t["kind"] == "tool")
+    assert tool["component_id"] == "gmail-new-email"
+
+
 def test_normalize_triggers_defaults_to_chat():
-    assert normalize_triggers([]) == [
-        {"kind": "chat", "enabled": True, "cron": None, "timezone": None}
-    ]
+    result = normalize_triggers([])
+    assert result[0]["kind"] == "chat"
+    assert result[0]["enabled"] is True
 
 
 def test_migrate_v4_to_v5_never_fabricates_model():

@@ -345,6 +345,21 @@ class PublishService:
             result="success",
             risk_level="medium",
         )
+        try:
+            from agent_service.supabase_client import get_supabase_admin_client
+            from agent_service.triggers.service import (
+                TriggerServiceError,
+                upsert_persistent_tool_trigger,
+            )
+
+            async with get_supabase_admin_client() as client:
+                await upsert_persistent_tool_trigger(
+                    user_id=user_id, agent_id=agent_id, client=client
+                )
+        except TriggerServiceError:
+            pass
+        except Exception:  # noqa: BLE001
+            logger.warning("persistent_trigger_deploy_failed agent=%s", agent_id, exc_info=True)
         return {
             "status": "active",
             "deployment_id": deployment_id,
@@ -375,6 +390,9 @@ class PublishService:
                 params={"id": f"eq.{agent_id}", "user_id": f"eq.{user_id}"},
                 json={"status": "built", "published_version_id": None},
             )
+            from agent_service.triggers.service import teardown_tool_triggers
+
+            await teardown_tool_triggers(user_id=user_id, agent_id=agent_id, client=client)
         await self.db.audit(
             user_id=user_id,
             agent_id=agent_id,

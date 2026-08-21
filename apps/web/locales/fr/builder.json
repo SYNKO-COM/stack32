@@ -245,8 +245,8 @@
     }
   },
   "capabilities": {
-    "prompt": "Comment cet agent doit-il démarrer ?\n\nLe chat est toujours activé. Vous pouvez aussi ajouter un passage automatique toutes les heures.",
-    "promptAfterSecret": "Clé enregistrée — merci.\n\nComment cet agent doit-il démarrer ?\n\nLe chat est toujours activé. Ajoutez éventuellement un planning horaire ci-dessous.",
+    "prompt": "Comment cet agent doit-il démarrer ?\n\nLe chat est toujours activé. Vous pouvez aussi ajouter un planning, ou un événement d’outil (Gmail, Sheets, Slack…).",
+    "promptAfterSecret": "Clé enregistrée — merci.\n\nComment cet agent doit-il démarrer ?\n\nLe chat est toujours activé. Ajoutez éventuellement un planning ou un événement d’outil ci-dessous.",
     "hint": "Choisissez comment déclencher cet agent. Le chat ne peut pas être désactivé.",
     "saved": "C'est noté.\n\nJe construis maintenant la première version. Ça peut prendre un moment.",
     "triggerChat": "Messages du chat",
@@ -254,6 +254,16 @@
     "required": "Obligatoire",
     "scheduleHourly": "Aussi toutes les heures",
     "scheduleHourlyHint": "Ajoute un passage automatique toutes les heures quand le planning est disponible.",
+    "toolTrigger": "Événement d’un outil",
+    "toolTriggerHint": "Démarre l’agent quand un événement arrive (nouveau mail, nouvelle ligne, message…).",
+    "toolTriggerApp": "Outil",
+    "toolTriggerSearch": "Rechercher une app Pipedream…",
+    "toolTriggerEvent": "Événement",
+    "toolTriggerEventPlaceholder": "Choisir l’événement",
+    "toolTriggerPickAppFirst": "Choisissez d’abord un outil",
+    "toolTriggerLoading": "Chargement des événements…",
+    "toolTriggerEmpty": "Aucun événement trouvé pour cet outil",
+    "toolTriggerRequired": "Choisissez un outil puis l’événement qui doit lancer l’agent.",
     "continue": "Construire mon agent",
     "submitting": "Construction…",
     "formClosed": "Déclencheurs enregistrés. Construction en cours."

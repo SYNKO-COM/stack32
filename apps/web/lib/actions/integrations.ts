@@ -390,6 +390,93 @@ export async function getProvidersHealth(): Promise<{
   });
 }
 
+export interface IntegrationTriggerHit {
+  triggerId: string;
+  name: string;
+  summary?: string;
+  appId?: string;
+}
+
+export async function searchIntegrationTriggers(
+  q: string,
+  appId?: string,
+  limit = 50,
+): Promise<{ query: string; triggers: IntegrationTriggerHit[] }> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { query: q, triggers: [] };
+  }
+  const accessToken = await requireAccessToken();
+  const params = new URLSearchParams({
+    q: q.slice(0, 200),
+    limit: String(Math.min(Math.max(limit, 1), 100)),
+  });
+  if (appId) params.set("app_id", appId);
+  const result = await agentServiceFetch<{
+    query: string;
+    triggers: Array<Record<string, unknown>>;
+  }>(`/v1/integrations/triggers/search?${params.toString()}`, {
+    method: "GET",
+    accessToken,
+  });
+  const triggers = (result.triggers ?? [])
+    .map((row) => {
+      const rec = asRecord(row);
+      const triggerId = String(rec.trigger_id ?? rec.triggerId ?? rec.id ?? rec.key ?? "");
+      return {
+        triggerId,
+        name: typeof rec.name === "string" && rec.name ? rec.name : triggerId,
+        summary: typeof rec.summary === "string" ? rec.summary : undefined,
+        appId:
+          typeof rec.app_id === "string"
+            ? rec.app_id
+            : typeof rec.appId === "string"
+              ? rec.appId
+              : undefined,
+      };
+    })
+    .filter((row) => Boolean(row.triggerId));
+  return { query: result.query, triggers };
+}
+
+export async function getIntegrationTriggerComponent(componentId: string): Promise<{
+  found: boolean;
+  name?: string;
+  appId?: string;
+  props: Array<{
+    name: string;
+    label: string;
+    required: boolean;
+    description?: string;
+    type?: string;
+  }>;
+}> {
+  if (currentAiExecutionMode() !== "agent-service" || !componentId) {
+    return { found: false, props: [] };
+  }
+  const accessToken = await requireAccessToken();
+  const result = await agentServiceFetch<{
+    found?: boolean;
+    name?: string;
+    app_id?: string;
+    props?: Array<Record<string, unknown>>;
+  }>(`/v1/integrations/triggers/${encodeURIComponent(componentId)}`, {
+    method: "GET",
+    accessToken,
+  });
+  return {
+    found: result.found === true,
+    name: result.name,
+    appId: result.app_id,
+    props: (result.props ?? []).map((p) => ({
+      name: String(p.name ?? ""),
+      label: String(p.label ?? p.name ?? ""),
+      required: p.required === true,
+      description: typeof p.description === "string" ? p.description : undefined,
+      type: typeof p.type === "string" ? p.type : undefined,
+    })).filter((p) => p.name),
+  };
+}
+
 export async function getAgentReadiness(agentId: string): Promise<{
   status: string;
   agentStatus?: string;

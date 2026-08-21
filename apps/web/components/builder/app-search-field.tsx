@@ -39,12 +39,15 @@ function AppMark({ src, name }: { src?: string; name: string }) {
 export function AppSearchField({
   value,
   onChange,
+  onSelect,
   seedQuery,
   placeholder,
   disabled,
 }: {
   value: string;
   onChange: (appId: string) => void;
+  /** Fired only when the user picks a catalog row (not on each keystroke). */
+  onSelect?: (app: IntegrationAppHit) => void;
   seedQuery?: string;
   placeholder?: string;
   disabled?: boolean;
@@ -151,6 +154,7 @@ export function AppSearchField({
                   onClick={() => {
                     setQuery(app.name);
                     onChange(app.appId);
+                    onSelect?.(app);
                     setOpen(false);
                   }}
                 >
@@ -203,6 +207,7 @@ export function AppSearchField({
             const hit = apps[0];
             setQuery(hit.name);
             onChange(hit.appId);
+            onSelect?.(hit);
             setOpen(false);
           }
         }}

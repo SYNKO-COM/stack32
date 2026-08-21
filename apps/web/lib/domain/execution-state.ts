@@ -160,11 +160,18 @@ export function reduceExecutionEvents(
         raw.trigger_kind === "schedule" ||
         (typeof raw.schedule_id === "string" && raw.schedule_id.length > 0)
           ? "schedule"
-          : "chat";
+          : raw.trigger_kind === "tool"
+            ? "tool"
+            : "chat";
       if (triggerKind === "schedule") {
         setNode("trigger:schedule", "success");
         legacy.input = "success";
         const e = edgeBetween(graph, "trigger:schedule", "agent");
+        if (e) setEdge(e, "success");
+      } else if (triggerKind === "tool") {
+        setNode("trigger:tool", "success");
+        legacy.input = "success";
+        const e = edgeBetween(graph, "trigger:tool", "agent");
         if (e) setEdge(e, "success");
       } else {
         setNode("trigger:chat", "success");

@@ -1,11 +1,15 @@
 "use client";
 
-import { Check, Loader2, Lock, MessageSquare, Timer } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Check, Loader2, Lock, MessageSquare, Timer, Zap } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { AppSearchField } from "@/components/builder/app-search-field";
 import { Button } from "@/components/ui/button";
+import { DaSelect } from "@/components/ui/da-select";
+import { Label } from "@/components/ui/label";
 import { submitBuilderCapabilities } from "@/lib/actions/builder";
+import { searchIntegrationTriggers } from "@/lib/actions/integrations";
 import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import type { BuilderUiComponent } from "@/lib/domain/types";
 import { useTranslation } from "@/hooks/use-translation";
@@ -31,13 +35,51 @@ export function AgentCapabilitiesForm({
   const [scheduleHourly, setScheduleHourly] = useState(
     () => fieldDefault(uiComponent.fields, "schedule_hourly") === "true",
   );
+  const [toolTrigger, setToolTrigger] = useState(false);
+  const [appId, setAppId] = useState("");
+  const [appName, setAppName] = useState("");
+  const [componentId, setComponentId] = useState("");
+  const [componentLabel, setComponentLabel] = useState("");
+  const [events, setEvents] = useState<Array<{ value: string; label: string }>>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!toolTrigger || !appId) {
+      setEvents([]);
+      return;
+    }
+    let cancelled = false;
+    setEventsLoading(true);
+    void searchIntegrationTriggers("", appId, 80)
+      .then((result) => {
+        if (cancelled) return;
+        setEvents(
+          result.triggers.map((row) => ({
+            value: row.triggerId,
+            label: row.name || row.triggerId,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([]);
+      })
+      .finally(() => {
+        if (!cancelled) setEventsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [toolTrigger, appId]);
+
+  const toolReady = Boolean(appId && componentId);
+  const canSubmit = !toolTrigger || toolReady;
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (submitting || completed) return;
+    if (submitting || completed || !canSubmit) return;
     setSubmitting(true);
     setErrorKey(null);
     setCompleted(true);
@@ -45,11 +87,14 @@ export function AgentCapabilitiesForm({
     try {
       await submitBuilderCapabilities({
         runId,
-        // Chat memory is always on by default — configured later in Structure if needed.
         memoryConversation: true,
         memorySemantic: false,
         knowledgeEnabled: false,
         scheduleHourly,
+        toolTrigger,
+        toolTriggerAppId: toolTrigger ? appId : null,
+        toolTriggerComponentId: toolTrigger ? componentId : null,
+        toolTriggerLabel: toolTrigger ? componentLabel || componentId : null,
         contextNotes: "",
       });
       void queryClient.invalidateQueries({ queryKey: ["builder"] });
@@ -90,7 +135,83 @@ export function AgentCapabilitiesForm({
           disabled={submitting}
           onChange={setScheduleHourly}
         />
+        <TriggerOption
+          icon={<Zap className="size-4" aria-hidden="true" />}
+          label={t("builder:capabilities.toolTrigger")}
+          hint={t("builder:capabilities.toolTriggerHint")}
+          checked={toolTrigger}
+          disabled={submitting}
+          onChange={(next) => {
+            setToolTrigger(next);
+            if (!next) {
+              setAppId("");
+              setAppName("");
+              setComponentId("");
+              setComponentLabel("");
+              setEvents([]);
+            }
+          }}
+        />
       </div>
+
+      {toolTrigger ? (
+        <div className="space-y-3 rounded-2xl border border-brand/25 bg-brand/[0.04] p-3.5">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">
+              {t("builder:capabilities.toolTriggerApp")}
+            </Label>
+            <AppSearchField
+              value={appName || appId}
+              disabled={submitting}
+              placeholder={t("builder:capabilities.toolTriggerSearch")}
+              onChange={() => {
+                setAppId("");
+                setComponentId("");
+                setComponentLabel("");
+              }}
+              onSelect={(app) => {
+                setAppId(app.appId);
+                setAppName(app.name);
+                setComponentId("");
+                setComponentLabel("");
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">
+              {t("builder:capabilities.toolTriggerEvent")}
+            </Label>
+            {eventsLoading ? (
+              <p className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                {t("builder:capabilities.toolTriggerLoading")}
+              </p>
+            ) : (
+              <DaSelect
+                value={componentId}
+                disabled={submitting || !appId || events.length === 0}
+                placeholder={
+                  appId
+                    ? events.length === 0
+                      ? t("builder:capabilities.toolTriggerEmpty")
+                      : t("builder:capabilities.toolTriggerEventPlaceholder")
+                    : t("builder:capabilities.toolTriggerPickAppFirst")
+                }
+                options={events}
+                onChange={(value) => {
+                  setComponentId(value);
+                  setComponentLabel(events.find((row) => row.value === value)?.label || value);
+                }}
+              />
+            )}
+          </div>
+          {!toolReady ? (
+            <p className="text-[11px] text-muted-foreground">
+              {t("builder:capabilities.toolTriggerRequired")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {errorKey ? <p className="text-xs text-destructive">{t(errorKey)}</p> : null}
 
@@ -98,7 +219,7 @@ export function AgentCapabilitiesForm({
         type="submit"
         size="default"
         className="h-10 w-full rounded-full text-sm font-medium sm:w-auto sm:min-w-[11rem]"
-        disabled={submitting}
+        disabled={submitting || !canSubmit}
       >
         {submitting ? (
           <>

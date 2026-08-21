@@ -148,6 +148,7 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
   const triggers = (definition?.triggers ?? []).filter((t) => t.enabled);
   const hasChat = triggers.length === 0 || triggers.some((t) => t.kind === "chat");
   const hasSchedule = triggers.some((t) => t.kind === "schedule");
+  const toolTrigger = triggers.find((t) => t.kind === "tool");
 
   if (hasChat) {
     nodes.push({
@@ -166,6 +167,15 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
       label: "Schedule",
       subtitle: input.scheduleSummary,
       configurationStatus: scheduleReady ? "ready" : "setup_required",
+    });
+  }
+  if (toolTrigger) {
+    nodes.push({
+      id: "trigger:tool",
+      kind: "trigger_tool",
+      label: toolTrigger.label || "Outil",
+      subtitle: toolTrigger.appId || undefined,
+      configurationStatus: toolTrigger.componentId ? "ready" : "setup_required",
     });
   }
 

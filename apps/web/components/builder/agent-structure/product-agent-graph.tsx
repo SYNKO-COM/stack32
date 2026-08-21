@@ -37,6 +37,7 @@ import { TriggerNode } from "@/components/builder/agent-structure/nodes/trigger-
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import { lookupIntegrationAppIcons } from "@/lib/actions/integrations";
+import { useAgent } from "@/hooks/use-agents";
 import type { ExecutionVisualState } from "@/lib/domain/execution-state";
 import type { ProductNode } from "@/lib/domain/product-agent-graph";
 import type { AgentSpec, ApprovalMode, GraphSpec } from "@/lib/domain/types";
@@ -136,6 +137,8 @@ function ProductAgentGraphCanvas({
   allowInstallationConfig = false,
 }: ProductAgentGraphProps) {
   const { t } = useTranslation("structure");
+  const { data: agent } = useAgent(agentId);
+  const agentPublished = agent?.status === "published";
   const canConfigure = !readOnly || allowInstallationConfig;
   const [selected, setSelected] = useState<ProductNode | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -422,17 +425,22 @@ function ProductAgentGraphCanvas({
         modelSubtitle={modelNode?.subtitle}
         integrationCount={integrationCount}
         executionError={executionVisual?.error ?? null}
+        published={agentPublished}
         onSaved={onConfigChanged}
       />
       <TriggerDrawer
         open={
           !readOnly &&
-          (selected?.kind === "trigger_chat" || selected?.kind === "trigger_schedule")
+          (selected?.kind === "trigger_chat" ||
+            selected?.kind === "trigger_schedule" ||
+            selected?.kind === "trigger_tool")
         }
         onOpenChange={(open) => !open && setSelected(null)}
         node={selected}
         agentId={agentId}
         spec={spec}
+        connections={connections}
+        published={agentPublished}
         onSaved={onConfigChanged}
       />
       <GenericDrawer

@@ -268,6 +268,11 @@ export async function updateAgentTriggers(input: {
     enabled?: boolean;
     cron?: string | null;
     timezone?: string | null;
+    appId?: string | null;
+    componentId?: string | null;
+    label?: string | null;
+    extraProps?: Record<string, unknown>;
+    connectionId?: string | null;
   }>;
 }): Promise<{ triggers: Array<{ kind: string; enabled: boolean; cron?: string | null; timezone?: string | null }> }> {
   await requireOwnedAgent(input.agentId);
@@ -279,12 +284,83 @@ export async function updateAgentTriggers(input: {
   if (input.scheduleHourly !== undefined) body.schedule_hourly = input.scheduleHourly;
   if (input.cron !== undefined) body.cron = input.cron;
   if (input.timezone !== undefined) body.timezone = input.timezone;
-  if (input.triggers !== undefined) body.triggers = input.triggers;
+  if (input.triggers !== undefined) {
+    body.triggers = input.triggers.map((t) => ({
+      kind: t.kind,
+      enabled: t.enabled,
+      cron: t.cron,
+      timezone: t.timezone,
+      app_id: t.appId,
+      component_id: t.componentId,
+      label: t.label,
+      extra_props: t.extraProps,
+      connection_id: t.connectionId,
+    }));
+  }
   return agentServiceFetch(`/v1/agents/${input.agentId}/triggers`, {
     method: "PATCH",
     accessToken,
     body,
   });
+}
+
+export async function getAgentTriggerRuntime(agentId: string): Promise<{
+  configured: boolean;
+  status: string;
+  mode: string;
+  listeningUntil?: string | null;
+  lastEventAt?: string | null;
+  appId?: string | null;
+  componentId?: string | null;
+}> {
+  await requireOwnedAgent(agentId);
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { configured: false, status: "idle", mode: "listen" };
+  }
+  const accessToken = await requireAccessToken();
+  const result = await agentServiceFetch<{
+    configured?: boolean;
+    status?: string;
+    mode?: string;
+    listening_until?: string | null;
+    last_event_at?: string | null;
+    app_id?: string | null;
+    component_id?: string | null;
+  }>(`/v1/agents/${agentId}/triggers/runtime`, { method: "GET", accessToken });
+  return {
+    configured: result.configured === true,
+    status: result.status || "idle",
+    mode: result.mode || "listen",
+    listeningUntil: result.listening_until,
+    lastEventAt: result.last_event_at,
+    appId: result.app_id,
+    componentId: result.component_id,
+  };
+}
+
+export async function startAgentTriggerListen(agentId: string): Promise<{
+  status: string;
+  mode: string;
+  listeningUntil?: string | null;
+  windowSeconds?: number;
+}> {
+  await requireOwnedAgent(agentId);
+  if (currentAiExecutionMode() !== "agent-service") {
+    throw new Error("triggers_require_agent_service");
+  }
+  const accessToken = await requireAccessToken();
+  const result = await agentServiceFetch<{
+    status?: string;
+    mode?: string;
+    listening_until?: string | null;
+    window_seconds?: number;
+  }>(`/v1/agents/${agentId}/triggers/listen`, { method: "POST", accessToken, body: {} });
+  return {
+    status: result.status || "listening",
+    mode: result.mode || "listen",
+    listeningUntil: result.listening_until,
+    windowSeconds: result.window_seconds,
+  };
 }
 
 /** Persist memory settings from Structure (conversation / semantic / provider). */
@@ -337,6 +413,10 @@ export async function submitBuilderCapabilities(input: {
   memorySemantic: boolean;
   knowledgeEnabled: boolean;
   scheduleHourly?: boolean;
+  toolTrigger?: boolean;
+  toolTriggerAppId?: string | null;
+  toolTriggerComponentId?: string | null;
+  toolTriggerLabel?: string | null;
   contextNotes: string;
 }): Promise<void> {
   const supabase = await requireSupabaseServerClient();
@@ -356,6 +436,10 @@ export async function submitBuilderCapabilities(input: {
       memory_semantic: input.memorySemantic,
       knowledge_enabled: input.knowledgeEnabled,
       schedule_hourly: input.scheduleHourly ?? false,
+      tool_trigger: input.toolTrigger ?? false,
+      tool_trigger_app_id: input.toolTriggerAppId || null,
+      tool_trigger_component_id: input.toolTriggerComponentId || null,
+      tool_trigger_label: input.toolTriggerLabel || null,
       context_notes: input.contextNotes,
     },
   });

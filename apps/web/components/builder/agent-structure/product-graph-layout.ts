@@ -32,7 +32,8 @@ export function layoutProductGraph(graph: ProductAgentGraph): {
   const positioned: Node[] = [];
 
   const triggers = graph.nodes.filter(
-    (n) => n.kind === "trigger_chat" || n.kind === "trigger_schedule",
+    (n) =>
+      n.kind === "trigger_chat" || n.kind === "trigger_schedule" || n.kind === "trigger_tool",
   );
   const agent = graph.nodes.find((n) => n.kind === "agent");
   const output = graph.nodes.find((n) => n.kind === "output");
@@ -46,7 +47,7 @@ export function layoutProductGraph(graph: ProductAgentGraph): {
     positioned.push(
       nodePosition(triggers[0], centerX - LAYOUT.nodeWidth.trigger / 2, LAYOUT.triggerY),
     );
-  } else if (triggers.length >= 2) {
+  } else if (triggers.length === 2) {
     positioned.push(
       nodePosition(
         triggers[0],
@@ -59,6 +60,12 @@ export function layoutProductGraph(graph: ProductAgentGraph): {
         LAYOUT.triggerY,
       ),
     );
+  } else if (triggers.length >= 3) {
+    const gap = 148;
+    const startX = centerX - gap - LAYOUT.nodeWidth.trigger / 2;
+    triggers.slice(0, 3).forEach((node, index) => {
+      positioned.push(nodePosition(node, startX + index * gap, LAYOUT.triggerY));
+    });
   }
 
   if (agent) {
@@ -109,7 +116,9 @@ function nodePosition(node: ProductNode, x: number, y: number): Node {
         ? "output"
         : node.kind === "integration"
           ? "integration"
-          : node.kind === "trigger_chat" || node.kind === "trigger_schedule"
+          : node.kind === "trigger_chat" ||
+              node.kind === "trigger_schedule" ||
+              node.kind === "trigger_tool"
             ? "trigger"
             : "attachment";
 

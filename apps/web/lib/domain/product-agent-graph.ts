@@ -3,6 +3,7 @@ import type { ModuleExecState } from "@/hooks/use-live-execution";
 export type ProductNodeKind =
   | "trigger_chat"
   | "trigger_schedule"
+  | "trigger_tool"
   | "agent"
   | "output"
   | "model"

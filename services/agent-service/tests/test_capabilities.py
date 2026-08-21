@@ -461,3 +461,22 @@ def test_remove_postgres_keeps_other_apps():
     assert "gmail_send_message" in ids
     assert any("google_maps" in i or "maps" in i for i in ids)
     assert all("postgres" not in i for i in ids)
+
+
+def test_resolve_spec_triggers_includes_tool_event():
+    from agent_service.builder.orchestrator import _resolve_spec_triggers
+
+    triggers = _resolve_spec_triggers(
+        current=None,
+        schedule_hourly=True,
+        tool_trigger={
+            "app_id": "gmail",
+            "component_id": "gmail-new-email",
+            "label": "New Email",
+        },
+    )
+    kinds = [t.kind for t in triggers]
+    assert kinds == ["chat", "schedule", "tool"]
+    tool = next(t for t in triggers if t.kind == "tool")
+    assert tool.component_id == "gmail-new-email"
+    assert tool.app_id == "gmail"

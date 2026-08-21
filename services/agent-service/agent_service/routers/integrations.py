@@ -328,6 +328,58 @@ async def providers_health() -> dict[str, Any]:
     return {"providers": integrations, "llm": llm}
 
 
+@router.get("/integrations/triggers/search")
+async def search_integration_triggers(
+    user: CurrentUser,
+    q: str = Query(default="", max_length=200),
+    app_id: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, Any]:
+    _ = user
+    client = PipedreamClient()
+    triggers = await client.search_triggers(q, app_id=app_id, limit=limit)
+    return {"query": q, "app_id": app_id, "triggers": triggers}
+
+
+@router.get("/integrations/triggers/{component_id}")
+async def get_integration_trigger(
+    component_id: str, user: CurrentUser
+) -> dict[str, Any]:
+    _ = user
+    client = PipedreamClient()
+    component = await client.get_trigger_component(component_id)
+    if not component:
+        return {"component_id": component_id, "found": False, "props": []}
+    from agent_service.integrations.pipedream.schema import normalize_configurable_props
+
+    schema = normalize_configurable_props(
+        component, tool_id=f"pd:{component_id}", action_id=component_id
+    )
+    skip_types = {"app", "$.service.db", "$.interface.http", "$.interface.timer", "alert"}
+    props = []
+    for prop in schema.props:
+        raw_type = str(prop.raw.get("type") or "")
+        if prop.kind == "connection" or raw_type in skip_types:
+            continue
+        props.append(
+            {
+                "name": prop.name,
+                "label": prop.label or prop.name,
+                "required": prop.required,
+                "description": prop.description,
+                "type": prop.json_type,
+                "remote_options": prop.remote_options,
+            }
+        )
+    return {
+        "component_id": component_id,
+        "found": True,
+        "name": component.get("name") or component_id,
+        "app_id": schema.app_id,
+        "props": props,
+    }
+
+
 @router.get("/integrations/tools/search")
 async def search_integration_tools(
     user: CurrentUser,

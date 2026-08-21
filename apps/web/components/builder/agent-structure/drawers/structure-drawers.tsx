@@ -12,6 +12,11 @@ import {
   AgentScheduleToggle,
   ScheduleTimingForm,
 } from "@/components/builder/agent-structure/drawers/triggers-config-form";
+import {
+  AgentToolTriggerToggle,
+  ToolTriggerConfigForm,
+  ToolTriggerListenButton,
+} from "@/components/builder/agent-structure/drawers/tool-trigger-form";
 import type { ExecutionErrorInfo } from "@/lib/domain/execution-state";
 import {
   Dialog,
@@ -307,6 +312,7 @@ export function AgentDrawer({
   modelSubtitle,
   integrationCount,
   executionError,
+  published,
   onSaved,
 }: {
   open: boolean;
@@ -317,6 +323,7 @@ export function AgentDrawer({
   modelSubtitle?: string;
   integrationCount: number;
   executionError?: ExecutionErrorInfo | null;
+  published?: boolean;
   onSaved?: () => void;
 }) {
   const { t } = useTranslation("structure");
@@ -365,12 +372,28 @@ export function AgentDrawer({
 
       <DetailBlock title={t("panel.triggersTitle")}>
         <AgentScheduleToggle
-          key={`${agentId}:${(spec?.triggers ?? []).some((t) => t.kind === "schedule" && t.enabled)}`}
+          key={`${agentId}:schedule:${(spec?.triggers ?? []).some((t) => t.kind === "schedule" && t.enabled)}`}
           agentId={agentId}
           spec={spec}
           onSaved={onSaved}
         />
+        <div className="mt-3">
+          <AgentToolTriggerToggle
+            key={`${agentId}:tool:${(spec?.triggers ?? []).some((t) => t.kind === "tool" && t.enabled)}`}
+            agentId={agentId}
+            spec={spec}
+            onSaved={onSaved}
+          />
+        </div>
       </DetailBlock>
+
+      <ToolTriggerListenButton
+        agentId={agentId}
+        published={published}
+        configured={Boolean(
+          (spec?.triggers ?? []).find((t) => t.kind === "tool" && t.enabled && t.componentId),
+        )}
+      />
 
       <p className="text-sm text-muted-foreground">{t("panel.agentReadOnlyHint")}</p>
 
@@ -405,6 +428,8 @@ export function TriggerDrawer({
   node,
   agentId,
   spec,
+  connections = [],
+  published,
   onSaved,
 }: {
   open: boolean;
@@ -412,12 +437,15 @@ export function TriggerDrawer({
   node: ProductNode | null;
   agentId?: string;
   spec?: AgentSpec | null;
+  connections?: AgentConnectionInfo[];
+  published?: boolean;
   onSaved?: () => void;
 }) {
   const { t } = useTranslation("structure");
   if (!node) return null;
 
   const isSchedule = node.kind === "trigger_schedule";
+  const isTool = node.kind === "trigger_tool";
 
   return (
     <FloatingPanel
@@ -425,10 +453,24 @@ export function TriggerDrawer({
       onOpenChange={onOpenChange}
       title={node.label}
       subtitle={
-        isSchedule ? t("panel.scheduleSubtitle") : t("panel.chatSubtitle")
+        isTool
+          ? t("panel.toolTriggerSubtitle")
+          : isSchedule
+            ? t("panel.scheduleSubtitle")
+            : t("panel.chatSubtitle")
       }
     >
-      {isSchedule ? (
+      {isTool ? (
+        agentId ? (
+          <ToolTriggerConfigForm
+            agentId={agentId}
+            spec={spec}
+            published={published}
+            connections={connections}
+            onSaved={onSaved}
+          />
+        ) : null
+      ) : isSchedule ? (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {node.subtitle || t("product.scheduleDefault", { defaultValue: "Runs on a schedule." })}
@@ -450,7 +492,7 @@ export function TriggerDrawer({
             <p>{t("panel.chatWhatBody")}</p>
           </DetailBlock>
           <DetailBlock title={t("panel.chatHow")}>
-            <ul className="list-disc space-y-1.5 pl-4 text-muted-foreground">
+            <ul className="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground">
               <li>{t("panel.chatHow1")}</li>
               <li>{t("panel.chatHow2")}</li>
               <li>{t("panel.chatHow3")}</li>

@@ -508,14 +508,35 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
             ? "schedule"
             : rec.kind === "manual"
               ? "manual"
-              : rec.kind === "webhook"
-                ? "webhook"
-                : "chat";
+              : rec.kind === "tool" || (rec.kind === "webhook" && rec.component_id)
+                ? "tool"
+                : rec.kind === "webhook"
+                  ? "webhook"
+                  : "chat";
         return {
           kind,
           enabled: rec.enabled !== false,
           cron: typeof rec.cron === "string" ? rec.cron : null,
           timezone: typeof rec.timezone === "string" ? rec.timezone : null,
+          appId:
+            typeof rec.app_id === "string"
+              ? rec.app_id
+              : typeof rec.appId === "string"
+                ? rec.appId
+                : null,
+          componentId:
+            typeof rec.component_id === "string"
+              ? rec.component_id
+              : typeof rec.componentId === "string"
+                ? rec.componentId
+                : null,
+          label: typeof rec.label === "string" ? rec.label : null,
+          extraProps:
+            rec.extra_props && typeof rec.extra_props === "object" && !Array.isArray(rec.extra_props)
+              ? (rec.extra_props as Record<string, unknown>)
+              : rec.extraProps && typeof rec.extraProps === "object" && !Array.isArray(rec.extraProps)
+                ? (rec.extraProps as Record<string, unknown>)
+                : {},
         };
       },
     );

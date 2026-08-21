@@ -470,6 +470,152 @@ class PipedreamClient:
                 return str(token)
         return None
 
+    def _component_rows(self, data: dict[str, Any] | list[Any] | None, *, limit: int) -> list[dict[str, Any]]:
+        if not data:
+            return []
+        if isinstance(data, list):
+            rows = data
+        else:
+            rows = data.get("data") or data.get("triggers") or data.get("components") or []
+        out: list[dict[str, Any]] = []
+        for row in rows[: max(limit, 1)]:
+            if not isinstance(row, dict):
+                continue
+            key = row.get("key") or row.get("id") or row.get("name")
+            app = row.get("app")
+            app_id = (
+                app.get("name_slug")
+                if isinstance(app, dict)
+                else (app if isinstance(app, str) else row.get("app_id"))
+            )
+            out.append(
+                {
+                    "trigger_id": key,
+                    "name": row.get("name") or key,
+                    "summary": row.get("description") or row.get("summary") or "",
+                    "app_id": app_id,
+                    "version": row.get("version"),
+                    "raw": row,
+                }
+            )
+        return out
+
+    async def search_triggers(
+        self,
+        query: str = "",
+        *,
+        app_id: str | None = None,
+        limit: int = 40,
+    ) -> list[dict[str, Any]]:
+        if not self.configured():
+            return []
+        params: dict[str, Any] = {"limit": min(max(limit, 1), 100), "registry": "all"}
+        if query.strip():
+            params["q"] = query.strip()[:200]
+        if app_id:
+            params["app"] = app_id.strip()[:128]
+        for path, extra in (
+            (f"/connect/{self._project_id()}/triggers", {}),
+            (
+                f"/connect/{self._project_id()}/components",
+                {"componentType": "trigger", "component_type": "trigger"},
+            ),
+        ):
+            try:
+                data = await self._request("GET", path, params={**params, **extra})
+            except PipedreamError as exc:
+                if exc.status == 404:
+                    continue
+                raise
+            rows = self._component_rows(data, limit=limit)
+            if rows:
+                return rows
+        return []
+
+    async def get_trigger_component(self, component_key: str) -> dict[str, Any] | None:
+        if not self.configured() or not component_key:
+            return None
+        for path in (
+            f"/connect/{self._project_id()}/triggers/{component_key}",
+            f"/connect/{self._project_id()}/components/{component_key}",
+            f"/connect/{self._project_id()}/actions/{component_key}",
+            f"/components/{component_key}",
+        ):
+            try:
+                data = await self._request("GET", path)
+            except PipedreamError as exc:
+                if exc.status == 404:
+                    continue
+                raise
+            if not isinstance(data, dict):
+                continue
+            inner = data.get("data") if isinstance(data.get("data"), dict) else data
+            if isinstance(inner, dict) and (
+                inner.get("key") or inner.get("configurable_props") or inner.get("name")
+            ):
+                return inner
+        return None
+
+    async def deploy_trigger(
+        self,
+        *,
+        external_user_id: str,
+        trigger_id: str,
+        configured_props: dict[str, Any] | None = None,
+        webhook_url: str,
+        emit_on_deploy: bool = False,
+    ) -> dict[str, Any]:
+        if not self.configured():
+            raise PipedreamError("PIPEDREAM_NOT_CONFIGURED")
+        body: dict[str, Any] = {
+            "external_user_id": external_user_id,
+            "id": trigger_id,
+            "configured_props": configured_props or {},
+            "webhook_url": webhook_url,
+            "emit_on_deploy": emit_on_deploy,
+        }
+        last_error: PipedreamError | None = None
+        for path in (
+            f"/connect/{self._project_id()}/triggers/deploy",
+            f"/connect/{self._project_id()}/components/triggers/deploy",
+        ):
+            try:
+                data = await self._request("POST", path, json=body)
+            except PipedreamError as exc:
+                last_error = exc
+                if exc.status == 404:
+                    continue
+                raise
+            if isinstance(data, dict):
+                return data
+        if last_error:
+            raise last_error
+        raise PipedreamError("PIPEDREAM_DEPLOY_FAILED")
+
+    async def delete_deployed_trigger(
+        self, *, deployed_id: str, external_user_id: str
+    ) -> bool:
+        if not self.configured() or not deployed_id:
+            return False
+        params = {"external_user_id": external_user_id}
+        for path in (
+            f"/connect/{self._project_id()}/deployed-triggers/{deployed_id}",
+            f"/connect/{self._project_id()}/triggers/{deployed_id}",
+        ):
+            try:
+                await self._request("DELETE", path, params=params)
+                return True
+            except PipedreamError as exc:
+                if exc.status == 404:
+                    continue
+                logger.warning(
+                    "pipedream_delete_trigger_failed id=%s status=%s",
+                    deployed_id,
+                    exc.status,
+                )
+                return False
+        return True
+
     async def delete_account(self, account_id: str) -> bool:
         """Remove a connected account from Pipedream so sync cannot resurrect it."""
         if not self.configured() or not account_id:

@@ -37,15 +37,18 @@ def _resolve_spec_triggers(
     *,
     current: AgentSpec | None,
     schedule_hourly: bool,
+    tool_trigger: dict[str, Any] | None = None,
 ) -> list[TriggerConfig]:
-    """Chat is always on; schedule comes from capabilities or a preserved current trigger."""
+    """Chat is always on; schedule/tool come from capabilities or a preserved spec."""
     triggers: list[TriggerConfig] = [TriggerConfig(kind="chat", enabled=True)]
     current_schedule = None
+    current_tool = None
     if current is not None:
         for item in current.triggers or []:
             if getattr(item, "kind", None) == "schedule":
                 current_schedule = item
-                break
+            elif getattr(item, "kind", None) == "tool":
+                current_tool = item
     if schedule_hourly:
         triggers.append(
             TriggerConfig(
@@ -62,6 +65,30 @@ def _resolve_spec_triggers(
                 enabled=True,
                 cron=str(getattr(current_schedule, "cron", None) or "0 9 * * 1,2,3,4,5")[:120],
                 timezone=str(getattr(current_schedule, "timezone", None) or "UTC")[:64],
+            )
+        )
+    tool_app = str((tool_trigger or {}).get("app_id") or "").strip()[:128]
+    tool_component = str((tool_trigger or {}).get("component_id") or "").strip()[:256]
+    tool_label = str((tool_trigger or {}).get("label") or "").strip()[:160]
+    if tool_component:
+        triggers.append(
+            TriggerConfig(
+                kind="tool",
+                enabled=True,
+                app_id=tool_app or None,
+                component_id=tool_component,
+                label=tool_label or None,
+            )
+        )
+    elif current_tool is not None and getattr(current_tool, "enabled", True):
+        triggers.append(
+            TriggerConfig(
+                kind="tool",
+                enabled=True,
+                app_id=getattr(current_tool, "app_id", None),
+                component_id=getattr(current_tool, "component_id", None),
+                label=getattr(current_tool, "label", None),
+                extra_props=getattr(current_tool, "extra_props", None) or {},
             )
         )
     return triggers
@@ -710,6 +737,10 @@ class BuilderOrchestrator:
         memory_semantic: bool = False,
         knowledge_enabled: bool = False,
         schedule_hourly: bool = False,
+        tool_trigger: bool = False,
+        tool_trigger_app_id: str | None = None,
+        tool_trigger_component_id: str | None = None,
+        tool_trigger_label: str | None = None,
         context_notes: str = "",
     ) -> dict[str, Any]:
         interrupt = await self.db.get_builder_interrupt(run_id, user_id)
@@ -726,18 +757,33 @@ class BuilderOrchestrator:
             tone=str(draft.get("tone") or "professional")[:64],
             description=str(draft.get("description") or "")[:2000],
         )
-        # Trigger form only collects schedule — chat memory is always enabled by default.
-        # Semantic memory / notes are configured later in Structure if the user wants.
         _ = (memory_conversation, memory_semantic, context_notes)
-        notes = "Schedule: run every hour when scheduling is available." if schedule_hourly else ""
-        caps = {
+        app_id = (tool_trigger_app_id or "").strip()[:128]
+        component_id = (tool_trigger_component_id or "").strip()[:256]
+        label = (tool_trigger_label or "").strip()[:160]
+        use_tool = bool(tool_trigger and component_id)
+        notes_parts: list[str] = []
+        if schedule_hourly:
+            notes_parts.append("Schedule: run every hour when scheduling is available.")
+        if use_tool:
+            notes_parts.append(
+                f"Event trigger: {label or component_id} on app {app_id or 'pipedream'}."
+            )
+        notes = " ".join(notes_parts)
+        caps: dict[str, Any] = {
             "memory_conversation": True,
             "memory_semantic": False,
             "knowledge_enabled": bool(knowledge_enabled),
             "schedule_hourly": schedule_hourly,
             "trigger_chat": True,
+            "tool_trigger": use_tool,
+            "tool_trigger_app_id": app_id if use_tool else None,
+            "tool_trigger_component_id": component_id if use_tool else None,
+            "tool_trigger_label": label if use_tool else None,
             "context_notes": notes,
         }
+        if use_tool and app_id:
+            caps["preferred_apps"] = [app_id]
         if schedule_hourly:
             from agent_service.supabase_client import get_supabase_admin_client
 
@@ -752,6 +798,21 @@ class BuilderOrchestrator:
                         "enabled": True,
                         "config": {"source": "builder_capabilities", "trigger_chat": True},
                     },
+                )
+        if use_tool:
+            from agent_service.supabase_client import get_supabase_admin_client
+            from agent_service.triggers.service import sync_tool_trigger_row
+
+            async with get_supabase_admin_client() as client:
+                await sync_tool_trigger_row(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    enabled=True,
+                    app_id=app_id or None,
+                    component_id=component_id,
+                    extra_props={},
+                    connection_id=None,
+                    client=client,
                 )
         await self.db.clear_builder_interrupt(run_id, user_id)
         await self.db.update_run_status(run_id, "running")
@@ -3438,9 +3499,17 @@ class BuilderOrchestrator:
             current, user_id=user_id, agent_id=agent_id
         )
         schedule_hourly = bool(caps.get("schedule_hourly"))
+        tool_trigger = None
+        if caps.get("tool_trigger") and caps.get("tool_trigger_component_id"):
+            tool_trigger = {
+                "app_id": caps.get("tool_trigger_app_id"),
+                "component_id": caps.get("tool_trigger_component_id"),
+                "label": caps.get("tool_trigger_label"),
+            }
         triggers = _resolve_spec_triggers(
             current=current,
             schedule_hourly=schedule_hourly,
+            tool_trigger=tool_trigger,
         )
         spec = AgentSpec(
             schema_version="4.0",
