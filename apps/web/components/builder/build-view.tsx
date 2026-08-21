@@ -1261,37 +1261,79 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (draft) setPrefill(draft);
   }, [agentId, threadReady]);
 
-  // Soft pin only when new messages arrive — ResizeObserver handles growth without
-  // re-running on every activity-line poll (those caused micro-jumps every ~1s).
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    // Don't yank scroll if the user scrolled up to read history.
-    if (distanceFromBottom > 120) return;
-    const pin = () => {
-      el.scrollTop = el.scrollHeight;
-    };
-    pin();
-    const raf = window.requestAnimationFrame(pin);
-    return () => window.cancelAnimationFrame(raf);
-  }, [messages.length, showLocalWorking, activeRevealId, revealedIds.size]);
-
-  // Keep pinned while content grows (typewriter / activity lines).
+  // Follow the live conversation while it grows (activity lines, typewriter, forms).
+  // Previously we only re-pinned on message count, so new activity wrote under the
+  // composer until the turn finished — then jumped. Keep sticky while work is in
+  // flight, unless the user scrolled up to read history.
   useEffect(() => {
     const root = scrollRef.current;
-    if (!root || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      const distanceFromBottom =
-        root.scrollHeight - root.scrollTop - root.clientHeight;
-      if (distanceFromBottom > 120) return;
+    if (!root) return;
+
+    const NEAR_BOTTOM_PX = 160;
+    let pinned =
+      root.scrollHeight - root.scrollTop - root.clientHeight <= NEAR_BOTTOM_PX;
+
+    const stick = () => {
+      if (!pinned) return;
       root.scrollTop = root.scrollHeight;
+    };
+
+    const onScroll = () => {
+      const distance = root.scrollHeight - root.scrollTop - root.clientHeight;
+      pinned = distance <= NEAR_BOTTOM_PX;
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+
+    const liveFollowing =
+      showLocalWorking ||
+      composerBusy ||
+      awaitingReply ||
+      pendingToken !== null ||
+      Boolean(activeRevealId) ||
+      activityLines.length > 0;
+
+    let raf = 0;
+    const tick = () => {
+      stick();
+      if (liveFollowing) raf = window.requestAnimationFrame(tick);
+    };
+    stick();
+    if (liveFollowing) raf = window.requestAnimationFrame(tick);
+
+    const resize =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => stick())
+        : null;
+    resize?.observe(root);
+    const content = root.querySelector("[data-builder-scroll-content]");
+    if (content) resize?.observe(content);
+
+    const mutate =
+      typeof MutationObserver !== "undefined"
+        ? new MutationObserver(() => stick())
+        : null;
+    mutate?.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
     });
-    observer.observe(root);
-    const inner = root.firstElementChild;
-    if (inner) observer.observe(inner);
-    return () => observer.disconnect();
-  }, []);
+
+    return () => {
+      root.removeEventListener("scroll", onScroll);
+      if (raf) window.cancelAnimationFrame(raf);
+      resize?.disconnect();
+      mutate?.disconnect();
+    };
+  }, [
+    showLocalWorking,
+    composerBusy,
+    awaitingReply,
+    pendingToken,
+    activeRevealId,
+    activityLines.length,
+    messages.length,
+    revealedIds.size,
+  ]);
 
   useEffect(() => {
     // Wait until baseline is known so refresh never re-chimes historical Ready cards.
@@ -1362,7 +1404,10 @@ export function BuildView({ agentId }: { agentId: string }) {
           <div className="h-full w-full bg-background/55 backdrop-blur-md [mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.55)_6%,black_18%,black_78%,rgba(0,0,0,0.6)_90%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.55)_6%,black_18%,black_78%,rgba(0,0,0,0.6)_90%,transparent_100%)]" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/50 to-background/70" />
         </div>
-        <div className="relative z-[1] mx-auto max-w-3xl space-y-6 py-8">
+        <div
+          data-builder-scroll-content
+          className="relative z-[1] mx-auto max-w-3xl space-y-6 pt-8 pb-16"
+        >
           {messages.length === 0 && !showLocalWorking ? (
             <div className="flex min-h-[45vh] flex-col items-center justify-center text-center">
               <span className="glass mb-6 flex size-14 items-center justify-center rounded-3xl">
