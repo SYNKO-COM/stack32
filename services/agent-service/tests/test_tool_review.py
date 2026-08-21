@@ -1,5 +1,7 @@
 """Tests for mandatory tool review helpers."""
 
+import pytest
+
 from agent_service.builder.tool_review import (
     apply_reviewed_tools,
     build_tool_review_entries,
@@ -60,8 +62,74 @@ def test_build_entries_french_utility():
     entries = build_tool_review_entries(
         proposed=proposed, current=None, goal="Préparer un meeting", locale="fr"
     )
-    assert "sert à avancer" in entries[0]["utility"]
-    assert "Lets the agent" not in entries[0]["utility"]
+    utility = entries[0]["utility"]
+    assert "mail" in utility.lower()
+    assert "sert à avancer" not in utility
+    assert "Lets the agent" not in utility
+    assert "Help the user achieve their goal" not in utility
+    sheets = build_tool_review_entries(
+        proposed=[
+            ToolBinding(tool_id="sheets_update", provider="pipedream", app_id="google_sheets")
+        ],
+        current=None,
+        goal="Préparer un meeting",
+        locale="fr",
+    )[0]["utility"]
+    assert sheets != utility
+    assert "feuille" in sheets.lower() or "calcul" in sheets.lower()
+
+
+def test_build_entries_uses_config_utility():
+    proposed = [
+        ToolBinding(
+            tool_id="gmail_send",
+            provider="pipedream",
+            app_id="gmail",
+            config={"utility": "Envoyer le brief hebdo aux clients."},
+        )
+    ]
+    entries = build_tool_review_entries(proposed=proposed, current=None, goal="x", locale="fr")
+    assert entries[0]["utility"] == "Envoyer le brief hebdo aux clients."
+
+
+def test_is_generic_utility():
+    from agent_service.builder.tool_review import is_generic_utility
+
+    assert is_generic_utility(
+        "Gmail sert à avancer sur cet objectif : Help the user achieve their goal.."
+    )
+    assert not is_generic_utility("Lire les mails des leads et préparer une réponse.")
+
+
+@pytest.mark.asyncio
+async def test_enrich_utilities_with_llm_overrides_adds():
+    from agent_service.builder.tool_review import enrich_utilities_with_llm
+
+    class _FakeResult:
+        content = (
+            '{"gmail":"Lire les mails des leads et préparer une réponse.",'
+            '"google_calendar":"Bloquer des créneaux pour les demos."}'
+        )
+
+    class _FakeGateway:
+        async def complete(self, **_kwargs):
+            return _FakeResult()
+
+    entries = build_tool_review_entries(
+        proposed=[
+            ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail"),
+            ToolBinding(tool_id="cal_create", provider="pipedream", app_id="google_calendar"),
+        ],
+        current=None,
+        goal="Qualifier des leads",
+        locale="fr",
+    )
+    out = await enrich_utilities_with_llm(
+        entries, goal="Qualifier des leads", locale="fr", gateway=_FakeGateway()
+    )
+    by_app = {e["app_id"]: e["utility"] for e in out}
+    assert "leads" in by_app["gmail"].lower()
+    assert "créneaux" in by_app["google_calendar"].lower() or "demos" in by_app["google_calendar"].lower()
 
 
 def test_apply_reviewed_tools_keeps_hidden_and_all_app_actions():

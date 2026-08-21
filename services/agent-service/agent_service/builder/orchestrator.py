@@ -1409,7 +1409,11 @@ class BuilderOrchestrator:
         spec: AgentSpec,
         current_spec: AgentSpec | None,
     ) -> dict[str, Any] | None:
-        from agent_service.builder.tool_review import build_tool_review_entries, tools_changed
+        from agent_service.builder.tool_review import (
+            build_tool_review_entries,
+            enrich_utilities_with_llm,
+            tools_changed,
+        )
 
         if capabilities.get("tools_confirmed") and isinstance(
             capabilities.get("confirmed_spec"), dict
@@ -1420,14 +1424,21 @@ class BuilderOrchestrator:
 
         run_row = await self.db.get_owned_run(run_id, user_id)
         locale = str(((run_row or {}).get("input") or {}).get("locale") or "en")
+        goal = str(spec.goal or prompt or "")[:400]
         entries = build_tool_review_entries(
             proposed=list(spec.tools or []),
             current=list(current_spec.tools) if current_spec else None,
-            goal=str(spec.goal or prompt or "")[:400],
+            goal=goal,
             locale=locale,
         )
         if not entries:
             return None
+        entries = await enrich_utilities_with_llm(
+            entries,
+            goal=goal,
+            locale=locale,
+            gateway=self.gateway,
+        )
         mode = "initial" if current_spec is None else "modify"
         return await self._interrupt_tool_review_form(
             run_id=run_id,

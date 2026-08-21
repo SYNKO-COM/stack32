@@ -24,14 +24,20 @@ import { cn } from "@/lib/utils";
 
 type DraftTool = BuilderToolReviewEntry & { key: string };
 
-function looksLikeEnglishDefault(utility: string): boolean {
-  return /lets the agent use/i.test(utility) || /toward:/i.test(utility);
+function looksLikeGenericUtility(utility: string): boolean {
+  const lower = utility.trim().toLowerCase();
+  if (!lower) return true;
+  return (
+    /lets the agent use/i.test(lower) ||
+    /toward:/i.test(lower) ||
+    /sert à avancer sur cet objectif/i.test(lower) ||
+    /utilise pour lire, créer ou envoyer/i.test(lower) ||
+    /read, create, or send what it needs/i.test(lower) ||
+    /help the user achieve their goal/i.test(lower)
+  );
 }
 
-function seedFromComponent(
-  ui: BuilderUiComponent,
-  localize: (name: string) => string,
-): DraftTool[] {
+function seedFromComponent(ui: BuilderUiComponent): DraftTool[] {
   const grouped = new Map<string, DraftTool>();
   for (const [index, tool] of (ui.tools ?? []).entries()) {
     if (!isProductFacingTool(tool.toolId)) continue;
@@ -40,7 +46,8 @@ function seedFromComponent(
       provider: tool.provider,
     });
     const name = resolveAppDisplayName(appKey, tool.toolId) || tool.name;
-    const utility = looksLikeEnglishDefault(tool.utility) ? localize(name) : tool.utility;
+    // Keep agent-provided copy as-is; never replace with a shared template.
+    const utility = looksLikeGenericUtility(tool.utility) ? "" : tool.utility;
     const incomingIds = tool.toolIds?.length ? tool.toolIds : [tool.toolId];
     const existing = grouped.get(appKey);
     if (existing) {
@@ -102,9 +109,7 @@ export function ToolReviewForm({
   const queryClient = useQueryClient();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [tools, setTools] = useState<DraftTool[]>(() =>
-    seedFromComponent(uiComponent, (name) => t("toolReview.utilityDefault", { name })),
-  );
+  const [tools, setTools] = useState<DraftTool[]>(() => seedFromComponent(uiComponent));
   const [addAppId, setAddAppId] = useState("");
   const [addAppName, setAddAppName] = useState("");
   const [addUtility, setAddUtility] = useState("");

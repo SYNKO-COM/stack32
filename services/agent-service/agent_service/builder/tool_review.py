@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import re
 from typing import Any
 
+from agent_service.gateway.model_gateway import ModelProfile
 from agent_service.integrations.app_keys import app_key_from_tool_id
 from agent_service.models.agent_spec import ToolBinding
+
+logger = logging.getLogger(__name__)
 
 # Always present, never shown in the review UI (same set as Structure).
 HIDDEN_FROM_REVIEW = frozenset(
@@ -88,6 +94,64 @@ def _app_display_name(app_key: str, tool: ToolBinding) -> str:
     return _title_case(app_key or tool.tool_id)
 
 
+_APP_UTILITY_HINTS_FR: dict[str, str] = {
+    "gmail": "Lire, trier et rédiger des e-mails pour avancer sur l’objectif.",
+    "microsoft_outlook": "Lire et envoyer des e-mails Outlook liés à l’objectif.",
+    "outlook": "Lire et envoyer des e-mails Outlook liés à l’objectif.",
+    "google_calendar": "Consulter l’agenda et créer ou mettre à jour des événements.",
+    "google_sheets": "Lire et mettre à jour des feuilles de calcul pour suivre les infos.",
+    "google_docs": "Créer ou compléter des documents Google Docs utiles à l’objectif.",
+    "google_drive": "Retrouver et organiser des fichiers dans Google Drive.",
+    "google_slides": "Préparer ou mettre à jour des présentations.",
+    "slack": "Lire et envoyer des messages Slack utiles à l’objectif.",
+    "notion": "Lire et mettre à jour des pages Notion liées à l’objectif.",
+    "hubspot": "Consulter et mettre à jour les contacts / deals HubSpot.",
+    "salesforce": "Consulter et mettre à jour les fiches Salesforce.",
+    "pipedrive": "Suivre les deals et contacts dans Pipedrive.",
+    "stripe": "Consulter paiements, clients ou factures Stripe.",
+    "canva": "Créer ou adapter des designs Canva.",
+    "linear": "Lire et créer des tickets Linear.",
+    "airtable": "Lire et mettre à jour des bases Airtable.",
+}
+
+_APP_UTILITY_HINTS_EN: dict[str, str] = {
+    "gmail": "Read, sort, and draft emails that move the goal forward.",
+    "microsoft_outlook": "Read and send Outlook emails related to the goal.",
+    "outlook": "Read and send Outlook emails related to the goal.",
+    "google_calendar": "Check the calendar and create or update events.",
+    "google_sheets": "Read and update spreadsheets to track the needed data.",
+    "google_docs": "Create or update Google Docs that support the goal.",
+    "google_drive": "Find and organize files in Google Drive.",
+    "google_slides": "Prepare or update slide decks.",
+    "slack": "Read and send Slack messages useful for the goal.",
+    "notion": "Read and update Notion pages related to the goal.",
+    "hubspot": "Look up and update HubSpot contacts or deals.",
+    "salesforce": "Look up and update Salesforce records.",
+    "pipedrive": "Track deals and contacts in Pipedrive.",
+    "stripe": "Check Stripe payments, customers, or invoices.",
+    "canva": "Create or adapt Canva designs.",
+    "linear": "Read and create Linear issues.",
+    "airtable": "Read and update Airtable bases.",
+}
+
+
+def is_generic_utility(text: str) -> bool:
+    lower = (text or "").strip().lower()
+    if not lower:
+        return True
+    markers = (
+        "lets the agent use",
+        "toward:",
+        "sert à avancer sur cet objectif",
+        "l’agent l’utilise pour lire, créer ou envoyer",
+        "l'agent l'utilise pour lire, créer ou envoyer",
+        "to read, create, or send what it needs",
+        "to get its job done",
+        "help the user achieve their goal",
+    )
+    return any(m in lower for m in markers)
+
+
 def default_utility(
     tool: ToolBinding,
     *,
@@ -99,31 +163,33 @@ def default_utility(
     cfg = tool.config if isinstance(tool.config, dict) else {}
     for key in ("utility", "purpose", "reason"):
         value = cfg.get(key)
-        if isinstance(value, str) and value.strip():
+        if isinstance(value, str) and value.strip() and not is_generic_utility(value):
             return value.strip()[:500]
     label = name or _app_display_name(_app_key(tool), tool)
     french = str(locale or "en").lower().startswith("fr")
     goal_bit = (goal or "").strip()
+    app_key = _app_key(tool).lower()
     if change == "remove":
         if french:
             return f"Stack32 propose de retirer {label}."
         return f"Stack32 proposes removing {label} from this agent."
+    hint = (_APP_UTILITY_HINTS_FR if french else _APP_UTILITY_HINTS_EN).get(app_key)
+    if hint:
+        if goal_bit:
+            suffix = (
+                f" Pour : {goal_bit[:120]}."
+                if french
+                else f" For: {goal_bit[:120]}."
+            )
+            return f"{hint}{suffix}"[:500]
+        return hint[:500]
     if french:
         if goal_bit:
-            return (
-                f"{label} sert à avancer sur cet objectif : {goal_bit[:140]}. "
-                "L’agent l’utilise pour lire, créer ou envoyer ce qu’il faut."
-            )[:500]
-        return (
-            f"L’agent utilise {label} pour faire son travail "
-            "(lire, créer ou envoyer ce qu’il faut)."
-        )
+            return f"{label} aide l’agent sur : {goal_bit[:160]}."[:500]
+        return f"L’agent s’appuie sur {label} pour avancer sur sa mission."
     if goal_bit:
-        return (
-            f"{label} helps with: {goal_bit[:140]}. "
-            "The agent uses it to read, create, or send what it needs."
-        )[:500]
-    return f"The agent uses {label} to get its job done."
+        return f"{label} helps the agent with: {goal_bit[:160]}."[:500]
+    return f"The agent uses {label} to advance its mission."
 
 
 def _group_tools(tools: list[ToolBinding]) -> dict[str, list[ToolBinding]]:
@@ -195,6 +261,81 @@ def build_tool_review_entries(
 
     order = {"add": 0, "keep": 1, "remove": 2}
     entries.sort(key=lambda e: (order.get(str(e.get("change")), 9), str(e.get("name") or "")))
+    return entries
+
+
+async def enrich_utilities_with_llm(
+    entries: list[dict[str, Any]],
+    *,
+    goal: str,
+    locale: str = "en",
+    gateway: Any | None = None,
+) -> list[dict[str, Any]]:
+    """Ask the builder LLM for a specific 1–2 sentence utility per proposed app."""
+    # Always rewrite agent-proposed adds; keep existing utilities only when already specific
+    # (e.g. user confirmed earlier) and not a template fallback.
+    targets = [
+        e
+        for e in entries
+        if str(e.get("change") or "") == "add"
+        or (
+            str(e.get("change") or "") == "keep"
+            and is_generic_utility(str(e.get("utility") or ""))
+        )
+    ]
+    if not targets or gateway is None:
+        return entries
+
+    french = str(locale or "en").lower().startswith("fr")
+    lang = "French" if french else "English"
+    app_lines = "\n".join(
+        f"- {e.get('app_id')}: {e.get('name')}" for e in targets if e.get("app_id")
+    )
+    goal_bit = (goal or "").strip()[:600]
+    try:
+        result = await gateway.complete(
+            profile=ModelProfile.FAST,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You explain why each app belongs on this AI agent.\n"
+                        f"Write in {lang}.\n"
+                        "Return ONLY a JSON object mapping app_id → utility string.\n"
+                        "Each utility: 1 or 2 short sentences, concrete, specific to THIS goal.\n"
+                        "No marketing, no filler, no repeated generic phrases like "
+                        "\"help the user achieve their goal\" or \"read, create or send\".\n"
+                        "Example: "
+                        '{"gmail":"Lire les e-mails entrants des leads et préparer une réponse personnalisée."}'
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Agent goal:\n{goal_bit or '(not specified)'}\n\n"
+                        f"Apps to explain:\n{app_lines}\n"
+                    ),
+                },
+            ],
+            temperature=0.3,
+            max_tokens=500,
+        )
+        raw = (getattr(result, "content", None) or "").strip()
+        if not raw:
+            return entries
+        match = re.search(r"\{[\s\S]*\}", raw)
+        payload = json.loads(match.group(0) if match else raw)
+        if not isinstance(payload, dict):
+            return entries
+        by_id = {str(k).strip().lower(): str(v).strip() for k, v in payload.items() if v}
+        for entry in targets:
+            app_id = str(entry.get("app_id") or "").strip().lower()
+            name = str(entry.get("name") or "").strip().lower()
+            text = by_id.get(app_id) or by_id.get(name)
+            if text and not is_generic_utility(text):
+                entry["utility"] = text[:500]
+    except Exception:  # noqa: BLE001
+        logger.exception("tool_review_utility_llm_failed")
     return entries
 
 
