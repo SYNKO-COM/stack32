@@ -491,6 +491,14 @@ export interface PublicAgentDto {
   avgRating?: number | null;
   reviewCount?: number;
   modules?: Array<{ label: string; kind?: string }>;
+  /** Identity role (e.g. “Meeting prep assistant”). */
+  role?: string;
+  /** High-level objective / goal from the published spec. */
+  goal?: string;
+  /** System instructions shown on the public landing (no secrets). */
+  instructions?: string;
+  /** Behavioral rules from the published spec. */
+  rules?: string[];
 }
 
 export interface PublishResult {

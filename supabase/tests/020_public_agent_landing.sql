@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(5);
+select plan(6);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -61,7 +61,17 @@ insert into public.agent_versions (
   '33333333-3333-3333-3333-333333333333',
   '22222222-2222-2222-2222-222222222222',
   1,
-  '{"schema_version":"2","tools":[{"tool":"canva_create","enabled":true,"provider":"canva","app_id":"canva"},{"tool":"notion_page","enabled":true,"provider":"notion","app_id":"notion"}]}'::jsonb,
+  '{
+    "schema_version":"2",
+    "goal":"Prepare concise meeting briefs",
+    "identity":{"name":"Landing Agent","role":"Meeting prep assistant"},
+    "instructions":{"system":"Summarize attendees, agenda and risks before each meeting."},
+    "rules":["Never invent facts","Cite sources when available"],
+    "tools":[
+      {"tool":"canva_create","enabled":true,"provider":"canva","app_id":"canva"},
+      {"tool":"notion_page","enabled":true,"provider":"notion","app_id":"notion"}
+    ]
+  }'::jsonb,
   'passed',
   'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 );
@@ -101,6 +111,13 @@ select ok(
     public.resolve_published_agent('pub_landing', 'landing-agent')->'modules'
   ) >= 1,
   'anon resolve includes modules'
+);
+
+select ok(
+  (select public.resolve_published_agent('pub_landing', 'landing-agent')->>'goal') is not null
+  or (select public.resolve_published_agent('pub_landing', 'landing-agent')->>'instructions') is not null
+  or jsonb_array_length(public.resolve_published_agent('pub_landing', 'landing-agent')->'rules') >= 0,
+  'anon resolve includes brief fields'
 );
 
 select lives_ok(

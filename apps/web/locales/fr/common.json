@@ -154,7 +154,13 @@
     "avgRating": "Note",
     "subscriberNames": "Personnes qui utilisent cet agent",
     "buyerNames": "Abonnés payants",
-    "noNames": "Personne pour l'instant."
+    "noNames": "Personne pour l'instant.",
+    "tabGeneral": "Général",
+    "tabAgents": "Par agent",
+    "generalTitle": "Vue d'ensemble",
+    "agentsCount": "{{count}} agents",
+    "prevReviews": "Avis précédents",
+    "nextReviews": "Avis suivants"
   },
   "agentSettings": {
     "title": "Paramètres de l'agent",
@@ -223,7 +229,13 @@
     "backToListing": "Retour à la présentation",
     "modulesEmpty": "Modules disponibles après publication.",
     "ratingLabel": "{{rating}} · {{count}} avis",
-    "ratingEmpty": "Pas encore d’avis"
+    "ratingEmpty": "Pas encore d’avis",
+    "briefTitle": "Brief de l’agent",
+    "briefHint": "Objectif, instructions et règles définis par le créateur.",
+    "roleTitle": "Rôle",
+    "goalTitle": "Objectif",
+    "instructionsTitle": "Instructions",
+    "rulesTitle": "Règles"
   },
   "account": {
     "dangerZone": "Zone de danger",

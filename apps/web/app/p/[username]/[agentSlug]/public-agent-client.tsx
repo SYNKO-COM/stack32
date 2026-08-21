@@ -1,7 +1,16 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Heart, Loader2, Sparkles, Star, Workflow } from "lucide-react";
+import {
+  BookOpen,
+  Heart,
+  Loader2,
+  Sparkles,
+  Star,
+  Target,
+  Workflow,
+  ShieldCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -231,6 +240,77 @@ function PublicAgentLanding({
             )}
           </div>
         </section>
+
+        {(agent.role || agent.goal || agent.instructions || (agent.rules && agent.rules.length > 0)) ? (
+          <section className="rounded-3xl border border-border/80 bg-background/60 p-5 backdrop-blur-sm md:p-6">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand/12 text-brand">
+                <BookOpen className="size-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold">{t("common:publicAgent.briefTitle")}</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {t("common:publicAgent.briefHint")}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {agent.role ? (
+                <div className="rounded-2xl border border-border/70 bg-foreground/[0.02] p-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    <Sparkles className="size-3.5 text-brand" aria-hidden="true" />
+                    {t("common:publicAgent.roleTitle")}
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-foreground">{agent.role}</p>
+                </div>
+              ) : null}
+
+              {agent.goal ? (
+                <div className="rounded-2xl border border-border/70 bg-foreground/[0.02] p-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    <Target className="size-3.5 text-brand" aria-hidden="true" />
+                    {t("common:publicAgent.goalTitle")}
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                    {agent.goal}
+                  </p>
+                </div>
+              ) : null}
+
+              {agent.instructions ? (
+                <div className="rounded-2xl border border-border/70 bg-foreground/[0.02] p-4 md:col-span-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    <BookOpen className="size-3.5 text-brand" aria-hidden="true" />
+                    {t("common:publicAgent.instructionsTitle")}
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                    {agent.instructions}
+                  </p>
+                </div>
+              ) : null}
+
+              {agent.rules && agent.rules.length > 0 ? (
+                <div className="rounded-2xl border border-border/70 bg-foreground/[0.02] p-4 md:col-span-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    <ShieldCheck className="size-3.5 text-brand" aria-hidden="true" />
+                    {t("common:publicAgent.rulesTitle")}
+                  </div>
+                  <ol className="mt-3 space-y-2.5">
+                    {agent.rules.map((rule, index) => (
+                      <li key={`${index}-${rule.slice(0, 24)}`} className="flex gap-3 text-sm">
+                        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-[11px] font-semibold text-brand">
+                          {index + 1}
+                        </span>
+                        <span className="leading-relaxed text-foreground/90">{rule}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         <section className="rounded-3xl border border-border/80 bg-background/60 p-5 backdrop-blur-sm md:p-6">
           <div className="flex items-center gap-2">

@@ -154,7 +154,13 @@
     "avgRating": "Rating",
     "subscriberNames": "People using this agent",
     "buyerNames": "Paid subscribers",
-    "noNames": "Nobody yet."
+    "noNames": "Nobody yet.",
+    "tabGeneral": "Overview",
+    "tabAgents": "By agent",
+    "generalTitle": "Overview",
+    "agentsCount": "{{count}} agents",
+    "prevReviews": "Previous reviews",
+    "nextReviews": "Next reviews"
   },
   "agentSettings": {
     "title": "Agent settings",
@@ -223,7 +229,13 @@
     "backToListing": "Back to listing",
     "modulesEmpty": "Modules appear after publish.",
     "ratingLabel": "{{rating}} · {{count}} reviews",
-    "ratingEmpty": "No reviews yet"
+    "ratingEmpty": "No reviews yet",
+    "briefTitle": "Agent brief",
+    "briefHint": "Goal, instructions and rules defined by the creator.",
+    "roleTitle": "Role",
+    "goalTitle": "Objective",
+    "instructionsTitle": "Instructions",
+    "rulesTitle": "Rules"
   },
   "account": {
     "dangerZone": "Danger zone",

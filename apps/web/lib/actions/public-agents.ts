@@ -39,6 +39,22 @@ function mapPublicAgent(raw: unknown): PublicAgentDto | null {
       ? row.listingVisibility
       : undefined;
 
+  const rulesRaw = Array.isArray(row.rules) ? row.rules : [];
+  const rules: string[] = [];
+  for (const item of rulesRaw) {
+    if (typeof item === "string" && item.trim()) {
+      rules.push(item.trim());
+      continue;
+    }
+    const rec = asRecord(item);
+    const text =
+      (typeof rec.text === "string" && rec.text.trim()) ||
+      (typeof rec.rule === "string" && rec.rule.trim()) ||
+      (typeof rec.body === "string" && rec.body.trim()) ||
+      "";
+    if (text) rules.push(text);
+  }
+
   return {
     agentId,
     name,
@@ -55,6 +71,13 @@ function mapPublicAgent(raw: unknown): PublicAgentDto | null {
     avgRating: typeof row.avgRating === "number" ? row.avgRating : null,
     reviewCount: typeof row.reviewCount === "number" ? row.reviewCount : 0,
     modules,
+    role: typeof row.role === "string" && row.role.trim() ? row.role.trim() : undefined,
+    goal: typeof row.goal === "string" && row.goal.trim() ? row.goal.trim() : undefined,
+    instructions:
+      typeof row.instructions === "string" && row.instructions.trim()
+        ? row.instructions.trim()
+        : undefined,
+    rules: rules.length > 0 ? rules : undefined,
   };
 }
 
