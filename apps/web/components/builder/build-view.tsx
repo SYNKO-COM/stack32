@@ -1396,17 +1396,9 @@ export function BuildView({ agentId }: { agentId: string }) {
         aria-label={t("builder:a11y.conversation")}
         aria-live="polite"
       >
-        {/* Stronger frosted film behind the Build conversation */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 z-0"
-        >
-          <div className="h-full w-full bg-background/55 backdrop-blur-md [mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.55)_6%,black_18%,black_78%,rgba(0,0,0,0.6)_90%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,rgba(0,0,0,0.55)_6%,black_18%,black_78%,rgba(0,0,0,0.6)_90%,transparent_100%)]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/50 to-background/70" />
-        </div>
         <div
           data-builder-scroll-content
-          className="relative z-[1] mx-auto max-w-3xl space-y-6 pt-8 pb-16"
+          className="relative mx-auto max-w-3xl space-y-6 pt-8 pb-16"
         >
           {messages.length === 0 && !showLocalWorking ? (
             <div className="flex min-h-[45vh] flex-col items-center justify-center text-center">
