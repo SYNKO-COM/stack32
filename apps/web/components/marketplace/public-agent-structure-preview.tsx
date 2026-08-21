@@ -71,8 +71,32 @@ function toStatusEdges(edges: ProductEdge[]): Edge[] {
     type: "status",
     selectable: false,
     focusable: false,
+    // Vitrine: always default edge color — no run/setup status colors.
     data: { style: edge.style, executionStatus: undefined },
   }));
+}
+
+/** Landing showcase only: idle/ready visuals, no setup warnings or exec colors. */
+function toShowcaseGraph(graph: ProductAgentGraph): ProductAgentGraph {
+  return {
+    nodes: graph.nodes.map((node) => ({
+      ...node,
+      configurationStatus: "ready",
+      executionStatus: undefined,
+      integration: node.integration
+        ? {
+            ...node.integration,
+            configurationStatus: "ready",
+            connectionStatus: "ready",
+          }
+        : undefined,
+    })),
+    edges: graph.edges.map((edge) => ({
+      ...edge,
+      configurationStatus: undefined,
+      executionStatus: undefined,
+    })),
+  };
 }
 
 function buildSyntheticGraph(
@@ -185,7 +209,7 @@ function PreviewCanvas({
   const { data: graphResponse } = useAgentGraph(canFetch ? agent.agentId : "");
 
   const { flowNodes, flowEdges, signature } = useMemo(() => {
-    const product =
+    const productRaw =
       canFetch && spec
         ? buildProductAgentGraph({
             definition: spec,
@@ -203,6 +227,8 @@ function PreviewCanvas({
             output: t("structure:modules.kinds.output"),
           });
 
+    // Public landing is a shop window — never show setup/run status chrome here.
+    const product = toShowcaseGraph(productRaw);
     const laid = layoutProductGraph(product);
     return {
       flowNodes: lockNodes(laid.nodes),
