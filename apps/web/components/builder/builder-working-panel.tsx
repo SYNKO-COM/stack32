@@ -104,10 +104,8 @@ export function BuilderWorkingPanel({
         active: op.state === "running",
       }));
     if (!lines.some((l) => l.active)) {
-      const last = lines.at(-1);
-      lines = last
-        ? lines.map((line, i) => ({ ...line, active: i === lines.length - 1 }))
-        : lines;
+      // All ops finished — keep them visible as done, do not fake an active step.
+      lines = lines.map((line) => ({ ...line, active: false }));
     }
   } else if (resumeMode) {
     // Refresh mid-build before events hydrate: show prior steps as done, no cascade replay.
@@ -128,6 +126,12 @@ export function BuilderWorkingPanel({
       ...lines.filter((l) => !l.active),
       { id: "planning", text: t("working.planning"), active: true },
     ];
+  }
+
+  // Never show a lonely "planning" row with nothing real behind it when the panel
+  // was mounted after a cancel / idle agent — parent should hide us, but belt & braces.
+  if (lines.length === 1 && lines[0]?.id === "planning" && !hasFeed && !hasOps) {
+    lines = [];
   }
 
   return (

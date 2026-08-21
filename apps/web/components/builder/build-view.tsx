@@ -119,6 +119,12 @@ function isInstallationOnlyForm(ui: BuilderMessage["uiComponent"]): boolean {
   return ui.type === "connection_form" || ui.type === "secret_form";
 }
 
+function isCancelNoticeContent(content?: string | null): boolean {
+  return (
+    content === "builder:errors.canceledDetail" || content === "builder:errors.canceled"
+  );
+}
+
 function MessageActions({
   actions,
   agentId,
@@ -719,10 +725,58 @@ export function BuildView({ agentId }: { agentId: string }) {
   const busy = rawBuilding && !staleBuilding;
   const staleRecoveredRef = useRef(false);
 
+  const messageIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    messages.forEach((m, i) => map.set(m.id, i));
+    return map;
+  }, [messages]);
+  const isFormSuperseded = (message: (typeof messages)[number]) => {
+    if (!message.uiComponent && !message.formResolved) return false;
+    const idx = messageIndex.get(message.id) ?? -1;
+    if (idx < 0) return false;
+    // Thinking / progress bubbles must not close an unanswered form (refresh mid-build).
+    // A cancel notice does close it — the interrupt was torn down.
+    return messages.slice(idx + 1).some(
+      (later) =>
+        later.role === "assistant" &&
+        (isCancelNoticeContent(later.content) ||
+          (later.card !== "thinking" &&
+            later.card !== "build_progress" &&
+            (later.formResolved ||
+              later.card === "ready" ||
+              later.card === "identity_confirmed" ||
+              Boolean(
+                later.uiComponent &&
+                  later.uiComponent.requestId !== message.uiComponent?.requestId,
+              )))),
+    );
+  };
+
+  const hasOpenBuilderForm = useMemo(
+    () =>
+      messages.some(
+        (m) =>
+          Boolean(m.uiComponent) &&
+          !isInstallationOnlyForm(m.uiComponent) &&
+          !m.formResolved &&
+          !isFormSuperseded(m) &&
+          !(m.uiComponent?.requestId && resolvedFormIds.has(m.uiComponent.requestId)),
+      ),
+    // isFormSuperseded closes over messages/messageIndex; list identity is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resolvedFormIds + messages drive openness
+    [messages, resolvedFormIds],
+  );
+
   // If the agent stays "building" with no new thread activity, the Cloud Tasks
   // worker likely exited early — stop the fake spinner and free the composer.
+  // Never treat an unanswered form interrupt as a stuck build (user may take minutes).
   useEffect(() => {
     if (!rawBuilding) {
+      setStaleBuilding(false);
+      staleRecoveredRef.current = false;
+      return;
+    }
+    if (hasOpenBuilderForm) {
       setStaleBuilding(false);
       staleRecoveredRef.current = false;
       return;
@@ -738,40 +792,19 @@ export function BuildView({ agentId }: { agentId: string }) {
     tick();
     const id = window.setInterval(tick, 12_000);
     return () => window.clearInterval(id);
-  }, [rawBuilding, lastMessageAt, agentId]);
+  }, [rawBuilding, lastMessageAt, agentId, hasOpenBuilderForm]);
 
   // Once we detect a stuck build, cancel so status leaves "building".
   useEffect(() => {
     if (!staleBuilding || !rawBuilding) return;
+    if (hasOpenBuilderForm) return;
     if (staleRecoveredRef.current) return;
     staleRecoveredRef.current = true;
     void cancelRun.mutateAsync().catch(() => {
       /* local UI already freed */
     });
-  }, [staleBuilding, rawBuilding, cancelRun]);
+  }, [staleBuilding, rawBuilding, cancelRun, hasOpenBuilderForm]);
 
-
-  const messageIndex = useMemo(() => {
-    const map = new Map<string, number>();
-    messages.forEach((m, i) => map.set(m.id, i));
-    return map;
-  }, [messages]);
-  const isFormSuperseded = (message: (typeof messages)[number]) => {
-    if (!message.uiComponent && !message.formResolved) return false;
-    const idx = messageIndex.get(message.id) ?? -1;
-    if (idx < 0) return false;
-    // Thinking / progress bubbles must not close an unanswered form (refresh mid-build).
-    return messages.slice(idx + 1).some(
-      (later) =>
-        later.role === "assistant" &&
-        later.card !== "thinking" &&
-        later.card !== "build_progress" &&
-        (later.formResolved ||
-          later.card === "ready" ||
-          later.card === "identity_confirmed" ||
-          Boolean(later.uiComponent && later.uiComponent.requestId !== message.uiComponent?.requestId)),
-    );
-  };
   // Hide ephemeral thinking / progress only when a *later* turn superseded them —
   // never hide all future progress just because a Ready card exists in history.
   const isCanceledProgress = (m: (typeof messages)[number]) =>
@@ -861,7 +894,7 @@ export function BuildView({ agentId }: { agentId: string }) {
       const supabase = requireSupabaseBrowserClient();
       const { data, error } = await supabase
         .from("runs")
-        .select("id,status,created_at")
+        .select("id,status,created_at,error_code")
         .eq("agent_id", agentId)
         .eq("run_type", "build")
         .in("status", ["queued", "running", "waiting_for_input"])
@@ -873,9 +906,12 @@ export function BuildView({ agentId }: { agentId: string }) {
     },
   });
 
+  // Interrupted builds wait on a form — they must not drive "resume working" / auto-await.
   const serverBuildRunId =
-    activeBuildRunQuery.data?.status === "queued" ||
-    activeBuildRunQuery.data?.status === "running"
+    activeBuildRunQuery.data &&
+    (activeBuildRunQuery.data.status === "queued" ||
+      activeBuildRunQuery.data.status === "running") &&
+    activeBuildRunQuery.data.error_code !== "BUILDER_INTERRUPTED"
       ? activeBuildRunQuery.data.id
       : null;
   const activeRunId =
@@ -883,16 +919,20 @@ export function BuildView({ agentId }: { agentId: string }) {
     (serverBuildRunId && !stoppedRunIds.has(serverBuildRunId) ? serverBuildRunId : null);
 
   // Resume local "turn in progress" UI after refresh when the server still has a build.
+  // Skip while a form is open — that is intentional waiting, not an in-flight compile.
   useEffect(() => {
     if (!serverBuildRunId) return;
     if (userStopped) return;
+    if (hasOpenBuilderForm) return;
     setAwaitingReply(true);
     setPendingToken((prev) => prev ?? Date.now());
-  }, [serverBuildRunId, userStopped]);
+  }, [serverBuildRunId, userStopped, hasOpenBuilderForm]);
 
   const activityEnabled =
     Boolean(activeRunId) &&
     !userStopped &&
+    !hasOpenBuilderForm &&
+    !staleBuilding &&
     (awaitingReply ||
       pendingToken !== null ||
       sendMessage.isPending ||
@@ -927,25 +967,25 @@ export function BuildView({ agentId }: { agentId: string }) {
   const lastIsUser = lastMessage?.role === "user";
   const lastIsThinking = lastMessage?.card === "thinking";
   const lastIsReady = lastMessage?.card === "ready";
+  const lastIsCancel = isCancelNoticeContent(lastMessage?.content);
   const progressInFlight =
     lastMessage?.card === "build_progress" &&
     Boolean(
       lastMessage.steps?.some((s) => s.state === "running" || s.state === "pending"),
     );
   const workInFlight = lastIsThinking || progressInFlight;
-  const waitingOnForm = Boolean(
-    lastMessage?.uiComponent &&
-      !isInstallationOnlyForm(lastMessage.uiComponent) &&
-      !lastMessage.formResolved &&
-      !isFormSuperseded(lastMessage) &&
-      !(lastMessage.uiComponent.requestId && resolvedFormIds.has(lastMessage.uiComponent.requestId)),
-  );
+  const waitingOnForm = hasOpenBuilderForm;
   const hasVisibleWorkingBubble = isWorkingCard(lastMessage);
   // Keep a local working panel whenever the turn is still active but the server
   // thinking/progress bubble is missing (common gap after "Settings saved").
+  // Never invent a working panel after a cancel / while a form is unanswered /
+  // when the backend agent is idle (grey).
   const buildTurnActive =
     !userStopped &&
     !lastIsReady &&
+    !lastIsCancel &&
+    !staleBuilding &&
+    !waitingOnForm &&
     (awaitingReply ||
       pendingToken !== null ||
       sendMessage.isPending ||
@@ -965,6 +1005,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     !userStopped &&
     !waitingOnForm &&
     !lastIsReady &&
+    !lastIsCancel &&
     (buildTurnActive || cancelRun.isPending);
 
   const pendingReveal = visibleMessages.filter(
