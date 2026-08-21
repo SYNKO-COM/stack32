@@ -123,6 +123,7 @@ function FloatingPanel({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
+        onOpenAutoFocus={(event) => event.preventDefault()}
         style={{
           top: "1rem",
           right: "1rem",
