@@ -493,7 +493,7 @@
   },
   "profile": {
     "plan": "Plan actuel",
-    "managePlan": "Gérer l'abonnement",
+    "managePlan": "Changer de plan",
     "credits": "Crédits",
     "creditsValue": "{{used}} / {{limit}}",
     "creditsHint": "Crédits déduits selon l’usage réel Builder (tokens).",

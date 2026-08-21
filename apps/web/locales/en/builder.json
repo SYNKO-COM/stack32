@@ -493,7 +493,7 @@
   },
   "profile": {
     "plan": "Current plan",
-    "managePlan": "Manage plan",
+    "managePlan": "Change plan",
     "credits": "Credits",
     "creditsValue": "{{used}} / {{limit}}",
     "creditsHint": "Credits deducted from real Builder usage (tokens).",
