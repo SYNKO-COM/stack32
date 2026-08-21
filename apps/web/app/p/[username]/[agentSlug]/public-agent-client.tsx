@@ -405,7 +405,7 @@ function PublicAgentLanding({
 
         {/* Brief + Structure */}
         <section className="grid min-h-0 gap-5 lg:grid-cols-2 lg:gap-6 xl:gap-8">
-          <div className="flex min-h-[28rem] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/70 p-5 backdrop-blur-md md:p-6">
+          <div className="flex min-h-[34rem] md:min-h-[36rem] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/70 p-5 backdrop-blur-md md:p-6">
             <div className="mb-4 flex items-start gap-3">
               <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand/12 text-brand">
                 <BookOpen className="size-4" aria-hidden="true" />
@@ -444,7 +444,7 @@ function PublicAgentLanding({
             )}
           </div>
 
-          <div className="flex min-h-[28rem] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/70 backdrop-blur-md">
+          <div className="flex min-h-[34rem] md:min-h-[36rem] flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/70 backdrop-blur-md">
             <div className="flex items-start gap-3 border-b border-border/60 px-5 py-4 md:px-6">
               <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-2xl bg-brand/12 text-brand">
                 <Workflow className="size-4" aria-hidden="true" />

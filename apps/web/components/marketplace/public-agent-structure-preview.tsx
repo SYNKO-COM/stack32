@@ -220,7 +220,7 @@ function PreviewCanvas({
   }, [flowEdges, flowNodes, setEdges, setNodes]);
 
   return (
-    <div className={cn("relative h-full min-h-[320px] w-full", className)}>
+    <div className={cn("relative h-full min-h-[380px] w-full", className)}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
