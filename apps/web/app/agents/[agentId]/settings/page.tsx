@@ -151,14 +151,9 @@ export default function AgentSettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto px-4 py-6 md:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-[1400px] space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{t("agentSettings.title")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t("agentSettings.subtitle")}</p>
-        </div>
-
+      <div className="mx-auto w-full max-w-[1400px]">
         <form
-          className="space-y-5"
+          className="space-y-6"
           onSubmit={(e) => {
             e.preventDefault();
             setSaving(true);
@@ -222,6 +217,22 @@ export default function AgentSettingsPage() {
               .finally(() => setSaving(false));
           }}
         >
+          <div className="space-y-3">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">{t("agentSettings.title")}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{t("agentSettings.subtitle")}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit" className="rounded-full" disabled={saving || uploading}>
+                {saving ? t("loading") : t("actions.save")}
+              </Button>
+              {saved ? (
+                <p className="text-sm text-emerald-600">{t("agentSettings.saved")}</p>
+              ) : null}
+              {saveError ? <p className="text-sm text-destructive">{saveError}</p> : null}
+            </div>
+          </div>
+
           <div className="grid items-start gap-5 lg:grid-cols-2 lg:gap-6 xl:gap-8">
             {/* Left: identity & brief */}
             <section className="space-y-4 rounded-2xl border border-border/70 bg-background/50 p-4 md:p-5">
@@ -442,16 +453,6 @@ export default function AgentSettingsPage() {
                     {t("agentSettings.linkSlugAdjusted", { slug: slugPreview })}
                   </p>
                 ) : null}
-              </div>
-
-              <div className="space-y-2">
-                <Button type="submit" className="rounded-full" disabled={saving || uploading}>
-                  {saving ? t("loading") : t("actions.save")}
-                </Button>
-                {saved ? (
-                  <p className="text-sm text-emerald-600">{t("agentSettings.saved")}</p>
-                ) : null}
-                {saveError ? <p className="text-sm text-destructive">{saveError}</p> : null}
               </div>
 
               <section className="space-y-2 border-t border-border/60 pt-4">
