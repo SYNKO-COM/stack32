@@ -498,6 +498,7 @@ class BuilderOrchestrator:
                 complexity=complexity,
                 current_spec=current_spec,
                 capabilities=stored_caps,
+                builder_intent=intent,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("builder failed run=%s", run_id)
@@ -2056,6 +2057,7 @@ class BuilderOrchestrator:
         complexity: TaskComplexity,
         current_spec: AgentSpec | None,
         capabilities: dict[str, Any] | None = None,
+        builder_intent: BuilderIntent | None = None,
     ) -> dict[str, Any]:
         identity = identity or AgentIdentity(name="Agent", role="Assist the user")
         await self.db.update_agent_status(agent_id, user_id, "building")
@@ -2078,6 +2080,7 @@ class BuilderOrchestrator:
                 complexity=complexity,
                 current_spec=current_spec,
                 capabilities=capabilities,
+                builder_intent=builder_intent,
             )
 
     async def _continue_build_inner(
@@ -2092,6 +2095,7 @@ class BuilderOrchestrator:
         complexity: TaskComplexity,
         current_spec: AgentSpec | None,
         capabilities: dict[str, Any] | None = None,
+        builder_intent: BuilderIntent | None = None,
     ) -> dict[str, Any]:
         import asyncio
 
@@ -2153,6 +2157,7 @@ class BuilderOrchestrator:
                 progress_id=progress_id,
                 board=board,
                 tick=_tick,
+                builder_intent=builder_intent,
             )
         except _BuildCanceled:
             if progress_id:
@@ -2232,8 +2237,11 @@ class BuilderOrchestrator:
         progress_id: str | None,
         board: dict[str, Any],
         tick,
+        builder_intent: BuilderIntent | None = None,
     ) -> dict[str, Any]:
         caps = dict(capabilities or {})
+        agent_row = await self.db.get_owned_agent(agent_id, user_id)
+        intent = builder_intent or self._classify_intent(content, agent_row or {})
         confirmed_raw = caps.get("confirmed_spec")
         if isinstance(confirmed_raw, dict) and caps.get("tools_confirmed"):
             try:
@@ -2333,6 +2341,34 @@ class BuilderOrchestrator:
             )
             if tool_review:
                 return tool_review
+
+        if intent in (BuilderIntent.REPAIR, BuilderIntent.MODIFY) and current_spec is not None:
+            from agent_service.builder.repair_engine import make_repair_contract_for_turn
+            from agent_service.builder.spec_diff_guard import (
+                clamp_spec_to_repair_contract,
+                filter_unauthorized_tool_bindings,
+            )
+
+            repair_contract = make_repair_contract_for_turn(
+                user_request=content,
+                spec=current_spec,
+                explicit_user_tool_change=bool(caps.get("tools_confirmed")),
+            )
+            spec.tools = filter_unauthorized_tool_bindings(
+                list(spec.tools or []),
+                contract=repair_contract,
+                current=list(current_spec.tools or []),
+            )
+            spec = clamp_spec_to_repair_contract(
+                before=current_spec,
+                after=spec,
+                contract=repair_contract,
+            )
+            await self.db.emit_event(
+                run_id,
+                "builder.repair.contract",
+                {"repair_id": repair_contract.repair_id, "intent": intent.value},
+            )
 
         # Connection binding is installation-scoped (AI Agent), never a Build gate.
         tool_names = ", ".join(t.tool_id for t in spec.tools[:4]) or "core tools"
@@ -2628,13 +2664,35 @@ class BuilderOrchestrator:
                     focus="Applying changes in the sandbox…",
                 )
                 pipeline = CodeBuildPipeline(manager=SandboxManager(), emit=_emit)
-                build_report = await pipeline.build(
-                    blueprint,
-                    user_id=user_id,
-                    agent_id=agent_id,
-                    run_id=run_id,
-                    version_id=version.get("id"),
-                )
+                if intent in (BuilderIntent.MODIFY, BuilderIntent.REPAIR):
+                    from agent_service.builder.repair_engine import (
+                        make_repair_contract_for_turn,
+                        run_modify_or_repair_from_snapshot,
+                    )
+
+                    contract = make_repair_contract_for_turn(
+                        user_request=content,
+                        spec=spec,
+                        explicit_user_tool_change=bool(caps.get("tools_confirmed")),
+                    )
+                    build_report = await run_modify_or_repair_from_snapshot(
+                        user_id=user_id,
+                        agent_id=agent_id,
+                        run_id=run_id,
+                        spec=spec,
+                        contract=contract,
+                        blueprint=blueprint,
+                        version_id=version.get("id"),
+                        emit=_emit,
+                    )
+                else:
+                    build_report = await pipeline.build(
+                        blueprint,
+                        user_id=user_id,
+                        agent_id=agent_id,
+                        run_id=run_id,
+                        version_id=version.get("id"),
+                    )
                 build_ok = bool(getattr(build_report, "success", False))
                 if not build_ok:
                     build_failure_reason = str(

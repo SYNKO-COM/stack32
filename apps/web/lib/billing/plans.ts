@@ -121,11 +121,41 @@ export function clampCreditsForPlan(planKey: PlanKey, credits: number): number {
   return next ?? allowed[allowed.length - 1]!;
 }
 
-/** Scale budget with selected monthly credits. */
-export function budgetUsdForCredits(planKey: PlanKey, creditsMonthly: number): number {
+export const MAX_VARIABLE_AI_COST_RATIO = 0.25;
+
+/** Annual effective monthly AI budget caps (>=75% margin). */
+export const ANNUAL_MONTHLY_AI_BUDGET_USD: Record<Exclude<PlanKey, "free">, number> = {
+  starter: 5,
+  pro: 10,
+  scale: 20,
+};
+
+/** Scale budget with selected monthly credits and billing interval. */
+export function budgetUsdForCredits(
+  planKey: PlanKey,
+  creditsMonthly: number,
+  interval: BillingInterval = "monthly",
+): number {
   const plan = PLANS[planKey];
-  if (plan.baseCredits <= 0) return plan.baseBudgetUsd;
-  return (plan.baseBudgetUsd * creditsMonthly) / plan.baseCredits;
+  if (planKey === "free") {
+    return (plan.baseBudgetUsd * creditsMonthly) / Math.max(plan.baseCredits, 1);
+  }
+  const base =
+    interval === "annual"
+      ? ANNUAL_MONTHLY_AI_BUDGET_USD[planKey]
+      : plan.baseBudgetUsd;
+  const scaled = (base * creditsMonthly) / Math.max(plan.baseCredits, 1);
+  const revenue =
+    interval === "annual" ? plan.annualMonthlyPriceUsd : plan.monthlyPriceUsd;
+  if (revenue > 0) {
+    return Math.min(scaled, revenue * MAX_VARIABLE_AI_COST_RATIO);
+  }
+  return scaled;
+}
+
+/** @deprecated Use budgetUsdForCredits with interval for annual-aware caps. */
+export function budgetUsdForCreditsLegacy(planKey: PlanKey, creditsMonthly: number): number {
+  return budgetUsdForCredits(planKey, creditsMonthly, "monthly");
 }
 
 /** USD of platform cost represented by one credit at this tier. */
@@ -197,13 +227,15 @@ export const MODEL_TOKEN_RATES_USD_PER_M: Record<
   string,
   { input: number; output: number }
 > = {
+  "gpt-5.6-luna": { input: 0.2, output: 1.2 },
+  "gpt-5.6-terra": { input: 2, output: 12 },
+  "gpt-5.6-sol": { input: 5, output: 30 },
+  "claude-sonnet-5": { input: 2, output: 10 },
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
   "gpt-4o": { input: 2.5, output: 10 },
   "text-embedding-3-small": { input: 0.02, output: 0 },
   "grok-4": { input: 3, output: 15 },
   "grok-4.5": { input: 3, output: 15 },
-  "grok-3": { input: 3, output: 15 },
-  "grok-3-mini": { input: 0.3, output: 0.5 },
   whisper: { input: 0, output: 0 },
 };
 
@@ -217,6 +249,6 @@ export function estimateCostUsdFromTokens(
   );
   const rates = key
     ? MODEL_TOKEN_RATES_USD_PER_M[key]!
-    : { input: 1, output: 3 }; // conservative unknown-model fallback
+    : { input: 10, output: 30 }; // conservative unknown-model fallback (fail-closed)
   return (inputTokens * rates.input + outputTokens * rates.output) / 1_000_000;
 }

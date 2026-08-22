@@ -90,29 +90,62 @@ class CodingAgent:
         self.tool_ids = tool_ids or self.registry.ids()
 
     async def _decide(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        stage: str = "patch",
+        repair_attempt: int = 0,
+        prior_failures: int = 0,
     ) -> ModelDecision:
+        from agent_service.gateway.model_stage_router import (
+            CodingStage,
+            ReasoningEffort,
+            platform_model_chain,
+            route_coding_stage,
+        )
         from agent_service.security.llm_budget import LlmCallBudgetExceeded
 
         try:
-            result = await self.gateway.complete(
-                profile=ModelProfile.CODING,
-                messages=messages,
-                tools=tools,
-                max_tokens=2048,
-                temperature=0.1,
-            )
-        except LlmCallBudgetExceeded:
-            raise
-        except Exception:
-            # Specialized coding models may be unavailable — degrade to balanced chat.
-            result = await self.gateway.complete(
-                profile=ModelProfile.BALANCED,
-                messages=messages,
-                tools=tools,
-                max_tokens=2048,
-                temperature=0.1,
-            )
+            coding_stage = CodingStage(stage)
+        except ValueError:
+            coding_stage = CodingStage.PATCH
+
+        route = route_coding_stage(
+            coding_stage,
+            repair_attempt=repair_attempt,
+            prior_failures=prior_failures,
+        )
+        chain = [route.model] + [
+            m for m in platform_model_chain(ModelProfile.CODING, stage=coding_stage) if m != route.model
+        ]
+        last_exc: Exception | None = None
+        for model_id in chain:
+            try:
+                result = await self.gateway.complete(
+                    profile=route.profile,
+                    messages=messages,
+                    tools=tools,
+                    max_tokens=2048,
+                    temperature=0.1,
+                    model=model_id,
+                    reasoning_effort=(
+                        route.reasoning_effort.value
+                        if route.reasoning_effort and route.reasoning_effort != ReasoningEffort.LOW
+                        else None
+                    ),
+                    timeout_seconds=route.timeout_seconds,
+                    coding_stage=coding_stage.value,
+                )
+                break
+            except LlmCallBudgetExceeded:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                logger.warning("coding model failed model=%s err=%s", model_id, type(exc).__name__)
+                continue
+        else:
+            raise last_exc or RuntimeError("MODEL_PROVIDER_UNAVAILABLE")
         content = getattr(result, "content", None) or ""
         raw_calls = getattr(result, "tool_calls", None) or []
         tool_calls: list[dict[str, Any]] = []
@@ -143,10 +176,13 @@ class CodingAgent:
         # Plan & Execute skeleton — ReAct turns execute against this plan.
         ledger.set_plan(
             [
-                "Inspect failing tests and relevant files",
-                "Apply the smallest coherent fix",
-                "Re-run verification (pytest)",
-                "Self-check: stop only if tests pass",
+                "Parse repair contract and inspect current state",
+                "Reproduce or confirm the reported failure",
+                "Identify root cause with evidence",
+                "Apply the smallest coherent patch",
+                "Run targeted tests, then full regression + lint",
+                "Review diff against protected scope",
+                "Stop only when verification gates pass",
             ]
         )
 
@@ -174,12 +210,20 @@ class CodingAgent:
         ]
         schemas = self.registry.schemas_for(self.tool_ids)
         verification_repairs = 0
+        repair_attempt = 0
+        code_changed = False
 
         while ledger.turn_count < self.max_turns:
             ledger.turn_count += 1
             await self.emit("builder.model.call", {"turn": ledger.turn_count})
             try:
-                decision = await decide(messages, schemas)
+                decision = await decide(
+                    messages,
+                    schemas,
+                    stage="repair_hard" if repair_attempt >= 1 else "patch",
+                    repair_attempt=repair_attempt,
+                    prior_failures=verification_repairs,
+                )
             except Exception as exc:  # noqa: BLE001
                 from agent_service.security.llm_budget import LlmCallBudgetExceeded
 
@@ -199,13 +243,42 @@ class CodingAgent:
                 )
 
             if not decision.tool_calls:
-                # Proposed completion — verify before accepting.
-                if ledger.verification.get("tests") == "failed" and verification_repairs < self.max_verification_repairs:
+                tests_state = ledger.verification.get("tests", "not_run")
+                lint_state = ledger.verification.get("lint", "not_run")
+                if code_changed and tests_state in {"not_run", "pending"}:
                     verification_repairs += 1
                     messages.append({"role": "assistant", "content": decision.content})
                     messages.append({
                         "role": "user",
+                        "content": (
+                            "Verification has NOT_RUN. You changed code but did not run "
+                            "exec.run_tests (and exec.run_lint). Run them before finishing."
+                        ),
+                    })
+                    continue
+                if code_changed and lint_state == "failed":
+                    verification_repairs += 1
+                    messages.append({"role": "assistant", "content": decision.content})
+                    messages.append({
+                        "role": "user",
+                        "content": "Lint is failing. Fix lint issues before finishing.",
+                    })
+                    continue
+                if ledger.verification.get("tests") == "failed" and verification_repairs < self.max_verification_repairs:
+                    verification_repairs += 1
+                    repair_attempt += 1
+                    messages.append({"role": "assistant", "content": decision.content})
+                    messages.append({
+                        "role": "user",
                         "content": "Tests are still failing. Inspect the failure and repair before finishing.",
+                    })
+                    continue
+                if code_changed and tests_state != "passed":
+                    verification_repairs += 1
+                    messages.append({"role": "assistant", "content": decision.content})
+                    messages.append({
+                        "role": "user",
+                        "content": "Tests must pass before completion.",
                     })
                     continue
                 await self.emit("builder.ready", ledger.summary())
@@ -247,6 +320,8 @@ class CodingAgent:
                 })
 
             files_changed = set(ctx.files_touched) != files_before
+            if files_changed:
+                code_changed = True
             reason = detector.reason()
             if reason:
                 await self.emit("builder.repair.started", {"reason": reason})

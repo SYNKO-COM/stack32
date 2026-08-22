@@ -1,56 +1,68 @@
-# Stack32 model profiles — names only, no secrets.
-# Override via environment variables MODEL_*_PRIMARY / MODEL_*_FALLBACK.
+# Stack32 model profiles — OpenAI-first platform defaults (Aug 2026).
 
 profiles:
   fast:
-    primary: ${MODEL_FAST_PRIMARY}
+    primary: openai/gpt-5.6-luna
     fallbacks:
-      - ${MODEL_FAST_FALLBACK}
-    purpose: intent classification, identity suggestions, simple patches
+      - openai/gpt-4.1-mini
+    purpose: intent, identity, form utility
+    reasoning: low
 
   balanced:
-    primary: ${MODEL_BALANCED_PRIMARY}
+    primary: openai/gpt-5.6-terra
     fallbacks:
-      - ${MODEL_BALANCED_FALLBACK}
-    purpose: instructions, Live chat, moderate generation
+      - openai/gpt-5.6-sol
+    purpose: builder chat, moderate spec generation
+    reasoning: medium
 
   reasoning:
-    primary: ${MODEL_REASONING_PRIMARY}
+    primary: openai/gpt-5.6-terra
     fallbacks:
-      - ${MODEL_REASONING_FALLBACK}
-    purpose: architecture, GraphSpec, heavy repair
+      - openai/gpt-5.6-sol
+      - anthropic/claude-sonnet-5
+    purpose: architecture, graph, heavy analysis
+    reasoning: high
 
   coding:
-    primary: ${MODEL_CODING_PRIMARY}
+    primary: openai/gpt-5.6-terra
     fallbacks:
-      - ${MODEL_CODING_FALLBACK}
-    purpose: agent blueprint, GraphSpec, structured patches, repair
+      - openai/gpt-5.6-sol
+      - anthropic/claude-sonnet-5
+    expert: openai/gpt-5.6-sol
+    external_expert: anthropic/claude-sonnet-5
+    purpose: sandbox coding, inspect/patch/repair
+    reasoning: medium-high
 
   validator:
-    primary: ${MODEL_VALIDATOR_PRIMARY}
+    primary: openai/gpt-5.6-terra
     fallbacks:
-      - ${MODEL_VALIDATOR_FALLBACK}
-    purpose: validation feedback, smoke-test evaluation
+      - openai/gpt-5.6-luna
+    purpose: structured validation, diff review
+    reasoning: medium
 
   embedding:
-    primary: ${MODEL_EMBEDDING_PRIMARY}
+    primary: openai/text-embedding-3-small
     dimension: 1536
-    purpose: knowledge and semantic memory embeddings
 
 routing:
   intent_classification: fast
   identity: fast
-  simple_patch: fast
-  architecture: coding
-  instructions: coding
-  graph_generation: coding
-  validation_feedback: validator
-  repair: coding
-  live_simple: balanced
-  live_tool_use: reasoning
+  builder_chat: balanced
+  spec_generation: balanced
+  coding_patch: coding
+  coding_repair: coding
+  coding_expert: coding
+  validation: validator
   embeddings: embedding
 
+stage_policy:
+  inspect: { model: terra, reasoning: medium }
+  diagnose: { model: terra, reasoning: high }
+  patch: { model: terra, reasoning: medium }
+  repair_hard: { model: sol, reasoning: xhigh }
+  repair_expert: { model: claude-sonnet-5, max_per_repair: 1 }
+
 cost_defaults:
-  starter_monthly_budget_usd: 10.0
-  max_repair_attempts: 2
-  prefer_cheap_for_fast_path: true
+  conservative_unknown_usd_per_m: { input: 10, output: 30 }
+  sonnet_reservation_usd_per_m: { input: 3, output: 15 }
+  annual_monthly_ai_caps_usd: { starter: 5, pro: 10, scale: 20 }

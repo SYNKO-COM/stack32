@@ -127,20 +127,9 @@ def _provider_key_present(provider: str) -> bool:
 
 
 def resolve_models(profile: ModelProfile) -> list[str]:
-    settings = get_settings()
-    names = PROFILE_ENV[profile]
-    models: list[str] = []
-    for env_name in names:
-        value = getattr(settings, env_name, "") or ""
-        if value and value not in models:
-            models.append(value)
-    # Coding repairs must degrade to working chat models when specialized IDs fail.
-    if profile == ModelProfile.CODING:
-        for env_name in PROFILE_ENV[ModelProfile.BALANCED]:
-            value = getattr(settings, env_name, "") or ""
-            if value and value not in models:
-                models.append(value)
-    return models
+    from agent_service.gateway.model_stage_router import platform_model_chain
+
+    return platform_model_chain(profile)
 
 
 def provider_health() -> list[ProviderHealth]:
@@ -183,6 +172,9 @@ class ModelGateway:
         provider: str | None = None,
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
+        reasoning_effort: str | None = None,
+        timeout_seconds: int | None = None,
+        coding_stage: str | None = None,
     ) -> ModelCallResult | T:
         import asyncio
 
@@ -192,11 +184,13 @@ class ModelGateway:
         )
 
         settings = get_settings()
+        from agent_service.gateway.model_stage_router import profile_timeout_seconds
+
         budget = get_run_llm_budget()
         if budget is not None and budget.calls >= budget.max_calls:
             raise LlmCallBudgetExceeded()
 
-        timeout = float(settings.LLM_CALL_TIMEOUT_SECONDS)
+        timeout = float(timeout_seconds or profile_timeout_seconds(profile))
         try:
             result = await asyncio.wait_for(
                 self._complete_inner(
@@ -209,6 +203,8 @@ class ModelGateway:
                     provider=provider,
                     tools=tools,
                     model=model,
+                    reasoning_effort=reasoning_effort,
+                    coding_stage=coding_stage,
                 ),
                 timeout=timeout,
             )
@@ -222,6 +218,11 @@ class ModelGateway:
                 input_tokens=int(getattr(result, "input_tokens", 0) or 0),
                 output_tokens=int(getattr(result, "output_tokens", 0) or 0),
                 cost_usd=float(getattr(result, "cost_usd", 0) or 0),
+                profile=profile.value,
+                stage=coding_stage,
+                reasoning_effort=reasoning_effort,
+                latency_ms=int(getattr(result, "latency_ms", 0) or 0),
+                idempotency_key=f"{budget.run_id}:{budget.calls + 1}",
             )
         elif budget is not None:
             # Structured response_model path — still counts as a call.
@@ -240,6 +241,8 @@ class ModelGateway:
         provider: str | None,
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
+        reasoning_effort: str | None = None,
+        coding_stage: str | None = None,
     ) -> ModelCallResult | T:
         settings = get_settings()
         if settings.AI_EXECUTION_MODE == "mock":
@@ -273,6 +276,8 @@ class ModelGateway:
             raise RuntimeError("MODEL_PROVIDER_UNAVAILABLE")
 
         models = resolve_models(profile)
+        if model:
+            models = [model] + [m for m in models if m != model]
         last_error: Exception | None = None
         safe_messages = redact_obj(messages)
 
@@ -290,6 +295,7 @@ class ModelGateway:
                     max_tokens=max_tokens,
                     response_model=response_model,
                     tools=tools,
+                    reasoning_effort=reasoning_effort,
                 )
                 self._breaker.record_success(model)
                 return result
@@ -308,20 +314,21 @@ class ModelGateway:
         settings = get_settings()
         provider = provider.lower()
         mapping = {
-            ("openai", ModelProfile.FAST): "openai/gpt-5.4-mini",
-            ("openai", ModelProfile.BALANCED): "openai/gpt-5.4",
-            ("openai", ModelProfile.REASONING): "openai/gpt-5.4",
-            ("openai", ModelProfile.CODING): "openai/gpt-5.4",
-            ("openai", ModelProfile.VALIDATOR): "openai/gpt-5.4-mini",
+            ("openai", ModelProfile.FAST): "openai/gpt-5.6-luna",
+            ("openai", ModelProfile.BALANCED): "openai/gpt-5.6-terra",
+            ("openai", ModelProfile.REASONING): "openai/gpt-5.6-terra",
+            ("openai", ModelProfile.CODING): "openai/gpt-5.6-terra",
+            ("openai", ModelProfile.VALIDATOR): "openai/gpt-5.6-terra",
             ("xai", ModelProfile.FAST): "xai/grok-4",
             ("xai", ModelProfile.BALANCED): "xai/grok-4.5",
             ("xai", ModelProfile.REASONING): settings.MODEL_REASONING_FALLBACK or "xai/grok-4.5",
             ("xai", ModelProfile.CODING): "xai/grok-code-fast-1",
             ("xai", ModelProfile.VALIDATOR): "xai/grok-4",
             ("anthropic", ModelProfile.FAST): "anthropic/claude-3-5-haiku-latest",
-            ("anthropic", ModelProfile.BALANCED): "anthropic/claude-sonnet-4-5",
-            ("anthropic", ModelProfile.REASONING): "anthropic/claude-sonnet-4-5",
-            ("anthropic", ModelProfile.CODING): "anthropic/claude-sonnet-4-5",
+            ("anthropic", ModelProfile.BALANCED): "anthropic/claude-sonnet-5",
+            ("anthropic", ModelProfile.REASONING): "anthropic/claude-sonnet-5",
+            ("anthropic", ModelProfile.CODING): "anthropic/claude-sonnet-5",
+            ("anthropic", ModelProfile.VALIDATOR): "anthropic/claude-sonnet-5",
             ("google", ModelProfile.FAST): "gemini/gemini-2.0-flash",
             ("google", ModelProfile.BALANCED): "gemini/gemini-2.0-flash",
             ("google", ModelProfile.REASONING): "gemini/gemini-2.5-pro",
@@ -378,6 +385,7 @@ class ModelGateway:
         response_model: type[T] | None,
         api_key: str | None = None,
         tools: list[dict[str, Any]] | None = None,
+        reasoning_effort: str | None = None,
     ) -> ModelCallResult | T:
         from litellm import acompletion
 
@@ -400,6 +408,8 @@ class ModelGateway:
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
+        if reasoning_effort and _provider_from_model(model) == "openai":
+            kwargs["reasoning_effort"] = reasoning_effort
 
         try:
             response = await acompletion(**kwargs)
@@ -456,9 +466,9 @@ class ModelGateway:
         output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
         cost = float(getattr(response, "_hidden_params", {}).get("response_cost", 0) or 0)
         if cost <= 0 and (input_tokens > 0 or output_tokens > 0):
-            from agent_service.billing.plans import estimate_cost_usd_from_tokens
+            from agent_service.billing.pricing import estimate_cost_usd_from_tokens
 
-            cost = estimate_cost_usd_from_tokens(model, input_tokens, output_tokens)
+            cost, _pricing_source = estimate_cost_usd_from_tokens(model, input_tokens, output_tokens)
 
         result = ModelCallResult(
             content=content,

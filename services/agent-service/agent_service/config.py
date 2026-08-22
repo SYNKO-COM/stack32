@@ -56,17 +56,20 @@ class Settings(BaseSettings):
     LITELLM_CONFIG_PATH: str = ""
     MODEL_CONFIG_PATH: str = "services/model-gateway/config/models.yaml"
 
-    MODEL_FAST_PRIMARY: str = "openai/gpt-5.4-mini"
-    MODEL_FAST_FALLBACK: str = "xai/grok-4"
-    MODEL_BALANCED_PRIMARY: str = "openai/gpt-5.4"
-    MODEL_BALANCED_FALLBACK: str = "xai/grok-4.5"
-    MODEL_REASONING_PRIMARY: str = "openai/gpt-5.4"
-    MODEL_REASONING_FALLBACK: str = "xai/grok-4.5"
-    # Coding profiles — prefer stable chat models (gpt-5.1-codex returns BadRequest on many keys)
-    MODEL_CODING_PRIMARY: str = "openai/gpt-5.4"
-    MODEL_CODING_FALLBACK: str = "xai/grok-code-fast-1"
-    MODEL_VALIDATOR_PRIMARY: str = "openai/gpt-5.4-mini"
-    MODEL_VALIDATOR_FALLBACK: str = "xai/grok-4"
+    # Platform-internal Builder routing (OpenAI-first; no xAI defaults).
+    MODEL_FAST_PRIMARY: str = "openai/gpt-5.6-luna"
+    MODEL_FAST_FALLBACK: str = "openai/gpt-5.6-terra"
+    MODEL_BALANCED_PRIMARY: str = "openai/gpt-5.6-terra"
+    MODEL_BALANCED_FALLBACK: str = "openai/gpt-5.6-luna"
+    MODEL_REASONING_PRIMARY: str = "openai/gpt-5.6-terra"
+    MODEL_REASONING_EXPERT: str = "openai/gpt-5.6-sol"
+    MODEL_REASONING_FALLBACK: str = "openai/gpt-5.6-sol"
+    MODEL_CODING_PRIMARY: str = "openai/gpt-5.6-terra"
+    MODEL_CODING_EXPERT: str = "openai/gpt-5.6-sol"
+    MODEL_CODING_EXTERNAL_EXPERT: str = "anthropic/claude-sonnet-5"
+    MODEL_CODING_FALLBACK: str = "openai/gpt-5.6-sol"
+    MODEL_VALIDATOR_PRIMARY: str = "openai/gpt-5.6-terra"
+    MODEL_VALIDATOR_FALLBACK: str = "openai/gpt-5.6-luna"
     MODEL_EMBEDDING_PRIMARY: str = "openai/text-embedding-3-small"
     EMBEDDING_DIMENSION: int = 1536
 
@@ -92,6 +95,15 @@ class Settings(BaseSettings):
     MAX_LLM_CALLS_PER_RUN: int = 28
     MAX_LLM_CALLS_PER_CODING_REPAIR: int = 16
     LLM_CALL_TIMEOUT_SECONDS: int = 45
+    LLM_TIMEOUT_FAST: int = 45
+    LLM_TIMEOUT_BALANCED: int = 90
+    LLM_TIMEOUT_REASONING: int = 120
+    LLM_TIMEOUT_CODING: int = 150
+    LLM_TIMEOUT_CODING_HARD: int = 180
+    LLM_TIMEOUT_VALIDATOR: int = 90
+    MAX_VARIABLE_AI_COST_RATIO: float = 0.25
+    BUILDER_USE_RESPONSES_API: bool = False
+    BUILDER_BROWSER_DEBUG_ENABLED: bool = False
     RATE_LIMIT_PER_USER_PER_MINUTE: int = 20
     RATE_LIMIT_PER_IP_PER_MINUTE: int = 60
     WEB_SEARCH_API_KEY: str = ""

@@ -226,6 +226,43 @@ def _wrap_exec(default_cmd: list[str] | None = None):
     return _run
 
 
+async def _workspace_status(ctx: ToolContext, _args: dict[str, Any]) -> dict[str, Any]:
+    touched = sorted(ctx.files_touched)
+    return {"files_touched": touched, "count": len(touched)}
+
+
+async def _workspace_diff(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    import difflib
+
+    path = str(args.get("path") or "").strip()
+    if not path:
+        return {"error": "path required"}
+    try:
+        current = await ctx.provider.read_file(ctx.handle, path)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)[:300]}
+    original = str(args.get("original_content") or "")
+    if not original:
+        return {"path": path, "note": "Provide original_content to compute diff.", "lines": len(current.splitlines())}
+    diff = list(
+        difflib.unified_diff(
+            original.splitlines(),
+            current.splitlines(),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            lineterm="",
+        )
+    )
+    return {"path": path, "diff": "\n".join(diff)[:12000], "changed": bool(diff)}
+
+
+async def _run_targeted_test(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    nodeid = str(args.get("nodeid") or args.get("test") or "").strip()
+    extra = ["-q", nodeid] if nodeid else ["-q"]
+    runner = _wrap_exec(["python", "-m", "pytest", *extra])
+    return await runner(ctx, {"cwd": args.get("cwd", ".")})
+
+
 def build_registry() -> CodingToolRegistry:
     reg = CodingToolRegistry()
     tools = [
@@ -291,6 +328,21 @@ def build_registry() -> CodingToolRegistry:
             "low", _wrap_exec(["python", "-m", "ruff", "check", "."]),
         ),
         CodingTool(
+            "exec.run_targeted_test", "exec", "Run a single pytest node id or file.",
+            _obj({"nodeid": {"type": "string"}, "cwd": {"type": "string"}}, []),
+            "medium", _run_targeted_test,
+        ),
+        CodingTool(
+            "workspace.status", "workspace", "List files touched in this repair session.",
+            _obj({}, []),
+            "low", _workspace_status,
+        ),
+        CodingTool(
+            "workspace.diff", "workspace", "Unified diff for a file vs provided original content.",
+            _obj({"path": {"type": "string"}, "original_content": {"type": "string"}}, ["path"]),
+            "low", _workspace_diff,
+        ),
+        CodingTool(
             "stack32.search_tool_catalog", "stack32",
             "Search the Stack32 tool/connector catalog for tools relevant to the agent being built. Returns brief summaries (no schemas).",
             _obj({"query": {"type": "string"}, "limit": {"type": "integer"}}, ["query"]),
@@ -305,4 +357,11 @@ def build_registry() -> CodingToolRegistry:
     ]
     for t in tools:
         reg.register(t)
+    from agent_service.config import get_settings
+
+    if get_settings().BUILDER_BROWSER_DEBUG_ENABLED:
+        from agent_service.builder.coding.tools_browser import browser_tools
+
+        for bt in browser_tools():
+            reg.register(bt)
     return reg

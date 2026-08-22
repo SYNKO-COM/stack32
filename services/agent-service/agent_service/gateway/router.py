@@ -50,17 +50,13 @@ def route_profile(
 ) -> ModelProfile:
     """Select a model profile for a task.
 
-    When budget is nearly exhausted, prefer FAST/BALANCED over REASONING/CODING.
+    Never downgrade CODING/REPAIR to BALANCED — capability floor preserved.
     """
     profile = _ROUTE[task]
-    if budget_remaining_usd is not None and budget_remaining_usd < 1.0:
-        if profile in (ModelProfile.REASONING, ModelProfile.CODING):
+    if budget_remaining_usd is not None and budget_remaining_usd < 0.5:
+        if profile == ModelProfile.REASONING:
             return ModelProfile.BALANCED
-    if complexity == TaskComplexity.FAST and profile in (
-        ModelProfile.REASONING,
-        ModelProfile.CODING,
-    ):
-        return ModelProfile.BALANCED
+        # CODING/REPAIR keep capability floor — budget exhaustion handled elsewhere.
     return profile
 
 

@@ -94,13 +94,10 @@ MODEL_TOKEN_RATES_USD_PER_M: dict[str, tuple[float, float]] = {
 
 
 def estimate_cost_usd_from_tokens(model: str, input_tokens: int, output_tokens: int) -> float:
-    lower = (model or "").lower()
-    rates = (1.0, 3.0)
-    for key, value in MODEL_TOKEN_RATES_USD_PER_M.items():
-        if key in lower:
-            rates = value
-            break
-    return (input_tokens * rates[0] + output_tokens * rates[1]) / 1_000_000.0
+    from agent_service.billing.pricing import estimate_cost_usd_from_tokens as _estimate
+
+    cost, _source = _estimate(model, input_tokens, output_tokens)
+    return cost
 
 
 def budget_usd_for_credits(plan_key: PlanKey, credits_monthly: int) -> float:

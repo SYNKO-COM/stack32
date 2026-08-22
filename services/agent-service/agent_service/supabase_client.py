@@ -342,6 +342,52 @@ class Persistence(SupabaseRepository):
                 },
             )
 
+    async def record_llm_usage_event(
+        self,
+        *,
+        user_id: str,
+        agent_id: str | None,
+        run_id: str | None,
+        profile: str,
+        provider: str,
+        model: str,
+        idempotency_key: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        estimated_cost_usd: float = 0,
+        final_cost_usd: float = 0,
+        stage: str | None = None,
+        reasoning_effort: str | None = None,
+        latency_ms: int = 0,
+        success: bool = True,
+        error_code: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        async with get_supabase_admin_client() as client:
+            await client.post(
+                "/llm_usage_events",
+                json={
+                    "user_id": user_id,
+                    "agent_id": agent_id,
+                    "run_id": run_id,
+                    "source": "builder",
+                    "profile": profile,
+                    "stage": stage,
+                    "provider": provider,
+                    "model": model,
+                    "reasoning_effort": reasoning_effort,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "estimated_cost_usd": estimated_cost_usd,
+                    "final_cost_usd": final_cost_usd,
+                    "idempotency_key": idempotency_key,
+                    "latency_ms": latency_ms,
+                    "success": success,
+                    "error_code": error_code,
+                    "metadata": redact_obj(metadata or {}),
+                },
+            )
+
     async def resolve_builder_form(
         self,
         *,

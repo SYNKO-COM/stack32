@@ -105,4 +105,8 @@ class ContextEngine:
         return RetrievalResult(chunks=chunks, definitions=defs[:12], grep_hits=[])
 
     def allocation(self, max_model_tokens: int = 128_000, reserved_output_tokens: int = 8_000) -> BudgetAllocation:
-        return allocate(max_model_tokens, reserved_output_tokens)
+        from agent_service.builder.context.tiers import tiered_allocation
+
+        _ = max_model_tokens
+        _ = reserved_output_tokens
+        return tiered_allocation(complexity="moderate")

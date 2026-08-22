@@ -125,6 +125,7 @@ class CodeBuildPipeline:
         repair_model_fn: ModelFn | None = None,
         persist: bool = True,
         scaffolded: bool = False,
+        repair_objective: str | None = None,
     ) -> BuildReport:
         events: list[str] = []
 
@@ -159,117 +160,130 @@ class CodeBuildPipeline:
         repaired = False
         stop_reason = "COMPLETED"
         # 5. Repair loop when tests fail and a model is available.
+        from agent_service.verifier.classify import failure_fingerprint
+        from agent_service.verifier.repair import RepairLoopController
+
+        repair_controller = RepairLoopController()
         if test_status == "failed" and (repair_model_fn is not None or self.gateway):
-            await emit("builder.repair.started", {})
             failure_excerpt = str(test_result.get("stdout") or test_result.get("stderr") or "")[:500]
-            lesson_block = ""
-            try:
-                from agent_service.learning import (
-                    format_lessons_for_prompt,
-                    lessons_for_repair,
-                    record_error_observation,
-                )
+            fingerprint = failure_fingerprint("SANDBOX_TESTS_FAILED", failure_excerpt)
+            from agent_service.verifier import classify_failure
 
-                await record_error_observation(
-                    error_code="SANDBOX_TESTS_FAILED",
-                    reason=failure_excerpt or "sandbox tests failed",
-                    context={"agent_id": agent_id, "project": blueprint.name, "source": "coding_pipeline"},
-                )
-                lessons = await lessons_for_repair(
-                    error_code="SANDBOX_TESTS_FAILED",
-                    reason=failure_excerpt,
-                    limit=5,
-                )
-                # Also pull provider/budget lessons so the repair model avoids known traps.
-                extra = await lessons_for_repair(error_code="MODEL_PROVIDER_UNAVAILABLE", limit=2)
-                lessons = (lessons + extra)[:7]
-                lesson_block = format_lessons_for_prompt(lessons)
-            except Exception:  # noqa: BLE001
-                logger.exception("coding_repair_lessons_load_failed")
-
-            system_prompt = BUILDER_SYSTEM_PROMPT
-            if lesson_block:
-                system_prompt = f"{BUILDER_SYSTEM_PROMPT}\n\n{lesson_block}"
-
-            agent = CodingAgent(
-                provider=provider, handle=handle, engine=engine,
-                registry=registry, gateway=self.gateway, emit=emit, max_turns=10,
-            )
-            from agent_service.config import get_settings
-            from agent_service.security.llm_budget import llm_run_budget
-
-            settings = get_settings()
-            async with llm_run_budget(
-                run_id=f"{run_id}:coding",
-                user_id=user_id,
-                agent_id=agent_id,
-                max_calls=settings.MAX_LLM_CALLS_PER_CODING_REPAIR,
-            ):
-                result = await agent.run(
-                    f"The project tests are failing. Fix the code so `pytest` passes.\n\nProject: {blueprint.name}",
-                    system_prompt=system_prompt,
-                    model_fn=repair_model_fn,
-                )
-            repaired = result.success
-            stop_reason = result.stop_reason
-            test_status = result.ledger.verification.get("tests", test_status)
-            # Re-read files after repair.
-            files = await self._read_all(provider, handle, [f["path"] for f in files])
-            if repaired and test_status == "passed":
+            category = classify_failure("SANDBOX_TESTS_FAILED")
+            decision = repair_controller.decide(category=category, fingerprint=fingerprint)
+            if decision.action != "repair":
+                stop_reason = decision.reason
+            else:
+                await emit("builder.repair.started", {"iteration": repair_controller.iteration})
+                lesson_block = ""
                 try:
-                    from agent_service.learning import record_repair_lesson
+                    from agent_service.learning import (
+                        format_lessons_for_prompt,
+                        lessons_for_repair,
+                        record_error_observation,
+                    )
 
-                    await record_repair_lesson(
+                    await record_error_observation(
                         error_code="SANDBOX_TESTS_FAILED",
                         reason=failure_excerpt or "sandbox tests failed",
-                        context={
-                            "agent_id": agent_id,
-                            "project": blueprint.name,
-                            "source": "coding_pipeline",
-                        },
-                        resolution={"stop_reason": stop_reason, "test_status": test_status},
-                        resolution_summary=(
-                            f"Coding repair fixed failing tests for {blueprint.name}"
-                        ),
+                        context={"agent_id": agent_id, "project": blueprint.name, "source": "coding_pipeline"},
                     )
+                    lessons = await lessons_for_repair(
+                        error_code="SANDBOX_TESTS_FAILED",
+                        reason=failure_excerpt,
+                        limit=5,
+                    )
+                    extra = await lessons_for_repair(error_code="MODEL_PROVIDER_UNAVAILABLE", limit=2)
+                    lessons = (lessons + extra)[:7]
+                    lesson_block = format_lessons_for_prompt(lessons)
                 except Exception:  # noqa: BLE001
-                    logger.exception("coding_repair_lesson_record_failed")
-            elif not repaired:
-                try:
-                    from agent_service.learning import record_error_observation, record_repair_lesson
+                    logger.exception("coding_repair_lessons_load_failed")
 
-                    code = stop_reason if stop_reason in {
-                        "MODEL_PROVIDER_UNAVAILABLE",
-                        "MODEL_BUDGET_EXCEEDED",
-                    } else "SANDBOX_REPAIR_FAILED"
-                    await record_error_observation(
-                        error_code=code,
-                        reason=failure_excerpt or stop_reason,
-                        context={
-                            "agent_id": agent_id,
-                            "project": blueprint.name,
-                            "stop_reason": stop_reason,
-                        },
+                system_prompt = BUILDER_SYSTEM_PROMPT
+                if lesson_block:
+                    system_prompt = f"{BUILDER_SYSTEM_PROMPT}\n\n{lesson_block}"
+
+                agent = CodingAgent(
+                    provider=provider, handle=handle, engine=engine,
+                    registry=registry, gateway=self.gateway, emit=emit, max_turns=10,
+                )
+                from agent_service.config import get_settings
+                from agent_service.security.llm_budget import llm_run_budget
+
+                settings = get_settings()
+                async with llm_run_budget(
+                    run_id=f"{run_id}:coding",
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    max_calls=settings.MAX_LLM_CALLS_PER_CODING_REPAIR,
+                ):
+                    result = await agent.run(
+                        repair_objective
+                        or f"The project tests are failing. Fix the code so `pytest` passes.\n\nProject: {blueprint.name}",
+                        system_prompt=system_prompt,
+                        model_fn=repair_model_fn,
                     )
-                    if code in {"MODEL_PROVIDER_UNAVAILABLE", "MODEL_BUDGET_EXCEEDED"}:
+                repaired = result.success
+                stop_reason = result.stop_reason
+                test_status = result.ledger.verification.get("tests", test_status)
+                lint_result = await registry.get("exec.run_lint").run(ctx, {})
+                lint_status = "passed" if lint_result.get("ok") else "failed"
+                files = await self._read_all(provider, handle, [f["path"] for f in files])
+                if repaired and test_status == "passed":
+                    try:
+                        from agent_service.learning import record_repair_lesson
+
                         await record_repair_lesson(
-                            error_code=code,
-                            reason=failure_excerpt or stop_reason,
-                            context={"source": "coding_pipeline", "project": blueprint.name},
-                            resolution={
-                                "prefer_models": ["openai/gpt-4.1", "openai/gpt-4.1-mini"],
-                                "fallback_profile": "balanced",
-                                "avoid_models": ["openai/gpt-5.1-codex"],
+                            error_code="SANDBOX_TESTS_FAILED",
+                            reason=failure_excerpt or "sandbox tests failed",
+                            context={
+                                "agent_id": agent_id,
+                                "project": blueprint.name,
+                                "source": "coding_pipeline",
                             },
+                            resolution={"stop_reason": stop_reason, "test_status": test_status},
                             resolution_summary=(
-                                "Use gpt-4.1 / balanced profile for coding repairs; "
-                                "skip dead coding model ids; keep a dedicated repair budget."
+                                f"Coding repair fixed failing tests for {blueprint.name}"
                             ),
                         )
-                except Exception:  # noqa: BLE001
-                    logger.exception("coding_repair_failure_lesson_failed")
+                    except Exception:  # noqa: BLE001
+                        logger.exception("coding_repair_lesson_record_failed")
+                elif not repaired:
+                    try:
+                        from agent_service.learning import record_error_observation, record_repair_lesson
 
-        success = test_status == "passed"
+                        code = stop_reason if stop_reason in {
+                            "MODEL_PROVIDER_UNAVAILABLE",
+                            "MODEL_BUDGET_EXCEEDED",
+                        } else "SANDBOX_REPAIR_FAILED"
+                        await record_error_observation(
+                            error_code=code,
+                            reason=failure_excerpt or stop_reason,
+                            context={
+                                "agent_id": agent_id,
+                                "project": blueprint.name,
+                                "stop_reason": stop_reason,
+                            },
+                        )
+                        if code in {"MODEL_PROVIDER_UNAVAILABLE", "MODEL_BUDGET_EXCEEDED"}:
+                            await record_repair_lesson(
+                                error_code=code,
+                                reason=failure_excerpt or stop_reason,
+                                context={"source": "coding_pipeline", "project": blueprint.name},
+                                resolution={
+                                    "prefer_models": ["openai/gpt-5.6-terra", "openai/gpt-5.6-sol"],
+                                    "fallback_profile": "coding",
+                                    "avoid_models": ["openai/gpt-5.1-codex"],
+                                },
+                                resolution_summary=(
+                                    "Use gpt-5.6 terra/sol for coding repairs; "
+                                    "never downgrade to balanced chat; keep a dedicated repair budget."
+                                ),
+                            )
+                    except Exception:  # noqa: BLE001
+                        logger.exception("coding_repair_failure_lesson_failed")
+
+        success = test_status == "passed" and lint_status == "passed"
         structure = sorted(f["path"] for f in files)
 
         # Classify a terminal failure so callers/readiness can react (repairable vs
