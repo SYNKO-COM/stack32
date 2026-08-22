@@ -5,7 +5,13 @@ import { create } from "zustand";
  * Domain/server state lives in TanStack Query + repositories.
  */
 
-export type ActiveDialog = "auth" | "settings" | "billing" | "upgrade" | null;
+export type ActiveDialog =
+  | "auth"
+  | "settings"
+  | "billing"
+  | "upgrade"
+  | "buyCredits"
+  | null;
 
 interface UiState {
   sidebarOpen: boolean;

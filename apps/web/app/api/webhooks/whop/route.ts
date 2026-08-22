@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import {
   deactivateMembershipFromWhop,
+  fulfillCreditTopUpFromWhop,
   fulfillMembershipFromWhop,
   markMembershipPastDueFromWhop,
   syncMembershipCancelFlagFromWhop,
@@ -15,6 +16,7 @@ import {
   isWhopPaymentSucceeded,
   isWhopRefundCreated,
 } from "@/lib/billing/whop-event-types";
+import { isCreditTopUpMetadata, parseCheckoutMetadata } from "@/lib/billing/whop-catalog";
 import { getWhopSdk } from "@/lib/billing/whop-sdk";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
@@ -73,29 +75,84 @@ async function fulfillWhopEvent(
 
     if (activate || paymentOk) {
       const data = event.data;
-      const membership = activate
-        ? await resolveMembershipPayload(data)
-        : await resolveMembershipPayload(
-            (data as { membership?: unknown } | null)?.membership ?? data,
+      const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+      const metaCandidate =
+        record.metadata ??
+        (record.membership && typeof record.membership === "object"
+          ? (record.membership as { metadata?: unknown }).metadata
+          : undefined) ??
+        (record.plan && typeof record.plan === "object"
+          ? (record.plan as { metadata?: unknown }).metadata
+          : undefined);
+
+      if (isCreditTopUpMetadata(metaCandidate) || parseCheckoutMetadata(metaCandidate).kind === "credit_topup") {
+        await fulfillCreditTopUpFromWhop(data);
+      } else {
+        const membership = activate
+          ? await resolveMembershipPayload(data)
+          : await resolveMembershipPayload(
+              (data as { membership?: unknown } | null)?.membership ?? data,
+            );
+        if (membership) {
+          const memMeta = parseCheckoutMetadata(
+            (membership as { metadata?: unknown }).metadata,
           );
-      if (membership) {
-        await fulfillMembershipFromWhop(membership);
+          if (memMeta.kind === "credit_topup") {
+            await fulfillCreditTopUpFromWhop(membership);
+          } else {
+            await fulfillMembershipFromWhop(membership);
+          }
+        }
       }
     }
 
     if (deactivate) {
-      await deactivateMembershipFromWhop(event.data);
+      const data = event.data;
+      const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+      const meta = parseCheckoutMetadata(record.metadata);
+      // One-time credit memberships ending must not wipe the paid subscription.
+      if (meta.kind !== "credit_topup") {
+        await deactivateMembershipFromWhop(event.data);
+      }
     }
 
     if (paymentFail) {
-      await markMembershipPastDueFromWhop(event.data);
+      const data = event.data;
+      const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+      const meta = parseCheckoutMetadata(record.metadata);
+      if (meta.kind !== "credit_topup") {
+        await markMembershipPastDueFromWhop(event.data);
+      }
     }
 
     if (refund) {
       const data = event.data;
-      const membership =
-        (data as { membership?: unknown } | null)?.membership ?? data;
-      await deactivateMembershipFromWhop(membership);
+      const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+      const meta = parseCheckoutMetadata(
+        record.metadata ??
+          (record.membership && typeof record.membership === "object"
+            ? (record.membership as { metadata?: unknown }).metadata
+            : undefined),
+      );
+      if (meta.kind === "credit_topup") {
+        const paymentId =
+          typeof record.id === "string"
+            ? record.id
+            : typeof record.payment_id === "string"
+              ? record.payment_id
+              : null;
+        if (paymentId) {
+          await admin
+            .from("credit_topups")
+            .update({ status: "refunded" })
+            .eq("provider", "whop")
+            .eq("provider_payment_id", paymentId);
+        }
+      } else {
+        const membership =
+          (data as { membership?: unknown } | null)?.membership ?? data;
+        await deactivateMembershipFromWhop(membership);
+      }
     }
 
     if (cancelFlag) {

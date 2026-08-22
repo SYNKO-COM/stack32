@@ -2,7 +2,8 @@
 
 import { CircleCheck, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
@@ -13,20 +14,23 @@ type RefreshResult = {
   status?: string | null;
 };
 
-/**
- * Poll server-side billing refresh so access appears within seconds of checkout
- * without trusting the browser alone (webhook remains canonical).
- */
-export default function BillingSuccessPage() {
+function BillingSuccessInner() {
   const { t } = useTranslation("billing");
+  const searchParams = useSearchParams();
+  const isTopUp = searchParams.get("topup") === "1";
   const [paid, setPaid] = useState(false);
-  const [polling, setPolling] = useState(true);
+  const [polling, setPolling] = useState(!isTopUp);
 
   useEffect(() => {
+    if (isTopUp) {
+      setPaid(true);
+      setPolling(false);
+      return;
+    }
+
     let cancelled = false;
     let attempts = 0;
     const maxAttempts = 20;
-    /** Fast cadence so Whop pull / webhook lands within ~1–2s typically. */
     const intervalMs = 400;
 
     const tick = async () => {
@@ -59,13 +63,17 @@ export default function BillingSuccessPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isTopUp]);
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
       <CircleCheck className="mb-6 size-14 text-emerald-400" aria-hidden="true" />
-      <h1 className="text-3xl font-semibold tracking-tight">{t("success.title")}</h1>
-      <p className="mt-3 text-muted-foreground">{t("success.subtitle")}</p>
+      <h1 className="text-3xl font-semibold tracking-tight">
+        {isTopUp ? t("success.topupTitle") : t("success.title")}
+      </h1>
+      <p className="mt-3 text-muted-foreground">
+        {isTopUp ? t("success.topupSubtitle") : t("success.subtitle")}
+      </p>
       {polling && !paid ? (
         <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -74,7 +82,7 @@ export default function BillingSuccessPage() {
           })}
         </p>
       ) : null}
-      {paid ? (
+      {paid && !isTopUp ? (
         <p className="mt-4 text-sm text-emerald-600 dark:text-emerald-400">
           {t("success.activated", { defaultValue: "Your plan is active." })}
         </p>
@@ -83,5 +91,23 @@ export default function BillingSuccessPage() {
         <Link href="/agents">{t("success.cta")}</Link>
       </Button>
     </div>
+  );
+}
+
+/**
+ * Poll server-side billing refresh so access appears within seconds of checkout
+ * without trusting the browser alone (webhook remains canonical).
+ */
+export default function BillingSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center py-12 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        </div>
+      }
+    >
+      <BillingSuccessInner />
+    </Suspense>
   );
 }

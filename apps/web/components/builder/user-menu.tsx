@@ -87,6 +87,14 @@ export function UserMenu() {
                 ? t("builder:profile.creditsHintAnnual")
                 : t("builder:profile.creditsHint")}
             </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-2.5 w-full rounded-xl"
+              onClick={() => openDialog("buyCredits")}
+            >
+              {t("builder:profile.buyCredits")}
+            </Button>
           </div>
         </div>
         <div className="p-1">

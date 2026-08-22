@@ -2356,6 +2356,48 @@ export type Database = {
           },
         ]
       }
+      credit_topups: {
+        Row: {
+          amount_paid_usd: number
+          budget_usd: number
+          created_at: string
+          credits: number
+          id: string
+          metadata: Json
+          provider: string
+          provider_checkout_id: string | null
+          provider_payment_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount_paid_usd: number
+          budget_usd: number
+          created_at?: string
+          credits: number
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_checkout_id?: string | null
+          provider_payment_id?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount_paid_usd?: number
+          budget_usd?: number
+          created_at?: string
+          credits?: number
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_checkout_id?: string | null
+          provider_payment_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           billing_interval: string

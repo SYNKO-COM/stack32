@@ -3,9 +3,13 @@ import "server-only";
 import {
   clampCreditsForPlan,
   PLANS,
+  priceCreditTopUp,
   type BillingInterval,
 } from "@/lib/billing/plans";
-import { parseCheckoutMetadata } from "@/lib/billing/whop-catalog";
+import {
+  isCreditTopUpMetadata,
+  parseCheckoutMetadata,
+} from "@/lib/billing/whop-catalog";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -60,6 +64,12 @@ export async function fulfillMembershipFromWhop(payload: unknown): Promise<void>
   const metadata = parseCheckoutMetadata(
     data.metadata ?? asRecord(data.checkout_configuration).metadata ?? data.meta,
   );
+
+  // One-time credit packs must never overwrite the subscription row.
+  if (metadata.kind === "credit_topup") {
+    await fulfillCreditTopUpFromWhop(payload);
+    return;
+  }
 
   const membershipId = pickString(
     data.id,
@@ -132,6 +142,100 @@ export async function fulfillMembershipFromWhop(payload: unknown): Promise<void>
   if (error) throw error;
 
   await restoreAgentsAfterBilling(userId);
+}
+
+/**
+ * Grant a one-time credit pack for the current billing period.
+ * Idempotent on provider_payment_id.
+ */
+export async function fulfillCreditTopUpFromWhop(payload: unknown): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new Error("Supabase admin client unavailable");
+
+  const data = asRecord(payload);
+  const metadataRaw =
+    data.metadata ??
+    asRecord(data.checkout_configuration).metadata ??
+    asRecord(data.plan).metadata ??
+    data.meta;
+  const metadata = parseCheckoutMetadata(metadataRaw);
+
+  if (!isCreditTopUpMetadata(metadataRaw) && metadata.kind !== "credit_topup") {
+    return;
+  }
+
+  const userId = metadata.stack32_user_id;
+  const credits = Number(metadata.credits ?? 0);
+  if (!userId || !Number.isFinite(credits) || credits <= 0) {
+    console.warn("[whop] credit top-up missing metadata", { metadata });
+    return;
+  }
+
+  const priced = priceCreditTopUp(credits);
+  const paymentId = pickString(
+    data.id,
+    data.payment_id,
+    asRecord(data.payment).id,
+    data.provider_payment_id,
+  );
+  const checkoutId = pickString(
+    data.checkout_configuration_id,
+    asRecord(data.checkout_configuration).id,
+    data.checkout_id,
+  );
+
+  if (paymentId) {
+    const { data: existing } = await admin
+      .from("credit_topups")
+      .select("id")
+      .eq("provider", "whop")
+      .eq("provider_payment_id", paymentId)
+      .maybeSingle();
+    if (existing) return;
+  }
+
+  const { error } = await admin.from("credit_topups").insert({
+    user_id: userId,
+    credits: priced.credits,
+    budget_usd: priced.budgetUsd,
+    amount_paid_usd: priced.chargeUsd,
+    provider: "whop",
+    provider_payment_id: paymentId,
+    provider_checkout_id: checkoutId,
+    status: "fulfilled",
+    metadata: {
+      source: "whop",
+      raw: data,
+    } as Json,
+  });
+
+  if (error) {
+    // Unique race on payment id — treat as success.
+    if (error.code === "23505") return;
+    throw error;
+  }
+}
+
+/** Local / mock grant without Whop. */
+export async function grantCreditTopUpLocal(input: {
+  userId: string;
+  credits: number;
+  amountPaidUsd?: number;
+}): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) throw new Error("Supabase admin client unavailable");
+  const priced = priceCreditTopUp(input.credits);
+  const { error } = await admin.from("credit_topups").insert({
+    user_id: input.userId,
+    credits: priced.credits,
+    budget_usd: priced.budgetUsd,
+    amount_paid_usd: input.amountPaidUsd ?? priced.chargeUsd,
+    provider: "mock",
+    provider_payment_id: `mock_${crypto.randomUUID()}`,
+    status: "fulfilled",
+    metadata: { source: "grantCreditTopUpLocal" } as Json,
+  });
+  if (error) throw error;
 }
 
 export async function deactivateMembershipFromWhop(payload: unknown): Promise<void> {

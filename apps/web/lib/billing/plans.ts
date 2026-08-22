@@ -130,6 +130,43 @@ export const ANNUAL_MONTHLY_AI_BUDGET_USD: Record<Exclude<PlanKey, "free">, numb
   scale: 20,
 };
 
+/** One-time credit packs (top-ups) — independent of subscription tier. */
+export const CREDIT_TOPUP_MIN = 50;
+export const CREDIT_TOPUP_MAX = 10_000;
+export const CREDIT_TOPUP_STEP = 50;
+/** Sell price USD / credit (one-time packs only; subscription tiers unchanged). */
+export const CREDIT_TOPUP_PRICE_USD = 0.43;
+/** Platform AI budget USD / credit (unchanged — keeps ≥75% margin vs subscription economics). */
+export const CREDIT_TOPUP_BUDGET_USD = 0.06;
+
+export function clampCreditTopUp(credits: number): number {
+  const raw = Number.isFinite(credits) ? credits : CREDIT_TOPUP_MIN;
+  const stepped = Math.round(raw / CREDIT_TOPUP_STEP) * CREDIT_TOPUP_STEP;
+  return Math.min(CREDIT_TOPUP_MAX, Math.max(CREDIT_TOPUP_MIN, stepped));
+}
+
+export function priceCreditTopUp(creditsInput: number): {
+  credits: number;
+  chargeUsd: number;
+  budgetUsd: number;
+  usdPerCreditSell: number;
+  usdPerCreditCost: number;
+  marginRatio: number;
+} {
+  const credits = clampCreditTopUp(creditsInput);
+  const chargeUsd = Math.round(credits * CREDIT_TOPUP_PRICE_USD * 100) / 100;
+  const budgetUsd =
+    Math.round(credits * CREDIT_TOPUP_BUDGET_USD * 1_000_000) / 1_000_000;
+  return {
+    credits,
+    chargeUsd,
+    budgetUsd,
+    usdPerCreditSell: CREDIT_TOPUP_PRICE_USD,
+    usdPerCreditCost: CREDIT_TOPUP_BUDGET_USD,
+    marginRatio: 1 - CREDIT_TOPUP_BUDGET_USD / CREDIT_TOPUP_PRICE_USD,
+  };
+}
+
 /** Scale budget with selected monthly credits and billing interval. */
 export function budgetUsdForCredits(
   planKey: PlanKey,
@@ -144,9 +181,12 @@ export function budgetUsdForCredits(
     interval === "annual"
       ? ANNUAL_MONTHLY_AI_BUDGET_USD[planKey]
       : plan.baseBudgetUsd;
-  const scaled = (base * creditsMonthly) / Math.max(plan.baseCredits, 1);
-  const revenue =
+  const scale = creditsMonthly / Math.max(plan.baseCredits, 1);
+  const scaled = base * scale;
+  // Cap against *scaled* plan revenue so extra credit tiers keep proportional budget.
+  const baseRevenue =
     interval === "annual" ? plan.annualMonthlyPriceUsd : plan.monthlyPriceUsd;
+  const revenue = baseRevenue * scale;
   if (revenue > 0) {
     return Math.min(scaled, revenue * MAX_VARIABLE_AI_COST_RATIO);
   }
@@ -217,7 +257,7 @@ export function pricePlanSelection(
     displayMonthlyUsd,
     listMonthlyUsd,
     chargeUsd: displayMonthlyUsd * months,
-    periodBudgetUsd: budgetUsdForCredits(planKey, creditsMonthly) * months,
+    periodBudgetUsd: budgetUsdForCredits(planKey, creditsMonthly, interval) * months,
     periodCredits: creditsMonthly * months,
   };
 }

@@ -88,11 +88,32 @@
   "success": {
     "title": "You're all set",
     "subtitle": "Your subscription is active. Time to build your next agent.",
+    "topupTitle": "Credits added",
+    "topupSubtitle": "Your extra credits are available for this billing period. Your subscription was not changed.",
     "cta": "Open the app"
   },
   "canceled": {
     "title": "Checkout canceled",
     "subtitle": "No charge was made. You can upgrade whenever you're ready.",
     "cta": "Back to the app"
+  },
+  "topup": {
+    "title": "Buy credits",
+    "subtitle": "One-time purchase for this period — your subscription and renewals stay the same.",
+    "creditsLabel": "Credits",
+    "priceLabel": "Price",
+    "sliderAria": "Number of credits to buy",
+    "hint": "One-time purchase at {{price}} / credit. Credits add to your current pool and expire at the end of the billing period.",
+    "buy": "Buy — {{amount}}",
+    "preparing": "Preparing checkout…",
+    "paidRequired": "Credit packs require a paid plan. Upgrade to Starter, Pro, or Scale to buy more.",
+    "seePlans": "See plans",
+    "error": "Couldn't start checkout. Please try again.",
+    "payTitle": "Secure payment",
+    "paySubtitle": "{{credits}} credits · {{amount}} (one-time)",
+    "back": "Change amount",
+    "successTitle": "Credits added",
+    "successBody": "{{credits}} credits were added to your current period.",
+    "done": "Close"
   }
 }

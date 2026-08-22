@@ -87,6 +87,15 @@ export type CheckoutMetadata = {
   billing_interval: BillingInterval;
   credits_monthly: string;
   source: "stack32";
+  kind?: "subscription" | "credit_topup";
+};
+
+/** One-time Builder credit pack (does not change the subscription). */
+export type CreditTopUpMetadata = {
+  stack32_user_id: string;
+  kind: "credit_topup";
+  credits: string;
+  source: "stack32";
 };
 
 export function buildCheckoutMetadata(input: {
@@ -101,14 +110,29 @@ export function buildCheckoutMetadata(input: {
     billing_interval: input.interval,
     credits_monthly: String(input.creditsMonthly),
     source: "stack32",
+    kind: "subscription",
+  };
+}
+
+export function buildCreditTopUpMetadata(input: {
+  userId: string;
+  credits: number;
+}): CreditTopUpMetadata {
+  return {
+    stack32_user_id: input.userId,
+    kind: "credit_topup",
+    credits: String(input.credits),
+    source: "stack32",
   };
 }
 
 export function parseCheckoutMetadata(
   raw: unknown,
-): Partial<CheckoutMetadata> {
+): Partial<CheckoutMetadata> & { credits?: string } {
   if (!raw || typeof raw !== "object") return {};
   const m = raw as Record<string, unknown>;
+  const kind =
+    m.kind === "credit_topup" || m.kind === "subscription" ? m.kind : undefined;
   return {
     stack32_user_id:
       typeof m.stack32_user_id === "string" ? m.stack32_user_id : undefined,
@@ -124,6 +148,37 @@ export function parseCheckoutMetadata(
       typeof m.credits_monthly === "string" || typeof m.credits_monthly === "number"
         ? String(m.credits_monthly)
         : undefined,
+    credits:
+      typeof m.credits === "string" || typeof m.credits === "number"
+        ? String(m.credits)
+        : undefined,
+    kind,
     source: m.source === "stack32" ? "stack32" : undefined,
   };
+}
+
+export function isCreditTopUpMetadata(
+  raw: unknown,
+): raw is CreditTopUpMetadata {
+  const m = parseCheckoutMetadata(raw);
+  return (
+    m.kind === "credit_topup" &&
+    typeof m.stack32_user_id === "string" &&
+    Boolean(m.credits)
+  );
+}
+
+/** Product used for one-time credit packs (falls back to Starter product). */
+export function getWhopCreditsProductId(): string | null {
+  return (
+    process.env.WHOP_PRODUCT_CREDITS_ID?.trim() ||
+    process.env.WHOP_PRODUCT_STARTER_ID?.trim() ||
+    null
+  );
+}
+
+export function requireWhopCreditsProductId(): string {
+  const id = getWhopCreditsProductId();
+  if (!id) throw new Error("WHOP_PRODUCT_CREDITS_ID / WHOP_PRODUCT_STARTER_ID is not configured");
+  return id;
 }

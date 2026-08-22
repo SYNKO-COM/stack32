@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { UserMenu } from "@/components/builder/user-menu";
 import { BillingDialog } from "@/components/billing/billing-dialog";
+import { BuyCreditsDialog } from "@/components/billing/buy-credits-dialog";
 import { UpgradeDialog } from "@/components/billing/upgrade-dialog";
 import { SettingsDialog } from "@/components/builder/settings-dialog";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
@@ -95,6 +96,7 @@ export function PublicAgentChrome({
       <SettingsDialog />
       <BillingDialog />
       <UpgradeDialog />
+      <BuyCreditsDialog />
     </div>
   );
 }

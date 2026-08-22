@@ -93,6 +93,19 @@ Use [sandbox](https://docs.whop.com/developer/guides/sandbox) + a test card, the
 4. Webhook verifies signature → fulfills `subscriptions`
 5. Credits / budgets come from existing entitlement RPCs
 
+## One-time credit top-ups
+
+Paid subscribers can buy extra Builder credits without changing their plan:
+
+1. Menu compte → **Acheter plus de crédits**
+2. Slider 50–10 000 (pas de 50) → checkout Whop `plan_type: one_time`
+3. Webhook `payment.succeeded` (metadata `kind=credit_topup`) → row in `credit_topups`
+4. `resolve_user_entitlements` adds those credits + AI budget to the **current period only**
+
+Optional env: `WHOP_PRODUCT_CREDITS_ID` (defaults to `WHOP_PRODUCT_STARTER_ID`).
+
+Sell price: **$0.43 / credit** · platform budget: **$0.06 / credit** (~86% gross margin on packs).
+
 ## Docs index
 
 - [Accept payments](https://docs.whop.com/developer/guides/accept-payments)

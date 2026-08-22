@@ -88,11 +88,32 @@
   "success": {
     "title": "Tout est prêt",
     "subtitle": "Votre abonnement est actif. Il est temps de créer votre prochain agent.",
+    "topupTitle": "Crédits ajoutés",
+    "topupSubtitle": "Vos crédits supplémentaires sont disponibles pour cette période. Votre abonnement n’a pas changé.",
     "cta": "Ouvrir l'application"
   },
   "canceled": {
     "title": "Paiement annulé",
     "subtitle": "Aucun montant n'a été prélevé. Vous pouvez passer à Pro quand vous voulez.",
     "cta": "Retour à l'application"
+  },
+  "topup": {
+    "title": "Acheter des crédits",
+    "subtitle": "Achat unique pour cette période — votre abonnement et son renouvellement restent inchangés.",
+    "creditsLabel": "Crédits",
+    "priceLabel": "Prix",
+    "sliderAria": "Nombre de crédits à acheter",
+    "hint": "Achat unique à {{price}} / crédit. Les crédits s’ajoutent à votre pool actuel et expirent à la fin de la période de facturation.",
+    "buy": "Acheter — {{amount}}",
+    "preparing": "Préparation du paiement…",
+    "paidRequired": "Les packs de crédits sont réservés aux abonnements payants. Passez à Starter, Pro ou Scale pour en acheter.",
+    "seePlans": "Voir les plans",
+    "error": "Impossible de démarrer le paiement. Réessayez.",
+    "payTitle": "Paiement sécurisé",
+    "paySubtitle": "{{credits}} crédits · {{amount}} (achat unique)",
+    "back": "Modifier la quantité",
+    "successTitle": "Crédits ajoutés",
+    "successBody": "{{credits}} crédits ont été ajoutés à votre période en cours.",
+    "done": "Fermer"
   }
 }

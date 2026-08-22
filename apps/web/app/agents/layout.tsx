@@ -2,6 +2,7 @@
 
 import { RequireAuth } from "@/components/auth/require-auth";
 import { BillingDialog } from "@/components/billing/billing-dialog";
+import { BuyCreditsDialog } from "@/components/billing/buy-credits-dialog";
 import { UpgradeDialog } from "@/components/billing/upgrade-dialog";
 import { AgentSidebar } from "@/components/builder/agent-sidebar";
 import { SettingsDialog } from "@/components/builder/settings-dialog";
@@ -38,6 +39,7 @@ export default function AgentsLayout({ children }: { children: React.ReactNode }
         <SettingsDialog />
         <BillingDialog />
         <UpgradeDialog />
+        <BuyCreditsDialog />
       </div>
     </RequireAuth>
   );

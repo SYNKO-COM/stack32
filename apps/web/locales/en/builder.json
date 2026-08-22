@@ -517,6 +517,7 @@
     "creditsValue": "{{used}} / {{limit}}",
     "creditsHint": "Credits deducted from real Builder usage (tokens).",
     "creditsHintAnnual": "Annual pool — credits shown cover the full period.",
+    "buyCredits": "Buy more credits",
     "changePassword": "Change password"
   }
 }

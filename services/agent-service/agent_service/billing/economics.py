@@ -38,8 +38,10 @@ def effective_ai_budget_usd(
     else:
         base = plan.base_budget_usd
 
-    scaled = base * max(credits_monthly, 1) / max(plan.base_credits, 1)
-    revenue = effective_monthly_revenue_usd(plan_key, billing_interval)
+    scale = max(credits_monthly, 1) / max(plan.base_credits, 1)
+    scaled = base * scale
+    # Cap against scaled plan revenue so extra credit tiers keep proportional budget.
+    revenue = effective_monthly_revenue_usd(plan_key, billing_interval) * scale
     if revenue > 0:
         return min(scaled, revenue * MAX_VARIABLE_AI_COST_RATIO)
     return scaled

@@ -5,6 +5,7 @@ import {
   clampCreditsForPlan,
   isPlanKey,
   PLANS,
+  priceCreditTopUp,
   pricePlanSelection,
   type BillingInterval,
   type PlanKey,
@@ -16,9 +17,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   buildCheckoutMetadata,
+  buildCreditTopUpMetadata,
   getWhopBasePlanId,
   isBaseCreditTier,
   planCheckoutTitle,
+  requireWhopCreditsProductId,
   requireWhopProductId,
   whopBillingPeriodDays,
 } from "@/lib/billing/whop-catalog";
@@ -378,6 +381,89 @@ export async function createWhopCheckoutSession(input: {
     planKey: input.planKey,
     interval: input.interval,
     creditsMonthly,
+  };
+}
+
+export type WhopCreditTopUpSessionResult = {
+  sessionId: string;
+  purchaseUrl: string | null;
+  amountUsd: number;
+  credits: number;
+};
+
+/**
+ * One-time credit pack checkout (Whop plan_type=one_time).
+ * Does not change the user's subscription tier or credits_monthly.
+ */
+export async function createWhopCreditTopUpSession(input: {
+  credits: number;
+}): Promise<WhopCreditTopUpSessionResult> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("UNAUTHENTICATED");
+
+  const access = await getSubscriptionAccess();
+  const planKey = access.subscription?.plan_key;
+  if (!planKey || planKey === "free" || !["active", "trialing"].includes(access.subscription?.status ?? "")) {
+    throw new Error("PAID_PLAN_REQUIRED");
+  }
+
+  const priced = priceCreditTopUp(input.credits);
+  const site =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+    "http://localhost:3000";
+
+  if (getBillingMode() === "mock" || !isWhopLiveConfigured()) {
+    const { grantCreditTopUpLocal } = await import("@/lib/billing/whop-fulfillment");
+    await grantCreditTopUpLocal({
+      userId: user.id,
+      credits: priced.credits,
+      amountPaidUsd: priced.chargeUsd,
+    });
+    return {
+      sessionId: "mock",
+      purchaseUrl: null,
+      amountUsd: priced.chargeUsd,
+      credits: priced.credits,
+    };
+  }
+
+  const companyId = requireWhopCompanyId();
+  const productId = requireWhopCreditsProductId();
+  const metadata = buildCreditTopUpMetadata({
+    userId: user.id,
+    credits: priced.credits,
+  });
+  const whop = requireWhopSdk();
+
+  const checkout = await whop.checkoutConfigurations.create({
+    account_id: companyId,
+    metadata,
+    redirect_url: `${site}/billing/success?topup=1`,
+    plan: {
+      account_id: companyId,
+      product_id: productId,
+      plan_type: "one_time",
+      currency: "usd",
+      initial_price: priced.chargeUsd,
+      title: `Credits ${priced.credits}`.slice(0, 30),
+      visibility: "hidden",
+      unlimited_stock: true,
+      force_create_new_plan: false,
+      metadata,
+    },
+  });
+
+  const purchaseUrl =
+    typeof (checkout as { purchase_url?: string }).purchase_url === "string"
+      ? (checkout as { purchase_url?: string }).purchase_url!
+      : null;
+
+  return {
+    sessionId: checkout.id,
+    purchaseUrl,
+    amountUsd: priced.chargeUsd,
+    credits: priced.credits,
   };
 }
 

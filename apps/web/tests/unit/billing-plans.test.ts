@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   budgetUsdForCredits,
+  clampCreditTopUp,
   clampCreditsForPlan,
   creditsFromCostUsd,
+  priceCreditTopUp,
   pricePlanSelection,
   usdPerCredit,
 } from "@/lib/billing/plans";
@@ -29,7 +31,20 @@ describe("billing plans", () => {
     expect(proAnnual.displayMonthlyUsd).toBe(40);
     expect(proAnnual.chargeUsd).toBe(480);
     expect(proAnnual.periodCredits).toBe(2400);
-    expect(proAnnual.periodBudgetUsd).toBeCloseTo(132);
+    // Annual AI budget cap $10/mo × 12 (not monthly $11)
+    expect(proAnnual.periodBudgetUsd).toBeCloseTo(120);
+  });
+
+  it("prices one-time credit top-ups at $0.43 with $0.06 cost", () => {
+    expect(clampCreditTopUp(73)).toBe(50);
+    expect(clampCreditTopUp(75)).toBe(100);
+    const pack = priceCreditTopUp(400);
+    expect(pack.credits).toBe(400);
+    expect(pack.chargeUsd).toBe(172);
+    expect(pack.budgetUsd).toBeCloseTo(24);
+    expect(pack.usdPerCreditSell).toBe(0.43);
+    expect(pack.usdPerCreditCost).toBe(0.06);
+    expect(pack.marginRatio).toBeCloseTo(1 - 0.06 / 0.43);
   });
 
   it("converts token cost into credits", () => {

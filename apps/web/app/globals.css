@@ -428,3 +428,46 @@ html.dark .structure-agent-flow .react-flow__controls-button svg path {
     opacity: 1;
   }
 }
+
+/* One-time credit pack slider */
+.credit-topup-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.credit-topup-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--brand);
+  border: 2px solid color-mix(in srgb, var(--background) 80%, white);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 22%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.credit-topup-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 28%, transparent);
+}
+
+.credit-topup-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--brand);
+  border: 2px solid color-mix(in srgb, var(--background) 80%, white);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 22%, transparent);
+  cursor: pointer;
+}
+
+.credit-topup-slider:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 55%, transparent);
+  outline-offset: 4px;
+}
+
