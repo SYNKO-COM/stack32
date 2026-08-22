@@ -114,6 +114,9 @@
     "back": "Modifier la quantité",
     "successTitle": "Crédits ajoutés",
     "successBody": "{{credits}} crédits ont été ajoutés à votre période en cours.",
-    "done": "Fermer"
+    "done": "Fermer",
+    "savedCardHint": "Si une carte est déjà enregistrée avec votre abonnement, elle sera débitée automatiquement — sans resaisir e-mail ni coordonnées.",
+    "chargedToCard": "Débité sur {{brand}} •••• {{last4}}",
+    "cardFallback": "carte"
   }
 }

@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Sparkles, X } from "lucide-react";
+import { CreditCard, Sparkles, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useTheme } from "@/components/providers/theme-provider";
@@ -61,6 +61,9 @@ export function BuyCreditsDialog() {
   const [credits, setCredits] = useState(100);
   const [step, setStep] = useState<"configure" | "pay" | "done">("configure");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [savedCard, setSavedCard] = useState<{ brand?: string | null; last4?: string | null } | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,6 +75,7 @@ export function BuyCreditsDialog() {
     if (!open) {
       setStep("configure");
       setSessionId(null);
+      setSavedCard(null);
       setError(null);
       setLoading(false);
       setCredits(100);
@@ -88,28 +92,44 @@ export function BuyCreditsDialog() {
     setError(null);
     try {
       const session = await createWhopCreditTopUpSession({ credits: priced.credits });
-      if (session.sessionId === "mock") {
+      if (session.mode === "mock" || session.mode === "saved") {
+        setSavedCard(
+          session.mode === "saved"
+            ? { brand: session.cardBrand, last4: session.cardLast4 }
+            : null,
+        );
         setStep("done");
-          await queryClient.invalidateQueries({ queryKey: ["billing"] });
-          return;
+        await queryClient.invalidateQueries({ queryKey: ["billing"] });
+        return;
+      }
+      if (!session.sessionId) {
+        setError(t("billing:topup.error"));
+        return;
       }
       setSessionId(session.sessionId);
       setStep("pay");
     } catch (err) {
       const code = err instanceof Error ? err.message : "CHECKOUT_FAILED";
-      setError(code === "PAID_PLAN_REQUIRED" ? t("billing:topup.paidRequired") : t("billing:topup.error"));
+      setError(
+        code === "PAID_PLAN_REQUIRED" ? t("billing:topup.paidRequired") : t("billing:topup.error"),
+      );
     } finally {
       setLoading(false);
     }
   }
+
+  const payStepOpen = step === "pay" && Boolean(sessionId);
 
   return (
     <Dialog open={open} onOpenChange={(o) => (!o ? closeDialog() : undefined)}>
       <DialogContent
         showCloseButton={false}
         className={cn(
-          "glass-strong overflow-hidden border-border p-0 sm:max-w-lg",
+          "glass-strong overflow-hidden border-border p-0",
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          payStepOpen
+            ? "sm:max-w-2xl md:max-w-3xl w-[min(100vw-1.5rem,52rem)]"
+            : "sm:max-w-lg",
         )}
       >
         <AnimatePresence mode="wait">
@@ -125,7 +145,7 @@ export function BuyCreditsDialog() {
               type="button"
               onClick={() => closeDialog()}
               className="absolute top-3 right-3 z-10 rounded-full p-1.5 text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
-              aria-label={t("common:actions.close", { defaultValue: "Close" })}
+              aria-label={t("common:actions.close")}
             >
               <X className="size-4" />
             </button>
@@ -168,7 +188,9 @@ export function BuyCreditsDialog() {
                             {t("billing:topup.creditsLabel")}
                           </p>
                           <p className="mt-1 text-4xl font-semibold tracking-tight tabular-nums">
-                            {priced.credits.toLocaleString(locale.startsWith("fr") ? "fr-FR" : "en-US")}
+                            {priced.credits.toLocaleString(
+                              locale.startsWith("fr") ? "fr-FR" : "en-US",
+                            )}
                           </p>
                         </div>
                         <div className="text-right">
@@ -220,6 +242,11 @@ export function BuyCreditsDialog() {
                       ))}
                     </div>
 
+                    <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground/80">
+                      <CreditCard className="mt-0.5 size-3.5 shrink-0 opacity-70" aria-hidden />
+                      <span>{t("billing:topup.savedCardHint")}</span>
+                    </p>
+
                     <p className="text-[11px] leading-relaxed text-muted-foreground/80">
                       {t("billing:topup.hint", {
                         price: formatUsd(priced.usdPerCreditSell, locale),
@@ -250,9 +277,9 @@ export function BuyCreditsDialog() {
             ) : null}
 
             {step === "pay" && sessionId ? (
-              <div className="flex max-h-[min(80vh,640px)] flex-col">
-                <div className="border-b border-border/60 px-5 py-4 pr-12">
-                  <DialogTitle className="text-base">
+              <div className="flex max-h-[min(88vh,760px)] min-h-[min(70vh,560px)] flex-col">
+                <div className="border-b border-border/60 px-6 py-4 pr-12">
+                  <DialogTitle className="text-lg tracking-tight">
                     {t("billing:topup.payTitle")}
                   </DialogTitle>
                   <DialogDescription className="mt-1 text-sm">
@@ -262,7 +289,7 @@ export function BuyCreditsDialog() {
                     })}
                   </DialogDescription>
                 </div>
-                <div className="min-h-[360px] flex-1 overflow-y-auto bg-background">
+                <div className="min-h-[420px] flex-1 overflow-y-auto bg-background px-1 sm:px-2">
                   <WhopCheckoutEmbed
                     key={`${sessionId}-${whopTheme}`}
                     sessionId={sessionId}
@@ -276,7 +303,7 @@ export function BuyCreditsDialog() {
                     }}
                   />
                 </div>
-                <div className="border-t border-border/60 px-5 py-3">
+                <div className="border-t border-border/60 px-6 py-3">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -301,6 +328,14 @@ export function BuyCreditsDialog() {
                 <DialogDescription className="mt-2">
                   {t("billing:topup.successBody", { credits: priced.credits })}
                 </DialogDescription>
+                {savedCard?.last4 ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {t("billing:topup.chargedToCard", {
+                      brand: savedCard.brand || t("billing:topup.cardFallback"),
+                      last4: savedCard.last4,
+                    })}
+                  </p>
+                ) : null}
                 <Button className="mt-6 rounded-full" onClick={() => closeDialog()}>
                   {t("billing:topup.done")}
                 </Button>

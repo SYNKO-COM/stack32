@@ -114,6 +114,9 @@
     "back": "Change amount",
     "successTitle": "Credits added",
     "successBody": "{{credits}} credits were added to your current period.",
-    "done": "Close"
+    "done": "Close",
+    "savedCardHint": "If a card is already on file from your subscription, we’ll charge it automatically — no email or card re-entry.",
+    "chargedToCard": "Charged to {{brand}} •••• {{last4}}",
+    "cardFallback": "card"
   }
 }

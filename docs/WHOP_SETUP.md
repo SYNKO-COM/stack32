@@ -106,6 +106,8 @@ Optional env: `WHOP_PRODUCT_CREDITS_ID` (defaults to `WHOP_PRODUCT_STARTER_ID`).
 
 Sell price: **$0.43 / credit** · platform budget: **$0.06 / credit** (~86% gross margin on packs).
 
+When the subscriber already has a Whop **member** + saved payment method (from subscription checkout with `setupFutureUsage: "off_session"`), top-ups charge off-session via `payments.create` and skip the embed. Otherwise the larger checkout embed is shown.
+
 ## Docs index
 
 - [Accept payments](https://docs.whop.com/developer/guides/accept-payments)

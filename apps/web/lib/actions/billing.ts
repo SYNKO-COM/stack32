@@ -385,14 +385,63 @@ export async function createWhopCheckoutSession(input: {
 }
 
 export type WhopCreditTopUpSessionResult = {
-  sessionId: string;
+  /** checkout = Whop embed; saved = charged saved card; mock = local grant */
+  mode: "checkout" | "saved" | "mock";
+  sessionId: string | null;
   purchaseUrl: string | null;
   amountUsd: number;
   credits: number;
+  paymentId?: string | null;
+  cardBrand?: string | null;
+  cardLast4?: string | null;
 };
+
+async function resolveWhopMemberId(input: {
+  whop: ReturnType<typeof requireWhopSdk>;
+  userId: string;
+  membershipId: string | null | undefined;
+  customerId: string | null | undefined;
+}): Promise<string | null> {
+  const existing = input.customerId?.trim();
+  if (existing && (existing.startsWith("mber_") || existing.startsWith("mem_"))) {
+    // Whop member ids are mber_; some older rows may store membership — still try.
+    if (existing.startsWith("mber_")) return existing;
+  }
+
+  const membershipId = input.membershipId?.trim();
+  if (!membershipId?.startsWith("mem_")) return existing?.startsWith("mber_") ? existing : null;
+
+  try {
+    const membership = await input.whop.memberships.retrieve(membershipId);
+    const member = membership.member as unknown;
+    let memberId = "";
+    if (typeof member === "string") {
+      memberId = member;
+    } else if (member && typeof member === "object" && "id" in member) {
+      memberId = String((member as { id?: string }).id ?? "");
+    }
+    if (memberId.startsWith("mber_")) {
+      const admin = createSupabaseAdminClient();
+      if (admin) {
+        await admin
+          .from("subscriptions")
+          .update({ provider_customer_id: memberId })
+          .eq("user_id", input.userId);
+      }
+      return memberId;
+    }
+  } catch (err) {
+    console.warn(
+      "[billing] resolve Whop member failed",
+      err instanceof Error ? err.message : err,
+    );
+  }
+  return null;
+}
 
 /**
  * One-time credit pack checkout (Whop plan_type=one_time).
+ * Prefers charging a saved payment method from the subscription; falls back to embed.
  * Does not change the user's subscription tier or credits_monthly.
  */
 export async function createWhopCreditTopUpSession(input: {
@@ -402,8 +451,9 @@ export async function createWhopCreditTopUpSession(input: {
   if (!user) throw new Error("UNAUTHENTICATED");
 
   const access = await getSubscriptionAccess();
-  const planKey = access.subscription?.plan_key;
-  if (!planKey || planKey === "free" || !["active", "trialing"].includes(access.subscription?.status ?? "")) {
+  const sub = access.subscription;
+  const planKey = sub?.plan_key;
+  if (!planKey || planKey === "free" || !["active", "trialing"].includes(sub?.status ?? "")) {
     throw new Error("PAID_PLAN_REQUIRED");
   }
 
@@ -421,6 +471,7 @@ export async function createWhopCreditTopUpSession(input: {
       amountPaidUsd: priced.chargeUsd,
     });
     return {
+      mode: "mock",
       sessionId: "mock",
       purchaseUrl: null,
       amountUsd: priced.chargeUsd,
@@ -435,6 +486,121 @@ export async function createWhopCreditTopUpSession(input: {
     credits: priced.credits,
   });
   const whop = requireWhopSdk();
+
+  // Prefer off-session charge on the card already saved from subscription checkout.
+  const memberId = await resolveWhopMemberId({
+    whop,
+    userId: user.id,
+    membershipId: sub?.provider_membership_id,
+    customerId: sub?.provider_customer_id,
+  });
+
+  if (memberId) {
+    try {
+      const methods = await whop.paymentMethods.list({
+        member_id: memberId,
+        first: 10,
+      });
+      const method = methods.data?.[0] as
+        | {
+            id?: string;
+            card?: { brand?: string | null; last4?: string | null } | null;
+            payment_method_type?: string;
+          }
+        | undefined;
+      const paymentMethodId = method?.id?.trim();
+      if (paymentMethodId) {
+        const payment = await whop.payments.create({
+          company_id: companyId,
+          member_id: memberId,
+          payment_method_id: paymentMethodId,
+          metadata,
+          plan: {
+            currency: "usd",
+            plan_type: "one_time",
+            initial_price: priced.chargeUsd,
+            product_id: productId,
+            title: `Credits ${priced.credits}`.slice(0, 30),
+            force_create_new_plan: false,
+          },
+        });
+
+        const status = String((payment as { status?: string }).status ?? "").toLowerCase();
+        const paidAt = (payment as { paid_at?: string | null }).paid_at;
+        const looksPaid =
+          Boolean(paidAt) ||
+          status === "paid" ||
+          status === "succeeded" ||
+          status === "complete" ||
+          status === "completed";
+
+        // Payment often settles async — wait briefly then fulfill if paid.
+        let settled = looksPaid;
+        if (!settled && payment.id) {
+          for (let i = 0; i < 8; i++) {
+            await new Promise((r) => setTimeout(r, 400));
+            try {
+              const latest = await whop.payments.retrieve(payment.id);
+              const s = String(latest.status ?? "").toLowerCase();
+              if (
+                latest.paid_at ||
+                s === "paid" ||
+                s === "succeeded" ||
+                s === "complete" ||
+                s === "completed"
+              ) {
+                settled = true;
+                break;
+              }
+              if (s === "failed" || s === "canceled" || s === "voided") {
+                throw new Error("SAVED_PAYMENT_FAILED");
+              }
+            } catch (err) {
+              if (err instanceof Error && err.message === "SAVED_PAYMENT_FAILED") throw err;
+            }
+          }
+        }
+
+        if (settled) {
+          const { fulfillCreditTopUpFromWhop } = await import(
+            "@/lib/billing/whop-fulfillment"
+          );
+          await fulfillCreditTopUpFromWhop({
+            id: payment.id,
+            metadata,
+            payment_id: payment.id,
+          });
+          return {
+            mode: "saved",
+            sessionId: null,
+            purchaseUrl: null,
+            amountUsd: priced.chargeUsd,
+            credits: priced.credits,
+            paymentId: payment.id,
+            cardBrand: method?.card?.brand ?? null,
+            cardLast4: method?.card?.last4 ?? null,
+          };
+        }
+
+        // Still pending — credit webhook will fulfill; treat as saved success UX.
+        return {
+          mode: "saved",
+          sessionId: null,
+          purchaseUrl: null,
+          amountUsd: priced.chargeUsd,
+          credits: priced.credits,
+          paymentId: payment.id,
+          cardBrand: method?.card?.brand ?? null,
+          cardLast4: method?.card?.last4 ?? null,
+        };
+      }
+    } catch (err) {
+      console.warn(
+        "[billing] saved-card top-up unavailable, falling back to embed",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
 
   const checkout = await whop.checkoutConfigurations.create({
     account_id: companyId,
@@ -460,6 +626,7 @@ export async function createWhopCreditTopUpSession(input: {
       : null;
 
   return {
+    mode: "checkout",
     sessionId: checkout.id,
     purchaseUrl,
     amountUsd: priced.chargeUsd,
