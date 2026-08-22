@@ -9,7 +9,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from agent_service.models.agent_spec import ConnectionRequirement, ToolBinding
+from agent_service.models.agent_spec import (
+    MAX_AGENT_TOOLS,
+    ConnectionRequirement,
+    ToolBinding,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +134,8 @@ _PIPEDREAM_APP_ALIASES: dict[str, str] = {
 # Max Pipedream actions bound per connected app during builder resolution.
 DEFAULT_PIPEDREAM_MAX_ACTIONS = 8
 MAPS_PIPEDREAM_MAX_ACTIONS = 10
-MAX_SELECTED_TOOLS = 40
+# Single source of truth — AgentSpec.tools rejects anything beyond this cap.
+MAX_SELECTED_TOOLS = MAX_AGENT_TOOLS
 # Key = user query (normalized slug); value = slugs that must not win by default.
 _CONFUSABLE_APP_NEIGHBORS: dict[str, set[str]] = {
     "canva": {"canvas", "gocanvas", "go_canvas", "go-canvas", "instructure_canvas"},

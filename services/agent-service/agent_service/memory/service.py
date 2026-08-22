@@ -78,18 +78,21 @@ async def upsert_conversation_summary(
 async def latest_conversation_summary(
     *, user_id: str, agent_id: str, thread_id: str
 ) -> str | None:
-    async with get_supabase_admin_client() as client:
-        response = await client.get(
-            "/conversation_summaries",
-            params={
-                "user_id": f"eq.{user_id}",
-                "agent_id": f"eq.{agent_id}",
-                "thread_id": f"eq.{thread_id}",
-                "select": "summary",
-                "order": "created_at.desc",
-                "limit": "1",
-            },
-        )
+    try:
+        async with get_supabase_admin_client() as client:
+            response = await client.get(
+                "/conversation_summaries",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "agent_id": f"eq.{agent_id}",
+                    "thread_id": f"eq.{thread_id}",
+                    "select": "summary",
+                    "order": "created_at.desc",
+                    "limit": "1",
+                },
+            )
+    except Exception:  # noqa: BLE001 — summary is an enhancement, never fail the run
+        return None
     if response.status_code >= 400:
         return None
     rows = response.json()

@@ -194,8 +194,8 @@ def default_linear_graph(
                 GraphNode(
                     id=nid,
                     type="tool",
-                    name=str(tool_id),
-                    description=f"Tool {tool_id}",
+                    name=str(tool_id)[:120],
+                    description=f"Tool {tool_id}"[:500],
                     config={"tool_id": tool_id},
                 )
             )

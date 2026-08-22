@@ -15,6 +15,7 @@ from agent_service.config import get_settings
 from agent_service.gateway.model_gateway import ModelProfile, get_model_gateway
 from agent_service.gateway.router import TaskComplexity, detect_complexity
 from agent_service.models.agent_spec import (
+    MAX_AGENT_TOOLS,
     AgentIdentity,
     AgentInstructions,
     AgentRule,
@@ -1634,7 +1635,7 @@ class BuilderOrchestrator:
             if binding.tool_id not in seen:
                 new_tools.append(binding)
                 seen.add(binding.tool_id)
-        new_tools = new_tools[:20]
+        new_tools = new_tools[:MAX_AGENT_TOOLS]
 
         connection_requirements = await build_connection_requirements(new_tools)
         data = pending_spec.model_dump()
@@ -3455,7 +3456,12 @@ class BuilderOrchestrator:
                 else None
             ),
         )
-        connection_requirements = await build_connection_requirements(tools)
+        # AgentSpec hard-caps tools/requirements — clamp so merge paths can
+        # never push us past the schema limit (BUILDER_PLAN_FAILED regression).
+        tools = tools[:MAX_AGENT_TOOLS]
+        connection_requirements = (await build_connection_requirements(tools))[
+            :MAX_AGENT_TOOLS
+        ]
 
         knowledge_enabled = bool(caps.get("knowledge_enabled")) or any(
             k in content.lower() for k in ("document", "knowledge", "pdf", "rag")

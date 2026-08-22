@@ -80,3 +80,31 @@ def test_agent_spec_rejects_out_of_bounds_runtime_limits():
     data["runtime"] = {"max_steps": 0}
     with pytest.raises(ValidationError):
         AgentSpec.model_validate(data)
+
+
+def test_agent_spec_accepts_up_to_max_agent_tools():
+    # Regression: builder resolution binds up to 8 Pipedream actions per app;
+    # 23 tools used to fail with "List should have at most 20 items"
+    # (prod run aa234401, BUILDER_PLAN_FAILED / ValidationError).
+    from agent_service.models.agent_spec import MAX_AGENT_TOOLS
+
+    data = valid_spec_data()
+    data["tools"] = [{"tool_id": f"pd:app-action-{i}"} for i in range(MAX_AGENT_TOOLS)]
+    spec = AgentSpec.model_validate(data)
+    assert len(spec.tools) == MAX_AGENT_TOOLS
+
+
+def test_agent_spec_rejects_beyond_max_agent_tools():
+    from agent_service.models.agent_spec import MAX_AGENT_TOOLS
+
+    data = valid_spec_data()
+    data["tools"] = [{"tool_id": f"pd:app-action-{i}"} for i in range(MAX_AGENT_TOOLS + 1)]
+    with pytest.raises(ValidationError):
+        AgentSpec.model_validate(data)
+
+
+def test_builder_tool_cap_matches_spec_cap():
+    from agent_service.builder.capabilities import MAX_SELECTED_TOOLS
+    from agent_service.models.agent_spec import MAX_AGENT_TOOLS
+
+    assert MAX_SELECTED_TOOLS == MAX_AGENT_TOOLS

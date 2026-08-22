@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from agent_service.supabase_client import Persistence
+
+logger = logging.getLogger(__name__)
 
 # Rough char budget ≈ tokens * 4 for truncation without a tokenizer dependency.
 _DEFAULT_CHAR_BUDGET = 24_000
@@ -63,20 +66,28 @@ async def load_live_history(
     window: int = 20,
     char_budget: int = _DEFAULT_CHAR_BUDGET,
 ) -> list[dict[str, str]]:
-    """Load recent Live messages with correct roles; truncate oldest first."""
-    rows = await db._select(
-        "live_messages",
-        {
-            "thread_id": f"eq.{thread_id}",
-            "user_id": f"eq.{user_id}",
-            "agent_id": f"eq.{agent_id}",
-            "select": "id,role,content,created_at",
-            "order": "created_at.desc",
-            # Fetch one extra so after stripping the current user turn we still
-            # fill the configured conversation window.
-            "limit": str(max(1, window + 1)),
-        },
-    )
+    """Load recent Live messages with correct roles; truncate oldest first.
+
+    History is an enhancement — a transient DB error must degrade to an empty
+    window instead of failing the whole run.
+    """
+    try:
+        rows = await db._select(
+            "live_messages",
+            {
+                "thread_id": f"eq.{thread_id}",
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "select": "id,role,content,created_at",
+                "order": "created_at.desc",
+                # Fetch one extra so after stripping the current user turn we still
+                # fill the configured conversation window.
+                "limit": str(max(1, window + 1)),
+            },
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("load_live_history_failed thread=%s", thread_id, exc_info=True)
+        return []
     if not isinstance(rows, list):
         return []
     chronological = list(reversed(rows))

@@ -41,6 +41,9 @@ NATIVE_BUILTIN_TOOL_IDS: frozenset[str] = frozenset(
 # Backward-compatible alias.
 TRUSTED_TOOL_IDS: frozenset[str] = NATIVE_BUILTIN_TOOL_IDS
 
+# Hard cap on bound tools — single source of truth for builder resolution too.
+MAX_AGENT_TOOLS = 40
+
 ModelProfileName = Literal["fast", "balanced", "reasoning"]
 ApprovalMode = Literal["never", "always", "conditional"]
 WritePolicy = Literal["never", "explicit", "automatic"]
@@ -209,8 +212,8 @@ class ConnectionRequirement(BaseModel):
     provider: str = Field(min_length=1, max_length=64)
     app_id: str | None = Field(default=None, max_length=128)
     auth_type: str = Field(default="oauth2", max_length=32)
-    tool_ids: list[str] = Field(default_factory=list, max_length=20)
-    required_for: list[str] = Field(default_factory=list, max_length=20)
+    tool_ids: list[str] = Field(default_factory=list, max_length=40)
+    required_for: list[str] = Field(default_factory=list, max_length=40)
     required: bool = True
 
     @model_validator(mode="after")
@@ -224,7 +227,7 @@ class ConnectionRequirement(BaseModel):
 
 class ConnectionBindingRef(BaseModel):
     connection_id: str = Field(min_length=1, max_length=64)
-    tool_ids: list[str] = Field(default_factory=list, max_length=20)
+    tool_ids: list[str] = Field(default_factory=list, max_length=40)
     enabled: bool = True
 
 
@@ -260,7 +263,7 @@ class AgentSpec(BaseModel):
     # V5+ additive: exact generated-agent model (BYOK). None until the user selects one.
     model: ModelConfig | None = None
     input_config: InputConfig = Field(default_factory=InputConfig)
-    tools: list[ToolBinding] = Field(default_factory=list, max_length=20)
+    tools: list[ToolBinding] = Field(default_factory=list, max_length=MAX_AGENT_TOOLS)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     rules: list[AgentRule] = Field(default_factory=list, max_length=50)
@@ -270,8 +273,12 @@ class AgentSpec(BaseModel):
     runtime: RuntimeLimits = Field(default_factory=RuntimeLimits)
     security: AgentSecurityPolicy = Field(default_factory=AgentSecurityPolicy)
     # V3+ additive
-    connection_requirements: list[ConnectionRequirement] = Field(default_factory=list, max_length=20)
-    connection_bindings: list[ConnectionBindingRef] = Field(default_factory=list, max_length=20)
+    connection_requirements: list[ConnectionRequirement] = Field(
+        default_factory=list, max_length=MAX_AGENT_TOOLS
+    )
+    connection_bindings: list[ConnectionBindingRef] = Field(
+        default_factory=list, max_length=MAX_AGENT_TOOLS
+    )
     approvals: ApprovalPolicy = Field(default_factory=ApprovalPolicy)
     triggers: list[TriggerConfig] = Field(default_factory=list, max_length=20)
 

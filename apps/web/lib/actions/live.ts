@@ -78,6 +78,20 @@ export async function executeLiveTurn(input: {
       throw err;
     }
     const admin = requireSupabaseAdminClient();
+    // Timeout race: the agent-service may own this turn even though our HTTP
+    // call dropped. If a live run exists for this thread, the backend writes
+    // the outcome (success or its own error message) — inserting runFailed
+    // here would show a false error next to a completed answer.
+    const { data: recentRun } = await admin
+      .from("runs")
+      .select("id,status")
+      .eq("thread_id", input.threadId)
+      .eq("run_type", "live")
+      .gte("created_at", new Date(Date.now() - 3 * 60_000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (recentRun) return;
     const contentKey =
       err instanceof AgentServiceError && err.code === "AGENT_SERVICE_UNAVAILABLE"
         ? "live:errors.serviceUnavailable"

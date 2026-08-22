@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -48,14 +49,35 @@ class SupabaseRepository:
     """Thin data-access layer with mandatory ownership filters."""
 
     async def _select(self, table: str, params: dict[str, str]) -> list[dict[str, Any]]:
-        async with get_supabase_admin_client() as client:
-            response = await client.get(f"/{table}", params=params)
-        if response.status_code >= 400:
-            raise HTTPException(
-                status_code=502,
-                detail={"code": "upstream_error", "message": "Database query failed."},
-            )
-        return response.json()
+        # GET is idempotent — retry once on transient upstream errors (5xx/timeouts)
+        # so a single Supabase blip does not fail a whole build/live run.
+        last_status: int | None = None
+        for attempt in (0, 1):
+            try:
+                async with get_supabase_admin_client() as client:
+                    response = await client.get(f"/{table}", params=params)
+            except httpx.HTTPError:
+                if attempt == 0:
+                    await asyncio.sleep(0.4)
+                    continue
+                raise HTTPException(
+                    status_code=502,
+                    detail={"code": "upstream_error", "message": "Database query failed."},
+                )
+            if response.status_code < 400:
+                return response.json()
+            last_status = response.status_code
+            if response.status_code >= 500 and attempt == 0:
+                await asyncio.sleep(0.4)
+                continue
+            break
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "upstream_error",
+                "message": f"Database query failed (status={last_status}).",
+            },
+        )
 
     async def get_owned_agent(self, agent_id: str, user_id: str) -> dict[str, Any] | None:
         rows = await self._select(
