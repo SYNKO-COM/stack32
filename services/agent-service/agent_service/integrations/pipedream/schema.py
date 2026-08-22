@@ -350,6 +350,17 @@ def build_configured_props(
     if auth_provision_id and schema.auth_prop_name:
         configured[schema.auth_prop_name] = {"authProvisionId": auth_provision_id}
 
+    try:
+        from agent_service.integrations.pipedream.tool_config import (
+            normalize_static_config_for_schema,
+        )
+
+        static_config = normalize_static_config_for_schema(
+            static_config, schema, app_id=schema.app_id
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
     for prop in schema.props_of("static"):
         if prop.name in static_config:
             configured[prop.name] = static_config[prop.name]

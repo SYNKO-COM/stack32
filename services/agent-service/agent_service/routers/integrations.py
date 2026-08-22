@@ -144,19 +144,36 @@ async def list_integration_accounts(
 
 @router.get("/agents/{agent_id}/tools/{tool_id}/config")
 async def get_tool_config(agent_id: str, tool_id: str, user: CurrentUser) -> dict[str, Any]:
+    from agent_service.integrations.pipedream.accounts import (
+        _select_tool_config_row,
+        load_agent_tool_config,
+    )
+
+    row = None
     async with get_supabase_admin_client() as sb:
         response = await sb.get(
             "/agent_tool_configurations",
             params={
                 "user_id": f"eq.{user.user_id}",
                 "agent_id": f"eq.{agent_id}",
-                "tool_id": f"eq.{tool_id}",
                 "select": "*",
-                "limit": "1",
+                "order": "updated_at.desc",
             },
         )
         rows = response.json() if response.status_code < 400 else []
-    row = rows[0] if rows else None
+        if isinstance(rows, list):
+            row = _select_tool_config_row(
+                [r for r in rows if isinstance(r, dict)],
+                tool_id=tool_id,
+                installation_id=None,
+            )
+    effective_config = await load_agent_tool_config(
+        user_id=user.user_id,
+        agent_id=agent_id,
+        tool_id=tool_id,
+    )
+    if row and effective_config and isinstance(row.get("config"), dict):
+        row = {**row, "config": effective_config}
     schema = None
     try:
         registry = get_provider_registry()

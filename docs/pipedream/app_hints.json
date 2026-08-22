@@ -98,7 +98,12 @@
         {"keys": ["headerRowNumber"], "label": "Ligne des titres", "why": "Numéro de la ligne qui contient les noms de colonnes (souvent 1)."},
         {"keys": ["watchDrive"], "label": "Surveiller tout le Drive", "why": "Oui = réagir aux changements dans le Drive entier."}
       ],
-      "builder_guidance": "Always reload props after sheetId; never drop dynamic_props_id. Prefer a specific spreadsheet + worksheet for the agent goal."
+      "builder_guidance": "Always reload props after sheetId; never drop dynamic_props_id. Prefer a specific spreadsheet + worksheet for the agent goal.",
+      "prop_aliases": {
+        "sheetId": ["spreadsheetId", "spreadsheet_id"],
+        "worksheetId": ["worksheetIds", "sheetName", "worksheet"]
+      },
+      "required_props": ["sheetId", "worksheetId"]
     },
     "google_docs": {
       "auth_prop_guess": "googleDocs",

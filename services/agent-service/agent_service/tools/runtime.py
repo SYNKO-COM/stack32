@@ -233,9 +233,35 @@ async def execute_tool(
                 if ref.provider == "pipedream":
                     user_id = str(context.get("user_id") or "")
                     agent_id = str(context.get("agent_id") or "")
+                    installation_id = context.get("installation_id")
+                    preloaded = context.get("tool_configs")
+                    if isinstance(preloaded, dict) and tool_id in preloaded:
+                        context["tool_config"] = preloaded[tool_id]
+                    elif context.get("tool_config") is None and user_id and agent_id:
+                        from agent_service.integrations.pipedream.tool_config import (
+                            resolve_effective_tool_config,
+                        )
+
+                        binding_cfg: dict[str, Any] | None = None
+                        spec_tools = context.get("spec_tools")
+                        if isinstance(spec_tools, list):
+                            for item in spec_tools:
+                                if isinstance(item, dict) and item.get("tool_id") == tool_id:
+                                    cfg = item.get("config")
+                                    binding_cfg = dict(cfg) if isinstance(cfg, dict) else None
+                                    break
+                        context["tool_config"] = await resolve_effective_tool_config(
+                            user_id=user_id,
+                            agent_id=agent_id,
+                            tool_id=tool_id,
+                            binding_config=binding_cfg,
+                            installation_id=str(installation_id)
+                            if installation_id
+                            else None,
+                            app_id=ref.provider_app_id,
+                        )
                     if user_id and agent_id and not context.get("auth_provision_id"):
                         from agent_service.integrations.pipedream.accounts import (
-                            load_agent_tool_config,
                             resolve_pipedream_auth_for_tool,
                         )
 
@@ -248,10 +274,6 @@ async def execute_tool(
                         if auth:
                             context["auth_provision_id"] = auth["auth_provision_id"]
                             context["connection_id"] = auth.get("connection_id")
-                        if "tool_config" not in context:
-                            context["tool_config"] = await load_agent_tool_config(
-                                user_id=user_id, agent_id=agent_id, tool_id=tool_id
-                            )
                     # Pipedream side-effects require approval unless already approved.
                     if _requires_pipedream_approval(tool_id, ref) and not _is_approved(
                         tool_id, context

@@ -302,6 +302,63 @@ async def resolve_pipedream_auth_for_tool(
     return None
 
 
+def _pick_tool_config_row(
+    rows: list[dict[str, Any]],
+    *,
+    installation_id: str | None,
+) -> dict[str, Any] | None:
+    """Prefer installation-scoped rows with non-empty config, then most recent."""
+    if not rows:
+        return None
+
+    def _score(row: dict[str, Any]) -> tuple[int, int, str]:
+        cfg = row.get("config")
+        filled = 1 if isinstance(cfg, dict) and any(v not in (None, "") for v in cfg.values()) else 0
+        inst = row.get("installation_id")
+        inst_match = 0
+        if installation_id:
+            inst_match = 2 if str(inst or "") == installation_id else (1 if inst is None else 0)
+        elif inst is None:
+            inst_match = 2
+        updated = str(row.get("updated_at") or row.get("last_validated_at") or "")
+        return (inst_match, filled, updated)
+
+    return max(rows, key=_score)
+
+
+def _config_from_row(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row:
+        return {}
+    cfg = row.get("config")
+    return dict(cfg) if isinstance(cfg, dict) else {}
+
+
+def _select_tool_config_row(
+    rows: list[dict[str, Any]],
+    *,
+    tool_id: str,
+    installation_id: str | None,
+) -> dict[str, Any] | None:
+    """Exact tool_id match first, then any sibling action in the same Pipedream app."""
+    from agent_service.integrations.app_keys import app_key_from_tool_id
+
+    exact = [r for r in rows if str(r.get("tool_id") or "") == tool_id]
+    picked = _pick_tool_config_row(exact, installation_id=installation_id)
+    if picked:
+        return picked
+
+    target_app = app_key_from_tool_id(tool_id)
+    if not target_app or target_app in {"pipedream", "pd"}:
+        return None
+
+    siblings = [
+        r
+        for r in rows
+        if app_key_from_tool_id(str(r.get("tool_id") or "")) == target_app
+    ]
+    return _pick_tool_config_row(siblings, installation_id=installation_id)
+
+
 async def load_agent_tool_config(
     *,
     user_id: str,
@@ -309,35 +366,48 @@ async def load_agent_tool_config(
     tool_id: str,
     installation_id: str | None = None,
 ) -> dict[str, Any]:
+    """Load Structure static props for a tool, falling back to same-app siblings.
+
+    Structure saves config against ``toolIds[0]`` while Live may call another
+    action in the same app (e.g. add-single-row vs add-multiple-rows).
+    """
+    select = (
+        "config,status,provider_action_id,connection_id,schema_version,"
+        "installation_id,updated_at,last_validated_at,tool_id"
+    )
     async with get_supabase_admin_client() as sb:
         params: dict[str, str] = {
             "user_id": f"eq.{user_id}",
             "agent_id": f"eq.{agent_id}",
             "tool_id": f"eq.{tool_id}",
-            "select": "config,status,provider_action_id,connection_id,schema_version,installation_id",
-            "limit": "1",
+            "select": select,
+            "order": "updated_at.desc",
         }
-        if installation_id:
-            params["installation_id"] = f"eq.{installation_id}"
         response = await sb.get("/agent_tool_configurations", params=params)
         if response.status_code >= 400:
             return {}
-        rows = response.json() or []
-        if not rows and installation_id:
-            # Legacy owner fallback without installation_id.
-            response = await sb.get(
-                "/agent_tool_configurations",
-                params={
-                    "user_id": f"eq.{user_id}",
-                    "agent_id": f"eq.{agent_id}",
-                    "tool_id": f"eq.{tool_id}",
-                    "installation_id": "is.null",
-                    "select": "config,status,provider_action_id,connection_id,schema_version",
-                    "limit": "1",
-                },
-            )
-            rows = response.json() or [] if response.status_code < 400 else []
-        if not rows:
+        rows = [r for r in (response.json() or []) if isinstance(r, dict)]
+        row = _select_tool_config_row(rows, tool_id=tool_id, installation_id=installation_id)
+        if row:
+            return _config_from_row(row)
+
+        from agent_service.integrations.app_keys import app_key_from_tool_id
+
+        target_app = app_key_from_tool_id(tool_id)
+        if not target_app or target_app in {"pipedream", "pd"}:
             return {}
-        cfg = rows[0].get("config")
-        return dict(cfg) if isinstance(cfg, dict) else {}
+
+        fallback = await sb.get(
+            "/agent_tool_configurations",
+            params={
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "select": select,
+                "order": "updated_at.desc",
+            },
+        )
+        if fallback.status_code >= 400:
+            return {}
+        all_rows = [r for r in (fallback.json() or []) if isinstance(r, dict)]
+        row = _select_tool_config_row(all_rows, tool_id=tool_id, installation_id=installation_id)
+        return _config_from_row(row)

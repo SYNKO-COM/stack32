@@ -584,6 +584,7 @@ class LiveRuntime:
                     conversation_summary=state.get("conversation_summary") or "",
                     user_message_content=user_message_content,
                     progress_message_id=progress_id,
+                    installation_id=installation_id,
                 )
                 answer = str(lg.get("answer") or "")
                 interrupt = lg.get("interrupt")

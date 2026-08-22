@@ -219,6 +219,7 @@ async def run_langgraph_agent(
     conversation_summary: str | None = None,
     user_message_content: str | list[dict[str, Any]] | None = None,
     progress_message_id: str | None = None,
+    installation_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute a ReAct-style LangGraph loop with tool calling and checkpoints."""
     from langgraph.graph import END, START, StateGraph
@@ -228,13 +229,17 @@ async def run_langgraph_agent(
     enabled_tools = [t.tool_id for t in spec.tools if t.enabled]
     tool_configs: dict[str, dict] = {}
     try:
-        from agent_service.integrations.pipedream.accounts import load_agent_tool_config
+        from agent_service.integrations.pipedream.tool_config import (
+            configured_tools_system_block,
+            resolve_agent_tool_configs,
+        )
 
-        for tid in enabled_tools:
-            if tid.startswith("pd:"):
-                tool_configs[tid] = await load_agent_tool_config(
-                    user_id=user_id, agent_id=agent_id, tool_id=tid
-                )
+        tool_configs = await resolve_agent_tool_configs(
+            spec,
+            user_id=user_id,
+            agent_id=agent_id,
+            installation_id=installation_id,
+        )
     except Exception:  # noqa: BLE001
         tool_configs = {}
     tool_schemas = await async_schemas_for_tools(enabled_tools, tool_configs=tool_configs)
@@ -334,6 +339,14 @@ async def run_langgraph_agent(
         memory_addon = (spec.memory.system_addon() or "").strip()
     if memory_addon:
         system = system + "\n\n" + memory_addon
+    try:
+        from agent_service.integrations.pipedream.tool_config import configured_tools_system_block
+
+        tools_block = configured_tools_system_block(spec, tool_configs)
+        if tools_block:
+            system = system + "\n\n" + tools_block
+    except Exception:  # noqa: BLE001
+        pass
     system = system[:12000]
 
     # Inject the rolling conversation summary so long threads keep continuity beyond
@@ -559,6 +572,9 @@ async def run_langgraph_agent(
                             "thread_id": thread_id,
                             "run_id": run_id,
                             "approved_tool_ids": approved_ids,
+                            "installation_id": installation_id,
+                            "tool_configs": tool_configs,
+                            "tool_config": tool_configs.get(call.tool_id),
                         },
                     )
                     if isinstance(obs, dict) and obs.get("error") == "CONNECTION_REQUIRED":

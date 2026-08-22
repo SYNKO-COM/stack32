@@ -292,8 +292,18 @@ async def async_schemas_for_tools(
         # If static fields are already configured on the agent, hide them from the LLM.
         static_schema = schema_payload.get("static_schema") or {}
         static_props = (static_schema.get("properties") or {}) if isinstance(static_schema, dict) else {}
+        app_id = schema_payload.get("provider_app_id")
+        try:
+            from agent_service.integrations.pipedream.tool_config import is_static_prop_configured
+        except Exception:  # noqa: BLE001
+            is_static_prop_configured = None  # type: ignore[assignment,misc]
         for key in list(props.keys()):
-            if key in configured and key in static_props:
+            filled = (
+                is_static_prop_configured(key, configured, app_id=app_id)
+                if is_static_prop_configured
+                else key in configured and configured[key] not in (None, "")
+            )
+            if filled and key in static_props:
                 props.pop(key, None)
         required = [
             r
@@ -302,7 +312,12 @@ async def async_schemas_for_tools(
         ]
         # Also surface unconfigured required static props so the model can ask / fail clearly
         for key, meta in static_props.items():
-            if key not in configured and key not in props:
+            filled = (
+                is_static_prop_configured(key, configured, app_id=app_id)
+                if is_static_prop_configured
+                else key in configured and configured[key] not in (None, "")
+            )
+            if not filled and key not in props:
                 props[key] = meta
                 if key in (static_schema.get("required") or []):
                     required.append(key)

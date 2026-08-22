@@ -342,6 +342,10 @@ async def evaluate_agent_readiness(
 
         try:
             from agent_service.integrations.pipedream.accounts import load_agent_tool_config
+            from agent_service.integrations.pipedream.tool_config import (
+                is_static_prop_configured,
+                merge_binding_and_stored_config,
+            )
 
             pd = registry.get_provider("pipedream")
             for binding in parsed.tools:
@@ -365,9 +369,15 @@ async def evaluate_agent_readiness(
                     installation_id=installation_id,
                 )
                 binding_cfg = binding.config if isinstance(binding.config, dict) else {}
-                merged = {**binding_cfg, **stored}
+                merged = merge_binding_and_stored_config(
+                    binding_config=binding_cfg,
+                    stored_config=stored,
+                )
+                app_id = schema_payload.get("provider_app_id") or getattr(binding, "app_id", None)
                 missing_keys = [
-                    k for k in required_static if k not in merged or merged[k] in (None, "")
+                    k
+                    for k in required_static
+                    if not is_static_prop_configured(k, merged, app_id=app_id)
                 ]
                 if missing_keys:
                     missing_config.append(
