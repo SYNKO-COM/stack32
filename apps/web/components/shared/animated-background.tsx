@@ -41,8 +41,9 @@ export function AnimatedBackground({ variant = "marketing", className }: Animate
 
       {variant === "editor" ? (
         <>
-          {/* Solid wash only — no brand glow behind Build / Structure / Live. */}
-          <div className="absolute inset-0 bg-background/40 dark:bg-background/50" />
+          <div className="absolute -top-1/4 left-1/2 h-[40vh] w-[50vw] -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--brand-from)_14%,transparent)] opacity-25 blur-[140px] dark:opacity-15" />
+          {/* Light wash kept very light so the dotted grid stays readable. */}
+          <div className="absolute inset-0 bg-background/15 dark:bg-black/20" />
         </>
       ) : null}
 

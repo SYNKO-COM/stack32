@@ -462,7 +462,7 @@ export function PromptComposer({
 
       <div
         className={cn(
-          "glass-strong border border-border/60 transition-colors",
+          "glass-strong shadow-glow-sm transition-shadow focus-within:shadow-glow",
           size === "hero"
             ? "rounded-[24px] p-4 sm:rounded-[28px] sm:p-5 md:rounded-[32px] md:p-6"
             : "rounded-[28px] p-3",
