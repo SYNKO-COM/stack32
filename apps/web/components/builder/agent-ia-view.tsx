@@ -20,6 +20,7 @@ import { useLiveThread } from "@/hooks/use-live";
 import { useRunEventStream } from "@/hooks/use-run-sse";
 import { useTranslation } from "@/hooks/use-translation";
 import { cancelLiveRun } from "@/lib/actions/live";
+import { isStaleInflightMessage } from "@/lib/chat/backend-failure";
 import {
   getAgentTriggerRuntime,
   startAgentTriggerListen,
@@ -28,6 +29,7 @@ import {
 import { listAgentConnections } from "@/lib/actions/connections";
 import { getAgentReadiness } from "@/lib/actions/integrations";
 import type { ExecutionVisualState } from "@/lib/domain/execution-state";
+import { mergeOptimisticLiveChatTurn } from "@/lib/domain/execution-state";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ApprovalMode } from "@/lib/domain/types";
 import { appsEquivalent } from "@/lib/integrations/app-grouping";
@@ -151,6 +153,18 @@ export function AgentIaView({
   const liveRunId = messageRunId || activeRunQuery.data?.id || null;
   const visualRunId =
     liveRunId && !ignoredRunIds.includes(liveRunId) ? liveRunId : null;
+
+  /** True from optimistic send until the assistant reply lands (or turn goes stale). */
+  const liveTurnInFlight = useMemo(() => {
+    const messages = liveThread?.messages ?? [];
+    if (messages.some((m) => m.pending)) return true;
+    const last = messages.at(-1);
+    return Boolean(
+      last?.role === "user" &&
+        last.createdAt &&
+        !isStaleInflightMessage(last.createdAt),
+    );
+  }, [liveThread?.messages]);
 
   const connectionsQuery = useQuery({
     queryKey: ["agent-connections", agentId, installationId ?? "default"],
@@ -322,6 +336,12 @@ export function AgentIaView({
     };
   }, [draftAwake, executionVisual, productGraph.edges, productGraph.nodes, visualRunId]);
 
+  const structureExecutionVisual = useMemo(() => {
+    const base = wakeExecutionVisual ?? executionVisual;
+    if (!liveTurnInFlight) return base;
+    return mergeOptimisticLiveChatTurn(base, productGraph);
+  }, [wakeExecutionVisual, executionVisual, liveTurnInFlight, productGraph]);
+
   const startDraftWake = () => {
     if (consumer || agentPublished || structureLocked) return;
     setWakeError(null);
@@ -488,7 +508,7 @@ export function AgentIaView({
       boundAppIds={boundAppIds}
       modelStatus={modelStatus}
       memoryStatus={memoryStatus}
-      executionVisual={wakeExecutionVisual ?? executionVisual}
+      executionVisual={structureExecutionVisual}
       readOnly={structureLocked}
       allowInstallationConfig={allowInstallationConfig}
       onConnectionsChanged={

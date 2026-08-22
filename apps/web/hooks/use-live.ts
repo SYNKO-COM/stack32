@@ -56,33 +56,48 @@ export function useSendLiveMessage(agentId: string) {
       const attachments = typeof input === "string" ? undefined : input.attachments;
       await queryClient.cancelQueries({ queryKey: ["live", agentId] });
       const previous = queryClient.getQueryData<LiveThread>(["live", agentId]);
-      if (previous) {
-        const optimisticId = `optimistic-${Date.now()}`;
-        const optimisticAttachments = attachments?.length
-          ? attachments.map((a) => ({
-              id: a.id,
-              name: a.name,
-              mimeType: a.mimeType,
-              kind: a.kind,
-              url: a.previewUrl,
-              sizeBytes: a.size,
-            }))
-          : undefined;
-        queryClient.setQueryData<LiveThread>(["live", agentId], {
-          ...previous,
-          messages: [
-            ...previous.messages,
-            {
-              id: optimisticId,
-              threadId: previous.id,
-              role: "user",
-              content,
-              attachments: optimisticAttachments,
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        });
-      }
+      const now = new Date().toISOString();
+      const base: LiveThread =
+        previous ??
+        ({
+          id: `optimistic-thread-${agentId}`,
+          agentId,
+          messages: [],
+        } as LiveThread);
+      const optimisticAttachments = attachments?.length
+        ? attachments.map((a) => ({
+            id: a.id,
+            name: a.name,
+            mimeType: a.mimeType,
+            kind: a.kind,
+            url: a.previewUrl,
+            sizeBytes: a.size,
+          }))
+        : undefined;
+      queryClient.setQueryData<LiveThread>(["live", agentId], {
+        ...base,
+        messages: [
+          ...base.messages,
+          {
+            id: `optimistic-user-${Date.now()}`,
+            threadId: base.id,
+            role: "user",
+            content,
+            attachments: optimisticAttachments,
+            createdAt: now,
+          },
+          {
+            id: `optimistic-assistant-${Date.now()}`,
+            threadId: base.id,
+            role: "assistant",
+            content: "",
+            pending: true,
+            statusKey: "started",
+            createdAt: now,
+          },
+        ],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["active-live-run", agentId] });
       return { previous };
     },
     onError: (error, _vars, context) => {

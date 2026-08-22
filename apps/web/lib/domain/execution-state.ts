@@ -387,6 +387,50 @@ export function reduceExecutionEvents(
   return { runStatus, nodes, edges, legacy, error, nodeErrors };
 }
 
+/**
+ * Instant Structure feedback while a Live turn is in flight but run_events
+ * have not arrived yet (optimistic send / SSE lag).
+ */
+export function mergeOptimisticLiveChatTurn(
+  base: ExecutionVisualState | undefined,
+  graph: ProductAgentGraph | null,
+): ExecutionVisualState {
+  const hasChat = graph?.nodes.some((n) => n.id === "trigger:chat") ?? true;
+  const nodes: Record<string, NodeVisualState> = { ...(base?.nodes ?? {}) };
+  const edges: Record<string, EdgeVisualState> = { ...(base?.edges ?? {}) };
+  const legacy: Record<string, ModuleExecState> = { ...(base?.legacy ?? {}) };
+
+  if (hasChat) {
+    nodes["trigger:chat"] = { executionStatus: "success" };
+    legacy.input = "success";
+    legacy["trigger:chat"] = "success";
+    const chatEdge = graph?.edges.find(
+      (e) => e.source === "trigger:chat" && e.target === "agent",
+    );
+    if (chatEdge) {
+      edges[chatEdge.id] = { executionStatus: "success" };
+    }
+  }
+
+  const agentStatus = nodes.agent?.executionStatus;
+  if (!agentStatus || agentStatus === "idle") {
+    nodes.agent = { executionStatus: "running" };
+    legacy.brain = "running";
+  }
+
+  const runStatus =
+    base?.runStatus && base.runStatus !== "idle" ? base.runStatus : "running";
+
+  return {
+    runStatus,
+    nodes,
+    edges,
+    legacy,
+    error: base?.error ?? null,
+    nodeErrors: base?.nodeErrors,
+  };
+}
+
 /** Backward-compatible flat map reducer. */
 export function reduceExecutionState(events: LiveEventPayload[]): Record<string, ModuleExecState> {
   return reduceExecutionEvents(events).legacy;

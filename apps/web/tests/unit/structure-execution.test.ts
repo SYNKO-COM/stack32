@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { reduceExecutionState } from "@/hooks/use-live-execution";
 import { buildAgentModules } from "@/lib/domain/agent-modules";
-import { reduceExecutionEvents } from "@/lib/domain/execution-state";
+import { mergeOptimisticLiveChatTurn, reduceExecutionEvents } from "@/lib/domain/execution-state";
+import type { ProductAgentGraph } from "@/lib/domain/product-agent-graph";
 import type { AgentSpec } from "@/lib/domain/types";
 
 function baseSpec(tools: AgentSpec["tools"]): AgentSpec {
@@ -59,6 +60,39 @@ describe("structure module filtering", () => {
 });
 
 describe("live execution state mapping", () => {
+  it("optimistically lights Chat trigger while a turn is in flight", () => {
+    const graph: ProductAgentGraph = {
+      nodes: [
+        {
+          id: "trigger:chat",
+          kind: "trigger_chat",
+          label: "Chat",
+          configurationStatus: "ready",
+        },
+        {
+          id: "agent",
+          kind: "agent",
+          label: "AI Agent",
+          configurationStatus: "ready",
+        },
+      ],
+      edges: [
+        {
+          id: "trigger:chat→agent",
+          source: "trigger:chat",
+          target: "agent",
+          style: "dashed",
+          role: "main",
+        },
+      ],
+    };
+    const merged = mergeOptimisticLiveChatTurn(undefined, graph);
+    expect(merged.runStatus).toBe("running");
+    expect(merged.nodes["trigger:chat"]?.executionStatus).toBe("success");
+    expect(merged.nodes.agent?.executionStatus).toBe("running");
+    expect(merged.edges["trigger:chat→agent"]?.executionStatus).toBe("success");
+  });
+
   it("maps tool events to exact tool ids", () => {
     const state = reduceExecutionState([
       { eventType: "runtime.input.received" },
