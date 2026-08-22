@@ -64,18 +64,19 @@ See [`CODING_AGENT_UPGRADE_BASELINE.md`](CODING_AGENT_UPGRADE_BASELINE.md).
 
 - `tests/benchmarks/test_builder_routing_benchmark.py` — 18 routing scenarios.
 
-### Phase 10 — Prod rollout checklist
+### Phase 10 — Prod rollout (done 2026-08-22)
 
-1. **Cloud Run env** (agent-service):
-   - `MODEL_FAST_PRIMARY=openai/gpt-5.6-luna`
-   - `MODEL_BALANCED_PRIMARY=openai/gpt-5.6-terra`
-   - `MODEL_CODING_PRIMARY=openai/gpt-5.6-terra`
-   - `MODEL_CODING_EXPERT=openai/gpt-5.6-sol`
-   - `MODEL_CODING_EXTERNAL_EXPERT=anthropic/claude-sonnet-5`
-   - Remove xAI from platform fallbacks (keep `XAI_API_KEY` for BYOK only).
-2. **Supabase**: `supabase db push` — apply `20260831000002_llm_usage_and_reservations.sql`.
-3. **Smoke**: one CREATE + one REPAIR (Sheets) on staging; verify `llm_usage_events` rows.
-4. **Validate model IDs** against provider docs before prod promotion.
+| Step | Status |
+|------|--------|
+| Commit `411e840` on `main` | Done |
+| Secret `stack32-production-anthropic-api-key` + Cloud Run `ANTHROPIC_API_KEY` | Done |
+| Cloud Run `MODEL_*` Luna/Terra/Sol/Sonnet | Done (revision `stack32-agent-api-00062-jkc`) |
+| Supabase migration `20260831000002` + pricing seed (5 rows) | Done |
+| Vercel prod (`stack32.com`) billing TS | Done |
+| Provider smoke Luna + Claude Sonnet 5 | Done (`OK`) |
+| API `/ready` | 200 |
+
+**Still manual (product smoke):** one Builder CREATE + one Live/Sheets REPAIR in the UI, then confirm rows in `llm_usage_events`.
 
 ## Tests added
 
