@@ -9,6 +9,41 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      agent_access_requests: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          requester_id: string
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          requester_id: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          requester_id?: string
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_access_requests_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_approval_requests: {
         Row: {
           action_summary: string
@@ -258,6 +293,70 @@ export type Database = {
             columns: ["pinned_version_id"]
             isOneToOne: false
             referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_listing_purchases: {
+        Row: {
+          agent_id: string
+          amount_cents: number
+          buyer_id: string
+          created_at: string
+          currency: string
+          id: string
+        }
+        Insert: {
+          agent_id: string
+          amount_cents: number
+          buyer_id: string
+          created_at?: string
+          currency?: string
+          id?: string
+        }
+        Update: {
+          agent_id?: string
+          amount_cents?: number
+          buyer_id?: string
+          created_at?: string
+          currency?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_listing_purchases_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_listing_views: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          viewer_id: string | null
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          viewer_id?: string | null
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          viewer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_listing_views_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
             referencedColumns: ["id"]
           },
         ]
@@ -518,6 +617,44 @@ export type Database = {
             columns: ["current_snapshot_id"]
             isOneToOne: false
             referencedRelation: "agent_project_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_reviews: {
+        Row: {
+          agent_id: string
+          body: string | null
+          created_at: string
+          id: string
+          rating: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          body?: string | null
+          created_at?: string
+          id?: string
+          rating: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          body?: string | null
+          created_at?: string
+          id?: string
+          rating?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_reviews_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
             referencedColumns: ["id"]
           },
         ]
@@ -795,39 +932,111 @@ export type Database = {
           },
         ]
       }
+      agent_trigger_events: {
+        Row: {
+          id: string
+          payload: Json
+          provider_event_id: string
+          received_at: string
+          run_id: string | null
+          trigger_id: string
+        }
+        Insert: {
+          id?: string
+          payload?: Json
+          provider_event_id: string
+          received_at?: string
+          run_id?: string | null
+          trigger_id: string
+        }
+        Update: {
+          id?: string
+          payload?: Json
+          provider_event_id?: string
+          received_at?: string
+          run_id?: string | null
+          trigger_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_trigger_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_trigger_events_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "agent_triggers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_triggers: {
         Row: {
           agent_id: string
+          app_id: string | null
+          component_id: string | null
           config: Json
           created_at: string
+          deployed_source_id: string | null
           enabled: boolean
           id: string
+          installation_id: string | null
+          last_error: string | null
+          last_event_at: string | null
+          listening_until: string | null
+          mode: string
           provider: string
+          status: string
           trigger_type: string
           updated_at: string
           user_id: string
+          webhook_signing_key: string | null
         }
         Insert: {
           agent_id: string
+          app_id?: string | null
+          component_id?: string | null
           config?: Json
           created_at?: string
+          deployed_source_id?: string | null
           enabled?: boolean
           id?: string
+          installation_id?: string | null
+          last_error?: string | null
+          last_event_at?: string | null
+          listening_until?: string | null
+          mode?: string
           provider: string
+          status?: string
           trigger_type: string
           updated_at?: string
           user_id: string
+          webhook_signing_key?: string | null
         }
         Update: {
           agent_id?: string
+          app_id?: string | null
+          component_id?: string | null
           config?: Json
           created_at?: string
+          deployed_source_id?: string | null
           enabled?: boolean
           id?: string
+          installation_id?: string | null
+          last_error?: string | null
+          last_event_at?: string | null
+          listening_until?: string | null
+          mode?: string
           provider?: string
+          status?: string
           trigger_type?: string
           updated_at?: string
           user_id?: string
+          webhook_signing_key?: string | null
         }
         Relationships: [
           {
@@ -835,6 +1044,13 @@ export type Database = {
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_triggers_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
             referencedColumns: ["id"]
           },
         ]
@@ -912,6 +1128,7 @@ export type Database = {
           icon_key: string | null
           id: string
           last_opened_at: string | null
+          listing_billing_interval: string
           listing_currency: string
           listing_price_cents: number
           listing_tagline: string | null
@@ -935,6 +1152,7 @@ export type Database = {
           icon_key?: string | null
           id?: string
           last_opened_at?: string | null
+          listing_billing_interval?: string
           listing_currency?: string
           listing_price_cents?: number
           listing_tagline?: string | null
@@ -958,6 +1176,7 @@ export type Database = {
           icon_key?: string | null
           id?: string
           last_opened_at?: string | null
+          listing_billing_interval?: string
           listing_currency?: string
           listing_price_cents?: number
           listing_tagline?: string | null
@@ -1427,6 +1646,48 @@ export type Database = {
           },
         ]
       }
+      credit_topups: {
+        Row: {
+          amount_paid_usd: number
+          budget_usd: number
+          created_at: string
+          credits: number
+          id: string
+          metadata: Json
+          provider: string
+          provider_checkout_id: string | null
+          provider_payment_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount_paid_usd: number
+          budget_usd: number
+          created_at?: string
+          credits: number
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_checkout_id?: string | null
+          provider_payment_id?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount_paid_usd?: number
+          budget_usd?: number
+          created_at?: string
+          credits?: number
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_checkout_id?: string | null
+          provider_payment_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_deliveries: {
         Row: {
           agent_id: string | null
@@ -1817,6 +2078,161 @@ export type Database = {
           },
         ]
       }
+      llm_budget_reservations: {
+        Row: {
+          consumed_usd: number
+          created_at: string
+          id: string
+          idempotency_key: string
+          metadata: Json
+          reserved_credits: number
+          reserved_usd: number
+          run_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          consumed_usd?: number
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          reserved_credits?: number
+          reserved_usd?: number
+          run_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          consumed_usd?: number
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          reserved_credits?: number
+          reserved_usd?: number
+          run_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      llm_usage_events: {
+        Row: {
+          agent_id: string | null
+          billing_interval: string | null
+          billing_period_id: string | null
+          cached_input_tokens: number
+          created_at: string
+          credits_debited: number
+          credits_monthly: number | null
+          credits_refunded: number
+          credits_reserved: number
+          error_code: string | null
+          estimated_cost_usd: number
+          final_cost_usd: number
+          id: string
+          idempotency_key: string
+          input_tokens: number
+          latency_ms: number
+          metadata: Json
+          model: string
+          output_tokens: number
+          plan_key: string | null
+          platform_paid: boolean
+          profile: string
+          provider: string
+          provider_cost_usd: number | null
+          reasoning_effort: string | null
+          reasoning_tokens: number
+          run_id: string | null
+          source: string
+          stage: string | null
+          success: boolean
+          thread_id: string | null
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          billing_interval?: string | null
+          billing_period_id?: string | null
+          cached_input_tokens?: number
+          created_at?: string
+          credits_debited?: number
+          credits_monthly?: number | null
+          credits_refunded?: number
+          credits_reserved?: number
+          error_code?: string | null
+          estimated_cost_usd?: number
+          final_cost_usd?: number
+          id?: string
+          idempotency_key: string
+          input_tokens?: number
+          latency_ms?: number
+          metadata?: Json
+          model: string
+          output_tokens?: number
+          plan_key?: string | null
+          platform_paid?: boolean
+          profile: string
+          provider: string
+          provider_cost_usd?: number | null
+          reasoning_effort?: string | null
+          reasoning_tokens?: number
+          run_id?: string | null
+          source?: string
+          stage?: string | null
+          success?: boolean
+          thread_id?: string | null
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          billing_interval?: string | null
+          billing_period_id?: string | null
+          cached_input_tokens?: number
+          created_at?: string
+          credits_debited?: number
+          credits_monthly?: number | null
+          credits_refunded?: number
+          credits_reserved?: number
+          error_code?: string | null
+          estimated_cost_usd?: number
+          final_cost_usd?: number
+          id?: string
+          idempotency_key?: string
+          input_tokens?: number
+          latency_ms?: number
+          metadata?: Json
+          model?: string
+          output_tokens?: number
+          plan_key?: string | null
+          platform_paid?: boolean
+          profile?: string
+          provider?: string
+          provider_cost_usd?: number | null
+          reasoning_effort?: string | null
+          reasoning_tokens?: number
+          run_id?: string | null
+          source?: string
+          stage?: string | null
+          success?: boolean
+          thread_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "llm_usage_events_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       llm_validations: {
         Row: {
           agent_id: string | null
@@ -1873,6 +2289,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      model_pricing_registry: {
+        Row: {
+          budget_reservation_input_usd_per_m: number | null
+          budget_reservation_output_usd_per_m: number | null
+          cached_input_usd_per_m: number
+          created_at: string
+          effective_from: string
+          effective_until: string | null
+          id: string
+          input_usd_per_m: number
+          model: string
+          output_usd_per_m: number
+          provider: string
+          source_version: string
+        }
+        Insert: {
+          budget_reservation_input_usd_per_m?: number | null
+          budget_reservation_output_usd_per_m?: number | null
+          cached_input_usd_per_m?: number
+          created_at?: string
+          effective_from?: string
+          effective_until?: string | null
+          id?: string
+          input_usd_per_m: number
+          model: string
+          output_usd_per_m: number
+          provider: string
+          source_version?: string
+        }
+        Update: {
+          budget_reservation_input_usd_per_m?: number | null
+          budget_reservation_output_usd_per_m?: number | null
+          cached_input_usd_per_m?: number
+          created_at?: string
+          effective_from?: string
+          effective_until?: string | null
+          id?: string
+          input_usd_per_m?: number
+          model?: string
+          output_usd_per_m?: number
+          provider?: string
+          source_version?: string
+        }
+        Relationships: []
       }
       oauth_connection_states: {
         Row: {
@@ -1979,6 +2440,33 @@ export type Database = {
           role_other_detail?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      pipedream_component_cache: {
+        Row: {
+          app_id: string | null
+          component_key: string
+          component_type: string
+          fetched_at: string
+          payload: Json
+          version: string | null
+        }
+        Insert: {
+          app_id?: string | null
+          component_key: string
+          component_type?: string
+          fetched_at?: string
+          payload?: Json
+          version?: string | null
+        }
+        Update: {
+          app_id?: string | null
+          component_key?: string
+          component_type?: string
+          fetched_at?: string
+          payload?: Json
+          version?: string | null
         }
         Relationships: []
       }
@@ -2355,48 +2843,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      credit_topups: {
-        Row: {
-          amount_paid_usd: number
-          budget_usd: number
-          created_at: string
-          credits: number
-          id: string
-          metadata: Json
-          provider: string
-          provider_checkout_id: string | null
-          provider_payment_id: string | null
-          status: string
-          user_id: string
-        }
-        Insert: {
-          amount_paid_usd: number
-          budget_usd: number
-          created_at?: string
-          credits: number
-          id?: string
-          metadata?: Json
-          provider?: string
-          provider_checkout_id?: string | null
-          provider_payment_id?: string | null
-          status?: string
-          user_id: string
-        }
-        Update: {
-          amount_paid_usd?: number
-          budget_usd?: number
-          created_at?: string
-          credits?: number
-          id?: string
-          metadata?: Json
-          provider?: string
-          provider_checkout_id?: string | null
-          provider_payment_id?: string | null
-          status?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       subscriptions: {
         Row: {
@@ -3025,6 +3471,7 @@ export type Database = {
           first_name: string | null
           full_name: string | null
           id: string
+          live_user_message_count: number
           locale: string
           onboarding_completed: boolean
           onboarding_completed_at: string | null
@@ -3073,6 +3520,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      effective_ai_budget_usd: {
+        Args: {
+          p_billing_interval: string
+          p_credits_monthly: number
+          p_effective_monthly_revenue_usd?: number
+          p_plan_key: string
+        }
+        Returns: number
+      }
       get_my_credit_usage: { Args: never; Returns: Json }
       heartbeat_run_queue_job: {
         Args: { p_lease_seconds?: number; p_owner: string; p_run_id: string }
@@ -3102,6 +3558,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      list_agent_access_requests: {
+        Args: { p_agent_id: string }
+        Returns: Json
+      }
+      list_agent_audience: { Args: { p_agent_id: string }; Returns: Json }
+      list_agent_reviews: { Args: { p_agent_id: string }; Returns: Json }
+      list_marketplace_agents: { Args: never; Returns: Json }
       match_agent_memories: {
         Args: {
           p_agent_id: string
@@ -3134,6 +3597,7 @@ export type Database = {
           source_id: string
         }[]
       }
+      prepare_account_deletion: { Args: { p_user_id: string }; Returns: Json }
       resolve_published_agent: {
         Args: { p_agent_slug: string; p_username: string }
         Returns: Json
@@ -3162,6 +3626,7 @@ export type Database = {
           first_name: string | null
           full_name: string | null
           id: string
+          live_user_message_count: number
           locale: string
           onboarding_completed: boolean
           onboarding_completed_at: string | null

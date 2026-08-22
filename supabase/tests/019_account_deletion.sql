@@ -49,7 +49,11 @@ values
   'private'
 );
 
+-- prepare_account_deletion gates on auth.role(), which reads the JWT claims —
+-- setting the Postgres role alone leaves auth.role() empty and the function
+-- correctly raises not_authorized. Simulate the Edge Function's service token.
 set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select is(
   (public.prepare_account_deletion('cccccccc-cccc-cccc-cccc-cccccccccccc')->>'mode'),
