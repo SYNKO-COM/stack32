@@ -80,11 +80,26 @@ def tools_changed(
     return proposed_keys != reviewable_app_keys(current)
 
 
+def has_tool_add_or_remove(
+    *,
+    proposed: list[ToolBinding],
+    current: list[ToolBinding] | None,
+) -> bool:
+    """True only when at least one product app would be added or removed."""
+    return tools_changed(proposed=proposed, current=current)
+
+
 def prompt_implies_tool_change(prompt: str) -> bool:
-    """Heuristic: user wants to add/remove/change integrations (post-Ready edits)."""
+    """Heuristic: user wants to add/remove/change integrations (post-Ready edits).
+
+    Used to clear a prior tools_confirmed lock so a later generate_spec can propose
+    a new app set — not to force the review form by itself.
+    """
     text = (prompt or "").strip().lower()
     if not text:
         return False
+    # Narrow markers: explicit tool/integration intent — NOT domain words like
+    # "facture" / "sheets" that appear in ordinary repair prompts.
     markers = (
         "outil",
         "outils",
@@ -105,26 +120,15 @@ def prompt_implies_tool_change(prompt: str) -> bool:
         "supprime",
         "enlève",
         "enleve",
-        "gmail",
-        "google sheets",
-        "google_sheets",
-        "sheets",
-        "comptab",
-        "facture",
-        "dépense",
-        "depense",
-        "stripe",
-        "quickbooks",
-        "xero",
-        "notion",
-        "slack",
-        "hubspot",
-        "airtable",
-        "calendar",
-        "drive",
+        "pas mis d'outil",
+        "pas d'outil",
+        "manque un outil",
+        "manque d'outil",
+        "manque d'outils",
     )
     if any(m in text for m in markers):
         return True
+    # Explicit "ajoute/retire <app>" style via catalog query extractor.
     from agent_service.builder.capabilities import extract_external_app_queries
 
     return bool(extract_external_app_queries(text))
@@ -138,20 +142,32 @@ def should_interrupt_tool_review(
     prompt: str,
     is_first_build: bool,
 ) -> bool:
-    """Mandatory tool review before first Ready; reopen when tools or intent change."""
+    """Show the tool form only when apps are actually added or removed.
+
+    Repair / config fixes / ordinary prompts must not open the form when the
+    reviewable app set is unchanged. First build still confirms the initial set.
+    """
     if capabilities.get("tools_confirmed") and isinstance(
         capabilities.get("confirmed_spec"), dict
     ):
         return False
-    if is_first_build:
+
+    # Sole gate after confirmation (and for first proposal): real add/remove.
+    if not has_tool_add_or_remove(proposed=proposed, current=current):
+        return False
+
+    # First build with apps → always confirm once.
+    if is_first_build or current is None:
         return True
+
     from agent_service.builder.capabilities import is_live_tool_repair_prompt
 
+    # Live repair: only if the proposed set actually changed (e.g. sibling action
+    # under a new app). Unchanged toolset never interrupts.
     if is_live_tool_repair_prompt(prompt):
-        return tools_changed(proposed=proposed, current=current)
-    if tools_changed(proposed=proposed, current=current):
-        return True
-    return prompt_implies_tool_change(prompt)
+        return True  # has_tool_add_or_remove already True above
+
+    return True
 
 
 def _title_case(slug: str) -> str:

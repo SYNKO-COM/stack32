@@ -171,9 +171,25 @@ def test_prompt_implies_tool_change_french():
     assert prompt_implies_tool_change("Change le ton en amical") is False
 
 
-def test_should_interrupt_first_build_even_without_apps():
+def test_should_interrupt_first_build_natives_only_skips():
+    """No product apps → no tool form, even on first build."""
     caps: dict = {}
     proposed = [ToolBinding(tool_id="web_search", provider="native")]
+    assert (
+        should_interrupt_tool_review(
+            capabilities=caps,
+            proposed=proposed,
+            current=None,
+            prompt="Agent comptabilité",
+            is_first_build=True,
+        )
+        is False
+    )
+
+
+def test_should_interrupt_first_build_with_apps():
+    caps: dict = {}
+    proposed = [ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail")]
     assert (
         should_interrupt_tool_review(
             capabilities=caps,
@@ -203,7 +219,37 @@ def test_should_interrupt_skips_when_tools_confirmed():
     )
 
 
-def test_should_interrupt_post_ready_tool_intent():
+def test_should_interrupt_repair_prompt_without_tool_change_skips():
+    """'résous le problème' must not open the tool form when apps are unchanged."""
+    tools = [
+        ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail"),
+        ToolBinding(tool_id="sheets_update", provider="pipedream", app_id="google_sheets"),
+    ]
+    assert (
+        should_interrupt_tool_review(
+            capabilities={},
+            proposed=list(tools),
+            current=list(tools),
+            prompt="résous le problème",
+            is_first_build=False,
+        )
+        is False
+    )
+    # Even if first_ready was never celebrated, keep-only must not interrupt.
+    assert (
+        should_interrupt_tool_review(
+            capabilities={},
+            proposed=list(tools),
+            current=list(tools),
+            prompt="résous le problème",
+            is_first_build=True,
+        )
+        is False
+    )
+
+
+def test_should_interrupt_post_ready_tool_intent_without_change_skips():
+    """Prompt intent alone is not enough — apps must actually change."""
     caps: dict = {}
     proposed = [ToolBinding(tool_id="web_search", provider="native")]
     current = [ToolBinding(tool_id="web_search", provider="native")]
@@ -215,7 +261,7 @@ def test_should_interrupt_post_ready_tool_intent():
             prompt="Ajoute Gmail pour lire les factures",
             is_first_build=False,
         )
-        is True
+        is False
     )
 
 
@@ -235,6 +281,23 @@ def test_should_interrupt_post_ready_when_apps_change():
         is True
     )
 
+
+def test_prompt_implies_tool_change_ignores_domain_words():
+    assert prompt_implies_tool_change("résous le problème des factures") is False
+    assert prompt_implies_tool_change("Change le ton en amical") is False
+    assert prompt_implies_tool_change("Ajoute Google Sheets pour ma comptabilité") is True
+    assert prompt_implies_tool_change("Supprime Gmail de cet agent") is True
+    # Even if a catalog app is mentioned for repair, interrupt still requires tools_changed.
+    assert (
+        should_interrupt_tool_review(
+            capabilities={},
+            proposed=[ToolBinding(tool_id="sheets_update", provider="pipedream", app_id="google_sheets")],
+            current=[ToolBinding(tool_id="sheets_update", provider="pipedream", app_id="google_sheets")],
+            prompt="Corrige Google Sheets",
+            is_first_build=False,
+        )
+        is False
+    )
 
 def test_live_repair_skips_tool_review_when_tools_unchanged():
     tools = [

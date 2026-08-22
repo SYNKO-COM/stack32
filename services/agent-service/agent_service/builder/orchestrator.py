@@ -1479,6 +1479,9 @@ class BuilderOrchestrator:
             goal=goal,
             locale=locale,
         )
+        # Hard gate: never block the user on a keep-only form (repair / no-op).
+        if not any(str(e.get("change") or "") in {"add", "remove"} for e in entries):
+            return None
         entries = await enrich_utilities_with_llm(
             entries,
             goal=goal,
