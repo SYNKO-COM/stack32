@@ -1,0 +1,9 @@
+{
+  "_meta": {
+    "purpose": "Auto-generated app hints from Pipedream component schemas (batch enrich script)",
+    "updated": "2026-08-22",
+    "app_count": 0,
+    "note": "Run scripts/enrich_pipedream_catalog.py with Pipedream credentials to populate. Curated app_hints.json overrides these entries."
+  },
+  "apps": {}
+}

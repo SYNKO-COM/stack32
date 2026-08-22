@@ -89,6 +89,22 @@ _CRITICAL_REQUIRED_STATIC = frozenset(
     }
 )
 
+# Advanced Structure fields — optional even when remoteOptions.
+_ADVANCED_ONLY_STATIC = frozenset(
+    {
+        "hasheaders",
+        "headerrownumber",
+        "watchdrive",
+        "drive",
+        "driveid",
+        "timer",
+        "asuser",
+        "as_user",
+        "ignorelinebreaks",
+        "includelinebreaks",
+    }
+)
+
 
 @dataclass
 class NormalizedProp:
@@ -311,6 +327,13 @@ def normalize_configurable_props(
         # even when Pipedream marks them optional — deploy fails without them.
         compact = prop.name.lower().replace("_", "").replace("-", "")
         if prop.kind == "static" and compact in _CRITICAL_REQUIRED_STATIC:
+            prop.required = True
+        # Any remoteOptions picker is a Structure resource — required unless advanced-only.
+        if (
+            prop.kind == "static"
+            and prop.remote_options
+            and compact not in _ADVANCED_ONLY_STATIC
+        ):
             prop.required = True
 
     return NormalizedToolSchema(

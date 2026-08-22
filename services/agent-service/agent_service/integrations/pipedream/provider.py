@@ -125,6 +125,19 @@ class PipedreamToolProvider:
         )
         self._cache_set(self._schema_cache, tool_id, schema)
         self._cache_set(self._schema_cache, f"pd:{key}", schema)
+        if schema.app_id:
+            try:
+                from agent_service.integrations.pipedream.auto_hints import (
+                    hint_from_normalized_schema,
+                )
+                from agent_service.integrations.pipedream.knowledge import register_runtime_app_hint
+
+                register_runtime_app_hint(
+                    schema.app_id,
+                    hint_from_normalized_schema(schema),
+                )
+            except Exception:  # noqa: BLE001
+                pass
         return schema
 
     async def search_apps(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]:

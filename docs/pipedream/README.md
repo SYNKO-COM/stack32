@@ -8,7 +8,9 @@ upstream Pipedream without inventing auth props or skipping `dynamic_props_id`.
 | File | Role |
 |------|------|
 | [CONNECT_KNOWLEDGE.md](./CONNECT_KNOWLEDGE.md) | Hard rules + API map + Stack32 lessons |
-| [app_hints.json](./app_hints.json) | Per-app static-config hints (Notion page, Slack channel, …) |
+| [app_hints.json](./app_hints.json) | Per-app static-config hints (Notion page, Slack channel, …) — **55 curated apps** |
+| [generated_app_hints.json](./generated_app_hints.json) | Auto-generated long tail (batch script) |
+| [SCALING_PLAN.md](./SCALING_PLAN.md) | Strategy for 3000+ Pipedream apps |
 | [ACTIONS.md](./ACTIONS.md) | Action configure / reload / run checklist |
 | [SCENARIO_LEARNINGS.md](./SCENARIO_LEARNINGS.md) | Offline capability matrix takeaways |
 | [LIVE_STRESS_LEARNINGS.md](./LIVE_STRESS_LEARNINGS.md) | Real Live stress takeaways (Calendar bind, Canva, Notion, BYOK) |

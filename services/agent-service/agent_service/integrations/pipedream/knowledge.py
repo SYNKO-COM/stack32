@@ -3,6 +3,9 @@
 Loads curated docs under ``docs/pipedream`` so the orchestrator can reason about
 Connect auth props, dynamic props, and app-specific configuration (Notion page,
 Slack channel, Canva designType, etc.) without hardcoding every agent.
+
+For the 3000+ app long tail, ``auto_hints`` + ``generated_app_hints.json`` fill
+gaps when no curated entry exists.
 """
 
 from __future__ import annotations
@@ -20,7 +23,11 @@ logger = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 _DOCS_DIR = _REPO_ROOT / "docs" / "pipedream"
 _HINTS_PATH = _DOCS_DIR / "app_hints.json"
+_GENERATED_HINTS_PATH = _DOCS_DIR / "generated_app_hints.json"
 _KNOWLEDGE_PATH = _DOCS_DIR / "CONNECT_KNOWLEDGE.md"
+
+# Populated at runtime when Pipedream schemas are loaded (JIT, in-process).
+_runtime_app_hints: dict[str, dict[str, Any]] = {}
 
 
 @lru_cache(maxsize=1)
@@ -50,19 +57,69 @@ def normalize_app_key(app_id: str | None) -> str:
     return (app_id or "").strip().lower().replace("-", "_")
 
 
-def hint_for_app(app_id: str | None) -> dict[str, Any] | None:
-    apps = load_app_hints()
+@lru_cache(maxsize=1)
+def load_generated_app_hints() -> dict[str, Any]:
+    """Batch-enriched hints (``scripts/enrich_pipedream_catalog.py``)."""
+    try:
+        raw = json.loads(_GENERATED_HINTS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    apps = raw.get("apps") if isinstance(raw, dict) else {}
+    return apps if isinstance(apps, dict) else {}
+
+
+def register_runtime_app_hint(app_id: str | None, hint: dict[str, Any] | None) -> None:
+    """Cache schema-derived hints after a Pipedream component is loaded."""
+    if not app_id or not hint:
+        return
     key = normalize_app_key(app_id)
     if not key:
-        return None
+        return
+    from agent_service.integrations.pipedream.auto_hints import merge_curated_and_auto
+
+    curated = load_app_hints().get(key)
+    generated = load_generated_app_hints().get(key)
+    base = generated if isinstance(generated, dict) else None
+    merged = merge_curated_and_auto(base, hint)
+    if curated:
+        merged = merge_curated_and_auto(curated, merged)
+    if merged:
+        _runtime_app_hints[key] = merged
+
+
+def _lookup_hint_dict(apps: dict[str, Any], key: str) -> dict[str, Any] | None:
     if key in apps:
         return dict(apps[key])
-    # slug variants: google-calendar → google_calendar
     compact = key.replace("_", "")
     for candidate, hint in apps.items():
         if candidate.replace("_", "") == compact:
             return dict(hint)
     return None
+
+
+def hint_for_app(app_id: str | None) -> dict[str, Any] | None:
+    key = normalize_app_key(app_id)
+    if not key:
+        return None
+
+    curated = _lookup_hint_dict(load_app_hints(), key)
+    generated = _lookup_hint_dict(load_generated_app_hints(), key)
+    runtime = _runtime_app_hints.get(key)
+
+    from agent_service.integrations.pipedream.auto_hints import merge_curated_and_auto
+
+    merged: dict[str, Any] | None = None
+    for layer in (generated, runtime):
+        if not layer:
+            continue
+        merged = merge_curated_and_auto(merged, layer) if merged else dict(layer)
+    if curated:
+        merged = merge_curated_and_auto(curated, merged)
+    elif merged:
+        pass
+    else:
+        return None
+    return merged
 
 
 def hint_for_tool(tool_id: str, app_id: str | None = None) -> dict[str, Any] | None:
