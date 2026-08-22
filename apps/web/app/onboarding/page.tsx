@@ -51,7 +51,10 @@ function OnboardingPageInner() {
   /** Only set after async profile retry when the query returned null. */
   const [retryReady, setRetryReady] = useState(false);
   const resolvingRef = useRef(false);
-  /** True once we showed the wizard — don't steal navigation when it completes. */
+  /** True once we showed the wizard — don't steal navigation when it completes.
+   *  State, not a ref: it gates the render branch below, and reading a ref
+   *  during render is not safe under concurrent rendering. */
+  const [startedIncomplete, setStartedIncomplete] = useState(false);
   const startedIncompleteRef = useRef(false);
 
   const settling = userLoading || profileLoading;
@@ -70,6 +73,7 @@ function OnboardingPageInner() {
 
     if (profile && !profile.onboardingCompleted) {
       startedIncompleteRef.current = true;
+      setStartedIncomplete(true);
     }
 
     if (profile?.onboardingCompleted) {
@@ -111,7 +115,7 @@ function OnboardingPageInner() {
 
   const readyForFlow = profileReadyForFlow || retryReady;
 
-  if (settling || !readyForFlow || (profile?.onboardingCompleted && !startedIncompleteRef.current)) {
+  if (settling || !readyForFlow || (profile?.onboardingCompleted && !startedIncomplete)) {
     return (
       <OnboardingShell>
         <BrandLoader label={t("loading")} size="lg" />

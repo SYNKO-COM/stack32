@@ -728,10 +728,16 @@ export function BuildView({ agentId }: { agentId: string }) {
   });
   const sendMessage = useSendBuilderMessage(agentId);
   const openDialog = useUiStore((s) => s.openDialog);
+  // Latest-value refs: assigning during render tears under concurrent
+  // rendering, and both are only ever read from effects and callbacks.
   const sendMutateRef = useRef(sendMessage.mutateAsync);
-  sendMutateRef.current = sendMessage.mutateAsync;
   const threadRef = useRef(thread);
-  threadRef.current = thread;
+  useEffect(() => {
+    sendMutateRef.current = sendMessage.mutateAsync;
+  }, [sendMessage.mutateAsync]);
+  useEffect(() => {
+    threadRef.current = thread;
+  }, [thread]);
   const cancelRun = useCancelBuilderRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

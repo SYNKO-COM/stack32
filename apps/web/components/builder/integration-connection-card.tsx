@@ -219,6 +219,8 @@ export function IntegrationConnectionCard({
   const accountsBeforeRef = useRef(0);
   const finishedRef = useRef(false);
   const connectLinkUrlRef = useRef<string | null>(null);
+  /** Mirrored into state because the render below uses it as a fallback URL. */
+  const [connectLinkUrl, setConnectLinkUrl] = useState<string | null>(null);
   const popupRef = useRef<Window | null>(null);
 
   const normalized = (provider || "native").toLowerCase();
@@ -407,6 +409,7 @@ export function IntegrationConnectionCard({
         const result = await tokenPromise;
         const url = result.connectLinkUrl?.trim() || null;
         connectLinkUrlRef.current = url;
+        setConnectLinkUrl(url);
 
         if (!url || result.degraded) {
           try {
@@ -515,7 +518,7 @@ export function IntegrationConnectionCard({
     });
   };
 
-  const fallbackUrl = pipedreamFallback?.connectLinkUrl || connectLinkUrlRef.current;
+  const fallbackUrl = pipedreamFallback?.connectLinkUrl || connectLinkUrl;
 
   return (
     <div className={cn("rounded-xl border border-border p-4 space-y-3", className)}>

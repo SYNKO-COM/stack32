@@ -15,7 +15,11 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), payment=()",
+    // microphone=(self): the composer records audio for /v1/transcribe. An empty
+    // allowlist blocked getUserMedia before Chrome even prompted, so the mic
+    // button always failed and told users to fix their browser settings — which
+    // could never help, because the block came from this header.
+    value: "camera=(), microphone=(self), geolocation=(), payment=()",
   },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   // Required for Pipedream Connect popups (same-origin COOP breaks window.open).
