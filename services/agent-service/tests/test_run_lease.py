@@ -45,3 +45,25 @@ def test_run_parked_on_a_user_question_is_not_a_duplicate():
     assert _is_waiting_for_input(_run(input={"interrupt": {"status": "open"}})) is True
     assert _is_waiting_for_input(_run()) is False
     assert _is_waiting_for_input(_run(input={"interrupt": {"status": "resolved"}})) is False
+
+
+def test_lease_outlives_the_cloud_tasks_dispatch_deadline():
+    """The lease must not expire at the exact moment a retry is dispatched.
+
+    Cloud Tasks abandons the request at the dispatch deadline and retries while
+    Cloud Run keeps executing. If the lease expired at the same instant, the
+    retry would take over a run that is still alive — the duplicate execution
+    the lease exists to prevent.
+    """
+    settings = get_settings()
+    assert settings.RUN_LEASE_SECONDS > settings.CLOUD_TASKS_DISPATCH_DEADLINE_SECONDS
+    margin = settings.RUN_LEASE_SECONDS - settings.CLOUD_TASKS_DISPATCH_DEADLINE_SECONDS
+    assert margin >= 300, f"only {margin}s of margin between deadline and lease"
+
+
+def test_a_run_still_alive_at_the_dispatch_deadline_is_treated_as_in_flight():
+    settings = get_settings()
+    at_deadline = datetime.now(UTC) - timedelta(
+        seconds=settings.CLOUD_TASKS_DISPATCH_DEADLINE_SECONDS
+    )
+    assert _lease_expired(_run(started_at=at_deadline.isoformat())) is False

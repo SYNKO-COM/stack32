@@ -98,10 +98,20 @@ class Settings(BaseSettings):
     # 2048 output tokens truncates any file over ~150 lines mid-write, which
     # sends the agent straight into a repair loop it cannot win. Real coding
     # agents need room to emit a whole file or a large patch in one turn.
+    # Cloud Tasks caps the HTTP dispatch deadline at 30 minutes and defaults to
+    # 10. Leaving it unset meant a build past 10 minutes was abandoned and
+    # retried while Cloud Run kept working on the first attempt.
+    CLOUD_TASKS_DISPATCH_DEADLINE_SECONDS: int = 1800
     # A Cloud Tasks delivery that is retried while the first attempt is still
     # executing must not restart the run: the whole LLM build would be paid for
     # again. Treat a run as in-flight until its lease expires.
-    RUN_LEASE_SECONDS: int = 1800
+    #
+    # Must stay comfortably ABOVE CLOUD_TASKS_DISPATCH_DEADLINE_SECONDS. Cloud
+    # Tasks gives up at the deadline and retries while Cloud Run (timeout 3600s)
+    # is still working; an equal lease would expire at exactly that moment and
+    # hand the retry a run that is very much alive. The margin also bounds how
+    # long a genuinely hung run blocks its own recovery.
+    RUN_LEASE_SECONDS: int = 2400
     CODING_MAX_OUTPUT_TOKENS: int = 8192
     # ReAct turns per coding/repair session (gather -> act -> verify -> repair).
     CODING_MAX_TURNS: int = 25

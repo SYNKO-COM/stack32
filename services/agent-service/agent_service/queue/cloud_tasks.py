@@ -98,13 +98,19 @@ def enqueue_via_cloud_tasks(*, run_id: str, user_id: str | None = None) -> str:
             "audience": audience,
         }
 
+    # Cloud Tasks caps an HTTP dispatch deadline at 30 minutes and defaults to
+    # 10. Unset, a coding build past ten minutes was abandoned mid-flight and
+    # retried while the first attempt kept running on Cloud Run — the run lease
+    # in queue/worker.py then had to absorb the duplicate. Ask for the real
+    # ceiling so the deadline matches how long a build can legitimately take.
+    deadline = max(15, min(1800, settings.CLOUD_TASKS_DISPATCH_DEADLINE_SECONDS))
+    task: dict[str, Any] = {
+        "http_request": http_request,
+        "dispatch_deadline": {"seconds": deadline},
+    }
+
     client = tasks_v2.CloudTasksClient()
-    response = client.create_task(
-        request={
-            "parent": parent,
-            "task": {"http_request": http_request},
-        }
-    )
+    response = client.create_task(request={"parent": parent, "task": task})
     task_name = response.name or ""
     logger.info(
         "cloud_tasks_enqueued run_id=%s queue=%s task=%s",
