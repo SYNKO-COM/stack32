@@ -240,6 +240,10 @@ async def run_langgraph_agent(
             installation_id=installation_id,
         )
     except Exception:  # noqa: BLE001
+        # Degrade rather than fail the run, but never silently: an empty config
+        # means Structure settings (spreadsheet id, channel...) are not injected
+        # and the agent will ask the user for values it should already have.
+        logger.exception("tool_config_resolution_failed agent_id=%s", agent_id)
         tool_configs = {}
     tool_schemas = await async_schemas_for_tools(enabled_tools, tool_configs=tool_configs)
     max_loops = min(settings.MAX_LLM_CALLS_PER_RUN, max(1, spec.runtime.max_tool_calls + 1))
@@ -345,7 +349,7 @@ async def run_langgraph_agent(
         if tools_block:
             system = system + "\n\n" + tools_block
     except Exception:  # noqa: BLE001
-        pass
+        logger.exception("configured_tools_system_block_failed agent_id=%s", agent_id)
     system = system[:12000]
 
     # Inject the rolling conversation summary so long threads keep continuity beyond

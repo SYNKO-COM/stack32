@@ -12,16 +12,39 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Repo root: services/agent-service/agent_service/integrations/pipedream/knowledge.py
-# -> parents[5] = Stack32/
-_REPO_ROOT = Path(__file__).resolve().parents[5]
-_DOCS_DIR = _REPO_ROOT / "docs" / "pipedream"
+def _resolve_docs_dir() -> Path:
+    """Locate the Pipedream runtime data (hints + Connect knowledge).
+
+    These files are read on every tool-config resolution, so they are package
+    data that ships with the code, not documentation. They previously lived in
+    the repo's ``docs/pipedream`` and were located via ``parents[5]`` — an index
+    that is out of range inside the container (``/app/agent_service/...``), and
+    a directory the Docker build context (``services/``) could not reach anyway.
+    The IndexError fired at *import* time: silently swallowed in the Live
+    runtime (tool configs never injected) and a hard 500 on reload-props.
+    """
+    override = os.environ.get("PIPEDREAM_DOCS_DIR")
+    if override:
+        return Path(override)
+    packaged = Path(__file__).resolve().parent / "data"
+    if packaged.is_dir():
+        return packaged
+    # Legacy checkout layout: walk up for docs/pipedream rather than assume depth.
+    for ancestor in Path(__file__).resolve().parents:
+        candidate = ancestor / "docs" / "pipedream"
+        if candidate.is_dir():
+            return candidate
+    return packaged
+
+
+_DOCS_DIR = _resolve_docs_dir()
 _HINTS_PATH = _DOCS_DIR / "app_hints.json"
 _GENERATED_HINTS_PATH = _DOCS_DIR / "generated_app_hints.json"
 _KNOWLEDGE_PATH = _DOCS_DIR / "CONNECT_KNOWLEDGE.md"

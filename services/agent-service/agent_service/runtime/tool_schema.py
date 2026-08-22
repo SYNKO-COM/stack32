@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class RuntimeToolCall(BaseModel):
@@ -296,6 +299,9 @@ async def async_schemas_for_tools(
         try:
             from agent_service.integrations.pipedream.tool_config import is_static_prop_configured
         except Exception:  # noqa: BLE001
+            # Falling back to a naive key check stops static props being hidden
+            # from the model, so it re-asks for values already configured.
+            logger.exception("is_static_prop_configured_import_failed tool_id=%s", tid)
             is_static_prop_configured = None  # type: ignore[assignment,misc]
         for key in list(props.keys()):
             filled = (

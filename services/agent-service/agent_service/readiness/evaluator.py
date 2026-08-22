@@ -405,7 +405,10 @@ async def evaluate_agent_readiness(
                         }
                     )
         except Exception:  # noqa: BLE001
-            logger.debug("readiness_tool_config_check_failed", exc_info=True)
+            # This block gates publication. Skipping it silently lets an agent
+            # with unconfigured Pipedream tools pass the readiness check and be
+            # published broken, so surface it rather than hide it at debug level.
+            logger.exception("readiness_tool_config_check_failed agent_id=%s", agent_id)
 
         if missing_connections:
             checks.append(
