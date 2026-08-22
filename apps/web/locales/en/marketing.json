@@ -12,7 +12,7 @@
   },
   "howItWorks": {
     "title": "How it works",
-    "subtitle": "No code. No workflows. No configuration. Just a conversation.",
+    "subtitle": "No code. No workflows. Just a conversation.",
     "describe": {
       "title": "Describe",
       "description": "Write what you need in plain language, like you would explain it to a new teammate."
@@ -92,7 +92,8 @@
   },
   "pricingPreview": {
     "title": "Simple pricing",
-    "subtitle": "Start free, then Starter, Pro or Scale as you grow — 20% off on annual billing."
+    "subtitle": "Start free, then Starter, Pro or Scale as you grow — 20% off on annual billing.",
+    "learnMore": "Learn more"
   },
   "finalCta": {
     "title": "Your first agent is one sentence away",

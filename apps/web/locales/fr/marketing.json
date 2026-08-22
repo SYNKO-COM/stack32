@@ -12,7 +12,7 @@
   },
   "howItWorks": {
     "title": "Comment ça marche",
-    "subtitle": "Pas de code. Pas de workflows. Pas de configuration. Juste une conversation.",
+    "subtitle": "Pas de code. Pas de workflows. Juste une conversation.",
     "describe": {
       "title": "Décrivez",
       "description": "Écrivez ce dont vous avez besoin en langage naturel, comme si vous l'expliquiez à un nouveau collègue."
@@ -92,7 +92,8 @@
   },
   "pricingPreview": {
     "title": "Une tarification simple",
-    "subtitle": "Commencez gratuitement, puis Starter, Pro ou Scale selon votre rythme — −20 % en annuel."
+    "subtitle": "Commencez gratuitement, puis Starter, Pro ou Scale selon votre rythme — −20 % en annuel.",
+    "learnMore": "En savoir plus"
   },
   "finalCta": {
     "title": "Votre premier agent est à une phrase de vous",

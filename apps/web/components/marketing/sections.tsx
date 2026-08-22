@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { PricingPlansPreview } from "@/components/marketing/pricing-plans-preview";
 import { Button } from "@/components/ui/button";
 import { useStartFromPrompt } from "@/hooks/use-start-from-prompt";
 import { useTranslation } from "@/hooks/use-translation";
@@ -177,19 +178,9 @@ export function FaqPreview() {
 }
 
 export function PricingPreview() {
-  const { t } = useTranslation(["marketing", "common"]);
-
   return (
-    <SectionShell className="max-w-4xl text-center">
-      <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-        {t("marketing:pricingPreview.title")}
-      </h2>
-      <p className="mt-3 text-muted-foreground">{t("marketing:pricingPreview.subtitle")}</p>
-      <div className="mt-8">
-        <Button asChild size="lg" className="rounded-full">
-          <Link href="/pricing">{t("common:nav.pricing")}</Link>
-        </Button>
-      </div>
+    <SectionShell>
+      <PricingPlansPreview />
     </SectionShell>
   );
 }
