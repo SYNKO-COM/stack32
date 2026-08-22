@@ -245,6 +245,11 @@ def _prop_to_json_schema(prop: NormalizedProp) -> dict[str, Any]:
         schema["default"] = prop.default
     if prop.json_type == "array":
         schema.setdefault("items", {"type": "string"})
+    raw = prop.raw if isinstance(prop.raw, dict) else {}
+    if raw.get("reloadProps") or raw.get("reload_props"):
+        schema["x-reload-props"] = True
+    if prop.remote_options:
+        schema["x-remote-options"] = True
     return schema
 
 

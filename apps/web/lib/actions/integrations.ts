@@ -204,6 +204,38 @@ export async function saveToolConfig(
   });
 }
 
+export async function reloadToolProps(input: {
+  toolId: string;
+  agentId: string;
+  config: Record<string, unknown>;
+  connectionId?: string;
+  changedProp?: string;
+}): Promise<{
+  dynamic_props_id?: string;
+  static_schema?: Record<string, unknown>;
+  reload_props_triggers?: string[];
+  error?: string;
+  message?: string;
+}> {
+  if (currentAiExecutionMode() !== "agent-service") {
+    return { error: "AGENT_SERVICE_DISABLED" };
+  }
+  const accessToken = await requireAccessToken();
+  return agentServiceFetch(
+    `/v1/integrations/tools/${encodeURIComponent(input.toolId)}/reload-props`,
+    {
+      method: "POST",
+      accessToken,
+      body: {
+        agent_id: input.agentId,
+        config: input.config,
+        ...(input.connectionId ? { connection_id: input.connectionId } : {}),
+        ...(input.changedProp ? { changed_prop: input.changedProp } : {}),
+      },
+    },
+  );
+}
+
 export async function getToolDynamicOptions(input: {
   toolId: string;
   prop: string;

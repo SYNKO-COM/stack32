@@ -1,15 +1,31 @@
 {
   "_meta": {
     "purpose": "Static hints for Structure tool-config UI and Stack32 Builder when wiring Pipedream apps. Not exhaustive — learning playbooks override when present. User-facing UI must NOT display summary/builder_guidance text.",
-    "updated": "2026-08-15"
+    "updated": "2026-08-22",
+    "promoted_batch": 80
   },
   "apps": {
     "notion": {
       "auth_prop_guess": "notion",
       "summary": "Notion Connect actions usually operate on an existing page/database — creation of arbitrary pages is limited; prefer update/append/comment on a configured page.",
       "required_static_hints": [
-        {"keys": ["pageId", "page_id", "parentPageId"], "label": "Page Notion", "why": "La page que l’agent doit lire ou mettre à jour."},
-        {"keys": ["databaseId", "database_id"], "label": "Base Notion", "why": "La base (tableau) Notion concernée."}
+        {
+          "keys": [
+            "pageId",
+            "page_id",
+            "parentPageId"
+          ],
+          "label": "Page Notion",
+          "why": "La page que l’agent doit lire ou mettre à jour."
+        },
+        {
+          "keys": [
+            "databaseId",
+            "database_id"
+          ],
+          "label": "Base Notion",
+          "why": "La base (tableau) Notion concernée."
+        }
       ],
       "builder_guidance": "When adding Notion tools, ask the user to pick a page or database in Structure after Connect. Do not assume blank-workspace page creation works for every action."
     },
@@ -17,7 +33,15 @@
       "auth_prop_guess": "slack",
       "summary": "Messaging requires a channel (or user) destination in addition to account connection.",
       "required_static_hints": [
-        {"keys": ["channel", "channelId", "conversation"], "label": "Canal Slack", "why": "Le canal où l’agent peut écrire ou lire."}
+        {
+          "keys": [
+            "channel",
+            "channelId",
+            "conversation"
+          ],
+          "label": "Canal Slack",
+          "why": "Le canal où l’agent peut écrire ou lire."
+        }
       ],
       "builder_guidance": "After Slack Connect, prompt for default channel in tool config. Prefer remoteOptions for channel pickers."
     },
@@ -25,7 +49,15 @@
       "auth_prop_guess": "slack",
       "summary": "Slack v2 app slug — same channel requirements as slack.",
       "required_static_hints": [
-        {"keys": ["channel", "channelId", "conversation"], "label": "Canal Slack", "why": "Le canal où l’agent peut écrire ou lire."}
+        {
+          "keys": [
+            "channel",
+            "channelId",
+            "conversation"
+          ],
+          "label": "Canal Slack",
+          "why": "Le canal où l’agent peut écrire ou lire."
+        }
       ],
       "builder_guidance": "Treat like slack; bind channel in tool_config."
     },
@@ -33,7 +65,15 @@
       "auth_prop_guess": "discord",
       "summary": "Bot posts need a guild channel; invite the bot with correct permissions.",
       "required_static_hints": [
-        {"keys": ["channelId", "channel", "channel_id"], "label": "Canal Discord", "why": "Le salon où le bot peut écrire."}
+        {
+          "keys": [
+            "channelId",
+            "channel",
+            "channel_id"
+          ],
+          "label": "Canal Discord",
+          "why": "Le salon où le bot peut écrire."
+        }
       ],
       "builder_guidance": "Surface channel picker after Connect; warn about missing bot permissions."
     },
@@ -41,7 +81,13 @@
       "auth_prop_guess": "googleCalendar",
       "summary": "Create-event expects eventStartDate/eventEndDate strings (or quick-add text), not Google API start/end objects, when using Pipedream actions.",
       "required_static_hints": [
-        {"keys": ["calendarId"], "label": "Agenda", "why": "Quel calendrier Google l’agent doit utiliser (souvent « principal »)."}
+        {
+          "keys": [
+            "calendarId"
+          ],
+          "label": "Agenda",
+          "why": "Quel calendrier Google l’agent doit utiliser (souvent « principal »)."
+        }
       ],
       "builder_guidance": "Prefer native calendar_* tools with Pipedream OAuth fallback. Never use slug google_calendar as the auth prop key."
     },
@@ -55,8 +101,20 @@
       "auth_prop_guess": "canva",
       "summary": "canva-create-design uses reloadProps: designType preset|custom then dynamic name/width/height. Must reload props and pass dynamic_props_id.",
       "required_static_hints": [
-        {"keys": ["designType"], "label": "Type de design", "why": "Modèle prêt à l’emploi, ou taille personnalisée."},
-        {"keys": ["name"], "label": "Modèle Canva", "why": "Quel format (document, présentation, e-mail…)."}
+        {
+          "keys": [
+            "designType"
+          ],
+          "label": "Type de design",
+          "why": "Modèle prêt à l’emploi, ou taille personnalisée."
+        },
+        {
+          "keys": [
+            "name"
+          ],
+          "label": "Modèle Canva",
+          "why": "Quel format (document, présentation, e-mail…)."
+        }
       ],
       "builder_guidance": "Default designType=preset and name=doc if the model omits them; always reload dynamic props before run."
     },
@@ -64,7 +122,16 @@
       "auth_prop_guess": "stripe",
       "summary": "Many Stripe actions are account-scoped; Connect accounts / Stripe Connect platforms may need account or customer ids.",
       "required_static_hints": [
-        {"keys": ["customer", "customerId", "account", "stripeAccount"], "label": "Client ou compte Stripe", "why": "Le client ou le compte Connect concerné par l’opération."}
+        {
+          "keys": [
+            "customer",
+            "customerId",
+            "account",
+            "stripeAccount"
+          ],
+          "label": "Client ou compte Stripe",
+          "why": "Le client ou le compte Connect concerné par l’opération."
+        }
       ],
       "builder_guidance": "After Stripe Connect, inspect the action schema for customer/account props and mark them static when the agent always uses one account."
     },
@@ -72,9 +139,27 @@
       "auth_prop_guess": "hubspot",
       "summary": "CRM writes need object type + properties; association ids often required.",
       "required_static_hints": [
-        {"keys": ["inboxId"], "label": "Boîte de réception", "why": "Quelle boîte HubSpot (inbox) l’agent doit utiliser pour les messages."},
-        {"keys": ["channelId"], "label": "Canal", "why": "Le canal de messagerie HubSpot concerné."},
-        {"keys": ["threadId"], "label": "Fil de discussion", "why": "La conversation précise dans la boîte (si l’agent doit répondre à un fil)."}
+        {
+          "keys": [
+            "inboxId"
+          ],
+          "label": "Boîte de réception",
+          "why": "Quelle boîte HubSpot (inbox) l’agent doit utiliser pour les messages."
+        },
+        {
+          "keys": [
+            "channelId"
+          ],
+          "label": "Canal",
+          "why": "Le canal de messagerie HubSpot concerné."
+        },
+        {
+          "keys": [
+            "threadId"
+          ],
+          "label": "Fil de discussion",
+          "why": "La conversation précise dans la boîte (si l’agent doit répondre à un fil)."
+        }
       ],
       "builder_guidance": "Prefer remoteOptions for owners/pipelines; keep property maps in tool_config when stable. Ask which inbox/channel the agent should use."
     },
@@ -82,8 +167,22 @@
       "auth_prop_guess": "airtable",
       "summary": "Base + table (+ optional view) are almost always required before row ops.",
       "required_static_hints": [
-        {"keys": ["baseId", "base"], "label": "Base Airtable", "why": "L’espace Airtable (base) où lire ou écrire."},
-        {"keys": ["tableId", "table"], "label": "Table", "why": "La table (feuille) dans cette base."}
+        {
+          "keys": [
+            "baseId",
+            "base"
+          ],
+          "label": "Base Airtable",
+          "why": "L’espace Airtable (base) où lire ou écrire."
+        },
+        {
+          "keys": [
+            "tableId",
+            "table"
+          ],
+          "label": "Table",
+          "why": "La table (feuille) dans cette base."
+        }
       ],
       "builder_guidance": "Chain remoteOptions: base → table → fields. Treat as reloadProps-heavy."
     },
@@ -91,25 +190,81 @@
       "auth_prop_guess": "googleSheets",
       "summary": "Classic dynamic-props example: spreadsheet then worksheet then headers/columns; requires dynamic_props_id.",
       "required_static_hints": [
-        {"keys": ["drive", "driveId"], "label": "Drive", "why": "Mon Drive, ou un Drive partagé de l’équipe."},
-        {"keys": ["sheetId", "spreadsheetId"], "label": "Fichier Google Sheets", "why": "Le classeur (fichier) que l’agent doit utiliser."},
-        {"keys": ["worksheetId", "worksheetIds"], "label": "Feuille", "why": "L’onglet à l’intérieur du fichier (ex. Feuille 1)."},
-        {"keys": ["hasHeaders"], "label": "La première ligne contient des titres", "why": "Oui si la ligne du haut nomme les colonnes."},
-        {"keys": ["headerRowNumber"], "label": "Ligne des titres", "why": "Numéro de la ligne qui contient les noms de colonnes (souvent 1)."},
-        {"keys": ["watchDrive"], "label": "Surveiller tout le Drive", "why": "Oui = réagir aux changements dans le Drive entier."}
+        {
+          "keys": [
+            "drive",
+            "driveId"
+          ],
+          "label": "Drive",
+          "why": "Mon Drive, ou un Drive partagé de l’équipe."
+        },
+        {
+          "keys": [
+            "sheetId",
+            "spreadsheetId"
+          ],
+          "label": "Fichier Google Sheets",
+          "why": "Le classeur (fichier) que l’agent doit utiliser."
+        },
+        {
+          "keys": [
+            "worksheetId",
+            "worksheetIds"
+          ],
+          "label": "Feuille",
+          "why": "L’onglet à l’intérieur du fichier (ex. Feuille 1)."
+        },
+        {
+          "keys": [
+            "hasHeaders"
+          ],
+          "label": "La première ligne contient des titres",
+          "why": "Oui si la ligne du haut nomme les colonnes."
+        },
+        {
+          "keys": [
+            "headerRowNumber"
+          ],
+          "label": "Ligne des titres",
+          "why": "Numéro de la ligne qui contient les noms de colonnes (souvent 1)."
+        },
+        {
+          "keys": [
+            "watchDrive"
+          ],
+          "label": "Surveiller tout le Drive",
+          "why": "Oui = réagir aux changements dans le Drive entier."
+        }
       ],
       "builder_guidance": "Always reload props after sheetId; never drop dynamic_props_id. Prefer a specific spreadsheet + worksheet for the agent goal.",
       "prop_aliases": {
-        "sheetId": ["spreadsheetId", "spreadsheet_id"],
-        "worksheetId": ["worksheetIds", "sheetName", "worksheet"]
+        "sheetId": [
+          "spreadsheetId",
+          "spreadsheet_id"
+        ],
+        "worksheetId": [
+          "worksheetIds",
+          "sheetName",
+          "worksheet"
+        ]
       },
-      "required_props": ["sheetId", "worksheetId"]
+      "required_props": [
+        "sheetId",
+        "worksheetId"
+      ]
     },
     "google_docs": {
       "auth_prop_guess": "googleDocs",
       "summary": "Create/append usually need a document id after creation; prefer native google_docs_* tools.",
       "required_static_hints": [
-        {"keys": ["documentId", "docId"], "label": "Document", "why": "Append/update ops need an existing doc."}
+        {
+          "keys": [
+            "documentId",
+            "docId"
+          ],
+          "label": "Document",
+          "why": "Append/update ops need an existing doc."
+        }
       ],
       "builder_guidance": "Prefer native google_docs_create/append; auth prop camelCase if using Pipedream actions."
     },
@@ -117,7 +272,15 @@
       "auth_prop_guess": "googleDrive",
       "summary": "File ops need folder/file ids; downloads may require stash_id.",
       "required_static_hints": [
-        {"keys": ["folderId", "fileId", "driveId"], "label": "Folder / file", "why": "Drive actions need a target folder or file."}
+        {
+          "keys": [
+            "folderId",
+            "fileId",
+            "driveId"
+          ],
+          "label": "Folder / file",
+          "why": "Drive actions need a target folder or file."
+        }
       ],
       "builder_guidance": "Use stash_id when downloading files to /tmp for File Stash."
     },
@@ -125,7 +288,15 @@
       "auth_prop_guess": "github",
       "summary": "Issues/PRs need owner + repo; often remoteOptions.",
       "required_static_hints": [
-        {"keys": ["owner", "repo", "repository"], "label": "Repository", "why": "Almost all GitHub actions are repo-scoped."}
+        {
+          "keys": [
+            "owner",
+            "repo",
+            "repository"
+          ],
+          "label": "Repository",
+          "why": "Almost all GitHub actions are repo-scoped."
+        }
       ],
       "builder_guidance": "Bind default owner/repo in tool_config for agent-scoped repos."
     },
@@ -133,7 +304,14 @@
       "auth_prop_guess": "gitlab",
       "summary": "Project ID is usually required; self-hosted needs base URL custom field.",
       "required_static_hints": [
-        {"keys": ["projectId", "project_id"], "label": "Project", "why": "GitLab actions are project-scoped."}
+        {
+          "keys": [
+            "projectId",
+            "project_id"
+          ],
+          "label": "Project",
+          "why": "GitLab actions are project-scoped."
+        }
       ],
       "builder_guidance": "Use remoteOptions for projectId; relative proxy paths for self-hosted."
     },
@@ -141,7 +319,14 @@
       "auth_prop_guess": "linear",
       "summary": "Issues need team id; optional project/state.",
       "required_static_hints": [
-        {"keys": ["teamId", "team"], "label": "Team", "why": "Linear issues belong to a team."}
+        {
+          "keys": [
+            "teamId",
+            "team"
+          ],
+          "label": "Team",
+          "why": "Linear issues belong to a team."
+        }
       ],
       "builder_guidance": "Pick default team after Connect."
     },
@@ -149,7 +334,15 @@
       "auth_prop_guess": "jira",
       "summary": "Issues need cloud project key / id.",
       "required_static_hints": [
-        {"keys": ["projectKey", "projectId", "project"], "label": "Project", "why": "Jira create/update is project-scoped."}
+        {
+          "keys": [
+            "projectKey",
+            "projectId",
+            "project"
+          ],
+          "label": "Project",
+          "why": "Jira create/update is project-scoped."
+        }
       ],
       "builder_guidance": "Bind project key in static config."
     },
@@ -157,7 +350,15 @@
       "auth_prop_guess": "asana",
       "summary": "Tasks need workspace/project.",
       "required_static_hints": [
-        {"keys": ["workspace", "project", "projectId"], "label": "Workspace / project", "why": "Asana tasks live under a project."}
+        {
+          "keys": [
+            "workspace",
+            "project",
+            "projectId"
+          ],
+          "label": "Workspace / project",
+          "why": "Asana tasks live under a project."
+        }
       ],
       "builder_guidance": "Chain workspace → project remoteOptions."
     },
@@ -165,7 +366,16 @@
       "auth_prop_guess": "trello",
       "summary": "Cards need board + list.",
       "required_static_hints": [
-        {"keys": ["board", "boardId", "list", "listId"], "label": "Board / list", "why": "Cards are created in a list on a board."}
+        {
+          "keys": [
+            "board",
+            "boardId",
+            "list",
+            "listId"
+          ],
+          "label": "Board / list",
+          "why": "Cards are created in a list on a board."
+        }
       ],
       "builder_guidance": "Bind default board/list."
     },
@@ -173,7 +383,14 @@
       "auth_prop_guess": "clickup",
       "summary": "Tasks need list id in a space/folder hierarchy.",
       "required_static_hints": [
-        {"keys": ["listId", "list"], "label": "List", "why": "ClickUp tasks belong to a list."}
+        {
+          "keys": [
+            "listId",
+            "list"
+          ],
+          "label": "List",
+          "why": "ClickUp tasks belong to a list."
+        }
       ],
       "builder_guidance": "RemoteOptions for space → folder → list."
     },
@@ -181,7 +398,14 @@
       "auth_prop_guess": "monday",
       "summary": "Items need board id.",
       "required_static_hints": [
-        {"keys": ["boardId", "board"], "label": "Board", "why": "Monday items are board-scoped."}
+        {
+          "keys": [
+            "boardId",
+            "board"
+          ],
+          "label": "Board",
+          "why": "Monday items are board-scoped."
+        }
       ],
       "builder_guidance": "Bind board after Connect."
     },
@@ -231,7 +455,15 @@
       "auth_prop_guess": "mailchimp",
       "summary": "Audience/list id required for campaigns/subscribers.",
       "required_static_hints": [
-        {"keys": ["listId", "audienceId", "list"], "label": "Audience", "why": "Mailchimp ops are list-scoped."}
+        {
+          "keys": [
+            "listId",
+            "audienceId",
+            "list"
+          ],
+          "label": "Audience",
+          "why": "Mailchimp ops are list-scoped."
+        }
       ],
       "builder_guidance": "Bind default audience."
     },
@@ -239,7 +471,14 @@
       "auth_prop_guess": "klaviyo",
       "summary": "Lists/flows need list or flow ids.",
       "required_static_hints": [
-        {"keys": ["listId", "flowId"], "label": "List / flow", "why": "Klaviyo actions target lists or flows."}
+        {
+          "keys": [
+            "listId",
+            "flowId"
+          ],
+          "label": "List / flow",
+          "why": "Klaviyo actions target lists or flows."
+        }
       ],
       "builder_guidance": "Bind list/flow after Connect."
     },
@@ -247,7 +486,15 @@
       "auth_prop_guess": "sendgrid",
       "summary": "From address / template ids often required.",
       "required_static_hints": [
-        {"keys": ["from", "fromEmail", "templateId"], "label": "From / template", "why": "Transactional send needs verified sender."}
+        {
+          "keys": [
+            "from",
+            "fromEmail",
+            "templateId"
+          ],
+          "label": "From / template",
+          "why": "Transactional send needs verified sender."
+        }
       ],
       "builder_guidance": "Prefer templates; keep from-address in static config."
     },
@@ -261,7 +508,15 @@
       "auth_prop_guess": "linkedin",
       "summary": "Org vs personal author urn may be required.",
       "required_static_hints": [
-        {"keys": ["author", "organization", "person"], "label": "Author", "why": "Posts need an author URN."}
+        {
+          "keys": [
+            "author",
+            "organization",
+            "person"
+          ],
+          "label": "Author",
+          "why": "Posts need an author URN."
+        }
       ],
       "builder_guidance": "Bind share/post actions after Connect; use the author URN from connection metadata when required."
     },
@@ -281,7 +536,14 @@
       "auth_prop_guess": "facebook",
       "summary": "Page id often required for posts.",
       "required_static_hints": [
-        {"keys": ["pageId", "page"], "label": "Page", "why": "Page posts need a Page id."}
+        {
+          "keys": [
+            "pageId",
+            "page"
+          ],
+          "label": "Page",
+          "why": "Page posts need a Page id."
+        }
       ],
       "builder_guidance": "Bind page after Connect."
     },
@@ -289,7 +551,15 @@
       "auth_prop_guess": "figma",
       "summary": "File key required for comments/nodes.",
       "required_static_hints": [
-        {"keys": ["fileKey", "file_key", "fileId"], "label": "File", "why": "Figma APIs are file-scoped."}
+        {
+          "keys": [
+            "fileKey",
+            "file_key",
+            "fileId"
+          ],
+          "label": "File",
+          "why": "Figma APIs are file-scoped."
+        }
       ],
       "builder_guidance": "Bind default file key."
     },
@@ -297,7 +567,14 @@
       "auth_prop_guess": "dropbox",
       "summary": "Path required for upload/download; stash for cross-action files.",
       "required_static_hints": [
-        {"keys": ["path", "pathDisplay"], "label": "Path", "why": "Dropbox ops need a folder/file path."}
+        {
+          "keys": [
+            "path",
+            "pathDisplay"
+          ],
+          "label": "Path",
+          "why": "Dropbox ops need a folder/file path."
+        }
       ],
       "builder_guidance": "Reuse stashId across download→upload flows."
     },
@@ -305,7 +582,14 @@
       "auth_prop_guess": "box",
       "summary": "Folder/file ids required.",
       "required_static_hints": [
-        {"keys": ["folderId", "fileId"], "label": "Folder / file", "why": "Box items are id-scoped."}
+        {
+          "keys": [
+            "folderId",
+            "fileId"
+          ],
+          "label": "Folder / file",
+          "why": "Box items are id-scoped."
+        }
       ],
       "builder_guidance": "Bind default folder."
     },
@@ -313,7 +597,15 @@
       "auth_prop_guess": "microsoftOneDrive",
       "summary": "Drive item paths/ids required.",
       "required_static_hints": [
-        {"keys": ["itemId", "path", "folderId"], "label": "Item / path", "why": "OneDrive ops need a target item."}
+        {
+          "keys": [
+            "itemId",
+            "path",
+            "folderId"
+          ],
+          "label": "Item / path",
+          "why": "OneDrive ops need a target item."
+        }
       ],
       "builder_guidance": "Auth prop name from component definition."
     },
@@ -321,7 +613,16 @@
       "auth_prop_guess": "microsoftTeams",
       "summary": "Team + channel ids required for posts.",
       "required_static_hints": [
-        {"keys": ["teamId", "channelId", "team", "channel"], "label": "Team / channel", "why": "Teams messages are channel-scoped."}
+        {
+          "keys": [
+            "teamId",
+            "channelId",
+            "team",
+            "channel"
+          ],
+          "label": "Team / channel",
+          "why": "Teams messages are channel-scoped."
+        }
       ],
       "builder_guidance": "Bind team+channel after Connect."
     },
@@ -335,7 +636,15 @@
       "auth_prop_guess": "microsoftExcel",
       "summary": "Workbook + worksheet often required (reloadProps).",
       "required_static_hints": [
-        {"keys": ["workbook", "worksheet", "itemId"], "label": "Workbook / sheet", "why": "Excel actions are workbook-scoped."}
+        {
+          "keys": [
+            "workbook",
+            "worksheet",
+            "itemId"
+          ],
+          "label": "Workbook / sheet",
+          "why": "Excel actions are workbook-scoped."
+        }
       ],
       "builder_guidance": "Expect dynamic_props_id after workbook selection."
     },
@@ -343,7 +652,15 @@
       "auth_prop_guess": "twilio",
       "summary": "From/to phone numbers required for SMS.",
       "required_static_hints": [
-        {"keys": ["from", "to", "fromNumber"], "label": "From / to", "why": "SMS needs E.164 numbers."}
+        {
+          "keys": [
+            "from",
+            "to",
+            "fromNumber"
+          ],
+          "label": "From / to",
+          "why": "SMS needs E.164 numbers."
+        }
       ],
       "builder_guidance": "Bind verified from-number in static config."
     },
@@ -351,7 +668,14 @@
       "auth_prop_guess": "telegram_bot_api",
       "summary": "Chat id required for bot messages.",
       "required_static_hints": [
-        {"keys": ["chatId", "chat_id"], "label": "Chat", "why": "Bot messages need a chat id."}
+        {
+          "keys": [
+            "chatId",
+            "chat_id"
+          ],
+          "label": "Chat",
+          "why": "Bot messages need a chat id."
+        }
       ],
       "builder_guidance": "Bind default chat after Connect."
     },
@@ -359,7 +683,15 @@
       "auth_prop_guess": "whatsapp_business",
       "summary": "Business phone + template/recipient required.",
       "required_static_hints": [
-        {"keys": ["to", "phoneNumberId", "template"], "label": "Recipient / template", "why": "WhatsApp Business sends need recipient + often a template."}
+        {
+          "keys": [
+            "to",
+            "phoneNumberId",
+            "template"
+          ],
+          "label": "Recipient / template",
+          "why": "WhatsApp Business sends need recipient + often a template."
+        }
       ],
       "builder_guidance": "Prefer approved templates; bind phone number id."
     },
@@ -373,7 +705,14 @@
       "auth_prop_guess": "supabase",
       "summary": "Project URL + table for row ops.",
       "required_static_hints": [
-        {"keys": ["table", "tableName"], "label": "Table", "why": "Row ops need a table name."}
+        {
+          "keys": [
+            "table",
+            "tableName"
+          ],
+          "label": "Table",
+          "why": "Row ops need a table name."
+        }
       ],
       "builder_guidance": "Prefer read-only queries for agents unless approved."
     },
@@ -393,7 +732,14 @@
       "auth_prop_guess": "mongodb",
       "summary": "Database + collection required.",
       "required_static_hints": [
-        {"keys": ["database", "collection"], "label": "DB / collection", "why": "Mongo ops are collection-scoped."}
+        {
+          "keys": [
+            "database",
+            "collection"
+          ],
+          "label": "DB / collection",
+          "why": "Mongo ops are collection-scoped."
+        }
       ],
       "builder_guidance": "Bind database+collection."
     },
@@ -407,7 +753,15 @@
       "auth_prop_guess": "aws",
       "summary": "S3 bucket + key for object ops; region awareness.",
       "required_static_hints": [
-        {"keys": ["bucket", "key", "region"], "label": "Bucket / key", "why": "S3 ops need bucket and object key."}
+        {
+          "keys": [
+            "bucket",
+            "key",
+            "region"
+          ],
+          "label": "Bucket / key",
+          "why": "S3 ops need bucket and object key."
+        }
       ],
       "builder_guidance": "Premium app; bind default bucket."
     },
@@ -421,9 +775,809 @@
       "auth_prop_guess": "pagerduty",
       "summary": "Incidents need service id; escalation policies optional.",
       "required_static_hints": [
-        {"keys": ["serviceId", "service", "from"], "label": "Service", "why": "Incidents are service-scoped."}
+        {
+          "keys": [
+            "serviceId",
+            "service",
+            "from"
+          ],
+          "label": "Service",
+          "why": "Incidents are service-scoped."
+        }
       ],
       "builder_guidance": "Bind default service for on-call agents."
+    },
+    "_1crm": {
+      "auth_prop_guess": "_1crm",
+      "summary": "Configuration auto depuis le schéma Pipedream (_1crm-update-lead). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "leadId"
+          ],
+          "label": "Lead ID",
+          "why": "ID of the lead"
+        }
+      ],
+      "required_props": [
+        "leadId"
+      ],
+      "builder_guidance": "Configure resource pickers in order (each dropdown may unlock the next). The server passes dynamic_props_id after reloadProps — do not ask the user for it. Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `_1crm` (server-injected, never from the model)."
+    },
+    "_0codekit": {
+      "auth_prop_guess": "_0codekit",
+      "summary": "Configuration auto depuis le schéma Pipedream (_0codekit-read-barcode). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `_0codekit` (server-injected, never from the model)."
+    },
+    "_2markdown": {
+      "auth_prop_guess": "_2markdown",
+      "summary": "Configuration auto depuis le schéma Pipedream (_2markdown-url-to-markdown). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `_2markdown` (server-injected, never from the model)."
+    },
+    "_2chat": {
+      "auth_prop_guess": "_2chat",
+      "summary": "Configuration auto depuis le schéma Pipedream (_2chat-list-from-number-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `_2chat` (server-injected, never from the model)."
+    },
+    "_302_ai": {
+      "auth_prop_guess": "_302_ai",
+      "summary": "Configuration auto depuis le schéma Pipedream (_302_ai-list-model-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `_302_ai` (server-injected, never from the model)."
+    },
+    "_360nrs": {
+      "auth_prop_guess": "_360nrs",
+      "summary": "Configuration auto depuis le schéma Pipedream (_360nrs-list-phone-number-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `_360nrs` (server-injected, never from the model)."
+    },
+    "_4dem": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (_4dem-list-sender-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "_46elks": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (_46elks-send-sms). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "from"
+          ],
+          "label": "From Phone Number",
+          "why": "The phone number initiating sending the SMS message. A valid phone number in E.164 format. Can be one of your voice enabled 46elks numbers, the phone number yo…"
+        },
+        {
+          "keys": [
+            "to"
+          ],
+          "label": "To Phone Number",
+          "why": "The phone number receiving the SMS message. The phone number of the recipient, in E.164 format."
+        }
+      ],
+      "required_props": [
+        "from",
+        "to"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `app` (server-injected, never from the model)."
+    },
+    "_8x8_connect": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (_8x8_connect-send-sms). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "_descript": {
+      "auth_prop_guess": "slack",
+      "summary": "Configuration auto depuis le schéma Pipedream (slack_v2-set-channel-description). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "conversation"
+          ],
+          "label": "Channel",
+          "why": "Select a public or private channel, or a user or group"
+        }
+      ],
+      "required_props": [
+        "conversation"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `slack` (server-injected, never from the model)."
+    },
+    "_twocaptcha": {
+      "auth_prop_guess": "_twocaptcha",
+      "summary": "Configuration auto depuis le schéma Pipedream (_twocaptcha-submit-captcha). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Configure resource pickers in order (each dropdown may unlock the next). The server passes dynamic_props_id after reloadProps — do not ask the user for it. Auth prop is `_twocaptcha` (server-injected, never from the model)."
+    },
+    "ably": {
+      "auth_prop_guess": "ably",
+      "summary": "Configuration auto depuis le schéma Pipedream (ably-publish-push-notification). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `ably` (server-injected, never from the model)."
+    },
+    "abstract": {
+      "auth_prop_guess": "abstract",
+      "summary": "Configuration auto depuis le schéma Pipedream (abstract-validate-email). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `abstract` (server-injected, never from the model)."
+    },
+    "abyssale": {
+      "auth_prop_guess": "abyssale",
+      "summary": "Configuration auto depuis le schéma Pipedream (abyssale-list-template-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `abyssale` (server-injected, never from the model)."
+    },
+    "accelo": {
+      "auth_prop_guess": "accelo",
+      "summary": "Configuration auto depuis le schéma Pipedream (accelo-update-contact). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "contactId"
+          ],
+          "label": "Contact ID",
+          "why": "The contact ID"
+        }
+      ],
+      "required_props": [
+        "contactId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `accelo` (server-injected, never from the model)."
+    },
+    "accredible": {
+      "auth_prop_guess": "accredible",
+      "summary": "Configuration auto depuis le schéma Pipedream (accredible-update-credential). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "credentialId"
+          ],
+          "label": "Credential ID",
+          "why": "The ID of the existing credential"
+        },
+        {
+          "keys": [
+            "groupId"
+          ],
+          "label": "Group ID",
+          "why": "The ID of the group"
+        }
+      ],
+      "required_props": [
+        "credentialId",
+        "groupId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `accredible` (server-injected, never from the model)."
+    },
+    "accuranker": {
+      "auth_prop_guess": "accuranker",
+      "summary": "Configuration auto depuis le schéma Pipedream (accuranker-list-domain-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `accuranker` (server-injected, never from the model)."
+    },
+    "accuweather": {
+      "auth_prop_guess": "accuweather",
+      "summary": "Configuration auto depuis le schéma Pipedream (accuweather-get-location-key). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `accuweather` (server-injected, never from the model)."
+    },
+    "acelle_mail": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (acelle_mail-subscribe-customer-to-plan). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "customerId"
+          ],
+          "label": "Customer ID",
+          "why": "The customer ID"
+        },
+        {
+          "keys": [
+            "planId"
+          ],
+          "label": "Plan ID",
+          "why": "The plan ID"
+        }
+      ],
+      "required_props": [
+        "customerId",
+        "planId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `app` (server-injected, never from the model)."
+    },
+    "actitime": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (actitime-modify-leave-time). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "userId"
+          ],
+          "label": "User ID",
+          "why": "The ID of the user whose working time is updated."
+        },
+        {
+          "keys": [
+            "leaveTypeId"
+          ],
+          "label": "Leave Type ID",
+          "why": "The ID of the leave type."
+        }
+      ],
+      "required_props": [
+        "userId",
+        "leaveTypeId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `app` (server-injected, never from the model)."
+    },
+    "activecampaign": {
+      "auth_prop_guess": "activecampaign",
+      "summary": "Configuration auto depuis le schéma Pipedream (activecampaign-list-event-type-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `activecampaign` (server-injected, never from the model)."
+    },
+    "activecalculator": {
+      "auth_prop_guess": "activecalculator",
+      "summary": "Configuration auto depuis le schéma Pipedream (activecalculator-list-calculator-ids-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `activecalculator` (server-injected, never from the model)."
+    },
+    "acuity_scheduling": {
+      "auth_prop_guess": "acuity_scheduling",
+      "summary": "Configuration auto depuis le schéma Pipedream (acuity_scheduling-list-label-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `acuity_scheduling` (server-injected, never from the model)."
+    },
+    "acumbamail": {
+      "auth_prop_guess": "acumbamail",
+      "summary": "Configuration auto depuis le schéma Pipedream (acumbamail-list-list-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `acumbamail` (server-injected, never from the model)."
+    },
+    "acymailing": {
+      "auth_prop_guess": "acymailing",
+      "summary": "Configuration auto depuis le schéma Pipedream (acymailing-list-list-ids-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `acymailing` (server-injected, never from the model)."
+    },
+    "add_to_calendar_pro": {
+      "auth_prop_guess": "add_to_calendar_pro",
+      "summary": "Configuration auto depuis le schéma Pipedream (add_to_calendar_pro-list-style-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `add_to_calendar_pro` (server-injected, never from the model)."
+    },
+    "adalo": {
+      "auth_prop_guess": "adalo",
+      "summary": "Configuration auto depuis le schéma Pipedream (adalo-update-record). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `adalo` (server-injected, never from the model)."
+    },
+    "addevent": {
+      "auth_prop_guess": "addevent",
+      "summary": "Configuration auto depuis le schéma Pipedream (addevent-list-event-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `addevent` (server-injected, never from the model)."
+    },
+    "addressfinder": {
+      "auth_prop_guess": "addressfinder",
+      "summary": "Configuration auto depuis le schéma Pipedream (addressfinder-verify-email). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `addressfinder` (server-injected, never from the model)."
+    },
+    "addresszen": {
+      "auth_prop_guess": "addresszen",
+      "summary": "Configuration auto depuis le schéma Pipedream (addresszen-verify-correct-us-address-zip-code). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `addresszen` (server-injected, never from the model)."
+    },
+    "adhook": {
+      "auth_prop_guess": "adhook",
+      "summary": "Configuration auto depuis le schéma Pipedream (adhook-list-post-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `adhook` (server-injected, never from the model)."
+    },
+    "adobe_pdf_services": {
+      "auth_prop_guess": "adobe",
+      "summary": "Configuration auto depuis le schéma Pipedream (adobe_pdf_services-extract-text-from-pdf). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `adobe` (server-injected, never from the model)."
+    },
+    "adobe_photoshop": {
+      "auth_prop_guess": "adobePhotoshop",
+      "summary": "Configuration auto depuis le schéma Pipedream (adobe_photoshop-remove-background-from-image). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `adobePhotoshop` (server-injected, never from the model)."
+    },
+    "adrapid": {
+      "auth_prop_guess": "adrapid",
+      "summary": "Configuration auto depuis le schéma Pipedream (adrapid-list-template-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `adrapid` (server-injected, never from the model)."
+    },
+    "adroll": {
+      "auth_prop_guess": "adroll",
+      "summary": "Configuration auto depuis le schéma Pipedream (adroll-list-advertiser-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `adroll` (server-injected, never from the model)."
+    },
+    "adversus": {
+      "auth_prop_guess": "adversus",
+      "summary": "Configuration auto depuis le schéma Pipedream (adversus-create-or-update-lead). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `adversus` (server-injected, never from the model)."
+    },
+    "adyen": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (adyen-submit-details). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "adyntel": {
+      "auth_prop_guess": "adyntel",
+      "summary": "Configuration auto depuis le schéma Pipedream (adyntel-tiktok-search). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `adyntel` (server-injected, never from the model)."
+    },
+    "aidbase": {
+      "auth_prop_guess": "aidbase",
+      "summary": "Configuration auto depuis le schéma Pipedream (aidbase-list-faq-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `aidbase` (server-injected, never from the model)."
+    },
+    "airtable_oauth": {
+      "auth_prop_guess": "airtable",
+      "summary": "Configuration auto depuis le schéma Pipedream (airtable_oauth-update-table). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "baseId"
+          ],
+          "label": "Base",
+          "why": "The Base ID."
+        },
+        {
+          "keys": [
+            "tableId"
+          ],
+          "label": "Table",
+          "why": "The Table ID."
+        }
+      ],
+      "required_props": [
+        "baseId",
+        "tableId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `airtable` (server-injected, never from the model)."
+    },
+    "airbrake": {
+      "auth_prop_guess": "airbrake",
+      "summary": "Configuration auto depuis le schéma Pipedream (airbrake-list-project-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `airbrake` (server-injected, never from the model)."
+    },
+    "aitable_ai": {
+      "auth_prop_guess": "aitable_ai",
+      "summary": "Configuration auto depuis le schéma Pipedream (aitable_ai-list-field-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `aitable_ai` (server-injected, never from the model)."
+    },
+    "albus": {
+      "auth_prop_guess": "albus",
+      "summary": "Configuration auto depuis le schéma Pipedream (albus-ask-question). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `albus` (server-injected, never from the model)."
+    },
+    "alttextlab": {
+      "auth_prop_guess": "altTextLab",
+      "summary": "Configuration auto depuis le schéma Pipedream (alttextlab-generate-alt-text). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `altTextLab` (server-injected, never from the model)."
+    },
+    "ambivo": {
+      "auth_prop_guess": "ambivo",
+      "summary": "Configuration auto depuis le schéma Pipedream (ambivo-get-leads). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `ambivo` (server-injected, never from the model)."
+    },
+    "anchor_browser": {
+      "auth_prop_guess": "anchor_browser",
+      "summary": "Configuration auto depuis le schéma Pipedream (anchor_browser-list-session-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `anchor_browser` (server-injected, never from the model)."
+    },
+    "ashby": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (ashby_job_postings_api-list-job-postings). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "ashby_job_postings_api": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (ashby_job_postings_api-list-job-postings). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "assemblyai": {
+      "auth_prop_guess": "assemblyai",
+      "summary": "Configuration auto depuis le schéma Pipedream (assemblyai-get-transcription). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "transcriptId"
+          ],
+          "label": "Transcript",
+          "why": "Identifier of a transcript"
+        }
+      ],
+      "required_props": [
+        "transcriptId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `assemblyai` (server-injected, never from the model)."
+    },
+    "autoblogger": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (autoblogger-validate-api-key). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "aweber": {
+      "auth_prop_guess": "aweberApp",
+      "summary": "Configuration auto depuis le schéma Pipedream (aweber-update-subscriber). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "accountId"
+          ],
+          "label": "Account ID",
+          "why": "The account ID"
+        },
+        {
+          "keys": [
+            "listId"
+          ],
+          "label": "List ID",
+          "why": "The list ID"
+        },
+        {
+          "keys": [
+            "email"
+          ],
+          "label": "Email",
+          "why": "The subscriber's email address"
+        }
+      ],
+      "required_props": [
+        "accountId",
+        "listId",
+        "email"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `aweberApp` (server-injected, never from the model)."
+    },
+    "autobound": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (autobound-write-personalized-content). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "azure_sql": {
+      "auth_prop_guess": "azure_sql",
+      "summary": "Configuration auto depuis le schéma Pipedream (azure_sql-list-table-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `azure_sql` (server-injected, never from the model)."
+    },
+    "badger_maps": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (badger_maps-update-account). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "accountId"
+          ],
+          "label": "Account ID",
+          "why": "The ID of the account."
+        }
+      ],
+      "required_props": [
+        "accountId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `app` (server-injected, never from the model)."
+    },
+    "bamboohr": {
+      "auth_prop_guess": "bamboohr",
+      "summary": "Configuration auto depuis le schéma Pipedream (bamboohr-list-status-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `bamboohr` (server-injected, never from the model)."
+    },
+    "bandwidth": {
+      "auth_prop_guess": "bandwidth",
+      "summary": "Configuration auto depuis le schéma Pipedream (bandwidth-send-sms). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `bandwidth` (server-injected, never from the model)."
+    },
+    "bannerbear": {
+      "auth_prop_guess": "bannerbear",
+      "summary": "Configuration auto depuis le schéma Pipedream (bannerbear-edit-video). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "uid"
+          ],
+          "label": "Video UID",
+          "why": "The video UID that you want to update."
+        }
+      ],
+      "required_props": [
+        "uid"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `bannerbear` (server-injected, never from the model)."
+    },
+    "barcode_lookup": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (barcode_lookup-search-products-by-parameters). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "bannerify": {
+      "auth_prop_guess": "bannerify",
+      "summary": "Configuration auto depuis le schéma Pipedream (bannerify-render-pdf). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "templateId"
+          ],
+          "label": "Template ID",
+          "why": "The Bannerify template ID to render. Example: template_abc123. Use the List Templates action if you need to find the template ID first."
+        }
+      ],
+      "required_props": [
+        "templateId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `bannerify` (server-injected, never from the model)."
+    },
+    "agile_crm": {
+      "auth_prop_guess": "agile_crm",
+      "summary": "Configuration auto depuis le schéma Pipedream (agile_crm-list-filter-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `agile_crm` (server-injected, never from the model)."
+    },
+    "agility_cms": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (agility_cms-get-item). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "itemId"
+          ],
+          "label": "Item ID",
+          "why": "ID of the item to get details of"
+        }
+      ],
+      "required_props": [
+        "itemId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `app` (server-injected, never from the model)."
+    },
+    "aircall": {
+      "auth_prop_guess": "aircall",
+      "summary": "Configuration auto depuis le schéma Pipedream (aircall-list-call-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `aircall` (server-injected, never from the model)."
+    },
+    "ai_textraction": {
+      "auth_prop_guess": "aiTextraction",
+      "summary": "Configuration auto depuis le schéma Pipedream (ai_textraction-extract-data). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Configure resource pickers in order (each dropdown may unlock the next). The server passes dynamic_props_id after reloadProps — do not ask the user for it. Auth prop is `aiTextraction` (server-injected, never from the model)."
+    },
+    "airfocus": {
+      "auth_prop_guess": "airfocus",
+      "summary": "Configuration auto depuis le schéma Pipedream (airfocus-update-item). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "workspaceId"
+          ],
+          "label": "Workspace ID",
+          "why": "The ID of the workspace."
+        },
+        {
+          "keys": [
+            "itemId"
+          ],
+          "label": "Item ID",
+          "why": "The ID of the item."
+        },
+        {
+          "keys": [
+            "statusId"
+          ],
+          "label": "Status ID",
+          "why": "The ID of the status."
+        }
+      ],
+      "required_props": [
+        "workspaceId",
+        "itemId",
+        "statusId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `airfocus` (server-injected, never from the model)."
+    },
+    "algodocs": {
+      "auth_prop_guess": "algodocs",
+      "summary": "Configuration auto depuis le schéma Pipedream (algodocs-upload-file). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `algodocs` (server-injected, never from the model)."
+    },
+    "allocadence": {
+      "auth_prop_guess": "allocadence",
+      "summary": "Configuration auto depuis le schéma Pipedream (allocadence-create-purchase-order). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `allocadence` (server-injected, never from the model)."
+    },
+    "alpaca": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (alpaca-get-account-info). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "americommerce": {
+      "auth_prop_guess": "americommerce",
+      "summary": "Configuration auto depuis le schéma Pipedream (americommerce-list-order-status-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `americommerce` (server-injected, never from the model)."
+    },
+    "affinda": {
+      "auth_prop_guess": "affinda",
+      "summary": "Configuration auto depuis le schéma Pipedream (affinda-list-organization-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `affinda` (server-injected, never from the model)."
+    },
+    "agiled": {
+      "auth_prop_guess": "agiled",
+      "summary": "Configuration auto depuis le schéma Pipedream (agiled-list-user-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `agiled` (server-injected, never from the model)."
+    },
+    "agendor": {
+      "auth_prop_guess": "agendor",
+      "summary": "Configuration auto depuis le schéma Pipedream (agendor-list-user-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `agendor` (server-injected, never from the model)."
+    },
+    "aidaform": {
+      "auth_prop_guess": "aidaform",
+      "summary": "Configuration auto depuis le schéma Pipedream (aidaform-list-form-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `aidaform` (server-injected, never from the model)."
+    },
+    "amplitude": {
+      "auth_prop_guess": "app",
+      "summary": "Configuration auto depuis le schéma Pipedream (amplitude-send-event-data). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `app` (server-injected, never from the model)."
+    },
+    "anthropic": {
+      "auth_prop_guess": "anthropic",
+      "summary": "Configuration auto depuis le schéma Pipedream (anthropic-list-model-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `anthropic` (server-injected, never from the model)."
+    },
+    "anymail_finder": {
+      "auth_prop_guess": "anymailFinder",
+      "summary": "Configuration auto depuis le schéma Pipedream (anymail_finder-search-email). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `anymailFinder` (server-injected, never from the model)."
+    },
+    "appdrag": {
+      "auth_prop_guess": "appdrag",
+      "summary": "Configuration auto depuis le schéma Pipedream (appdrag-list-table-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `appdrag` (server-injected, never from the model)."
+    },
+    "aero_workflow": {
+      "auth_prop_guess": "aero_workflow",
+      "summary": "Configuration auto depuis le schéma Pipedream (aero_workflow-list-contact-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `aero_workflow` (server-injected, never from the model)."
+    },
+    "aftership": {
+      "auth_prop_guess": "aftership",
+      "summary": "Configuration auto depuis le schéma Pipedream (aftership-list-tracking-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `aftership` (server-injected, never from the model)."
+    },
+    "agentset": {
+      "auth_prop_guess": "agentset",
+      "summary": "Configuration auto depuis le schéma Pipedream (agentset-search-namespace). (promoted from generated catalog)",
+      "required_static_hints": [
+        {
+          "keys": [
+            "namespaceId"
+          ],
+          "label": "Namespace ID",
+          "why": "The ID of the namespace"
+        }
+      ],
+      "required_props": [
+        "namespaceId"
+      ],
+      "builder_guidance": "Fill every resource picker in Structure before Live; IDs are injected at execution. Auth prop is `agentset` (server-injected, never from the model)."
+    },
+    "agrello": {
+      "auth_prop_guess": "agrello",
+      "summary": "Configuration auto depuis le schéma Pipedream (agrello-list-folder-id-options). (promoted from generated catalog)",
+      "required_static_hints": [],
+      "required_props": [],
+      "builder_guidance": "Auth prop is `agrello` (server-injected, never from the model)."
     }
   }
 }

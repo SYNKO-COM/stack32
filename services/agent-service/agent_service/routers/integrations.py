@@ -44,6 +44,13 @@ class ToolConfigRequest(BaseModel):
     schema_version: str | None = None
 
 
+class ReloadPropsRequest(BaseModel):
+    agent_id: str
+    config: dict[str, Any] = Field(default_factory=dict)
+    connection_id: str | None = None
+    changed_prop: str | None = Field(default=None, max_length=128)
+
+
 @router.post("/integrations/connect-token")
 async def create_connect_token(
     body: ConnectTokenRequest, user: CurrentUser
@@ -287,6 +294,24 @@ async def tool_dynamic_options(
         context=context,
     )
     return {"options": options}
+
+
+@router.post("/integrations/tools/{tool_id}/reload-props")
+async def reload_tool_props(
+    tool_id: str,
+    body: ReloadPropsRequest,
+    user: CurrentUser,
+) -> dict[str, Any]:
+    """Reload Pipedream dynamic props after a Structure reloadProps field changes."""
+    from agent_service.integrations.pipedream.tool_config import reload_tool_props_for_structure
+
+    return await reload_tool_props_for_structure(
+        user_id=user.user_id,
+        agent_id=body.agent_id,
+        tool_id=tool_id,
+        config=body.config,
+        connection_id=body.connection_id,
+    )
 
 
 @router.get("/integrations/apps/icons")

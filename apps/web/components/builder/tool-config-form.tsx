@@ -16,6 +16,7 @@ import {
   getToolConfig,
   getToolDynamicOptions,
   listIntegrationAccounts,
+  reloadToolProps,
   saveToolConfig,
 } from "@/lib/actions/integrations";
 import {
@@ -31,6 +32,8 @@ type FieldSchema = {
   enum?: unknown[];
   default?: unknown;
   title?: string;
+  "x-reload-props"?: boolean;
+  "x-remote-options"?: boolean;
 };
 
 type HintRow = {
@@ -71,6 +74,116 @@ export function ToolConfigForm({
   const [hintKeys, setHintKeys] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [reloadTriggers, setReloadTriggers] = useState<Set<string>>(new Set());
+  const [reloadingProps, setReloadingProps] = useState(false);
+
+  const loadRemoteOptionsForKeys = (
+    keys: string[],
+    cancelled: () => boolean,
+    propsMap?: Record<string, FieldSchema>,
+  ) => {
+    const map = propsMap ?? fields;
+    const loading: Record<string, boolean> = {};
+    for (const key of keys) {
+      const fieldMeta = map[key];
+      if (fieldMeta?.enum && fieldMeta.enum.length > 0) continue;
+      loading[key] = true;
+    }
+    if (Object.keys(loading).length === 0) return;
+    setLoadingOptions((prev) => ({ ...prev, ...loading }));
+    for (const key of Object.keys(loading)) {
+      void getToolDynamicOptions({ toolId, prop: key, agentId })
+        .then((res) => {
+          if (cancelled()) return;
+          setRemoteOptions((prev) => ({
+            ...prev,
+            [key]: (res.options ?? []).map((o) => ({
+              value: String(o.value),
+              label: String(o.label ?? o.value),
+            })),
+          }));
+        })
+        .finally(() => {
+          if (cancelled()) return;
+          setLoadingOptions((prev) => ({ ...prev, [key]: false }));
+        });
+    }
+  };
+
+  const applyStaticSchema = (
+    staticSchema: Record<string, unknown> | undefined,
+    existingValues: Record<string, string>,
+  ) => {
+    const props =
+      (staticSchema?.properties as Record<string, FieldSchema> | undefined) ?? {};
+    setFields(props);
+    setRequired(
+      Array.isArray(staticSchema?.required) ? (staticSchema.required as string[]) : [],
+    );
+    setValues((prev) => {
+      const next = { ...prev, ...existingValues };
+      for (const key of Object.keys(props)) {
+        if (next[key] === undefined) next[key] = "";
+      }
+      return next;
+    });
+    return Object.keys(props);
+  };
+
+  const handlePropChange = (name: string, value: string) => {
+    setSaved(false);
+    const nextValues = { ...values, [name]: value };
+    setValues(nextValues);
+
+    if (!reloadTriggers.has(name) || !value.trim()) return;
+
+    void (async () => {
+      setReloadingProps(true);
+      setError(null);
+      try {
+        const configPayload: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(nextValues)) {
+          if (v === "" || k.startsWith("_")) continue;
+          configPayload[k] = v;
+        }
+        const res = await reloadToolProps({
+          toolId,
+          agentId,
+          config: configPayload,
+          connectionId: connectionId || undefined,
+          changedProp: name,
+        });
+        if (res.error) {
+          setError(
+            typeof res.message === "string"
+              ? res.message
+              : "Impossible de charger les options suivantes.",
+          );
+          return;
+        }
+        const dynId = res.dynamic_props_id;
+        const mergedValues = { ...nextValues };
+        if (typeof dynId === "string" && dynId) {
+          mergedValues._dynamicPropsId = dynId;
+        }
+        const newKeys = applyStaticSchema(
+          res.static_schema as Record<string, unknown> | undefined,
+          mergedValues,
+        );
+        const triggers = Array.isArray(res.reload_props_triggers)
+          ? res.reload_props_triggers.filter((t): t is string => typeof t === "string")
+          : [];
+        if (triggers.length > 0) {
+          setReloadTriggers(new Set(triggers));
+        }
+        loadRemoteOptionsForKeys(newKeys, () => false);
+      } catch {
+        setError("Impossible de charger les options suivantes.");
+      } finally {
+        setReloadingProps(false);
+      }
+    })();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +217,23 @@ export function ToolConfigForm({
           const v = existing[key];
           next[key] = v == null ? "" : String(v);
         }
+        const dyn =
+          existing._dynamicPropsId ?? existing._dynamic_props_id ?? existing.dynamic_props_id;
+        if (dyn != null && String(dyn)) {
+          next._dynamicPropsId = String(dyn);
+        }
         setValues(next);
+        const triggersRaw =
+          schema && typeof schema === "object"
+            ? (schema as { reload_props_triggers?: unknown }).reload_props_triggers
+            : [];
+        const triggers = Array.isArray(triggersRaw)
+          ? triggersRaw.filter((x): x is string => typeof x === "string")
+          : [];
+        for (const [key, meta] of Object.entries(props)) {
+          if (meta?.["x-reload-props"]) triggers.push(key);
+        }
+        setReloadTriggers(new Set(triggers));
         const acctRows = listed.accounts ?? [];
         setAccounts(acctRows);
         const storedConn =
@@ -141,29 +270,7 @@ export function ToolConfigForm({
         setHintMeta(meta);
         setLoaded(true);
 
-        const loading: Record<string, boolean> = {};
-        for (const [key, fieldMeta] of Object.entries(props)) {
-          if (fieldMeta.enum && fieldMeta.enum.length > 0) continue;
-          loading[key] = true;
-        }
-        setLoadingOptions(loading);
-        for (const key of Object.keys(loading)) {
-          void getToolDynamicOptions({ toolId, prop: key, agentId })
-            .then((res) => {
-              if (cancelled) return;
-              setRemoteOptions((prev) => ({
-                ...prev,
-                [key]: (res.options ?? []).map((o) => ({
-                  value: String(o.value),
-                  label: String(o.label ?? o.value),
-                })),
-              }));
-            })
-            .finally(() => {
-              if (cancelled) return;
-              setLoadingOptions((prev) => ({ ...prev, [key]: false }));
-            });
-        }
+        loadRemoteOptionsForKeys(Object.keys(props), () => cancelled, props);
       } catch {
         if (!cancelled) setError(t("panel.toolConfigLoadError"));
       }
@@ -258,14 +365,15 @@ export function ToolConfigForm({
         <PipedreamPropFields
           props={requiredPropDefs}
           values={values}
-          disabled={pending}
+          disabled={pending || reloadingProps}
           selectPlaceholder={t("panel.toolConfigSelect")}
           searchPlaceholder={t("panel.toolConfigSearch")}
-          onChange={(name, value) => {
-            setSaved(false);
-            setValues((prev) => ({ ...prev, [name]: value }));
-          }}
+          onChange={handlePropChange}
         />
+      ) : null}
+
+      {reloadingProps ? (
+        <p className="text-xs text-muted-foreground">Chargement des options…</p>
       ) : null}
 
       {optionalPropDefs.length > 0 ? (
@@ -290,13 +398,10 @@ export function ToolConfigForm({
               <PipedreamPropFields
                 props={optionalPropDefs}
                 values={values}
-                disabled={pending}
+                disabled={pending || reloadingProps}
                 selectPlaceholder={t("panel.toolConfigSelect")}
                 searchPlaceholder={t("panel.toolConfigSearch")}
-                onChange={(name, value) => {
-                  setSaved(false);
-                  setValues((prev) => ({ ...prev, [name]: value }));
-                }}
+                onChange={handlePropChange}
               />
             </div>
           ) : null}

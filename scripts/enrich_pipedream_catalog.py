@@ -159,6 +159,10 @@ async def enrich(*, limit: int, offset: int, concurrency: int) -> dict:
 
 
 def main() -> None:
+    import os
+
+    # Tolerate malformed PIPEDREAM_ALLOWED_ORIGINS in local .env during batch runs.
+    os.environ.setdefault("PIPEDREAM_ALLOWED_ORIGINS", "[]")
     parser = argparse.ArgumentParser(description="Enrich Pipedream generated_app_hints.json")
     parser.add_argument("--limit", type=int, default=100, help="Max apps to process in this batch")
     parser.add_argument("--offset", type=int, default=0, help="Skip first N discovered apps")

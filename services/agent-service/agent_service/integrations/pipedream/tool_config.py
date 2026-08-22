@@ -29,6 +29,10 @@ _BANNED_PROMPT_KEYS = frozenset(
         "api_key",
         "oauth_token",
         "external_account_id",
+        "_dynamicPropsId",
+        "_dynamic_props_id",
+        "dynamic_props_id",
+        "dynamicPropsId",
     }
 )
 
@@ -322,6 +326,131 @@ def _safe_config_for_prompt(config: dict[str, Any]) -> dict[str, Any]:
             continue
         safe[key] = value
     return safe
+
+
+_DYNAMIC_PROPS_CONFIG_KEYS = frozenset(
+    {"_dynamicPropsId", "_dynamic_props_id", "dynamic_props_id", "dynamicPropsId"}
+)
+
+
+def dynamic_props_id_from_config(config: dict[str, Any] | None) -> str | None:
+    cfg = config or {}
+    for key in _DYNAMIC_PROPS_CONFIG_KEYS:
+        val = cfg.get(key)
+        if val not in (None, ""):
+            return str(val)
+    return None
+
+
+def schema_needs_reload_props(schema: NormalizedToolSchema) -> bool:
+    return any(
+        isinstance(p.raw, dict)
+        and (p.raw.get("reloadProps") or p.raw.get("reload_props"))
+        for p in schema.props
+    )
+
+
+def build_reload_props_seed(
+    schema: NormalizedToolSchema,
+    configured: dict[str, Any],
+) -> dict[str, Any]:
+    """Minimal configured_props for a reloadProps API call (auth + filled static/reload fields)."""
+    seed: dict[str, Any] = {}
+    if schema.auth_prop_name and schema.auth_prop_name in configured:
+        seed[schema.auth_prop_name] = configured[schema.auth_prop_name]
+
+    reload_trigger_names = {
+        p.name
+        for p in schema.props
+        if isinstance(p.raw, dict)
+        and (p.raw.get("reloadProps") or p.raw.get("reload_props"))
+    }
+    static_remote = {
+        p.name for p in schema.props if p.kind == "static" and p.remote_options
+    }
+
+    for key, value in configured.items():
+        if value in (None, ""):
+            continue
+        if key in reload_trigger_names or key in static_remote or key == schema.auth_prop_name:
+            seed[key] = value
+    return seed
+
+
+async def reload_tool_props_for_structure(
+    *,
+    user_id: str,
+    agent_id: str,
+    tool_id: str,
+    config: dict[str, Any],
+    connection_id: str | None = None,
+) -> dict[str, Any]:
+    """Structure wizard: reload props after user sets a reloadProps field."""
+    from agent_service.integrations.pipedream.accounts import resolve_pipedream_auth_for_tool
+    from agent_service.integrations.registry import get_provider_registry
+
+    registry = get_provider_registry()
+    pd = registry.get_provider("pipedream")
+    if pd is None:
+        return {"error": "PIPEDREAM_NOT_CONFIGURED"}
+
+    schema = await pd.get_normalized_schema(tool_id)
+    auth = await resolve_pipedream_auth_for_tool(
+        user_id=user_id,
+        agent_id=agent_id,
+        tool_id=tool_id,
+        app_id=schema.app_id,
+    )
+    if not auth:
+        return {"error": "CONNECTION_REQUIRED", "message": "Connectez ce compte d'abord."}
+
+    merged = normalize_static_config_for_schema(config, schema, app_id=schema.app_id)
+    from agent_service.integrations.pipedream.schema import (
+        build_configured_props,
+        normalize_configurable_props,
+    )
+
+    configured = build_configured_props(
+        schema,
+        auth_provision_id=str(auth["auth_provision_id"]),
+        static_config=merged,
+        runtime_args={},
+    )
+    seed = build_reload_props_seed(schema, configured)
+    action_id = tool_id.removeprefix("pd:")
+    client = pd._client  # noqa: SLF001
+    reloaded = await client.reload_props(
+        action_id=action_id,
+        external_user_id=user_id,
+        configured_props=seed,
+        version=schema.version,
+    )
+    if not isinstance(reloaded, dict) or reloaded.get("error"):
+        return reloaded if isinstance(reloaded, dict) else {"error": "PIPEDREAM_RELOAD_PROPS_FAILED"}
+
+    props = reloaded.get("configurable_props") or []
+
+    merged_component = {
+        "key": action_id,
+        "app": {"name_slug": schema.app_id} if schema.app_id else None,
+        "configurable_props": props,
+        "version": schema.version,
+    }
+    new_schema = normalize_configurable_props(
+        merged_component,
+        tool_id=tool_id,
+        action_id=action_id,
+    )
+    return {
+        "dynamic_props_id": reloaded.get("dynamic_props_id"),
+        "static_schema": new_schema.static_config_schema(),
+        "reload_props_triggers": [
+            p.name
+            for p in new_schema.props
+            if isinstance(p.raw, dict)
+            and (p.raw.get("reloadProps") or p.raw.get("reload_props"))
+        ],
+    }
 
 
 def configured_tools_system_block(

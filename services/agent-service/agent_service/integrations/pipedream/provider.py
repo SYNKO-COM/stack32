@@ -106,11 +106,28 @@ class PipedreamToolProvider:
         if cached is not None:
             return cached
         try:
+            from agent_service.integrations.pipedream.component_cache import get_cached_component
+
+            persisted = await get_cached_component(action_id, component_type="action")
+            if isinstance(persisted, dict) and self._valid_component(
+                persisted, expected_key=action_id
+            ):
+                self._cache_set(self._component_cache, action_id, persisted)
+                return persisted
+        except Exception:  # noqa: BLE001
+            persisted = None
+        try:
             component = await self._client.get_component(action_id)
         except Exception:  # noqa: BLE001
             return None
         if isinstance(component, dict) and self._valid_component(component, expected_key=action_id):
             self._cache_set(self._component_cache, action_id, component)
+            try:
+                from agent_service.integrations.pipedream.component_cache import put_cached_component
+
+                await put_cached_component(action_id, component, component_type="action")
+            except Exception:  # noqa: BLE001
+                pass
             return component
         return None
 
@@ -197,6 +214,13 @@ class PipedreamToolProvider:
         if not tool:
             return None
         schema = await self.get_normalized_schema(tool.tool_id)
+        reload_triggers = [
+            p.name
+            for p in schema.props
+            if isinstance(p.raw, dict)
+            and (p.raw.get("reloadProps") or p.raw.get("reload_props"))
+            and p.kind in {"static", "runtime"}
+        ]
         return {
             "tool_id": tool.tool_id,
             "provider": "pipedream",
@@ -207,6 +231,7 @@ class PipedreamToolProvider:
             "input_schema": schema.llm_json_schema(),
             "static_schema": schema.static_config_schema(),
             "param_kinds": {p.name: p.kind for p in schema.props},
+            "reload_props_triggers": reload_triggers,
         }
 
     async def get_auth_requirement(self, tool_id: str) -> dict[str, Any]:
@@ -349,13 +374,16 @@ class PipedreamToolProvider:
             runtime_args=runtime_args,
         )
 
-        # reloadProps (e.g. Canva `name` after designType=preset) are absent from the
-        # base schema — inject them directly so run_action still receives them.
-        dynamic_props_id: str | None = None
-        needs_reload = any(
-            bool((p.raw or {}).get("reloadProps") or (p.raw or {}).get("reload_props"))
-            for p in (schema.props or [])
-        ) or str(action_id).endswith("canva-create-design")
+        from agent_service.integrations.pipedream.tool_config import (
+            build_reload_props_seed,
+            dynamic_props_id_from_config,
+            schema_needs_reload_props,
+        )
+
+        dynamic_props_id = dynamic_props_id_from_config(static_config)
+        needs_reload = schema_needs_reload_props(schema) or str(action_id).endswith(
+            "canva-create-design"
+        )
         if str(action_id).endswith("canva-create-design") or tool_ref.tool_id.endswith(
             "canva-create-design"
         ):
@@ -364,25 +392,8 @@ class PipedreamToolProvider:
                     configured[key] = runtime_args[key]
             needs_reload = True
 
-        if needs_reload:
-            # Seed only auth + reload trigger props for the props reload call.
-            seed = {
-                k: v
-                for k, v in configured.items()
-                if k
-                in {
-                    schema.auth_prop_name,
-                    "designType",
-                    "sheetId",
-                    "drive",
-                    "worksheetId",
-                }
-                or k == schema.auth_prop_name
-            }
-            if schema.auth_prop_name and schema.auth_prop_name in configured:
-                seed[schema.auth_prop_name] = configured[schema.auth_prop_name]
-            if "designType" in configured:
-                seed["designType"] = configured["designType"]
+        if needs_reload and not dynamic_props_id:
+            seed = build_reload_props_seed(schema, configured)
             reloaded = await self._client.reload_props(
                 action_id=action_id,
                 external_user_id=user_id,
