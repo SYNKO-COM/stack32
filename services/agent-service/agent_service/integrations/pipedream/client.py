@@ -197,6 +197,59 @@ class PipedreamClient:
                 _ICON_CACHE[slug] = src
         return out
 
+    async def list_all_apps(
+        self,
+        *,
+        max_apps: int | None = None,
+        page_size: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Paginate the full Pipedream app catalog (~3000+ apps)."""
+        if not self.configured():
+            return []
+        page_size = min(max(page_size, 1), 100)
+        collected: list[dict[str, Any]] = []
+        after: str | None = None
+        seen_slugs: set[str] = set()
+
+        while True:
+            params: dict[str, Any] = {"limit": page_size}
+            if after:
+                params["after"] = after
+            data = await self._request("GET", "/apps", params=params)
+            if not isinstance(data, dict):
+                break
+            rows = data.get("data") or data.get("apps") or []
+            if not isinstance(rows, list) or not rows:
+                break
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                slug = str(row.get("name_slug") or row.get("id") or row.get("name") or "")
+                slug = slug.strip().lower().replace("-", "_")
+                if not slug or slug in seen_slugs:
+                    continue
+                seen_slugs.add(slug)
+                entry = {
+                    "app_id": row.get("name_slug") or row.get("id") or row.get("name"),
+                    "name": row.get("name") or row.get("name_slug"),
+                    "img_src": row.get("img_src") or row.get("icon") or row.get("logo"),
+                    "summary": row.get("description") or "",
+                    "auth_type": row.get("auth_type") or "oauth",
+                    "raw": row,
+                }
+                collected.append(entry)
+                src = entry.get("img_src")
+                if slug and isinstance(src, str) and src.startswith("http"):
+                    _ICON_CACHE[slug] = src
+                if max_apps and len(collected) >= max_apps:
+                    return collected[:max_apps]
+            page_info = data.get("page_info") if isinstance(data.get("page_info"), dict) else {}
+            next_cursor = page_info.get("end_cursor")
+            if not next_cursor or next_cursor == after:
+                break
+            after = str(next_cursor)
+        return collected
+
     async def icons_for_apps(self, app_ids: list[str]) -> dict[str, str]:
         """Exact app_id → img_src. Cache hits are instant; misses search once."""
         out: dict[str, str] = {}
