@@ -35,8 +35,8 @@ variable "image" {
 
 variable "min_instance_count" {
   type        = number
-  description = "Cloud Run minimum instances (1 avoids cold starts for hosted agents)"
-  default     = 1
+  description = "Cloud Run minimum instances (0 = scale-to-zero, best for early stage; 1 avoids cold starts)"
+  default     = 0
 }
 
 variable "max_instance_count" {

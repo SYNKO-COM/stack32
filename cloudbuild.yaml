@@ -1,0 +1,48 @@
+# Cloud Build — agent-service → Cloud Run (GitHub trigger on main).
+# Build context MUST be services/ (Dockerfile copies stack32-agent-runtime + agent-service).
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: Build
+    args:
+      - build
+      - --platform=linux/amd64
+      - -f
+      - services/agent-service/Dockerfile
+      - -t
+      - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:$COMMIT_SHA
+      - -t
+      - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:production
+      - services
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push-sha
+    args:
+      - push
+      - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:$COMMIT_SHA
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push-production
+    args:
+      - push
+      - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:production
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    id: Deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - stack32-agent-api
+      - --platform=managed
+      - --image=europe-west1-docker.pkg.dev/stack32/stack32/agent-service:$COMMIT_SHA
+      - --region=europe-west1
+      - --quiet
+
+images:
+  - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:$COMMIT_SHA
+  - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:production
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

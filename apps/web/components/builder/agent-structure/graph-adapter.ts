@@ -183,7 +183,7 @@ export function buildProductAgentGraph(input: BuildProductGraphInput): ProductAg
     nodes.push({
       id: "trigger:tool",
       kind: "trigger_tool",
-      label: `Trigger ${appName}`,
+      label: toolTrigger.label?.trim() || `Trigger ${appName}`,
       subtitle: toolTrigger.componentId || undefined,
       configurationStatus: triggerReady ? "ready" : "setup_required",
       ...(appKey

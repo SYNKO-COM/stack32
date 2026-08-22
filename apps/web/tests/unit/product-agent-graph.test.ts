@@ -145,7 +145,10 @@ describe("graph-adapter", () => {
         label: "New email",
       },
     ];
-    const graph = buildProductAgentGraph({ definition: spec });
+    const graph = buildProductAgentGraph({
+      definition: spec,
+      boundAppIds: new Set(["gmail"]),
+    });
     const tool = graph.nodes.find((n) => n.kind === "trigger_tool");
     expect(tool?.label).toBe("New email");
     expect(tool?.configurationStatus).toBe("ready");

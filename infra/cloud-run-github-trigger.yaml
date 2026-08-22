@@ -1,0 +1,14 @@
+name: rmgpgab-stack32-agent-api-europe-west1-SYNKO-COM-stack32--mawsa
+description: Build and deploy to Cloud Run service stack32-agent-api on push to "^main$"
+github:
+  owner: SYNKO-COM
+  name: stack32
+  push:
+    branch: ^main$
+filename: cloudbuild.yaml
+includeBuildLogs: INCLUDE_BUILD_LOGS_WITH_STATUS
+serviceAccount: projects/stack32/serviceAccounts/732339494633-compute@developer.gserviceaccount.com
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - stack32-agent-api

@@ -22,6 +22,7 @@ async def test_chat_mode_never_mutates_and_answers():
     db.update_run_status = AsyncMock()
     db.tag_thinking_with_run = AsyncMock()
     db.update_agent_status = AsyncMock()
+    db.get_owned_run = AsyncMock(return_value={"input": {}})
     db.get_owned_agent = AsyncMock(
         return_value={"id": "a1", "name": "Demo", "status": "ready", "user_id": "u1"}
     )
@@ -67,6 +68,10 @@ async def test_build_mode_does_not_use_chat_handler():
     db.tag_thinking_with_run = AsyncMock()
     db.update_run_status = AsyncMock()
     db.get_owned_run = AsyncMock(return_value={"input": {}})
+    db.get_owned_agent = AsyncMock(
+        return_value={"id": "a1", "name": "Research", "status": "draft", "user_id": "u1"}
+    )
+    db.update_agent_status = AsyncMock()
 
     orch = BuilderOrchestrator(db)
     orch._handle_chat_turn = AsyncMock(return_value={"status": "completed", "mode": "chat"})
