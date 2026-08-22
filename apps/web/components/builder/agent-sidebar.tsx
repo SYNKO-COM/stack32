@@ -46,7 +46,7 @@ import { useUiStore } from "@/store/ui-store";
 const CREATE_MIN_MS = 900;
 const CREATE_MAX_MS = 2200;
 /** Sidebar label cap — long agent names get an ellipsis. */
-const AGENT_NAME_MAX_CHARS = 22;
+const AGENT_NAME_MAX_CHARS = 18;
 
 function truncateAgentName(name: string, max = AGENT_NAME_MAX_CHARS): string {
   const trimmed = name.trim();
