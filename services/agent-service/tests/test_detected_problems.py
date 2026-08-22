@@ -23,9 +23,8 @@ def test_summarize_detected_problems_smoke_and_connection() -> None:
         build_ok=False,
         build_failure_reason="tests failed",
     )
-    assert any("Sandbox build failed" in p for p in problems)
-    # Product copy surfaces a friendly "quick test didn't pass" bullet for failed reports.
-    assert any("quick test didn't pass" in p.lower() for p in problems)
+    assert any("sandbox" in p.lower() or "vérification" in p.lower() for p in problems)
+    assert any("test rapide" in p.lower() for p in problems)
     assert any("gmail_send_message" in p for p in problems)
     assert any("google" in p.lower() for p in problems)
     # readiness.build_ok message must not duplicate the sandbox bullet

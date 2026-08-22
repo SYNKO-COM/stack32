@@ -121,18 +121,29 @@ def summarize_detected_problems(
 
     if build_ok is False:
         reason = str(build_failure_reason or "").strip()
-        if reason:
-            problems.append(f"Sandbox build failed: {reason[:160]}")
+        low = reason.lower()
+        if "validationerror" in low or "agentspec" in low:
+            problems.append(
+                "La configuration de l'agent a besoin d'un petit correctif — je peux le refaire."
+            )
+        elif "repair_requires_snapshot" in low or "no baseline" in low:
+            problems.append(
+                "Premier build sandbox en cours — je crée la base du projet puis je réessaie."
+            )
+        elif reason:
+            problems.append(f"La vérification sandbox a échoué : {reason[:140]}")
         else:
-            problems.append("Sandbox build or coding verification did not succeed.")
+            problems.append(
+                "La vérification sandbox n'a pas abouti. Je peux corriger ça pour vous."
+            )
 
     test_status = str(report.get("status") or "")
     if test_status and not test_status.startswith("passed"):
         reason = str(report.get("reason") or report.get("error_code") or "").strip()
         if reason:
-            problems.append("The quick test didn't pass. I can fix it for you.")
+            problems.append("Le test rapide n'est pas passé. Je peux le corriger.")
         else:
-            problems.append("The quick test didn't pass.")
+            problems.append("Le test rapide n'est pas passé.")
 
     if readiness is not None:
         for check in getattr(readiness, "checks", []) or []:
@@ -175,7 +186,13 @@ def summarize_detected_problems(
                 problems.append(f"Finish setup for {label}.")
 
     if error_name:
-        problems.append("The build stopped unexpectedly. You can ask me to try again.")
+        en = str(error_name).lower()
+        if en in {"validationerror", "typeerror", "attributeerror"}:
+            problems.append(
+                "Un correctif interne a bloqué la construction. Relancez — c'est réparable automatiquement."
+            )
+        else:
+            problems.append("La construction s'est arrêtée. Vous pouvez me demander de réessayer.")
 
     if status == "needs_setup" and not any("connect" in p.lower() for p in problems):
         problems.append("Complete runtime setup in AI Agent.")
@@ -2352,26 +2369,30 @@ class BuilderOrchestrator:
                 filter_unauthorized_tool_bindings,
             )
 
-            repair_contract = make_repair_contract_for_turn(
-                user_request=content,
-                spec=current_spec,
-                explicit_user_tool_change=bool(caps.get("tools_confirmed")),
-            )
-            spec.tools = filter_unauthorized_tool_bindings(
-                list(spec.tools or []),
-                contract=repair_contract,
-                current=list(current_spec.tools or []),
-            )
-            spec = clamp_spec_to_repair_contract(
-                before=current_spec,
-                after=spec,
-                contract=repair_contract,
-            )
-            await self.db.emit_event(
-                run_id,
-                "builder.repair.contract",
-                {"repair_id": repair_contract.repair_id, "intent": intent.value},
-            )
+            try:
+                repair_contract = make_repair_contract_for_turn(
+                    user_request=content,
+                    spec=current_spec,
+                    explicit_user_tool_change=bool(caps.get("tools_confirmed")),
+                )
+                spec.tools = filter_unauthorized_tool_bindings(
+                    list(spec.tools or []),
+                    contract=repair_contract,
+                    current=list(current_spec.tools or []),
+                )
+                spec = clamp_spec_to_repair_contract(
+                    before=current_spec,
+                    after=spec,
+                    contract=repair_contract,
+                )
+                await self.db.emit_event(
+                    run_id,
+                    "builder.repair.contract",
+                    {"repair_id": repair_contract.repair_id, "intent": intent.value},
+                )
+            except Exception:  # noqa: BLE001
+                # Spec guard must never abort a repair turn — keep proposed/current merge.
+                logger.exception("repair_contract_guard_failed run=%s", run_id)
 
         # Connection binding is installation-scoped (AI Agent), never a Build gate.
         tool_names = ", ".join(t.tool_id for t in spec.tools[:4]) or "core tools"
@@ -2670,6 +2691,7 @@ class BuilderOrchestrator:
                 if intent in (BuilderIntent.MODIFY, BuilderIntent.REPAIR):
                     from agent_service.builder.repair_engine import (
                         make_repair_contract_for_turn,
+                        resolve_baseline_snapshot_id,
                         run_modify_or_repair_from_snapshot,
                     )
 
@@ -2678,16 +2700,35 @@ class BuilderOrchestrator:
                         spec=spec,
                         explicit_user_tool_change=bool(caps.get("tools_confirmed")),
                     )
-                    build_report = await run_modify_or_repair_from_snapshot(
+                    snapshot_id = await resolve_baseline_snapshot_id(
                         user_id=user_id,
                         agent_id=agent_id,
-                        run_id=run_id,
-                        spec=spec,
-                        contract=contract,
-                        blueprint=blueprint,
-                        version_id=version.get("id"),
-                        emit=_emit,
+                        preferred_snapshot_id=contract.baseline_snapshot_id,
                     )
+                    if snapshot_id:
+                        build_report = await run_modify_or_repair_from_snapshot(
+                            user_id=user_id,
+                            agent_id=agent_id,
+                            run_id=run_id,
+                            spec=spec,
+                            contract=contract,
+                            blueprint=blueprint,
+                            version_id=version.get("id"),
+                            emit=_emit,
+                        )
+                    else:
+                        # First successful scaffold creates the baseline snapshot.
+                        await _emit(
+                            "builder.sandbox.scaffold_fallback",
+                            {"reason": "no_snapshot", "intent": intent.value},
+                        )
+                        build_report = await pipeline.build(
+                            blueprint,
+                            user_id=user_id,
+                            agent_id=agent_id,
+                            run_id=run_id,
+                            version_id=version.get("id"),
+                        )
                 else:
                     build_report = await pipeline.build(
                         blueprint,
@@ -2767,8 +2808,18 @@ class BuilderOrchestrator:
                 build_failure_reason = f"{type(exc).__name__}: {exc}"[:200]
                 # Platform plumbing bugs (e.g. fingerprint kwargs) must not strand the agent.
                 # Soft-skip so smoke-passed agents stay usable while we auto-repair next turn.
-                if type(exc).__name__ in {"TypeError", "AttributeError", "NameError"} or (
-                    "failure_fingerprint" in build_failure_reason
+                if type(exc).__name__ in {
+                    "TypeError",
+                    "AttributeError",
+                    "NameError",
+                    "ValidationError",
+                } or any(
+                    token in build_failure_reason
+                    for token in (
+                        "failure_fingerprint",
+                        "REPAIR_REQUIRES_SNAPSHOT",
+                        "AgentSpec",
+                    )
                 ):
                     build_ok = None
                     await self.db.emit_event(

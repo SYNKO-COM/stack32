@@ -20,7 +20,8 @@ def spec_sections_snapshot(spec: AgentSpec) -> dict[str, Any]:
         "tools_app_keys": sorted(_spec_tool_app_keys(spec)),
         "memory": spec.memory.model_dump(mode="json"),
         "triggers": [t.model_dump(mode="json") for t in (spec.triggers or [])],
-        "model": spec.model.model_dump(mode="json") if spec.model else {},
+        "model": (spec.model.model_dump(mode="json") if spec.model else None)
+        or (spec.model_policy.model_dump(mode="json") if spec.model_policy else {}),
     }
 
 
@@ -89,7 +90,8 @@ def filter_unauthorized_tool_bindings(
     """Drop unsolicited app changes during repair."""
     if contract.explicit_user_tool_change:
         return proposed
-    current_keys = _spec_tool_app_keys(AgentSpec(goal="", tools=list(current or [])))
+    # Never construct a full AgentSpec here — identity/graph are required fields.
+    current_keys = reviewable_app_keys(list(current or []))
     proposed_keys = reviewable_app_keys(proposed)
     if proposed_keys == current_keys:
         return proposed
@@ -118,17 +120,26 @@ def clamp_spec_to_repair_contract(
     violations = diff_spec_violations(before=before, after=after, contract=contract)
     if not violations:
         return after
-    data = after.model_dump()
+    data = after.model_dump(mode="json")
     b = spec_sections_snapshot(before)
     protected = contract.protected_scope or {}
-    if protected.get("identity"):
+    if protected.get("identity") and b.get("identity"):
         data["identity"] = b["identity"]
-    if protected.get("memory"):
+    if protected.get("memory") and b.get("memory"):
         data["memory"] = b["memory"]
     if protected.get("triggers"):
-        data["triggers"] = b["triggers"]
+        data["triggers"] = b.get("triggers") or []
     if protected.get("model_policy"):
-        data["model"] = b["model"]
+        # Prefer exact ModelConfig when present; otherwise restore model_policy only.
+        if before.model is not None:
+            data["model"] = before.model.model_dump(mode="json")
+        data["model_policy"] = before.model_policy.model_dump(mode="json")
     if protected.get("tool_set") and not contract.explicit_user_tool_change:
         data["tools"] = [t.model_dump(mode="json") for t in (before.tools or [])]
-    return AgentSpec.model_validate(data)
+    try:
+        return AgentSpec.model_validate(data)
+    except Exception:  # noqa: BLE001
+        # Never fail the whole build on clamp plumbing — keep the safer baseline.
+        logger = __import__("logging").getLogger(__name__)
+        logger.exception("clamp_spec_to_repair_contract_validate_failed")
+        return before

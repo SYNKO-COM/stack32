@@ -102,24 +102,34 @@ function humanizeProblemText(raw: string): string {
     lower.includes("agent connection binding") ||
     lower.includes("required agent connection")
   ) {
-    return "Connect the required account so this agent can use its tools.";
+    return "Connectez le compte requis pour que cet agent puisse utiliser ses outils.";
   }
   if (lower.startsWith("missing connection:")) {
-    const label = text.split(":").slice(1).join(":").trim() || "an app";
-    return `Connect your ${label} account to continue.`;
+    const label = text.split(":").slice(1).join(":").trim() || "une app";
+    return `Connectez votre compte ${label} pour continuer.`;
   }
   if (lower.includes("unresolved tools")) {
-    return text.replace(/Unresolved tools:/i, "Some tools still need to be set up:");
+    return text.replace(/Unresolved tools:/i, "Certains outils restent à configurer :");
   }
-  if (lower.includes("agentspec")) {
-    return "The agent configuration needs a small fix.";
+  if (lower.includes("agentspec") || lower.includes("validationerror")) {
+    return "La configuration de l'agent a besoin d'un petit correctif.";
+  }
+  if (
+    lower.includes("sandbox build") ||
+    lower.includes("coding verification") ||
+    lower.includes("vérification sandbox")
+  ) {
+    return "La vérification sandbox n'a pas abouti — je peux la corriger pour vous.";
+  }
+  if (lower.includes("build stopped unexpectedly") || lower.includes("construction s'est arrêtée")) {
+    return "La construction s'est arrêtée. Demandez-moi de réessayer.";
   }
   if (lower.includes("binding never") || lower.includes("approval policy")) {
-    return "Some tools can make changes without asking you first — review approvals.";
+    return "Certains outils peuvent agir sans vous demander — vérifiez les approbations.";
   }
   if (lower.includes("incomplete setup:")) {
-    const label = text.split(":").slice(1).join(":").trim() || "a tool";
-    return `Finish setup for ${label}.`;
+    const label = text.split(":").slice(1).join(":").trim() || "un outil";
+    return `Terminez la configuration de ${label}.`;
   }
   return text;
 }
