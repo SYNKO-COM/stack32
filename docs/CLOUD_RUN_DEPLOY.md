@@ -72,3 +72,27 @@ En résumé simple : **le serveur tournait H24**, même la nuit sans personne de
 **Exemple réaliste** : 300 users mix (50 % Starter, 40 % Pro, 10 % Scale) → **~12 000 $/mois** de revenus. Coûts infra lourds mais **les crédits limitent la facture IA** ; marge dépend surtout du % d’utilisation réelle vs crédits vendus.
 
 Formule mnémotechnique : **Cloud Run = l’électricité du serveur** ; **Supabase = le classeur** ; **OpenAI/Pipedream = l’essence** (le plus cher à l’échelle).
+
+## Alertes budget (e-mail)
+
+Alertes mensuelles actives sur le projet **stack32** :
+
+| Seuil | Nom dans GCP |
+|-------|----------------|
+| 20 € | Stack32 — alerte 20 € |
+| 50 € | Stack32 — alerte 50 € |
+| 100 € | Stack32 — alerte 100 € |
+| 500 € | Stack32 — alerte 500 € |
+| 1 000 € | Stack32 — alerte 1 000 € |
+| 5 000 € | Stack32 — alerte 5 000 € |
+
+Les e-mails partent vers les **administrateurs de facturation** du compte GCP (`stack32.com@gmail.com` si ce compte a le rôle Billing Admin).
+
+Pour recréer ou ajouter des paliers :
+
+```bash
+chmod +x infra/scripts/setup-gcp-budget-alerts.sh
+./infra/scripts/setup-gcp-budget-alerts.sh 01CDD1-50AE55-12EED8
+```
+
+Chaque alerte se déclenche deux fois si besoin : **dépenses du mois en cours** et **prévision fin de mois** (forecast).
