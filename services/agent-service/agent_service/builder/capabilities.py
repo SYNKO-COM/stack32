@@ -629,15 +629,13 @@ def extract_external_app_queries(
 
     # Alias dictionary (multi-word first).
     for alias in sorted(_PIPEDREAM_APP_ALIASES.keys(), key=len, reverse=True):
-        if skip_postgres_alias and _PIPEDREAM_APP_ALIASES[alias] in {
-            "postgresql",
-            "mysql",
-            "mongodb",
-            "snowflake",
-        }:
+        slug = _PIPEDREAM_APP_ALIASES[alias]
+        if skip_postgres_alias and slug in _PLATFORM_DATABASE_APP_SLUGS:
+            continue
+        if _database_alias_blocked(hay, slug):
             continue
         if alias in hay:
-            _add(_PIPEDREAM_APP_ALIASES[alias])
+            _add(slug)
 
     # Free-form LLM hints: treat unknown tokens as app search queries.
     reserved = set(_CAPABILITY_CATALOG) | {
@@ -680,6 +678,23 @@ _PLATFORM_POSTGRES_MARKERS = (
     "failed to initialize postgres checkpointer",
 )
 
+_PLATFORM_DATABASE_APP_SLUGS = frozenset(
+    {
+        "postgresql",
+        "postgres",
+        "supabase",
+        "mysql",
+        "mongodb",
+        "snowflake",
+    }
+)
+
+_NEGATED_DATABASE_RE = re.compile(
+    r"(?:never|ne\s+pas|do\s+not|don't|omit|jamais|pas\s+ajouter|ne\s+jamais)"
+    r"[^.\n]{0,120}\b(postgres(?:ql)?|supabase|mysql|mongodb|snowflake)\b",
+    re.I,
+)
+
 
 def is_platform_postgres_noise(text: str) -> bool:
     """True when 'postgres' appears because of Stack32 internals, not a user app."""
@@ -687,8 +702,40 @@ def is_platform_postgres_noise(text: str) -> bool:
     return any(marker in hay for marker in _PLATFORM_POSTGRES_MARKERS)
 
 
+def is_live_tool_repair_prompt(text: str) -> bool:
+    return "STACK32 LIVE TOOL REPAIR" in (text or "").upper()
+
+
+def _database_slug_from_binding(binding: ToolBinding) -> str:
+    app = _normalize_app_slug(binding.app_id or _app_slug_from_tool_id(binding.tool_id) or "")
+    if app in _PLATFORM_DATABASE_APP_SLUGS:
+        return app
+    tid = (binding.tool_id or "").lower()
+    for slug in _PLATFORM_DATABASE_APP_SLUGS:
+        if slug in tid:
+            return slug
+    return ""
+
+
+def is_platform_database_tool(binding: ToolBinding) -> bool:
+    return bool(_database_slug_from_binding(binding))
+
+
 def is_postgres_user_tool(tool_id: str) -> bool:
     return "postgres" in (tool_id or "").lower()
+
+
+def _database_alias_blocked(hay: str, slug: str) -> bool:
+    """Skip DB apps mentioned only as forbidden platform internals."""
+    if slug not in _PLATFORM_DATABASE_APP_SLUGS:
+        return False
+    if is_platform_postgres_noise(hay):
+        return True
+    if _NEGATED_DATABASE_RE.search(hay):
+        return True
+    if is_live_tool_repair_prompt(hay):
+        return True
+    return False
 
 
 _REMOVE_VERB_RE = re.compile(
@@ -747,13 +794,16 @@ def drop_removed_tools(tools: list[ToolBinding], *, prompt: str) -> list[ToolBin
 
 def user_requested_database_app(text: str) -> bool:
     """User explicitly asked for a database app — not a platform checkpointer error."""
-    if is_platform_postgres_noise(text):
+    if is_platform_postgres_noise(text) or is_live_tool_repair_prompt(text):
         return False
     removed = apps_user_asked_to_remove(text)
-    if removed & {"postgresql", "postgres", "mysql", "mongodb", "snowflake"}:
+    if removed & _PLATFORM_DATABASE_APP_SLUGS:
         return False
     return bool(
-        re.search(r"\b(postgres(ql)?|mysql|mongodb|snowflake)\b", (text or "").lower())
+        re.search(
+            r"\b(postgres(?:ql)?|supabase|mysql|mongodb|snowflake)\b",
+            (text or "").lower(),
+        )
     )
 
 
@@ -763,19 +813,19 @@ def filter_unsolicited_database_tools(
     prompt: str,
     keep_app_ids: set[str] | None = None,
 ) -> list[ToolBinding]:
-    """Drop Postgres/MySQL/… tools unless the user actually asked for a database."""
+    """Drop Postgres/Supabase/MySQL/… tools unless the user actually asked for a database."""
     tools = drop_removed_tools(tools, prompt=prompt)
     if user_requested_database_app(prompt):
         return tools
     keep = {_normalize_app_slug(a) for a in (keep_app_ids or set()) if a}
     if not keep:
-        return [t for t in tools if not is_postgres_user_tool(t.tool_id)]
+        return [t for t in tools if not is_platform_database_tool(t)]
     out: list[ToolBinding] = []
     for binding in tools:
-        if not is_postgres_user_tool(binding.tool_id):
+        if not is_platform_database_tool(binding):
             out.append(binding)
             continue
-        app = _normalize_app_slug(binding.app_id or _app_slug_from_tool_id(binding.tool_id) or "")
+        app = _database_slug_from_binding(binding)
         if app in keep:
             out.append(binding)
     return out

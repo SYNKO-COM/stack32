@@ -451,6 +451,36 @@ def test_explicit_postgres_request_is_kept():
     assert len(kept) == 1
 
 
+def test_live_repair_prompt_does_not_extract_supabase():
+    from agent_service.builder.capabilities import extract_external_app_queries
+
+    prompt = (
+        "STACK32 LIVE TOOL REPAIR REQUEST\n"
+        "Hard constraints:\n"
+        "- NEVER add PostgreSQL, Supabase, or any database app because of a checkpointer\n"
+        "Failed node: app:google_sheets\n"
+        "Error code: TOOL_NOT_ALLOWED\n"
+    )
+    apps = extract_external_app_queries(prompt)
+    assert "supabase" not in apps
+    assert "postgresql" not in apps
+    assert "google_sheets" in apps
+
+
+def test_filter_drops_unsolicited_supabase():
+    from agent_service.builder.capabilities import filter_unsolicited_database_tools
+    from agent_service.models.agent_spec import ToolBinding
+
+    kept = filter_unsolicited_database_tools(
+        [
+            ToolBinding(tool_id="pd:gmail-send-email", provider="pipedream", enabled=True),
+            ToolBinding(tool_id="pd:supabase-insert-row", provider="pipedream", enabled=True),
+        ],
+        prompt="Fix Google Sheets TOOL_NOT_ALLOWED",
+    )
+    assert [t.tool_id for t in kept] == ["pd:gmail-send-email"]
+
+
 def test_remove_postgres_keeps_other_apps():
     from agent_service.builder.capabilities import (
         apps_user_asked_to_remove,

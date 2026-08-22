@@ -234,3 +234,26 @@ def test_should_interrupt_post_ready_when_apps_change():
         )
         is True
     )
+
+
+def test_live_repair_skips_tool_review_when_tools_unchanged():
+    tools = [
+        ToolBinding(tool_id="pd:google_sheets-add-single-row", provider="pipedream", enabled=True),
+        ToolBinding(tool_id="gmail_send_message", provider="native", enabled=True),
+    ]
+    prompt = (
+        "STACK32 LIVE TOOL REPAIR REQUEST\n"
+        "Error code: TOOL_NOT_ALLOWED\n"
+        "tool=pd:google_sheets-add-multiple-rows\n"
+        "Please fix google sheets."
+    )
+    assert (
+        should_interrupt_tool_review(
+            capabilities={},
+            proposed=list(tools),
+            current=list(tools),
+            prompt=prompt,
+            is_first_build=False,
+        )
+        is False
+    )

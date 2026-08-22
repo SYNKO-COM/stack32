@@ -14,6 +14,7 @@ import { IntegrationConnectionCard } from "@/components/builder/integration-conn
 import { MessageEntrance, TypewriterText } from "@/components/builder/message-motion";
 import { IdentityConfirmedMessage, ReadyCard } from "@/components/builder/ready-card";
 import { SecretForm } from "@/components/builder/secret-form";
+import { ToolChangeReviewForm } from "@/components/builder/tool-change-review-form";
 import { ToolReviewForm } from "@/components/builder/tool-review-form";
 import { ToolSetupCard } from "@/components/builder/tool-setup-card";
 import { LogoMark } from "@/components/shared/logo";
@@ -588,6 +589,14 @@ function BuilderBubble({
 
             {showForms && message.uiComponent?.type === "tool_review_form" ? (
               <ToolReviewForm
+                uiComponent={message.uiComponent}
+                runId={runId || message.uiComponent.requestId}
+                onSubmitted={() => onFormSubmitted?.(formRequestId ?? "")}
+              />
+            ) : null}
+
+            {showForms && message.uiComponent?.type === "tool_change_review_form" ? (
+              <ToolChangeReviewForm
                 uiComponent={message.uiComponent}
                 runId={runId || message.uiComponent.requestId}
                 onSubmitted={() => onFormSubmitted?.(formRequestId ?? "")}

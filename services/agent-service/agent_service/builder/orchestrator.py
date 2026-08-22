@@ -1485,6 +1485,7 @@ class BuilderOrchestrator:
             gateway=self.gateway,
         )
         mode = "initial" if current_spec is None else "modify"
+        form_type = "tool_change_review_form" if mode == "modify" else "tool_review_form"
         return await self._interrupt_tool_review_form(
             run_id=run_id,
             user_id=user_id,
@@ -1496,6 +1497,7 @@ class BuilderOrchestrator:
             pending_spec=spec,
             tools=entries,
             mode=mode,
+            form_type=form_type,
         )
 
     async def _interrupt_tool_review_form(
@@ -1511,6 +1513,7 @@ class BuilderOrchestrator:
         pending_spec: AgentSpec,
         tools: list[dict[str, Any]],
         mode: str,
+        form_type: str = "tool_review_form",
     ) -> dict[str, Any]:
         await self.db.insert_assistant_message(
             thread_id=thread_id,
@@ -1521,7 +1524,7 @@ class BuilderOrchestrator:
                 "tone": "normal",
                 "interrupt_run_id": run_id,
                 "ui_component": {
-                    "type": "tool_review_form",
+                    "type": form_type,
                     "version": "1",
                     "request_id": str(uuid.uuid4()),
                     "context": "builder",
@@ -3386,6 +3389,7 @@ class BuilderOrchestrator:
             extract_external_app_queries,
             filter_unsolicited_database_tools,
             apps_user_asked_to_remove,
+            is_live_tool_repair_prompt,
             is_surgical_tool_edit,
             merge_tools_on_edit,
         )
@@ -3395,6 +3399,7 @@ class BuilderOrchestrator:
         original_goal = str(
             caps.get("original_goal") or (current.goal if current else "") or content
         )[:4000]
+        live_repair = is_live_tool_repair_prompt(content)
         # On edits, design against the durable goal + the current change request.
         design_goal = (
             f"{original_goal}\n\nUser change request: {content[:1500]}"
@@ -3411,11 +3416,16 @@ class BuilderOrchestrator:
             design_goal + " " + notes + " " + " ".join(design.get("tool_hints") or [])
         )
         preferred_apps = list(caps.get("preferred_apps") or [])
-        tools, connection_requirements, ambiguous = await self._select_tools(
-            tool_prompt,
-            llm_hints=list(design.get("tool_hints") or []),
-            preferred_apps=preferred_apps or None,
-        )
+        if live_repair and current is not None:
+            tools = list(current.tools)
+            connection_requirements = list(current.connection_requirements or [])
+            ambiguous: list[dict[str, Any]] = []
+        else:
+            tools, connection_requirements, ambiguous = await self._select_tools(
+                tool_prompt,
+                llm_hints=list(design.get("tool_hints") or []),
+                preferred_apps=preferred_apps or None,
+            )
         named_apps = extract_external_app_queries(
             tool_prompt,
             llm_hints=list(design.get("tool_hints") or []) + preferred_apps,
@@ -3425,9 +3435,14 @@ class BuilderOrchestrator:
 
         surgical = bool(
             current is not None
-            and is_surgical_tool_edit(content, current_tool_count=len(current.tools))
+            and (
+                live_repair
+                or is_surgical_tool_edit(content, current_tool_count=len(current.tools))
+            )
         )
-        if current is not None and surgical:
+        if live_repair and current is not None:
+            goal = original_goal
+        elif current is not None and surgical:
             tools = merge_tools_on_edit(current.tools, tools, edit_prompt=content)
             connection_requirements = await build_connection_requirements(tools)
             goal = original_goal

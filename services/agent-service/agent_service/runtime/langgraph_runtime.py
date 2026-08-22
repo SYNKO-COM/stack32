@@ -494,7 +494,11 @@ async def run_langgraph_agent(
                 call = RuntimeToolCall.model_validate(payload)
             except Exception:  # noqa: BLE001
                 continue
-            if call.tool_id not in enabled_tools:
+            from agent_service.integrations.app_keys import is_same_pipedream_app
+
+            if call.tool_id not in enabled_tools and not is_same_pipedream_app(
+                call.tool_id, enabled_tools
+            ):
                 obs = {"error": "TOOL_NOT_ALLOWED", "tool_id": call.tool_id}
             elif call.tool_id in denied_ids:
                 obs = {

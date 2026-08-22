@@ -130,6 +130,21 @@ def expand_bind_tool_ids(tool_ids: list[str] | None) -> list[str]:
     return out
 
 
+def is_same_pipedream_app(tool_id: str, enabled_tool_ids: list[str] | set[str]) -> bool:
+    """True when tool_id is a Pipedream action from an app already enabled on the agent."""
+    tid = (tool_id or "").strip()
+    if not tid.startswith("pd:"):
+        return False
+    app = app_key_from_tool_id(tid)
+    if not app or app in SUITE_APP_IDS:
+        return False
+    for other in enabled_tool_ids:
+        other_tid = str(other or "").strip()
+        if other_tid.startswith("pd:") and app_key_from_tool_id(other_tid) == app:
+            return True
+    return False
+
+
 def app_keys_for_tool_ids(tool_ids: list[str]) -> list[str]:
     keys: list[str] = []
     seen: set[str] = set()

@@ -317,6 +317,25 @@
     "alreadyAdded": "That tool is already in the list.",
     "error": "Could not save tool choices. Please try again."
   },
+  "toolChangeReview": {
+    "title": "Review tool changes",
+    "hint": "Current tools stay as-is. For each add or remove Stack32 proposes, choose Authorize or Refuse.",
+    "currentTools": "Current tools",
+    "proposedAdds": "Proposed additions",
+    "proposedRemovals": "Proposed removals",
+    "badgeAdd": "Proposed add",
+    "badgeRemove": "Proposed remove",
+    "authorize": "Authorize",
+    "refuse": "Refuse",
+    "authorizeAdd": "Authorize add",
+    "refuseAdd": "Refuse add",
+    "authorizeRemove": "Authorize removal",
+    "refuseRemove": "Keep tool",
+    "removeCurrent": "Remove from list",
+    "decisionRequired": "Choose Authorize or Refuse for every proposed change.",
+    "continue": "Apply approved changes",
+    "submitting": "Saving…"
+  },
   "questions": {
     "prompt": "Before I continue, I need one or two quick details so the agent is built the right way.",
     "hint": "Answer below — you can change this later by asking me in chat, but not by editing this form again.",

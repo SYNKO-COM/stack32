@@ -317,6 +317,25 @@
     "alreadyAdded": "Cet outil est déjà dans la liste.",
     "error": "Impossible d’enregistrer les outils. Réessayez."
   },
+  "toolChangeReview": {
+    "title": "Valider les changements d’outils",
+    "hint": "Les outils actuels restent en place. Pour chaque ajout ou suppression proposé par Stack32, choisissez Autoriser ou Refuser.",
+    "currentTools": "Outils actuels",
+    "proposedAdds": "Ajouts proposés par l’agent",
+    "proposedRemovals": "Suppressions proposées par l’agent",
+    "badgeAdd": "Ajout proposé",
+    "badgeRemove": "Suppression proposée",
+    "authorize": "Autoriser",
+    "refuse": "Refuser",
+    "authorizeAdd": "Autoriser l’ajout",
+    "refuseAdd": "Refuser l’ajout",
+    "authorizeRemove": "Autoriser la suppression",
+    "refuseRemove": "Garder l’outil",
+    "removeCurrent": "Retirer de la liste",
+    "decisionRequired": "Répondez Autoriser ou Refuser pour chaque changement proposé.",
+    "continue": "Appliquer les changements validés",
+    "submitting": "Enregistrement…"
+  },
   "questions": {
     "prompt": "Avant de continuer, j’ai besoin d’un ou deux détails pour construire l’agent correctement.",
     "hint": "Répondez ci-dessous. Vous pourrez ajuster plus tard en m’écrivant dans le chat, mais plus via ce formulaire.",

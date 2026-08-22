@@ -145,6 +145,10 @@ def should_interrupt_tool_review(
         return False
     if is_first_build:
         return True
+    from agent_service.builder.capabilities import is_live_tool_repair_prompt
+
+    if is_live_tool_repair_prompt(prompt):
+        return tools_changed(proposed=proposed, current=current)
     if tools_changed(proposed=proposed, current=current):
         return True
     return prompt_implies_tool_change(prompt)

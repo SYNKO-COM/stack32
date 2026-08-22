@@ -263,6 +263,7 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
     type !== "dynamic_questions_form" &&
     type !== "provider_clarification_form" &&
     type !== "tool_review_form" &&
+    type !== "tool_change_review_form" &&
     type !== "connection_form" &&
     type !== "approval_form"
   ) {
@@ -395,7 +396,7 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
       }>
     | undefined;
   let mode: "initial" | "modify" | undefined;
-  if (type === "tool_review_form") {
+  if (type === "tool_review_form" || type === "tool_change_review_form") {
     const modeRaw = rec.mode;
     mode = modeRaw === "modify" ? "modify" : "initial";
     tools = Array.isArray(rec.tools)

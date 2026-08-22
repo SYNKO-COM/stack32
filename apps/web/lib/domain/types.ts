@@ -325,6 +325,7 @@ export interface BuilderUiComponent {
     | "dynamic_questions_form"
     | "provider_clarification_form"
     | "tool_review_form"
+    | "tool_change_review_form"
     | "connection_form"
     | "approval_form";
   version: "1";
