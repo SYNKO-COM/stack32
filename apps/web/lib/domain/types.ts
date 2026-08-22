@@ -372,7 +372,12 @@ export interface IdentitySummary {
   description?: string;
 }
 
-export type BuilderCard = "identity_confirmed" | "build_progress" | "ready" | "thinking";
+export type BuilderCard =
+  | "identity_confirmed"
+  | "tools_confirmed"
+  | "build_progress"
+  | "ready"
+  | "thinking";
 
 export interface BuilderMessage {
   id: string;
