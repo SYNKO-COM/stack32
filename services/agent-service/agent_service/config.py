@@ -94,6 +94,15 @@ class Settings(BaseSettings):
     # Builder sandbox coding loops need headroom beyond a short chat turn.
     MAX_LLM_CALLS_PER_RUN: int = 36
     MAX_LLM_CALLS_PER_CODING_REPAIR: int = 24
+    # --- Coding agent capacity -------------------------------------------
+    # 2048 output tokens truncates any file over ~150 lines mid-write, which
+    # sends the agent straight into a repair loop it cannot win. Real coding
+    # agents need room to emit a whole file or a large patch in one turn.
+    CODING_MAX_OUTPUT_TOKENS: int = 8192
+    # ReAct turns per coding/repair session (gather -> act -> verify -> repair).
+    CODING_MAX_TURNS: int = 25
+    # Live/runtime replies stay short; kept separate from the coding budget.
+    LIVE_MAX_OUTPUT_TOKENS: int = 4096
     LLM_CALL_TIMEOUT_SECONDS: int = 45
     LLM_TIMEOUT_FAST: int = 45
     LLM_TIMEOUT_BALANCED: int = 90

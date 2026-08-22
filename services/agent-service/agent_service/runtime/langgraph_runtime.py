@@ -179,7 +179,6 @@ def _to_provider_message(
             safe_name = to_openai_function_name(name)
             args = raw.get("arguments", {})
             if isinstance(args, dict):
-                import json
 
                 args_str = json.dumps(args)
             else:

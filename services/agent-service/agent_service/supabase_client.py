@@ -56,14 +56,14 @@ class SupabaseRepository:
             try:
                 async with get_supabase_admin_client() as client:
                     response = await client.get(f"/{table}", params=params)
-            except httpx.HTTPError:
+            except httpx.HTTPError as exc:
                 if attempt == 0:
                     await asyncio.sleep(0.4)
                     continue
                 raise HTTPException(
                     status_code=502,
                     detail={"code": "upstream_error", "message": "Database query failed."},
-                )
+                ) from exc
             if response.status_code < 400:
                 return response.json()
             last_status = response.status_code
@@ -569,7 +569,6 @@ class Persistence(SupabaseRepository):
 
     async def claim_first_ready_celebration(self, *, agent_id: str, user_id: str) -> bool:
         """Atomically mark first Ready celebration. Returns True only once per agent."""
-        from datetime import datetime
 
         agent = await self.get_owned_agent(agent_id, user_id)
         if not agent:

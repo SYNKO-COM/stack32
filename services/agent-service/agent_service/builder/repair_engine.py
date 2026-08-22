@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Any
 
-from agent_service.builder.build_pipeline import CodeBuildPipeline, BuildReport
+from agent_service.builder.build_pipeline import BuildReport, CodeBuildPipeline
 from agent_service.builder.projects import get_snapshot_files, list_snapshots
 from agent_service.builder.repair_contract import RepairContract, build_repair_contract
 from agent_service.builder.templates import ProjectBlueprint

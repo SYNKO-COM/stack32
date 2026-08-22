@@ -59,6 +59,25 @@ class BuildReport:
     events: list[str] = field(default_factory=list)
 
 
+async def _lint_with_autofix(registry, ctx) -> tuple[dict, str]:
+    """Apply ruff's own safe autofixes, then lint. Returns ``(result, status)``.
+
+    Import ordering (I001) and similar mechanical issues are trivially fixable
+    and LLM-written patches reintroduce them constantly. Spending a repair
+    iteration — and an expensive model call — on something ``ruff --fix``
+    resolves deterministically is pure waste, so fix first and only surface
+    what genuinely needs a human-grade decision.
+    """
+    try:
+        await registry.get("exec.run_command").run(
+            ctx, {"command": ["python", "-m", "ruff", "check", ".", "--fix"]}
+        )
+    except Exception:  # noqa: BLE001 - autofix is best-effort, never fatal
+        logger.debug("ruff_autofix_skipped", exc_info=True)
+    result = await registry.get("exec.run_lint").run(ctx, {})
+    return result, ("passed" if result.get("ok") else "failed")
+
+
 class CodeBuildPipeline:
     def __init__(
         self,
@@ -154,8 +173,7 @@ class CodeBuildPipeline:
         await emit(f"builder.tests.{'passed' if test_result.get('ok') else 'failed'}", {
             "exit_code": test_result.get("exit_code"),
         })
-        lint_result = await registry.get("exec.run_lint").run(ctx, {})
-        lint_status = "passed" if lint_result.get("ok") else "failed"
+        lint_result, lint_status = await _lint_with_autofix(registry, ctx)
 
         repaired = False
         stop_reason = "COMPLETED"
@@ -163,7 +181,11 @@ class CodeBuildPipeline:
         # Never stop on first failure — escalate Terra → Sol → Claude before surfacing.
         from agent_service.config import get_settings
         from agent_service.verifier import classify_failure
-        from agent_service.verifier.classify import failure_fingerprint
+        from agent_service.verifier.classify import (
+            failure_fingerprint,
+            made_forward_progress,
+            verification_progress_score,
+        )
         from agent_service.verifier.repair import RepairLoopController
 
         settings = get_settings()
@@ -172,9 +194,13 @@ class CodeBuildPipeline:
         repair_controller = RepairLoopController(
             target_iterations=max(5, settings.MAX_REPAIR_ATTEMPTS),
             hard_max=max(8, settings.MAX_REPAIR_ATTEMPTS + 3),
+            # Was left at the dataclass default of 2, which stopped the loop
+            # after a single repair attempt and made MAX_REPAIR_ATTEMPTS inert.
+            max_identical_fingerprints=max(3, settings.MAX_REPAIR_ATTEMPTS),
         )
         prior_failures = 0
         last_fingerprint: str | None = None
+        last_progress: tuple[int, int] | None = None
 
         if needs_repair and can_repair:
             lesson_block = ""
@@ -236,7 +262,14 @@ class CodeBuildPipeline:
                         fingerprint = failure_fingerprint(error_code, signature=str(failure_excerpt)[:200])
 
                     category = classify_failure(error_code)
-                    made_progress = (
+                    progress = verification_progress_score(
+                        str(test_result.get("stdout") or test_result.get("stderr") or ""),
+                        str(lint_result.get("stdout") or lint_result.get("stderr") or ""),
+                    )
+                    # Count-based progress first (3 of 4 tests fixed IS progress even
+                    # when the summary line is byte-identical); fingerprint change is
+                    # the fallback when the output cannot be parsed.
+                    made_progress = made_forward_progress(last_progress, progress) or (
                         last_fingerprint is not None and fingerprint != last_fingerprint
                     )
                     decision = repair_controller.decide(
@@ -245,6 +278,7 @@ class CodeBuildPipeline:
                         made_progress=made_progress,
                     )
                     last_fingerprint = fingerprint
+                    last_progress = progress
 
                     if decision.action == "stop":
                         stop_reason = decision.reason
@@ -265,8 +299,7 @@ class CodeBuildPipeline:
                         )
                         test_result = await registry.get("exec.run_tests").run(ctx, {})
                         test_status = "passed" if test_result.get("ok") else "failed"
-                        lint_result = await registry.get("exec.run_lint").run(ctx, {})
-                        lint_status = "passed" if lint_result.get("ok") else "failed"
+                        lint_result, lint_status = await _lint_with_autofix(registry, ctx)
                         continue
 
                     # Escalation: 1st Terra (patch), 2nd Sol (repair_hard), 3rd+ Claude (repair_expert).
@@ -301,7 +334,7 @@ class CodeBuildPipeline:
                         registry=registry,
                         gateway=self.gateway,
                         emit=emit,
-                        max_turns=10,
+                        max_turns=settings.CODING_MAX_TURNS,
                     )
 
                     base_objective = repair_objective or (
@@ -325,6 +358,7 @@ class CodeBuildPipeline:
                         _iter=iter_n,
                         _priors=prior_failures,
                         _outer=repair_model_fn,
+                        _agent=agent,
                     ):
                         if _outer is not None:
                             try:
@@ -337,7 +371,7 @@ class CodeBuildPipeline:
                                 )
                             except TypeError:
                                 return await _outer(messages, tools)
-                        return await agent._decide(
+                        return await _agent._decide(
                             messages,
                             tools,
                             stage=_stage,
@@ -362,8 +396,7 @@ class CodeBuildPipeline:
                     files = await self._read_all(provider, handle, [f["path"] for f in files])
                     test_result = await registry.get("exec.run_tests").run(ctx, {})
                     test_status = "passed" if test_result.get("ok") else "failed"
-                    lint_result = await registry.get("exec.run_lint").run(ctx, {})
-                    lint_status = "passed" if lint_result.get("ok") else "failed"
+                    lint_result, lint_status = await _lint_with_autofix(registry, ctx)
                     await emit(
                         "builder.repair.completed",
                         {

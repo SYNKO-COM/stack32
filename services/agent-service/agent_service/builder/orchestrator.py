@@ -393,11 +393,6 @@ class BuilderOrchestrator:
                 if isinstance(payload_early.get("identity"), dict)
                 else None
             )
-            stored_caps_early = (
-                payload_early.get("capabilities")
-                if isinstance(payload_early.get("capabilities"), dict)
-                else None
-            )
             # Post-capabilities Cloud Tasks resume: identity already confirmed on this run.
             if stored_ident_early and str(stored_ident_early.get("name") or "").strip():
                 placeholders = {"", "untitled agent", "untitled", "agent", "new agent"}
@@ -766,7 +761,6 @@ class BuilderOrchestrator:
                     model["credential_scope"] = "agent"
                     model["fallback_enabled"] = False
                     data["model"] = model
-                    from agent_service.models.agent_spec import AgentSpec
 
                     updated = AgentSpec.model_validate(data)
                     await self.db.persist_version(
@@ -3516,7 +3510,6 @@ class BuilderOrchestrator:
             build_connection_requirements,
             extract_external_app_queries,
             filter_unsolicited_database_tools,
-            apps_user_asked_to_remove,
             is_live_tool_repair_prompt,
             is_surgical_tool_edit,
             merge_tools_on_edit,

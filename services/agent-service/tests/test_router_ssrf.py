@@ -14,10 +14,22 @@ def test_route_architecture_is_coding():
     assert route_profile(TaskType.ARCHITECTURE) == ModelProfile.CODING
 
 
-def test_budget_forces_cheaper_profile():
-    assert (
-        route_profile(TaskType.REPAIR, budget_remaining_usd=0.5) == ModelProfile.BALANCED
-    )
+def test_low_budget_downgrades_reasoning_but_not_coding():
+    """Budget pressure must never lower the coding/repair capability floor.
+
+    A cheaper repair model produces worse patches, which costs *more* by
+    burning extra repair iterations. Exhaustion is enforced hard at the router
+    layer (BudgetExceeded in routers/builder.py, live.py, secrets.py) instead
+    of silently degrading quality here.
+    """
+    assert route_profile(TaskType.REPAIR, budget_remaining_usd=0.1) == ModelProfile.CODING
+    assert route_profile(TaskType.ARCHITECTURE, budget_remaining_usd=0.1) == ModelProfile.CODING
+
+
+def test_budget_threshold_is_strict():
+    """0.5 is the boundary and must NOT trigger a downgrade (< 0.5, not <=)."""
+    at_threshold = route_profile(TaskType.INTENT_CLASSIFICATION, budget_remaining_usd=0.5)
+    assert at_threshold == route_profile(TaskType.INTENT_CLASSIFICATION)
 
 
 def test_detect_complexity_fast_path():

@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import logging
 import operator
-from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
@@ -472,8 +471,9 @@ async def _web_search(inp: WebSearchInput) -> dict[str, Any]:
 
 
 async def _fetch_url(inp: FetchUrlInput) -> dict[str, Any]:
-    import httpx
     from urllib.parse import urlparse
+
+    import httpx
 
     raw_url = (inp.url or "").strip()
     host = (urlparse(raw_url).hostname or "").lower()

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -423,11 +422,10 @@ async def trigger_dynamic_options(
     configured: dict[str, Any] = {}
     if agent_id and app_id:
         try:
-            from agent_service.connections.manager import ConnectionManager
-            from agent_service.integrations.pipedream.knowledge import hint_for_app
             from agent_service.integrations.pipedream.accounts import (
                 _apps_equivalent,
             )
+            from agent_service.integrations.pipedream.knowledge import hint_for_app
 
             mgr = ConnectionManager()
             connections = await mgr.list_connections(user_id=user.user_id)

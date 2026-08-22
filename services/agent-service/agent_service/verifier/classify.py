@@ -16,6 +16,7 @@ unless it clearly looks user- or provider-owned.
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Literal
 
 FailureCategory = Literal[
@@ -123,3 +124,46 @@ def failure_fingerprint(
     ]
     joined = "\u241f".join(parts)
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+
+
+def verification_progress_score(
+    test_stdout: str | None = None,
+    lint_stdout: str | None = None,
+) -> tuple[int, int]:
+    """Return ``(failing_tests, lint_errors)`` parsed from tool output.
+
+    Used by the repair loop to decide whether an iteration actually moved
+    forward. Comparing failure *fingerprints* is not enough: a suite keeps
+    reporting the same summary line while the agent fixes 3 of 4 bugs, so
+    fingerprint equality wrongly reads as "no progress" and aborts the loop.
+    Counts shrink as the agent makes real progress.
+
+    Unparseable output yields ``(-1, -1)``, which never compares as progress.
+    """
+    tests = -1
+    lints = -1
+    if test_stdout:
+        m = re.search(r"(\d+)\s+failed", test_stdout)
+        if m:
+            tests = int(m.group(1))
+        elif re.search(r"\d+\s+passed", test_stdout) and "error" not in test_stdout.lower():
+            tests = 0
+    if lint_stdout is not None:
+        m = re.search(r"Found\s+(\d+)\s+error", lint_stdout)
+        if m:
+            lints = int(m.group(1))
+        elif "All checks passed" in lint_stdout:
+            lints = 0
+    return tests, lints
+
+
+def made_forward_progress(
+    previous: tuple[int, int] | None,
+    current: tuple[int, int],
+) -> bool:
+    """True when at least one failure count strictly decreased."""
+    if previous is None:
+        return False
+    if any(v < 0 for v in previous) or any(v < 0 for v in current):
+        return False
+    return current[0] < previous[0] or current[1] < previous[1]

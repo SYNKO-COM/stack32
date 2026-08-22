@@ -10,6 +10,7 @@ Canonical loop: gather -> (plan) -> act -> observe -> verify -> repair.
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -20,6 +21,7 @@ from agent_service.builder.coding.ledger import WorkLedger
 from agent_service.builder.coding.loop_detection import LoopDetector
 from agent_service.builder.coding.tools import CodingToolRegistry, ToolContext, build_registry
 from agent_service.builder.context.engine import ContextEngine
+from agent_service.config import get_settings
 from agent_service.gateway.model_gateway import ModelGateway, ModelProfile
 from agent_service.sandbox.base import SandboxProvider, WorkspaceHandle
 
@@ -65,6 +67,30 @@ async def _noop_emit(_type: str, _payload: dict[str, Any]) -> None:  # pragma: n
     return None
 
 
+def _adapt_model_fn(fn: Callable[..., Awaitable[ModelDecision]]) -> Callable[..., Awaitable[ModelDecision]]:
+    """Call ``fn`` with only the routing kwargs it actually accepts.
+
+    The loop wants to pass ``stage`` / ``repair_attempt`` / ``prior_failures``,
+    but plain ``(messages, tools)`` callables are valid too. Previously the
+    TypeError from the extra kwargs was swallowed by the turn-level handler and
+    reported as MODEL_PROVIDER_UNAVAILABLE, hiding a wiring bug behind an
+    infrastructure error. Inspect the signature once instead of guessing.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):  # builtins / C callables
+        params = {}
+    accepts_all = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+    allowed = {name for name, p in params.items() if p.kind is not inspect.Parameter.VAR_KEYWORD}
+
+    async def _call(messages, tools, **kwargs):
+        if not accepts_all:
+            kwargs = {k: v for k, v in kwargs.items() if k in allowed}
+        return await fn(messages, tools, **kwargs)
+
+    return _call
+
+
 class CodingAgent:
     def __init__(
         self,
@@ -75,7 +101,7 @@ class CodingAgent:
         registry: CodingToolRegistry | None = None,
         gateway: ModelGateway | None = None,
         emit: EmitFn | None = None,
-        max_turns: int = 12,
+        max_turns: int | None = None,
         max_verification_repairs: int = 3,
         tool_ids: list[str] | None = None,
     ) -> None:
@@ -85,7 +111,7 @@ class CodingAgent:
         self.registry = registry or build_registry()
         self.gateway = gateway or ModelGateway()
         self.emit = emit or _noop_emit
-        self.max_turns = max_turns
+        self.max_turns = max_turns if max_turns is not None else get_settings().CODING_MAX_TURNS
         self.max_verification_repairs = max_verification_repairs
         self.tool_ids = tool_ids or self.registry.ids()
 
@@ -126,7 +152,7 @@ class CodingAgent:
                     profile=route.profile,
                     messages=messages,
                     tools=tools,
-                    max_tokens=2048,
+                    max_tokens=get_settings().CODING_MAX_OUTPUT_TOKENS,
                     temperature=0.1,
                     model=model_id,
                     reasoning_effort=(
@@ -171,7 +197,7 @@ class CodingAgent:
         ctx = ToolContext(self.provider, self.handle, self.engine)
         ledger = WorkLedger(objective=objective)
         detector = LoopDetector()
-        decide = model_fn or self._decide
+        decide = _adapt_model_fn(model_fn) if model_fn is not None else self._decide
 
         # Plan & Execute skeleton — ReAct turns execute against this plan.
         ledger.set_plan(

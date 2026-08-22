@@ -697,7 +697,6 @@ async def _sync_external_memory_tools(
         # Fallback: ensure at least the chosen memory app is required.
         if nxt:
             reqs = list(data.get("connection_requirements") or [])
-            key = f"pipedream:{nxt}"
             if not any(
                 str(r.get("provider") or "").lower() == "pipedream"
                 and _norm(str(r.get("app_id") or "")) == nxt

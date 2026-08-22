@@ -96,7 +96,21 @@ def _pyproject(bp: ProjectBlueprint) -> str:
         "[tool.pytest.ini_options]\n"
         'testpaths = ["tests"]\n'
         'asyncio_mode = "auto"\n'
-        'pythonpath = ["src"]\n'
+        'pythonpath = ["src"]\n\n'
+        # Without this, ruff treats `agent` as third-party and reports I001 on
+        # every freshly generated project — so each build failed the lint gate
+        # at birth and entered a repair loop it could never win.
+        "[tool.ruff]\n"
+        'line-length = 100\n'
+        'src = ["src", "tests"]\n\n'
+        "[tool.ruff.lint]\n"
+        'select = ["E", "F", "I", "UP", "B"]\n'
+        # Generated lines embed user-chosen tool names and example args, so their
+        # width cannot be guaranteed. Line length on machine-written code buys
+        # nothing and would fail the gate for a long tool name alone.
+        'ignore = ["E501"]\n\n'
+        "[tool.ruff.lint.isort]\n"
+        'known-first-party = ["agent"]\n'
     )
 
 
@@ -164,7 +178,7 @@ def _orchestrator_module(bp: ProjectBlueprint) -> str:
         "from stack32_agent_runtime.patterns import recommended_limits\n\n"
         "from agent.prompts import SYSTEM_PROMPT\n"
         "from agent.security import build_policy\n"
-        "from agent.tools import build_registry\n\n\n"
+        "from agent.tools import build_registry\n\n"
         f"PATTERN = {json.dumps(bp.resolved_pattern())}\n\n\n"
         "def build_orchestrator(model, *, tracer=None, approver=None) -> Orchestrator:\n"
         "    limits_kwargs = recommended_limits(PATTERN)\n"

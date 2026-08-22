@@ -345,13 +345,12 @@ class PublishService:
             result="success",
             risk_level="medium",
         )
-        try:
-            from agent_service.supabase_client import get_supabase_admin_client
-            from agent_service.triggers.service import (
-                TriggerServiceError,
-                upsert_persistent_tool_trigger,
-            )
+        from agent_service.triggers.service import (
+            TriggerServiceError,
+            upsert_persistent_tool_trigger,
+        )
 
+        try:
             async with get_supabase_admin_client() as client:
                 await upsert_persistent_tool_trigger(
                     user_id=user_id, agent_id=agent_id, client=client

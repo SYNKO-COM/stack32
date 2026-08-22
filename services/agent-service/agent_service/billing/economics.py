@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agent_service.billing.plans import PLANS, PlanKey, BillingInterval
+from agent_service.billing.plans import PLANS, BillingInterval, PlanKey
 
 MAX_VARIABLE_AI_COST_RATIO = 0.25
 

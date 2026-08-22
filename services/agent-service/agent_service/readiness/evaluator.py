@@ -341,8 +341,8 @@ async def evaluate_agent_readiness(
                 missing_connections.append(req)
 
         try:
-            from agent_service.integrations.pipedream.knowledge import hint_for_app
             from agent_service.integrations.pipedream.accounts import load_agent_tool_config
+            from agent_service.integrations.pipedream.knowledge import hint_for_app
             from agent_service.integrations.pipedream.tool_config import (
                 is_static_prop_configured,
                 merge_binding_and_stored_config,

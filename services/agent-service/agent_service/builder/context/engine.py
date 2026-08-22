@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from agent_service.builder.context.budget import BudgetAllocation, allocate, fit_to_budget
+from agent_service.builder.context.budget import BudgetAllocation, fit_to_budget
 from agent_service.builder.context.indexer import (
     ProjectIndex,
     index_workspace,

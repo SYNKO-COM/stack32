@@ -178,13 +178,11 @@ class ModelGateway:
     ) -> ModelCallResult | T:
         import asyncio
 
+        from agent_service.gateway.model_stage_router import profile_timeout_seconds
         from agent_service.security.llm_budget import (
             LlmCallBudgetExceeded,
             get_run_llm_budget,
         )
-
-        settings = get_settings()
-        from agent_service.gateway.model_stage_router import profile_timeout_seconds
 
         budget = get_run_llm_budget()
         if budget is not None and budget.calls >= budget.max_calls:

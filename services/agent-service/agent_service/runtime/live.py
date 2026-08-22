@@ -268,7 +268,6 @@ class LiveRuntime:
         if not spec:
             return {"error": "AGENT_SPEC_INVALID"}
 
-        from agent_service.config import get_settings
         from agent_service.security.user_secrets import resolve_llm_credentials
 
         settings = get_settings()
