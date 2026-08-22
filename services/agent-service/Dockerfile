@@ -16,10 +16,13 @@ COPY agent-service/pyproject.toml agent-service/README.md ./
 COPY agent-service/agent_service ./agent_service
 
 # Install runtime + service together so the local path satisfies the dep.
-# gcp = Cloud Tasks (production queue); sandbox = E2B builder coding agent.
+# gcp = Cloud Tasks (production queue); sandbox = E2B builder coding agent;
+# observability = sentry-sdk. Without the last one, setting SENTRY_DSN silently
+# does nothing: _maybe_init_sentry logs "sdk not installed" and returns, so the
+# service runs with no error reporting at all.
 RUN pip install --no-cache-dir --prefix=/install \
       /tmp/stack32-agent-runtime \
-      ".[gcp,sandbox]"
+      ".[gcp,sandbox,observability]"
 
 FROM python:3.12-slim
 
