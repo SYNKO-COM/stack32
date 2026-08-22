@@ -45,6 +45,14 @@ import { useUiStore } from "@/store/ui-store";
 
 const CREATE_MIN_MS = 900;
 const CREATE_MAX_MS = 2200;
+/** Sidebar label cap — long agent names get an ellipsis. */
+const AGENT_NAME_MAX_CHARS = 22;
+
+function truncateAgentName(name: string, max = AGENT_NAME_MAX_CHARS): string {
+  const trimmed = name.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max).trimEnd()}…`;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -70,7 +78,9 @@ function AgentRow({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [name, setName] = useState(agent.name);
 
-  const displayName = agent.name || t("builder:sidebar.untitledAgent");
+  const displayName = truncateAgentName(
+    agent.name || t("builder:sidebar.untitledAgent"),
+  );
 
   return (
     <div
@@ -87,7 +97,9 @@ function AgentRow({
       >
         <AgentIcon icon={agent.icon} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm text-foreground/90">{displayName}</span>
+          <span className="block max-w-[11rem] truncate text-sm text-foreground/90" title={agent.name || undefined}>
+            {displayName}
+          </span>
         </span>
         <StatusBadge status={agent.status} mode="dot" />
       </Link>

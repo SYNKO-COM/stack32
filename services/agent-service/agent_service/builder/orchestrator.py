@@ -2762,6 +2762,22 @@ class BuilderOrchestrator:
                 logger.exception("sandbox coding pipeline failed run=%s", run_id)
                 build_ok = False
                 build_failure_reason = f"{type(exc).__name__}: {exc}"[:200]
+                # Platform plumbing bugs (e.g. fingerprint kwargs) must not strand the agent.
+                # Soft-skip so smoke-passed agents stay usable while we auto-repair next turn.
+                if type(exc).__name__ in {"TypeError", "AttributeError", "NameError"} or (
+                    "failure_fingerprint" in build_failure_reason
+                ):
+                    build_ok = None
+                    await self.db.emit_event(
+                        run_id,
+                        "builder.sandbox.soft_skipped",
+                        {
+                            "mapping_key": "builder.progress.sandboxSoftSkipped",
+                            "reason": "platform_plumbing",
+                            "detail": build_failure_reason,
+                        },
+                    )
+                    build_failure_reason = None
 
         # If the user stopped mid-flight, do not emit a success/modify card.
         current = await self.db.get_owned_run(run_id, user_id)
@@ -2894,7 +2910,7 @@ class BuilderOrchestrator:
             # Soft setup / problems — never connection_form mid-build.
             meta = {
                 "tone": "warning" if status == "needs_attention" else "normal",
-                "actions": ["fix_it"] if status == "needs_attention" else [],
+                "actions": ["fix_automatically"] if status == "needs_attention" else [],
                 "version_id": version.get("id"),
                 "test_report": test_report,
                 "playReadySound": False,

@@ -87,13 +87,13 @@ class Settings(BaseSettings):
     MONTHLY_USER_BUDGET_USD: float = 10.0
     MAX_CONCURRENT_BUILDER_RUNS: int = 2
     MAX_CONCURRENT_LIVE_RUNS: int = 3
-    MAX_REPAIR_ATTEMPTS: int = 2
+    MAX_REPAIR_ATTEMPTS: int = 5
     # Outer Builder quality loops (plan → build → critique → repair). Keep ≤8.
     MAX_QUALITY_LOOPS: int = 6
     MAX_CRITIQUE_ROUNDS: int = 2
     # Builder sandbox coding loops need headroom beyond a short chat turn.
-    MAX_LLM_CALLS_PER_RUN: int = 28
-    MAX_LLM_CALLS_PER_CODING_REPAIR: int = 16
+    MAX_LLM_CALLS_PER_RUN: int = 36
+    MAX_LLM_CALLS_PER_CODING_REPAIR: int = 24
     LLM_CALL_TIMEOUT_SECONDS: int = 45
     LLM_TIMEOUT_FAST: int = 45
     LLM_TIMEOUT_BALANCED: int = 90
