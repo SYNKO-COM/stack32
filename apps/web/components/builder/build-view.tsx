@@ -49,6 +49,10 @@ import {
   readBuilderStop,
   writeBuilderStop,
 } from "@/lib/builder/stop-persistence";
+import {
+  isTerminalAssistantMessage,
+  turnHasTerminalReply,
+} from "@/lib/builder/turn-terminal";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
@@ -60,7 +64,8 @@ function isEphemeralBuilderAck(message: BuilderMessage | undefined): boolean {
   if (
     message.card === "thinking" ||
     message.card === "build_progress" ||
-    message.card === "identity_confirmed"
+    message.card === "identity_confirmed" ||
+    message.card === "tools_confirmed"
   ) {
     return true;
   }
@@ -78,6 +83,7 @@ function isEphemeralBuilderAck(message: BuilderMessage | undefined): boolean {
     content === "builder:secrets.saved" ||
     content === "builder:secrets.formClosed" ||
     content === "builder:providers.saved" ||
+    content === "builder:toolReview.saved" ||
     content === "builder:questions.formClosed" ||
     content === "builder:connection.prompt" ||
     content === "builder:connection.required"
@@ -872,6 +878,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     return -1;
   })();
   const turnMessages = lastUserIdx >= 0 ? messages.slice(lastUserIdx + 1) : messages;
+  const turnHasTerminal = turnHasTerminalReply(messages);
 
   const liveProgress = [...turnMessages]
     .reverse()
@@ -934,21 +941,24 @@ export function BuildView({ agentId }: { agentId: string }) {
 
   // Interrupted builds wait on a form — they must not drive "resume working" / auto-await.
   const serverBuildRunId =
+    !turnHasTerminal &&
     activeBuildRunQuery.data &&
     (activeBuildRunQuery.data.status === "queued" ||
       activeBuildRunQuery.data.status === "running") &&
     activeBuildRunQuery.data.error_code !== "BUILDER_INTERRUPTED"
       ? activeBuildRunQuery.data.id
       : null;
-  const activeRunId =
-    (messageRunId && !stoppedRunIds.has(messageRunId) ? messageRunId : null) ??
-    (serverBuildRunId && !stoppedRunIds.has(serverBuildRunId) ? serverBuildRunId : null);
+  const activeRunId = turnHasTerminal
+    ? null
+    : ((messageRunId && !stoppedRunIds.has(messageRunId) ? messageRunId : null) ??
+      (serverBuildRunId && !stoppedRunIds.has(serverBuildRunId) ? serverBuildRunId : null));
 
   // Resume local "turn in progress" UI after refresh when the server still has a build.
   // Skip while a form is open — that is intentional waiting, not an in-flight compile.
   // Never revive a turn the user already stopped (session flag or cancel notice).
   useEffect(() => {
     if (!serverBuildRunId) return;
+    if (turnHasTerminal) return;
     if (userStopped || readBuilderStop(agentId)) return;
     if (hasOpenBuilderForm) return;
     const last = messages.at(-1);
@@ -963,9 +973,11 @@ export function BuildView({ agentId }: { agentId: string }) {
     agentId,
     messages,
     stoppedRunIds,
+    turnHasTerminal,
   ]);
 
   const activityEnabled =
+    !turnHasTerminal &&
     Boolean(activeRunId) &&
     !userStopped &&
     !hasOpenBuilderForm &&
@@ -1018,6 +1030,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   // Never invent a working panel after a cancel / while a form is unanswered /
   // when the backend agent is idle (grey).
   const buildTurnActive =
+    !turnHasTerminal &&
     !userStopped &&
     !lastIsReady &&
     !lastIsCancel &&
@@ -1152,14 +1165,7 @@ export function BuildView({ agentId }: { agentId: string }) {
 
     const last = messages.at(-1);
     const readyTerminal = last?.role === "assistant" && last.card === "ready";
-    const contentTerminal =
-      last?.role === "assistant" &&
-      last.card !== "thinking" &&
-      last.card !== "build_progress" &&
-      last.card !== "identity_confirmed" &&
-      !last.uiComponent &&
-      !isEphemeralBuilderAck(last) &&
-      Boolean(last.content || (last.actions && last.actions.length > 0));
+    const contentTerminal = isTerminalAssistantMessage(last);
 
     let hasFinalFromSend = false;
     if (pendingToken !== null) {
@@ -1190,15 +1196,16 @@ export function BuildView({ agentId }: { agentId: string }) {
     }
 
     if (!readyTerminal && !contentTerminal && !hasFinalFromSend) return;
-    // Silence-after-submit guard: while a build is still running (e.g. right after a
-    // form/secret/connection continuation inserts a "saved" acknowledgement), an
-    // intermediate content message must NOT be treated as terminal — only a Ready
-    // card ends the turn. Otherwise the working panel disappears before progress
-    // events arrive and the UI goes silent.
-    if (!readyTerminal && (busy || isEphemeralBuilderAck(last))) return;
+    if (isEphemeralBuilderAck(last)) return;
+    // Keep waiting through mid-build acks only — a substantive reply ends the turn
+    // even if agent status or run row lag behind for a few seconds.
+    if (!readyTerminal && !contentTerminal && busy) return;
     setPendingToken(null);
     setAwaitingReply(false);
-  }, [messages, pendingToken, awaitingReply, busy, waitingOnForm]);
+    if (turnHasTerminal) {
+      void queryClient.invalidateQueries({ queryKey: ["active-build-run", agentId] });
+    }
+  }, [messages, pendingToken, awaitingReply, busy, waitingOnForm, agentId, queryClient, turnHasTerminal]);
 
 
   // Consume the landing-page pending prompt exactly once, on an empty thread.

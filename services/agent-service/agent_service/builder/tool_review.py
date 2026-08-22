@@ -80,6 +80,76 @@ def tools_changed(
     return proposed_keys != reviewable_app_keys(current)
 
 
+def prompt_implies_tool_change(prompt: str) -> bool:
+    """Heuristic: user wants to add/remove/change integrations (post-Ready edits)."""
+    text = (prompt or "").strip().lower()
+    if not text:
+        return False
+    markers = (
+        "outil",
+        "outils",
+        "tool",
+        "tools",
+        "integration",
+        "intégration",
+        "integrer",
+        "intégrer",
+        "brancher",
+        "connecter",
+        "connect ",
+        "ajoute",
+        "ajouter",
+        "add ",
+        "remove",
+        "retire",
+        "supprime",
+        "enlève",
+        "enleve",
+        "gmail",
+        "google sheets",
+        "google_sheets",
+        "sheets",
+        "comptab",
+        "facture",
+        "dépense",
+        "depense",
+        "stripe",
+        "quickbooks",
+        "xero",
+        "notion",
+        "slack",
+        "hubspot",
+        "airtable",
+        "calendar",
+        "drive",
+    )
+    if any(m in text for m in markers):
+        return True
+    from agent_service.builder.capabilities import extract_external_app_queries
+
+    return bool(extract_external_app_queries(text))
+
+
+def should_interrupt_tool_review(
+    *,
+    capabilities: dict[str, Any],
+    proposed: list[ToolBinding],
+    current: list[ToolBinding] | None,
+    prompt: str,
+    is_first_build: bool,
+) -> bool:
+    """Mandatory tool review before first Ready; reopen when tools or intent change."""
+    if capabilities.get("tools_confirmed") and isinstance(
+        capabilities.get("confirmed_spec"), dict
+    ):
+        return False
+    if is_first_build:
+        return True
+    if tools_changed(proposed=proposed, current=current):
+        return True
+    return prompt_implies_tool_change(prompt)
+
+
 def _title_case(slug: str) -> str:
     raw = (slug or "tool").replace("_", " ").replace("-", " ")
     return " ".join(part.capitalize() for part in raw.split() if part)[:80]

@@ -467,6 +467,13 @@ class BuilderOrchestrator:
             stored_caps = (
                 payload.get("capabilities") if isinstance(payload.get("capabilities"), dict) else None
             )
+            if stored_caps and content:
+                from agent_service.builder.tool_review import prompt_implies_tool_change
+
+                if prompt_implies_tool_change(content):
+                    stored_caps = dict(stored_caps)
+                    stored_caps.pop("tools_confirmed", None)
+                    stored_caps.pop("confirmed_spec", None)
             stored_ident = (
                 payload.get("identity") if isinstance(payload.get("identity"), dict) else None
             )
@@ -1206,7 +1213,11 @@ class BuilderOrchestrator:
         capabilities: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """Ack the form immediately; compile on the queue in production."""
-        complexity = detect_complexity(content, is_first_build=True)
+        agent_row = await self.db.get_owned_agent(agent_id, user_id)
+        complexity = detect_complexity(
+            content,
+            is_first_build=not bool((agent_row or {}).get("first_ready_celebrated")),
+        )
         await self.db.merge_run_input(
             run_id,
             user_id,
@@ -1443,27 +1454,29 @@ class BuilderOrchestrator:
         from agent_service.builder.tool_review import (
             build_tool_review_entries,
             enrich_utilities_with_llm,
-            tools_changed,
+            should_interrupt_tool_review,
         )
-
-        if capabilities.get("tools_confirmed") and isinstance(
-            capabilities.get("confirmed_spec"), dict
-        ):
-            return None
-        if not tools_changed(proposed=list(spec.tools or []), current=current_spec.tools if current_spec else None):
-            return None
 
         run_row = await self.db.get_owned_run(run_id, user_id)
         locale = str(((run_row or {}).get("input") or {}).get("locale") or "en")
         goal = str(spec.goal or prompt or "")[:400]
+        agent_row = await self.db.get_owned_agent(agent_id, user_id)
+        is_first_build = not bool((agent_row or {}).get("first_ready_celebrated"))
+        if not should_interrupt_tool_review(
+            capabilities=capabilities,
+            proposed=list(spec.tools or []),
+            current=list(current_spec.tools) if current_spec else None,
+            prompt=prompt,
+            is_first_build=is_first_build,
+        ):
+            return None
+
         entries = build_tool_review_entries(
             proposed=list(spec.tools or []),
             current=list(current_spec.tools) if current_spec else None,
             goal=goal,
             locale=locale,
         )
-        if not entries:
-            return None
         entries = await enrich_utilities_with_llm(
             entries,
             goal=goal,
@@ -1604,6 +1617,12 @@ class BuilderOrchestrator:
                         resolved_extra.append(binding.model_copy(update={"config": cfg}))
                 except Exception:  # noqa: BLE001
                     logger.exception("tool_review_resolve_app_failed app_id=%s", app_id)
+                if not any(
+                    b.app_id and str(b.app_id).lower().replace("-", "_")
+                    == app_id.lower().replace("-", "_")
+                    for b in resolved_extra
+                ):
+                    cleaned.append(item)
                 continue
             cleaned.append(item)
 
@@ -2231,7 +2250,10 @@ class BuilderOrchestrator:
                 )
 
         if not (isinstance(confirmed_raw, dict) and caps.get("tools_confirmed")):
-            if complexity == TaskComplexity.FAST and current_spec is not None:
+            from agent_service.builder.tool_review import prompt_implies_tool_change
+
+            tool_change_request = prompt_implies_tool_change(content)
+            if complexity == TaskComplexity.FAST and current_spec is not None and not tool_change_request:
                 await self.db.emit_event(
                     run_id, "builder.plan.created", {"mapping_key": "builder.progress.architecture"}
                 )

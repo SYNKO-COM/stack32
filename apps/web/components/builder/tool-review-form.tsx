@@ -213,7 +213,6 @@ export function ToolReviewForm({
     }
     startTransition(async () => {
       try {
-        onSubmitted?.();
         await submitBuilderToolReview({
           runId,
           tools: finalTools.map((tool) => ({
@@ -225,6 +224,7 @@ export function ToolReviewForm({
             toolIds: tool.toolIds,
           })),
         });
+        onSubmitted?.();
         void queryClient.invalidateQueries({ queryKey: ["builder"] });
         void queryClient.invalidateQueries({ queryKey: ["agents"] });
       } catch {

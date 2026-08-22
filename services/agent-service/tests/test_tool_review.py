@@ -5,6 +5,8 @@ import pytest
 from agent_service.builder.tool_review import (
     apply_reviewed_tools,
     build_tool_review_entries,
+    prompt_implies_tool_change,
+    should_interrupt_tool_review,
     tools_changed,
 )
 from agent_service.models.agent_spec import ToolBinding
@@ -161,3 +163,74 @@ def test_apply_reviewed_tools_keeps_hidden_and_all_app_actions():
     assert "calendar_list" not in ids
     gmail = next(t for t in out if t.tool_id == "gmail_send")
     assert gmail.config.get("utility") == "Envoyer le brief"
+
+
+def test_prompt_implies_tool_change_french():
+    assert prompt_implies_tool_change("Tu ne m'as pas mis d'outils") is True
+    assert prompt_implies_tool_change("Ajoute Google Sheets pour ma comptabilité") is True
+    assert prompt_implies_tool_change("Change le ton en amical") is False
+
+
+def test_should_interrupt_first_build_even_without_apps():
+    caps: dict = {}
+    proposed = [ToolBinding(tool_id="web_search", provider="native")]
+    assert (
+        should_interrupt_tool_review(
+            capabilities=caps,
+            proposed=proposed,
+            current=None,
+            prompt="Agent comptabilité",
+            is_first_build=True,
+        )
+        is True
+    )
+
+
+def test_should_interrupt_skips_when_tools_confirmed():
+    caps = {
+        "tools_confirmed": True,
+        "confirmed_spec": {"goal": "x", "tools": []},
+    }
+    assert (
+        should_interrupt_tool_review(
+            capabilities=caps,
+            proposed=[],
+            current=None,
+            prompt="anything",
+            is_first_build=False,
+        )
+        is False
+    )
+
+
+def test_should_interrupt_post_ready_tool_intent():
+    caps: dict = {}
+    proposed = [ToolBinding(tool_id="web_search", provider="native")]
+    current = [ToolBinding(tool_id="web_search", provider="native")]
+    assert (
+        should_interrupt_tool_review(
+            capabilities=caps,
+            proposed=proposed,
+            current=current,
+            prompt="Ajoute Gmail pour lire les factures",
+            is_first_build=False,
+        )
+        is True
+    )
+
+
+def test_should_interrupt_post_ready_when_apps_change():
+    current = [ToolBinding(tool_id="gmail_send", provider="pipedream", app_id="gmail")]
+    proposed = current + [
+        ToolBinding(tool_id="sheets_update", provider="pipedream", app_id="google_sheets")
+    ]
+    assert (
+        should_interrupt_tool_review(
+            capabilities={},
+            proposed=proposed,
+            current=current,
+            prompt="Continue",
+            is_first_build=False,
+        )
+        is True
+    )

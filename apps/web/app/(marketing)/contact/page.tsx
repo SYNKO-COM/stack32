@@ -110,7 +110,7 @@ export default function ContactPage() {
           <div>
             <h2 className="font-medium">{t("contact.aside.companyTitle")}</h2>
             <p className="mt-1.5 text-muted-foreground">
-              {company.legalCompanyName}
+              {company.brandName}
               {contactEmail ? (
                 <>
                   {" — "}

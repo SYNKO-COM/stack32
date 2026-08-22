@@ -5,6 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { BuilderMessage, BuilderThread, MessageAttachment } from "@/lib/domain/types";
 import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
+import {
+  turnHasInflightWork,
+  turnHasTerminalReply,
+} from "@/lib/builder/turn-terminal";
 import { cancelBuilderRun } from "@/lib/actions/builder";
 import { getBuilderRepository } from "@/lib/repositories/factory";
 
@@ -31,6 +35,9 @@ function composerToMessageAttachments(
 /** True while the builder is still producing progressive updates. */
 export function isThreadActive(thread: BuilderThread | undefined): boolean {
   if (!thread) return false;
+  if (turnHasTerminalReply(thread.messages) && !turnHasInflightWork(thread.messages)) {
+    return false;
+  }
   const last = thread.messages[thread.messages.length - 1];
   if (!last) return false;
   if (isFailureMessageKey(last.content) || last.tone === "warning" || last.tone === "error") {
@@ -60,11 +67,13 @@ export function isThreadActive(thread: BuilderThread | undefined): boolean {
     const content = last.content ?? "";
     const continuationAck =
       last.card === "identity_confirmed" ||
+      last.card === "tools_confirmed" ||
       content === "builder:capabilities.saved" ||
       content === "builder:identity.confirmed" ||
       content.startsWith("builder:identity.confirmed") ||
       content === "builder:secrets.saved" ||
-      content === "builder:providers.saved";
+      content === "builder:providers.saved" ||
+      content === "builder:toolReview.saved";
     if (continuationAck && !isStaleInflightMessage(last.createdAt)) {
       return true;
     }

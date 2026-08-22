@@ -224,6 +224,7 @@ export function BillingDialog() {
           ) : null}
         </div>
       </DialogContent>
+    </Dialog>
 
       <Dialog
         open={confirmCancel}
@@ -231,7 +232,7 @@ export function BillingDialog() {
           if (!open && !busy) setConfirmCancel(false);
         }}
       >
-        <DialogContent className="glass-strong border-border sm:max-w-md">
+        <DialogContent className="glass-strong border-border sm:max-w-md z-[60]">
           <DialogHeader>
             <DialogTitle>{t("billing:status.cancelConfirmTitle")}</DialogTitle>
             <DialogDescription>
@@ -260,6 +261,6 @@ export function BillingDialog() {
           </div>
         </DialogContent>
       </Dialog>
-    </Dialog>
+    </>
   );
 }
