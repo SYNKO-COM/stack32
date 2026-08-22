@@ -7,7 +7,7 @@
   "plan": {
     "agentLimit": "Le plan gratuit autorise un seul agent à vie — le supprimer ne permet pas d’en créer un autre. Passez à un plan supérieur pour en créer davantage.",
     "workspaceLimit": "Votre plan n’autorise qu’un workspace. Passez à un plan supérieur pour en ajouter.",
-    "liveMessageLimit": "Le plan gratuit autorise 3 messages dans Agent IA. Passez à un plan supérieur pour continuer."
+    "liveMessageLimit": "Le plan gratuit autorise 10 messages dans Agent IA. Passez à un plan supérieur pour continuer."
   },
   "builder": {
     "inputRejected": "Ce message n'a pas pu être traité. Reformulez votre demande.",
