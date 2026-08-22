@@ -217,7 +217,11 @@ async def get_tool_config(agent_id: str, tool_id: str, user: CurrentUser) -> dic
 async def put_tool_config(
     agent_id: str, tool_id: str, body: ToolConfigRequest, user: CurrentUser
 ) -> dict[str, Any]:
-    now = datetime.now(UTC).isoformat()
+    from agent_service.integrations.pipedream.accounts import (
+        replicate_tool_config_to_app_siblings,
+        upsert_agent_tool_config,
+    )
+
     cleaned = {
         k: v
         for k, v in (body.config or {}).items()
@@ -230,39 +234,23 @@ async def put_tool_config(
             "api_key",
         }
     }
-    payload = {
-        "user_id": user.user_id,
-        "agent_id": agent_id,
-        "tool_id": tool_id,
-        "connection_id": body.connection_id,
-        "provider": "pipedream" if tool_id.startswith("pd:") else "native",
-        "provider_action_id": body.provider_action_id or tool_id.removeprefix("pd:"),
-        "config": cleaned,
-        "schema_version": body.schema_version,
-        "status": "active",
-        "last_validated_at": now,
-        "updated_at": now,
-    }
-    async with get_supabase_admin_client() as sb:
-        existing = await sb.get(
-            "/agent_tool_configurations",
-            params={
-                "user_id": f"eq.{user.user_id}",
-                "agent_id": f"eq.{agent_id}",
-                "tool_id": f"eq.{tool_id}",
-                "select": "id",
-                "limit": "1",
-            },
-        )
-        rows = existing.json() if existing.status_code < 400 else []
-        if rows:
-            await sb.patch(
-                "/agent_tool_configurations",
-                params={"id": f"eq.{rows[0]['id']}", "user_id": f"eq.{user.user_id}"},
-                json=payload,
-            )
-        else:
-            await sb.post("/agent_tool_configurations", json=payload)
+    await upsert_agent_tool_config(
+        user_id=user.user_id,
+        agent_id=agent_id,
+        tool_id=tool_id,
+        config=cleaned,
+        connection_id=body.connection_id,
+        provider_action_id=body.provider_action_id,
+        schema_version=body.schema_version,
+    )
+    await replicate_tool_config_to_app_siblings(
+        user_id=user.user_id,
+        agent_id=agent_id,
+        source_tool_id=tool_id,
+        config=cleaned,
+        connection_id=body.connection_id,
+        schema_version=body.schema_version,
+    )
     return {"ok": True, "config": cleaned}
 
 

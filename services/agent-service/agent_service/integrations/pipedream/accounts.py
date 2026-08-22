@@ -411,3 +411,108 @@ async def load_agent_tool_config(
         all_rows = [r for r in (fallback.json() or []) if isinstance(r, dict)]
         row = _select_tool_config_row(all_rows, tool_id=tool_id, installation_id=installation_id)
         return _config_from_row(row)
+
+
+async def upsert_agent_tool_config(
+    *,
+    user_id: str,
+    agent_id: str,
+    tool_id: str,
+    config: dict[str, Any],
+    connection_id: str | None = None,
+    provider_action_id: str | None = None,
+    schema_version: str | None = None,
+) -> None:
+    """Create or update Structure static props for one tool."""
+    now = datetime.now(UTC).isoformat()
+    payload = {
+        "user_id": user_id,
+        "agent_id": agent_id,
+        "tool_id": tool_id,
+        "connection_id": connection_id,
+        "provider": "pipedream" if tool_id.startswith("pd:") else "native",
+        "provider_action_id": provider_action_id or tool_id.removeprefix("pd:"),
+        "config": config,
+        "schema_version": schema_version,
+        "status": "active",
+        "last_validated_at": now,
+        "updated_at": now,
+    }
+    async with get_supabase_admin_client() as sb:
+        existing = await sb.get(
+            "/agent_tool_configurations",
+            params={
+                "user_id": f"eq.{user_id}",
+                "agent_id": f"eq.{agent_id}",
+                "tool_id": f"eq.{tool_id}",
+                "select": "id",
+                "limit": "1",
+            },
+        )
+        rows = existing.json() if existing.status_code < 400 else []
+        if rows:
+            await sb.patch(
+                "/agent_tool_configurations",
+                params={"id": f"eq.{rows[0]['id']}", "user_id": f"eq.{user_id}"},
+                json=payload,
+            )
+        else:
+            await sb.post("/agent_tool_configurations", json=payload)
+
+
+async def replicate_tool_config_to_app_siblings(
+    *,
+    user_id: str,
+    agent_id: str,
+    source_tool_id: str,
+    config: dict[str, Any],
+    connection_id: str | None = None,
+    schema_version: str | None = None,
+) -> None:
+    """Copy saved config to every enabled Pipedream tool in the same app on this agent."""
+    from agent_service.integrations.app_keys import app_key_from_tool_id
+    from agent_service.models.agent_spec import load_agent_spec
+
+    target_app = app_key_from_tool_id(source_tool_id)
+    if not target_app or not source_tool_id.startswith("pd:"):
+        return
+
+    async with get_supabase_admin_client() as sb:
+        response = await sb.get(
+            "/agents",
+            params={"id": f"eq.{agent_id}", "select": "definition", "limit": "1"},
+        )
+        if response.status_code >= 400:
+            return
+        rows = response.json() or []
+        if not rows:
+            return
+        definition = rows[0].get("definition") if isinstance(rows[0], dict) else None
+        if not isinstance(definition, dict):
+            return
+
+    try:
+        spec = load_agent_spec(definition)
+    except Exception:  # noqa: BLE001
+        logger.debug("replicate_tool_config_spec_failed agent_id=%s", agent_id, exc_info=True)
+        return
+
+    sibling_ids: list[str] = []
+    for binding in spec.tools:
+        if not binding.enabled:
+            continue
+        tid = str(binding.tool_id or "")
+        if not tid.startswith("pd:") or tid == source_tool_id:
+            continue
+        if app_key_from_tool_id(tid) == target_app:
+            sibling_ids.append(tid)
+
+    for tid in sibling_ids:
+        await upsert_agent_tool_config(
+            user_id=user_id,
+            agent_id=agent_id,
+            tool_id=tid,
+            config=dict(config),
+            connection_id=connection_id,
+            schema_version=schema_version,
+        )

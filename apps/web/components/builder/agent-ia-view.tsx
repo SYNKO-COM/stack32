@@ -245,6 +245,11 @@ export function AgentIaView({
 
   const productGraph = useMemo(() => {
     try {
+      const toolStatuses: Record<string, string> = {};
+      for (const m of readinessQuery.data?.missingConfig ?? []) {
+        const tid = typeof m.tool_id === "string" ? m.tool_id : null;
+        if (tid) toolStatuses[tid] = "setup_required";
+      }
       return buildProductAgentGraph({
         definition: spec,
         graph: graphResponse?.graph,
@@ -253,11 +258,21 @@ export function AgentIaView({
         boundAppIds,
         modelStatus,
         memoryStatus,
+        toolStatuses,
       });
     } catch {
       return { nodes: [], edges: [] };
     }
-  }, [spec, graphResponse?.graph, boundToolIds, boundProviders, boundAppIds, modelStatus, memoryStatus]);
+  }, [
+    spec,
+    graphResponse?.graph,
+    boundToolIds,
+    boundProviders,
+    boundAppIds,
+    modelStatus,
+    memoryStatus,
+    readinessQuery.data?.missingConfig,
+  ]);
 
   const hasGraph = productGraph.nodes.length > 0;
 

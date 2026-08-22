@@ -59,6 +59,48 @@ def test_normalize_spreadsheet_id_alias_to_sheet_id() -> None:
     assert normalized["worksheetId"] == "0"
 
 
+def test_normalize_google_sheets_url_extracts_ids() -> None:
+    schema = normalize_configurable_props(
+        GOOGLE_SHEETS_COMPONENT,
+        tool_id="pd:google_sheets-add-single-row",
+    )
+    url = (
+        "https://docs.google.com/spreadsheets/d/1NE3nvOln6atl5qNtZCAUpoeelXIYhpMIWXbP5xVOPk0/"
+        "edit?usp=sharing#gid=123456"
+    )
+    normalized = normalize_static_config_for_schema(
+        {"sheetId": url},
+        schema,
+        app_id="google_sheets",
+    )
+    assert normalized["sheetId"] == "1NE3nvOln6atl5qNtZCAUpoeelXIYhpMIWXbP5xVOPk0"
+    assert normalized["worksheetId"] == "123456"
+
+
+def test_normalize_google_sheets_defaults_worksheet_zero() -> None:
+    schema = normalize_configurable_props(
+        GOOGLE_SHEETS_COMPONENT,
+        tool_id="pd:google_sheets-add-single-row",
+    )
+    normalized = normalize_static_config_for_schema(
+        {"sheetId": "abc123"},
+        schema,
+        app_id="google_sheets",
+    )
+    assert normalized["sheetId"] == "abc123"
+    assert normalized["worksheetId"] == "0"
+
+
+def test_extract_google_sheets_ids_from_text() -> None:
+    from agent_service.integrations.pipedream.tool_config import extract_google_sheets_ids_from_text
+
+    parsed = extract_google_sheets_ids_from_text(
+        "https://docs.google.com/spreadsheets/d/abc123/edit#gid=0"
+    )
+    assert parsed["sheetId"] == "abc123"
+    assert parsed["worksheetId"] == "0"
+
+
 def test_build_configured_props_uses_alias_config() -> None:
     schema = normalize_configurable_props(
         GOOGLE_SHEETS_COMPONENT,

@@ -341,10 +341,12 @@ async def evaluate_agent_readiness(
                 missing_connections.append(req)
 
         try:
+            from agent_service.integrations.pipedream.knowledge import hint_for_app
             from agent_service.integrations.pipedream.accounts import load_agent_tool_config
             from agent_service.integrations.pipedream.tool_config import (
                 is_static_prop_configured,
                 merge_binding_and_stored_config,
+                resolve_effective_tool_config,
             )
 
             pd = registry.get_provider("pipedream")
@@ -360,6 +362,12 @@ async def evaluate_agent_readiness(
                     continue
                 static_schema = schema_payload.get("static_schema") or {}
                 required_static = list(static_schema.get("required") or [])
+                app_id = schema_payload.get("provider_app_id") or getattr(binding, "app_id", None)
+                hint = hint_for_app(app_id) if app_id else None
+                if hint and isinstance(hint.get("required_props"), list):
+                    for key in hint["required_props"]:
+                        if isinstance(key, str) and key.strip() and key not in required_static:
+                            required_static.append(key.strip())
                 if not required_static:
                     continue
                 stored = await load_agent_tool_config(
@@ -369,10 +377,19 @@ async def evaluate_agent_readiness(
                     installation_id=installation_id,
                 )
                 binding_cfg = binding.config if isinstance(binding.config, dict) else {}
-                merged = merge_binding_and_stored_config(
+                merged = await resolve_effective_tool_config(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    tool_id=binding.tool_id,
                     binding_config=binding_cfg,
-                    stored_config=stored,
+                    installation_id=installation_id,
+                    app_id=app_id,
                 )
+                if not merged:
+                    merged = merge_binding_and_stored_config(
+                        binding_config=binding_cfg,
+                        stored_config=stored,
+                    )
                 app_id = schema_payload.get("provider_app_id") or getattr(binding, "app_id", None)
                 missing_keys = [
                     k

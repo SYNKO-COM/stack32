@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from agent_service.integrations.pipedream.knowledge import hint_for_app, hint_for_tool
@@ -34,6 +35,52 @@ _BANNED_PROMPT_KEYS = frozenset(
 
 def _compact(name: str) -> str:
     return name.lower().replace("_", "").replace("-", "")
+
+
+_GOOGLE_SHEETS_URL_RE = re.compile(
+    r"docs\.google\.com/spreadsheets/d/([a-zA-Z0-9-_]+)",
+    re.IGNORECASE,
+)
+_GOOGLE_SHEETS_GID_RE = re.compile(r"(?:[#&]gid=)(\d+)", re.IGNORECASE)
+
+
+def extract_google_sheets_ids_from_text(value: str) -> dict[str, str]:
+    """Parse spreadsheet id and optional worksheet gid from a URL or raw id string."""
+    text = str(value or "").strip()
+    if not text:
+        return {}
+    out: dict[str, str] = {}
+    match = _GOOGLE_SHEETS_URL_RE.search(text)
+    if match:
+        out["sheetId"] = match.group(1)
+    elif re.fullmatch(r"[a-zA-Z0-9-_]{20,}", text):
+        out["sheetId"] = text
+    gid = _GOOGLE_SHEETS_GID_RE.search(text)
+    if gid:
+        out["worksheetId"] = gid.group(1)
+    return out
+
+
+def _apply_google_sheets_defaults(
+    out: dict[str, Any],
+    *,
+    app_id: str | None,
+) -> dict[str, Any]:
+    """When a spreadsheet is configured without a tab, default to the first sheet (gid 0)."""
+    app = str(app_id or "").lower().replace("-", "_")
+    if app not in {"google_sheets", "googlesheets", "sheets"}:
+        return out
+    has_sheet = any(
+        out.get(k) not in (None, "")
+        for k in ("sheetId", "spreadsheetId", "spreadsheet_id")
+    )
+    has_worksheet = any(
+        out.get(k) not in (None, "")
+        for k in ("worksheetId", "worksheetIds", "worksheet", "sheetName")
+    )
+    if has_sheet and not has_worksheet:
+        out["worksheetId"] = "0"
+    return out
 
 
 def prop_alias_groups_for_app(app_id: str | None) -> list[frozenset[str]]:
@@ -108,7 +155,19 @@ def normalize_static_config_for_schema(
     for key, value in raw.items():
         if value is None or value == "":
             continue
-        if key in target_names:
+        is_sheets_url = isinstance(value, str) and bool(_GOOGLE_SHEETS_URL_RE.search(value))
+        if isinstance(value, str):
+            parsed = extract_google_sheets_ids_from_text(value)
+            if parsed:
+                for pid, pval in parsed.items():
+                    if pid in target_names and pid not in out:
+                        out[pid] = pval
+                    else:
+                        for tname in target_names:
+                            if _compact(tname) == _compact(pid):
+                                out[tname] = pval
+                                break
+        if key in target_names and not (is_sheets_url and _compact(key) in {"sheetid", "spreadsheetid"}):
             out[key] = value
 
     alias_to_canonical = _alias_lookup(app)
@@ -143,7 +202,7 @@ def normalize_static_config_for_schema(
             if name in target_names and name not in out:
                 out[name] = value
 
-    return out
+    return _apply_google_sheets_defaults(out, app_id=app)
 
 
 def is_static_prop_configured(
@@ -286,8 +345,27 @@ def configured_tools_system_block(
 
     if not lines:
         return ""
-    return (
+    guidance: list[str] = []
+    seen_apps: set[str] = set()
+    for binding in tools:
+        if not getattr(binding, "enabled", True):
+            continue
+        app = str(getattr(binding, "app_id", None) or "").strip()
+        if not app or app in seen_apps:
+            continue
+        seen_apps.add(app)
+        hint = hint_for_app(app)
+        if hint and isinstance(hint.get("builder_guidance"), str):
+            guidance.append(f"- {app}: {hint['builder_guidance'].strip()}")
+
+    block = (
         "CONFIGURED TOOLS (set in Structure — do NOT ask the user for these IDs; "
         "they are injected automatically when you call the tool):\n"
         + "\n".join(lines)
+        + "\n\nWhen the user mentions a spreadsheet URL, prefer the configured sheetId/"
+        "worksheetId above — only use URL parsing if no Structure config exists. "
+        "Call the tool directly with row/column data; do not stop to re-confirm IDs."
     )
+    if guidance:
+        block += "\n\nAPP GUIDANCE:\n" + "\n".join(guidance)
+    return block
