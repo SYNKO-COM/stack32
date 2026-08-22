@@ -27,6 +27,9 @@ packages/**/build/
 .env.local
 .env.*.local
 
+# Internal financials — never publish
+docs/BILLING_MARGINS.md
+
 # supabase local
 supabase/.temp/
 supabase/.branches/
