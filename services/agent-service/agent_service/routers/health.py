@@ -1,9 +1,13 @@
 """Health and readiness endpoints (no auth, not versioned)."""
 
+import logging
+
 from fastapi import APIRouter, Response
 
 from agent_service import __version__
 from agent_service.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["health"])
 
@@ -36,6 +40,21 @@ async def ready(response: Response) -> dict[str, object]:
         if (settings.is_production or settings.is_production_like) and not checks["cloud_tasks"]:
             response.status_code = 503
             return {"status": "not_ready", "checks": checks}
+
+    # Pipedream hints and Connect knowledge are read on every tool-config
+    # resolution. When they are missing the service still answers 200 on every
+    # request and merely stops injecting Structure settings — which is exactly
+    # how a packaging bug (IndexError at import, data never copied into the
+    # image) stayed invisible in production for days. Make a bad image visible
+    # here instead of leaving users to discover it one broken agent at a time.
+    from agent_service.integrations.pipedream.knowledge import missing_runtime_data
+
+    missing_data = missing_runtime_data()
+    checks["pipedream_runtime_data"] = not missing_data
+    if missing_data and (settings.is_production or settings.is_production_like):
+        logger.error("pipedream_runtime_data_missing files=%s", missing_data)
+        response.status_code = 503
+        return {"status": "not_ready", "checks": checks, "missing_data": missing_data}
 
     ready_ok = all(checks.values())
     return {"status": "ready" if ready_ok else "degraded", "checks": checks}

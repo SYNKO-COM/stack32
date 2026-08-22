@@ -75,6 +75,13 @@ def _agent_yaml(bp: ProjectBlueprint) -> str:
     )
 
 
+# The generated project always ships a single internal package under src/.
+# Ruff's isort config, the wheel packages list and the file map below all derive
+# from this one name: if they ever disagree, ruff reports I001 on every freshly
+# generated project and each build fails its lint gate at birth.
+GENERATED_PACKAGE = "agent"
+
+
 def _pyproject(bp: ProjectBlueprint) -> str:
     return (
         "[build-system]\n"
@@ -92,7 +99,7 @@ def _pyproject(bp: ProjectBlueprint) -> str:
         "[project.optional-dependencies]\n"
         'dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.6"]\n\n'
         "[tool.hatch.build.targets.wheel]\n"
-        'packages = ["src/agent"]\n\n'
+        f'packages = ["src/{GENERATED_PACKAGE}"]\n\n'
         "[tool.pytest.ini_options]\n"
         'testpaths = ["tests"]\n'
         'asyncio_mode = "auto"\n'
@@ -110,7 +117,7 @@ def _pyproject(bp: ProjectBlueprint) -> str:
         # nothing and would fail the gate for a long tool name alone.
         'ignore = ["E501"]\n\n'
         "[tool.ruff.lint.isort]\n"
-        'known-first-party = ["agent"]\n'
+        f'known-first-party = ["{GENERATED_PACKAGE}"]\n'
     )
 
 

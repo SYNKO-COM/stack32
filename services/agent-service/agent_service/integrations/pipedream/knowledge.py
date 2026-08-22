@@ -23,28 +23,42 @@ def _resolve_docs_dir() -> Path:
     """Locate the Pipedream runtime data (hints + Connect knowledge).
 
     These files are read on every tool-config resolution, so they are package
-    data that ships with the code, not documentation. They previously lived in
-    the repo's ``docs/pipedream`` and were located via ``parents[5]`` — an index
-    that is out of range inside the container (``/app/agent_service/...``), and
-    a directory the Docker build context (``services/``) could not reach anyway.
-    The IndexError fired at *import* time: silently swallowed in the Live
-    runtime (tool configs never injected) and a hard 500 on reload-props.
+    data that ships beside the code. They used to live in the repo's ``docs/``
+    and be found via ``parents[5]`` — an index out of range inside the container
+    (``/app/agent_service/...``), and a directory the Docker build context
+    (``services/``) could not reach anyway.
+
+    Resolution is deliberately NOT a search. Walking up looking for a matching
+    directory would let any ancestor that happens to be writable — a workspace
+    root, a cwd under tenant control — supply the service's own configuration.
+    Only the packaged location, or an explicit operator override, is trusted.
     """
     override = os.environ.get("PIPEDREAM_DOCS_DIR")
     if override:
         return Path(override)
-    packaged = Path(__file__).resolve().parent / "data"
-    if packaged.is_dir():
-        return packaged
-    # Legacy checkout layout: walk up for docs/pipedream rather than assume depth.
-    for ancestor in Path(__file__).resolve().parents:
-        candidate = ancestor / "docs" / "pipedream"
-        if candidate.is_dir():
-            return candidate
-    return packaged
+    return Path(__file__).resolve().parent / "data"
 
 
 _DOCS_DIR = _resolve_docs_dir()
+
+# Files the integrations layer cannot work correctly without. Missing data does
+# not crash a request — it degrades tool-config resolution silently, which is
+# how an IndexError here went unnoticed in production for days. Surface it on
+# /ready instead so a bad image is visible before users hit it.
+REQUIRED_DATA_FILES = ("app_hints.json", "generated_app_hints.json", "CONNECT_KNOWLEDGE.md")
+
+
+def missing_runtime_data() -> list[str]:
+    """Return the names of required data files that are absent or unreadable."""
+    missing: list[str] = []
+    for name in REQUIRED_DATA_FILES:
+        path = _DOCS_DIR / name
+        try:
+            if not path.is_file() or path.stat().st_size == 0:
+                missing.append(name)
+        except OSError:
+            missing.append(name)
+    return missing
 _HINTS_PATH = _DOCS_DIR / "app_hints.json"
 _GENERATED_HINTS_PATH = _DOCS_DIR / "generated_app_hints.json"
 _KNOWLEDGE_PATH = _DOCS_DIR / "CONNECT_KNOWLEDGE.md"

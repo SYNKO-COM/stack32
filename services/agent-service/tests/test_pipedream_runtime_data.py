@@ -17,6 +17,7 @@ Docker build context, so it was never copied into the image at all.
 
 from __future__ import annotations
 
+import inspect
 import subprocess
 import sys
 from pathlib import Path
@@ -47,6 +48,35 @@ def test_resolution_survives_a_shallow_path(tmp_path, monkeypatch):
     """The container layout has fewer ancestors than the repo checkout."""
     monkeypatch.setenv("PIPEDREAM_DOCS_DIR", str(tmp_path))
     assert knowledge._resolve_docs_dir() == tmp_path
+
+
+def test_resolution_never_searches_ancestor_directories(monkeypatch):
+    """A search would let a writable ancestor supply our own configuration.
+
+    Walking up for a matching directory turns a packaging bug into a
+    cross-trust-boundary one: a workspace root or a cwd under tenant control
+    could shadow the service's data. Only the packaged path, or an explicit
+    operator override, is trusted.
+    """
+    monkeypatch.delenv("PIPEDREAM_DOCS_DIR", raising=False)
+    resolved = knowledge._resolve_docs_dir()
+    assert resolved == Path(knowledge.__file__).resolve().parent / "data"
+
+    source = inspect.getsource(knowledge._resolve_docs_dir)
+    assert ".parents" not in source, "must not walk up looking for a data directory"
+
+
+def test_missing_runtime_data_is_reported():
+    assert knowledge.missing_runtime_data() == []
+
+
+def test_missing_runtime_data_detects_an_incomplete_image(tmp_path, monkeypatch):
+    monkeypatch.setattr(knowledge, "_DOCS_DIR", tmp_path)
+    assert set(knowledge.missing_runtime_data()) == set(knowledge.REQUIRED_DATA_FILES)
+    (tmp_path / "app_hints.json").write_text("{}", encoding="utf-8")
+    assert "app_hints.json" not in knowledge.missing_runtime_data()
+    (tmp_path / "CONNECT_KNOWLEDGE.md").write_text("", encoding="utf-8")
+    assert "CONNECT_KNOWLEDGE.md" in knowledge.missing_runtime_data(), "empty file is missing data"
 
 
 def test_tool_config_chain_imports_without_error():
