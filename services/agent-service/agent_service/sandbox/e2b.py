@@ -36,6 +36,18 @@ class E2BSandbox:
     """Isolated cloud sandbox backed by E2B."""
 
     name = "e2b"
+    # NOT network isolation. An E2B microVM has internet access, and the coding
+    # agent needs `python` to run pytest and ruff, so
+    # `python -c "import urllib.request; urllib.request.urlopen(...)"` reaches the
+    # network regardless of this list. Treat it as a speed bump that stops casual
+    # egress and makes deliberate egress conspicuous in the transcript — never as
+    # a containment boundary. Real isolation needs an E2B template/plan with
+    # egress control; see docs/SANDBOX_NETWORK.md.
+    #
+    # What keeps this acceptable today: no platform secret is ever placed in the
+    # sandbox (create_workspace passes no env), so a workspace holds only the
+    # user's own generated project. That invariant is enforced by
+    # tests/test_sandbox_no_secrets.py and must not be relaxed.
     _NETWORK_BINARIES = frozenset(
         {"curl", "wget", "nc", "ncat", "netcat", "ssh", "scp", "ftp", "telnet", "dig", "nslookup"}
     )

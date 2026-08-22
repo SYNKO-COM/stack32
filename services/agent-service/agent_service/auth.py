@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 import jwt as pyjwt
 from fastapi import Depends, Header, HTTPException
@@ -137,7 +138,52 @@ def _google_oidc_invoker_ok(authorization: str | None) -> bool:
     if claims.get("email_verified") is False:
         return False
     issuer = str(claims.get("iss") or "")
-    return issuer in {"accounts.google.com", "https://accounts.google.com"}
+    if issuer not in {"accounts.google.com", "https://accounts.google.com"}:
+        return False
+    return _oidc_audience_ok(str(claims.get("aud") or ""))
+
+
+def _service_origin(url: str) -> str | None:
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _oidc_audience_ok(aud: str) -> bool:
+    """Reject a token minted for a different service.
+
+    ``verify_oauth2_token`` skips the ``aud`` check entirely when no audience is
+    passed, so any OIDC token issued to the invoker service account — including
+    one minted for an unrelated Cloud Run service — used to be accepted here.
+    The ``aud`` claim exists precisely to stop that cross-service replay.
+
+    Cloud Tasks and Cloud Scheduler mint per-endpoint audiences
+    (``.../tasks/run`` and ``.../tasks/schedules/tick``) that share the service
+    origin, so accept an exact configured match or any audience on our own
+    origin. Fail closed when nothing is configured.
+    """
+    aud = (aud or "").strip()
+    if not aud:
+        return False
+    settings = get_settings()
+    configured = [
+        (settings.CLOUD_TASKS_OIDC_AUDIENCE or "").strip(),
+        (settings.CLOUD_TASKS_TARGET_URL or "").strip(),
+    ]
+    allowed = {c for c in configured if c}
+    if not allowed:
+        logger.error("oidc_audience_not_configured; refusing internal OIDC auth")
+        return False
+    if aud in allowed:
+        return True
+    aud_origin = _service_origin(aud)
+    if aud_origin is None:
+        return False
+    return any(_service_origin(c) == aud_origin for c in allowed)
 
 
 async def require_internal_service(

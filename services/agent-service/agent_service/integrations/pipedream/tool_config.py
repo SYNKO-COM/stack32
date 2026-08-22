@@ -69,21 +69,34 @@ def _apply_google_sheets_defaults(
     out: dict[str, Any],
     *,
     app_id: str | None,
+    target_names: set[str] | None = None,
 ) -> dict[str, Any]:
     """When a spreadsheet is configured without a tab, default to the first sheet (gid 0)."""
     app = str(app_id or "").lower().replace("-", "_")
     if app not in {"google_sheets", "googlesheets", "sheets"}:
         return out
-    has_sheet = any(
-        out.get(k) not in (None, "")
-        for k in ("sheetId", "spreadsheetId", "spreadsheet_id")
-    )
-    has_worksheet = any(
-        out.get(k) not in (None, "")
-        for k in ("worksheetId", "worksheetIds", "worksheet", "sheetName")
-    )
+    # Compare on compacted names: Pipedream components use sheetID / worksheetIDs
+    # with casing that never matched these literals, so the check silently
+    # concluded "no spreadsheet configured" and skipped the default entirely.
+    filled = {_compact(k) for k, v in out.items() if v not in (None, "")}
+    has_sheet = bool(filled & {"sheetid", "spreadsheetid"})
+    has_worksheet = bool(filled & {"worksheetid", "worksheetids", "worksheet", "sheetname"})
     if has_sheet and not has_worksheet:
-        out["worksheetId"] = "0"
+        # Write the component's real prop name. Pipedream calls it "worksheetIDs"
+        # on several Sheets components, so hardcoding "worksheetId" meant the
+        # default never landed: a required field stayed empty, the trigger could
+        # not be saved, and the agent stayed stuck on "à configurer".
+        names = target_names or set()
+        preferred = next(
+            (n for n in ("worksheetIDs", "worksheetIds", "worksheetId") if n in names),
+            None,
+        )
+        if preferred is None and names:
+            preferred = next(
+                (n for n in names if _compact(n) in {"worksheetids", "worksheetid"}),
+                None,
+            )
+        out[preferred or "worksheetId"] = "0"
     return out
 
 
@@ -206,7 +219,7 @@ def normalize_static_config_for_schema(
             if name in target_names and name not in out:
                 out[name] = value
 
-    return _apply_google_sheets_defaults(out, app_id=app)
+    return _apply_google_sheets_defaults(out, app_id=app, target_names=target_names)
 
 
 def is_static_prop_configured(
