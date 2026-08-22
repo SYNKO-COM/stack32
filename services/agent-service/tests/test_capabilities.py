@@ -194,6 +194,22 @@ def test_email_send_only_least_privilege():
     assert ids == ["gmail_send_message"]
 
 
+def test_email_automation_includes_send():
+    from agent_service.builder.capabilities import _email_tool_ids
+
+    ids = _email_tool_ids("agent qui envoie des mails automatiquement")
+    assert "gmail_send_message" in ids
+    assert "gmail_create_draft" in ids
+
+
+def test_build_plan_defaults_gmail_for_automation():
+    from agent_service.builder.capabilities import build_capability_plan
+
+    plan = build_capability_plan("Crée un agent qui envoie des mails automatiquement")
+    assert "email_provider" not in plan.ambiguities
+    assert "email" in plan.capability_ids()
+
+
 @pytest.mark.asyncio
 async def test_calendar_list_only_no_create():
     caps = extract_capabilities("List my upcoming calendar events")

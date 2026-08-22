@@ -19,12 +19,10 @@ import { fetchProfileWithRetry } from "@/lib/auth/post-auth";
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation("common");
   const router = useRouter();
-  const { data: user, isLoading: userLoading, isError: userError, isFetching: userFetching } =
-    useCurrentUser();
+  const { data: user, isLoading: userLoading, isError: userError } = useCurrentUser();
   const {
     data: profile,
     isLoading: profileLoading,
-    isFetching: profileFetching,
     refetch: refetchProfile,
   } = useProfile();
 
@@ -32,15 +30,16 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   const [retryComplete, setRetryComplete] = useState<boolean | null>(null);
   const resolvingRef = useRef(false);
 
-  const settling = userLoading || profileLoading || userFetching || profileFetching;
+  // Never block on background refetch (tab return / reconnect) — only initial load.
+  const settling = userLoading || profileLoading;
   const knownComplete = profile?.onboardingCompleted === true;
   const knownIncomplete = Boolean(profile && !profile.onboardingCompleted);
   const needsRetry = Boolean(
-    user && !userError && profile == null && !profileLoading && !userLoading && !userFetching,
+    user && !userError && profile == null && !profileLoading && !userLoading,
   );
 
   useEffect(() => {
-    if (userLoading || userFetching) return;
+    if (userLoading) return;
 
     if (userError || !user) {
       router.replace("/login");
@@ -77,7 +76,6 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     knownIncomplete,
     needsRetry,
     userLoading,
-    userFetching,
     userError,
     router,
     refetchProfile,

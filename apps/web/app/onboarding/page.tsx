@@ -39,14 +39,12 @@ function OnboardingPageInner() {
     data: user,
     isLoading: userLoading,
     isError: userError,
-    isFetching: userFetching,
     refetch: refetchUser,
   } = useCurrentUser();
   const {
     data: profile,
     isLoading: profileLoading,
     isError: profileError,
-    isFetching: profileFetching,
     refetch: refetchProfile,
   } = useProfile();
 
@@ -56,14 +54,14 @@ function OnboardingPageInner() {
   /** True once we showed the wizard — don't steal navigation when it completes. */
   const startedIncompleteRef = useRef(false);
 
-  const settling = userLoading || profileLoading || userFetching || profileFetching;
+  const settling = userLoading || profileLoading;
   const profileReadyForFlow = Boolean(profile && !profile.onboardingCompleted);
   const needsProfileRetry = Boolean(
-    user && !userError && !profile && !profileLoading && !userLoading && !userFetching,
+    user && !userError && !profile && !profileLoading && !userLoading,
   );
 
   useEffect(() => {
-    if (userLoading || userFetching) return;
+    if (userLoading) return;
 
     if (userError || !user) {
       router.replace("/signup");
@@ -105,7 +103,6 @@ function OnboardingPageInner() {
     profileReadyForFlow,
     needsProfileRetry,
     userLoading,
-    userFetching,
     userError,
     router,
     refetchProfile,

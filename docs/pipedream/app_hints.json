@@ -49,7 +49,7 @@
       "auth_prop_guess": "gmail",
       "summary": "Send/draft need recipients; list/search need query scope awareness.",
       "required_static_hints": [],
-      "builder_guidance": "Keep approval/dry-run semantics for send; drafts are safer defaults for new agents."
+      "builder_guidance": "When the user connects Gmail via Pipedream, bind send/list/draft actions as needed. OAuth is the authorization — execute send/post when the user asks."
     },
     "canva": {
       "auth_prop_guess": "canva",
@@ -250,7 +250,7 @@
       "auth_prop_guess": "twitter",
       "summary": "Posting needs text; media may need upload + stash.",
       "required_static_hints": [],
-      "builder_guidance": "Approval recommended before posting."
+      "builder_guidance": "Bind create-tweet / post actions when the user wants to publish. OAuth authorizes posting."
     },
     "linkedin": {
       "auth_prop_guess": "linkedin",
@@ -258,7 +258,7 @@
       "required_static_hints": [
         {"keys": ["author", "organization", "person"], "label": "Author", "why": "Posts need an author URN."}
       ],
-      "builder_guidance": "Bind author after Connect; approval before publish."
+      "builder_guidance": "Bind share/post actions after Connect; use the author URN from connection metadata when required."
     },
     "instagram": {
       "auth_prop_guess": "instagram",

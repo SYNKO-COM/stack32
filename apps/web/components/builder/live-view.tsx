@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, AlertTriangle, Loader2, Table2, Trash2 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AgentIcon } from "@/components/builder/agent-icon";
@@ -23,6 +23,11 @@ import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-but
 import { gatherSupportDiagnostic } from "@/lib/actions/support-diagnostic";
 import { isFailureMessageKey, isStaleInflightMessage } from "@/lib/chat/backend-failure";
 import { isUpgradeGateError, PlanLimitError } from "@/lib/billing/plan-limit";
+import {
+  clearLiveStop,
+  readLiveStop,
+  writeLiveStop,
+} from "@/lib/builder/stop-persistence";
 import { agentHasUnpublishedDraft } from "@/lib/domain/agent-publish";
 import type { LiveMessage } from "@/lib/domain/types";
 import { useUiStore } from "@/store/ui-store";
@@ -261,32 +266,77 @@ export function LiveView({
   const clearThread = useClearLiveThread(agentId);
   const cancelRun = useCancelLiveRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [userStopped, setUserStopped] = useState(() => Boolean(readLiveStop(agentId)));
+  const [stoppedRunIds, setStoppedRunIds] = useState<Set<string>>(() => {
+    const stop = readLiveStop(agentId);
+    return stop?.runId ? new Set([stop.runId]) : new Set();
+  });
 
   const messages = thread?.messages ?? [];
-  const pendingBusy = messages.some((m) => m.pending);
-  const awaitingApproval = messages.some(
+  const displayMessages = userStopped
+    ? messages.map((m) => {
+        if (!m.pending) return m;
+        if (m.runId && stoppedRunIds.size > 0 && !stoppedRunIds.has(m.runId)) return m;
+        return {
+          ...m,
+          pending: false,
+          content: "live:errors.canceled",
+          tone: "warning" as const,
+        };
+      })
+    : messages;
+  const pendingBusy = displayMessages.some((m) => m.pending);
+  const awaitingApproval = displayMessages.some(
     (m) => m.role === "assistant" && m.uiComponent?.type === "approval_form",
   );
-  const lastLiveMessage = messages.at(-1);
+  const lastLiveMessage = displayMessages.at(-1);
   const awaitingReply =
+    !userStopped &&
     lastLiveMessage?.role === "user" &&
     !isStaleInflightMessage(lastLiveMessage.createdAt);
-  const busy =
-    pendingBusy ||
-    awaitingReply ||
-    awaitingApproval ||
-    sendMessage.isPending ||
-    cancelRun.isPending;
+  const composerBusy =
+    !userStopped &&
+    !awaitingApproval &&
+    (pendingBusy ||
+      awaitingReply ||
+      sendMessage.isPending ||
+      cancelRun.isPending);
   const runId =
     activeRunId ||
-    [...messages].reverse().find((m) => m.runId)?.runId ||
+    [...displayMessages].reverse().find((m) => m.runId)?.runId ||
     null;
   const agentName = agent?.name || t("builder:sidebar.untitledAgent");
   const hasUnpublishedDraft = agentHasUnpublishedDraft(agent);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, busy]);
+  }, [displayMessages.length, composerBusy]);
+
+  useEffect(() => {
+    const stop = readLiveStop(agentId);
+    if (!stop) return;
+    setUserStopped(true);
+    if (stop.runId) {
+      setStoppedRunIds((prev) => new Set([...prev, stop.runId!]));
+    }
+    // Best-effort: sync server after refresh so polling cannot revive the turn.
+    void cancelRun.mutateAsync(stop.runId).catch(() => {
+      /* already canceled */
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per agent mount
+  }, [agentId]);
+
+  const handleStop = () => {
+    const runToStop = runId;
+    if (runToStop) {
+      setStoppedRunIds((prev) => new Set([...prev, runToStop]));
+    }
+    writeLiveStop(agentId, runToStop);
+    setUserStopped(true);
+    void cancelRun.mutateAsync(runToStop).catch(() => {
+      /* optimistic UI already freed the composer */
+    });
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -378,12 +428,12 @@ export function LiveView({
               ) : null}
             </div>
           ) : (
-            messages.map((message) => (
+            displayMessages.map((message) => (
               <LiveBubble
                 key={message.id}
                 message={message}
                 agentId={agentId}
-                userPrompt={promptBeforeLiveMessage(messages, message.id)}
+                userPrompt={promptBeforeLiveMessage(displayMessages, message.id)}
                 agentIcon={agent?.icon ?? "bot"}
                 onSecretSubmitted={() => {
                   void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
@@ -403,7 +453,10 @@ export function LiveView({
           placeholder={t("live:composer.placeholder")}
           draftKey={`live:${agentId}`}
           onSubmit={async (value, attachments) => {
-            if (busy) return false;
+            if (composerBusy) return false;
+            clearLiveStop(agentId);
+            setUserStopped(false);
+            setStoppedRunIds(new Set());
             try {
               await sendMessage.mutateAsync({ content: value, attachments });
             } catch (error) {
@@ -416,12 +469,10 @@ export function LiveView({
               throw error;
             }
           }}
-          onStop={() => {
-            void cancelRun.mutateAsync(runId);
-          }}
-          busy={busy && !awaitingApproval}
+          onStop={handleStop}
+          busy={composerBusy}
           paused={awaitingApproval}
-          disabled={busy && !runId && !pendingBusy}
+          disabled={composerBusy && !runId && !pendingBusy}
         />
       </div>
     </div>

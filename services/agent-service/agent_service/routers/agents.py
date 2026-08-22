@@ -627,6 +627,7 @@ async def _sync_external_memory_tools(
 ) -> dict[str, Any]:
     """Bind Pipedream DB tools + connection requirement for external memory."""
     from agent_service.builder.capabilities import (
+        DEFAULT_PIPEDREAM_MAX_ACTIONS,
         _app_slug_from_tool_id,
         build_connection_requirements,
         resolve_pipedream_app,
@@ -680,7 +681,7 @@ async def _sync_external_memory_tools(
                 search=search,
                 add_binding=add_binding,
                 ambiguous=[],
-                max_actions=3,
+                max_actions=DEFAULT_PIPEDREAM_MAX_ACTIONS,
             )
         except Exception:  # noqa: BLE001
             # Connection requirement below still lets the user Connect; tools can JIT later.

@@ -127,7 +127,10 @@ _PIPEDREAM_APP_ALIASES: dict[str, str] = {
     "chatgpt": "openai",
 }
 
-# Near-homophones / catalog collisions. Never auto-bind a wrong neighbor.
+# Max Pipedream actions bound per connected app during builder resolution.
+DEFAULT_PIPEDREAM_MAX_ACTIONS = 8
+MAPS_PIPEDREAM_MAX_ACTIONS = 10
+MAX_SELECTED_TOOLS = 40
 # Key = user query (normalized slug); value = slugs that must not win by default.
 _CONFUSABLE_APP_NEIGHBORS: dict[str, set[str]] = {
     "canva": {"canvas", "gocanvas", "go_canvas", "go-canvas", "instructure_canvas"},
@@ -155,13 +158,16 @@ _CAPABILITY_CATALOG: dict[str, dict[str, Any]] = {
             "courriel",
             "e-mail",
             "courrier",
-            # Do NOT use bare "envoie"/"envoyer"/"mail" — "quand je lui envoie les infos"
-            # and substrings must not imply Gmail.
+            "mails",
             "send email",
             "envoyer un email",
             "envoyer un mail",
             "envoie un email",
             "envoie un mail",
+            "envoie des mails",
+            "envoyer des mails",
+            "automatiquement",
+            "automatically",
         ],
     },
     "calendar": {
@@ -311,12 +317,20 @@ def build_capability_plan(
     ambiguities: list[str] = []
 
     # Ambiguous email without provider → ask business question later.
-    mentions_email = bool(re.search(r"\b(email|mail|e-mail|courriel)\b", lower))
+    mentions_email = bool(
+        re.search(r"\b(email|emails|mail|mails|e-mail|courriel|courriels)\b", lower)
+    )
     mentions_gmail = "gmail" in lower or "google mail" in lower
     mentions_outlook = "outlook" in lower or "microsoft mail" in lower
     if mentions_email and not mentions_gmail and not mentions_outlook:
         if not any(a in {"gmail", "microsoft_outlook", "outlook"} for a in apps):
-            ambiguities.append("email_provider")
+            # Email automation prompts default to Gmail — OAuth via Pipedream Connect.
+            if re.search(
+                r"\b(automat|automatic|envoi|envoie|envoyer|send|dispatch|agent)\b", lower
+            ):
+                apps.append("gmail")
+            else:
+                ambiguities.append("email_provider")
 
     # Ambiguous CRM without a named provider → ask which CRM later.
     mentions_crm = bool(re.search(r"\bcrm\b", lower))
@@ -512,9 +526,12 @@ def extract_capabilities(
 
 
 def _email_tool_ids(prompt_lower: str) -> list[str]:
-    """Least privilege: send-only ≠ read/list; draft vs send from intent."""
+    """Bind read/draft/send from intent. Automation agents get send by default."""
     wants_send = bool(
-        re.search(r"\b(send|envoie|envoyer|dispatch)\b", prompt_lower)
+        re.search(
+            r"\b(send|envoie|envoyer|dispatch|post|publier|publish|tweet)\b",
+            prompt_lower,
+        )
         and not re.search(r"\b(draft|brouillon)\b", prompt_lower)
     )
     wants_draft = bool(
@@ -526,10 +543,26 @@ def _email_tool_ids(prompt_lower: str) -> list[str]:
             prompt_lower,
         )
     )
-    # Default: draft (+ list) when unspecified; send-only stays send-only.
-    if not wants_send and not wants_draft and not wants_read:
-        wants_draft = True
+    wants_automation = bool(
+        re.search(r"\b(automat|automatic|automatiquement|trigger|d[eé]clench)\b", prompt_lower)
+    )
+    mentions_email = bool(
+        re.search(r"\b(email|emails|mail|mails|gmail|courriel|courriels)\b", prompt_lower)
+    )
+
+    if wants_automation and mentions_email:
+        wants_send = True
         wants_read = True
+        wants_draft = True
+    elif not wants_send and not wants_draft and not wants_read:
+        if mentions_email:
+            # Email agent without explicit read/draft/send → full mailbox + send.
+            wants_send = True
+            wants_read = True
+            wants_draft = True
+        else:
+            wants_draft = True
+            wants_read = True
 
     tools: list[str] = []
     if wants_read or wants_draft:
@@ -803,9 +836,42 @@ def _filter_actions_for_app(tools: list[Any], app_id: str) -> list[Any]:
 
 
 def _prefer_action_tools(tools: list[Any], prompt_lower: str) -> list[Any]:
-    """Rank create/design (or Maps search/details) actions first when relevant."""
+    """Rank create/design, outbound (send/post), or Maps actions first when relevant."""
     if not tools:
         return tools
+
+    wants_outbound = bool(
+        re.search(
+            r"\b(send|envoie|envoyer|post|publier|publish|tweet|share|notify|message|social|réseau|reseau)\b",
+            prompt_lower,
+        )
+    )
+    if wants_outbound:
+
+        def _outbound_score(tool: Any) -> int:
+            tid = str(getattr(tool, "tool_id", None) or "").lower()
+            name = str(getattr(tool, "name", None) or "").lower()
+            hay = f"{tid} {name}"
+            score = 0
+            for kw in (
+                "send",
+                "post",
+                "publish",
+                "tweet",
+                "create-tweet",
+                "share",
+                "message",
+                "reply",
+                "dm",
+            ):
+                if kw in hay:
+                    score += 70
+            for kw in ("list", "get", "search", "read", "find", "lookup"):
+                if kw in hay:
+                    score -= 25
+            return score
+
+        return sorted(tools, key=_outbound_score, reverse=True)
 
     mapsish = any(
         "google_maps" in str(getattr(t, "tool_id", "") or "").lower()
@@ -1104,7 +1170,7 @@ def merge_tools_on_edit(
             continue
         seen.add(binding.tool_id)
         merged.append(binding)
-    return merged[:20]
+    return merged[:MAX_SELECTED_TOOLS]
 
 
 def blocking_ambiguities(
@@ -1235,7 +1301,7 @@ async def resolve_pipedream_app(
     search: Any,
     add_binding: Any,
     ambiguous: list[dict[str, Any]],
-    max_actions: int = 2,
+    max_actions: int = DEFAULT_PIPEDREAM_MAX_ACTIONS,
 ) -> str | None:
     """JIT-resolve a Pipedream app + top actions. Returns resolved app_id or None.
 
@@ -1551,7 +1617,7 @@ async def resolve_tools_for_capabilities(
         and not (cap_ids & integration_ids)
         and not external_apps
     ):
-        return selected[:20], [], ambiguous
+        return selected[:MAX_SELECTED_TOOLS], [], ambiguous
 
     async def _resolve_preferred(tool_ids: list[str]) -> None:
         for tid in tool_ids:
@@ -1578,7 +1644,11 @@ async def resolve_tools_for_capabilities(
             a in {"gmail", "microsoft_outlook", "outlook"} for a in (preferred_apps or [])
         )
         if email_resolved:
-            await _resolve_preferred(_email_tool_ids(lower))
+            email_tools = _email_tool_ids(lower)
+            if any(p.intent == "send" for p in active_plan.capabilities if p.id == "email"):
+                if "gmail_send_message" not in email_tools:
+                    email_tools.append("gmail_send_message")
+            await _resolve_preferred(email_tools)
 
     if "calendar" in cap_ids:
         cal_ids = ["calendar_list"]
@@ -1601,16 +1671,9 @@ async def resolve_tools_for_capabilities(
     if "calculator" in cap_ids:
         await _resolve_preferred(["calculator"])
 
-    # Long-tail: any SaaS via Pipedream (Slack, Notion, Stripe, Sheets, … + 3000 apps).
-    # Gmail / Calendar / Docs use first-party tools but Connect via Pipedream
-    # (see oauth_provider_for_app) — skip duplicate PD catalog bindings for those apps.
-    skip_pd = set()
-    if "email" in cap_ids and not prefer_outlook:
-        skip_pd.update({"gmail", "email", "mail"})
-    if "calendar" in cap_ids:
-        skip_pd.update({"google_calendar", "calendar"})
-    if "google_docs" in cap_ids:
-        skip_pd.update({"google_docs", "docs"})
+    # Long-tail SaaS via Pipedream (Slack, Notion, Twitter, Gmail send actions, …).
+    # Do not skip connected apps — OAuth is the authorization gate; bind send/post actions.
+    skip_pd: set[str] = set()
     if "crm_provider" in active_plan.ambiguities and not any(
         a in {"hubspot", "salesforce", "pipedrive", "zoho_crm", "zoho", "close", "copper"}
         for a in (preferred_apps or [])
@@ -1640,9 +1703,9 @@ async def resolve_tools_for_capabilities(
             add_binding=_add_binding,
             ambiguous=ambiguous,
             # Maps research needs search + details (fetch_url on Maps URLs fails).
-            max_actions=3 if maps_app else 2,
+            max_actions=MAPS_PIPEDREAM_MAX_ACTIONS if maps_app else DEFAULT_PIPEDREAM_MAX_ACTIONS,
         )
 
     # Build connection requirements for OAuth / connection_required tools.
     requirements = await build_connection_requirements(selected, registry=reg)
-    return selected[:20], requirements, ambiguous
+    return selected[:MAX_SELECTED_TOOLS], requirements, ambiguous

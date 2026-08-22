@@ -19,6 +19,9 @@ export function useWorkspaces() {
   return useQuery({
     queryKey: workspaceKeys.list,
     queryFn: () => getWorkspaceRepository().listWorkspaces(),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    placeholderData: (previous) => previous,
   });
 }
 

@@ -13,7 +13,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
             retry: 1,
             // Returning to the tab must not refetch everything (composer remounts, micro-lag).
             refetchOnWindowFocus: false,
-            refetchOnReconnect: true,
+            refetchOnReconnect: false,
           },
         },
       }),

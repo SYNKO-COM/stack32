@@ -55,6 +55,64 @@ class LiveRuntime:
         self.gateway = get_model_gateway()
         self.settings = get_settings()
 
+    async def _run_was_canceled(self, run_id: str, user_id: str) -> bool:
+        current = await self.db.get_owned_run(run_id, user_id)
+        return bool(current and current.get("status") == "canceled")
+
+    async def _finish_canceled_live(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        thread_id: str,
+        agent_id: str,
+        progress_id: str | None,
+    ) -> dict[str, Any]:
+        """Stop cooperatively — do not overwrite a user cancel with a late LLM reply."""
+        if progress_id:
+            pending = await self.db.find_pending_live_message(run_id=run_id)
+            if pending:
+                await self.db.update_assistant_message(
+                    message_id=str(pending["id"]),
+                    content="live:errors.canceled",
+                    metadata={"tone": "normal", "pending": False, "run_id": run_id},
+                    table="live_messages",
+                )
+        await self.db.emit_event(run_id, "run.canceled", {"mapping_key": "live.status.canceled"})
+        return {"status": "canceled", "run_id": run_id}
+
+    async def _finalize_if_not_canceled(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        progress_id: str | None,
+        thread_id: str,
+        agent_id: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """Finalize assistant message only when the run was not canceled."""
+        if await self._run_was_canceled(run_id, user_id):
+            await self._finish_canceled_live(
+                run_id=run_id,
+                user_id=user_id,
+                thread_id=thread_id,
+                agent_id=agent_id,
+                progress_id=progress_id,
+            )
+            return False
+        await self._finalize_progress(
+            progress_id=progress_id,
+            thread_id=thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            run_id=run_id,
+            content=content,
+            metadata=metadata,
+        )
+        return True
+
     async def _emit_live(
         self,
         run_id: str,
@@ -383,6 +441,14 @@ class LiveRuntime:
         progress_id: str | None = None,
     ) -> dict[str, Any]:
         try:
+            if await self._run_was_canceled(run_id, user_id):
+                return await self._finish_canceled_live(
+                    run_id=run_id,
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    agent_id=agent_id,
+                    progress_id=progress_id,
+                )
             if user_creds is None:
                 from agent_service.security.user_secrets import resolve_llm_credentials
 
@@ -494,6 +560,15 @@ class LiveRuntime:
 
             if use_langgraph_runtime():
                 from agent_service.runtime.langgraph_runtime import run_langgraph_agent
+
+                if await self._run_was_canceled(run_id, user_id):
+                    return await self._finish_canceled_live(
+                        run_id=run_id,
+                        user_id=user_id,
+                        thread_id=thread_id,
+                        agent_id=agent_id,
+                        progress_id=progress_id,
+                    )
 
                 lg = await run_langgraph_agent(
                     db=self.db,
@@ -640,12 +715,12 @@ class LiveRuntime:
                             },
                             progress_id=progress_id,
                         )
-                    await self._finalize_progress(
+                    finalized = await self._finalize_if_not_canceled(
+                        run_id=run_id,
+                        user_id=user_id,
                         progress_id=progress_id,
                         thread_id=thread_id,
                         agent_id=agent_id,
-                        user_id=user_id,
-                        run_id=run_id,
                         content=(
                             "live:status.approval"
                             if interrupt == "APPROVAL_REQUIRED"
@@ -653,6 +728,8 @@ class LiveRuntime:
                         ),
                         metadata=meta,
                     )
+                    if not finalized:
+                        return {"status": "canceled", "run_id": run_id}
                     await self.db.update_run_status(run_id, "waiting_for_input")
                     return {
                         "status": "interrupted",
@@ -661,15 +738,17 @@ class LiveRuntime:
                         "interrupt": interrupt,
                     }
 
-                await self._finalize_progress(
+                finalized = await self._finalize_if_not_canceled(
+                    run_id=run_id,
+                    user_id=user_id,
                     progress_id=progress_id,
                     thread_id=thread_id,
                     agent_id=agent_id,
-                    user_id=user_id,
-                    run_id=run_id,
                     content=answer,
                     metadata=meta,
                 )
+                if not finalized:
+                    return {"status": "canceled", "run_id": run_id}
                 if spec.memory.conversation_enabled and answer:
                     await upsert_conversation_summary(
                         user_id=user_id,
@@ -840,18 +919,20 @@ class LiveRuntime:
                 ),
             )
 
-            await self._finalize_progress(
+            finalized = await self._finalize_if_not_canceled(
+                run_id=run_id,
+                user_id=user_id,
                 progress_id=progress_id,
                 thread_id=thread_id,
                 agent_id=agent_id,
-                user_id=user_id,
-                run_id=run_id,
                 content=answer,
                 metadata={
                     "citations": citations,
                     "model": getattr(result, "model", None),
                 },
             )
+            if not finalized:
+                return {"status": "canceled", "run_id": run_id}
             if spec.memory.conversation_enabled and answer:
                 await upsert_conversation_summary(
                     user_id=user_id,

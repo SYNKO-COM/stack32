@@ -122,9 +122,47 @@ export function useCancelLiveRun(agentId: string) {
       const { cancelLiveRun } = await import("@/lib/actions/live");
       return cancelLiveRun({ agentId, runId });
     },
+    onMutate: async (runId) => {
+      await queryClient.cancelQueries({ queryKey: ["live", agentId] });
+      await queryClient.cancelQueries({ queryKey: ["active-live-run", agentId] });
+      queryClient.setQueryData(["active-live-run", agentId], null);
+      const previous = queryClient.getQueryData<LiveThread>(["live", agentId]);
+      if (previous) {
+        const patched = previous.messages.map((m) => {
+          if (!m.pending) return m;
+          if (runId && m.runId && m.runId !== runId) return m;
+          return {
+            ...m,
+            pending: false,
+            content: "live:errors.canceled",
+            tone: "warning" as const,
+          };
+        });
+        queryClient.setQueryData<LiveThread>(["live", agentId], {
+          ...previous,
+          messages: patched,
+        });
+      }
+      if (runId) {
+        queryClient.setQueryData(["live-execution", runId], {
+          runStatus: "idle",
+          nodes: {},
+          edges: {},
+          legacy: {},
+          error: null,
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["live", agentId], ctx.previous);
+      }
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
       void queryClient.invalidateQueries({ queryKey: ["live-execution"] });
+      void queryClient.invalidateQueries({ queryKey: ["active-live-run", agentId] });
     },
   });
 }
