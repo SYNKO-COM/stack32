@@ -17,6 +17,33 @@ def _builder_mode_from_run(run: dict[str, Any]) -> str:
     return "chat" if raw == "chat" else "build"
 
 
+def _is_waiting_for_input(run: dict[str, Any]) -> bool:
+    """A run parked on a builder question is stored as running."""
+    if str(run.get("error_code") or "") == "BUILDER_INTERRUPTED":
+        return True
+    interrupt = (run.get("input") or {}).get("interrupt")
+    return isinstance(interrupt, dict) and interrupt.get("status") == "open"
+
+
+def _lease_expired(run: dict[str, Any]) -> bool:
+    """True when a running run is stale enough that a retry should take over."""
+    from datetime import UTC, datetime, timedelta
+
+    from agent_service.config import get_settings
+
+    raw = run.get("started_at")
+    if not raw:
+        return True
+    try:
+        started = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    lease = timedelta(seconds=get_settings().RUN_LEASE_SECONDS)
+    return datetime.now(UTC) - started > lease
+
+
 async def process_run_by_id(run_id: str) -> dict[str, Any]:
     """Load run context from DB and execute. Payload must only carry run_id."""
     from agent_service.logging_config import bind_log_context, reset_log_context
@@ -58,6 +85,20 @@ async def _process_run_by_id_inner(
 
     if status in ("completed", "failed", "canceled"):
         return {"status": status, "run_id": run_id}
+
+    if status == "running" and not _lease_expired(run):
+        # Cloud Tasks retries (maxAttempts=5) deliver the same run_id again when
+        # a long build outlives the Cloud Run request timeout. Without this the
+        # orchestrator restarts from scratch and the user is billed for every
+        # attempt. A run parked on a user question is also stored as "running",
+        # so let that fall through to the interrupt handling below.
+        if not _is_waiting_for_input(run):
+            logger.info(
+                "run_already_in_flight run=%s started_at=%s",
+                run_id,
+                run.get("started_at"),
+            )
+            return {"status": "running", "run_id": run_id, "duplicate_delivery": True}
 
     if run_type == "build":
         # If interrupted for identity, do not auto-continue

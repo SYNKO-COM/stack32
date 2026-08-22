@@ -1,8 +1,27 @@
 # Cloud Build — agent-service → Cloud Run (GitHub trigger on main).
 # Build context MUST be services/ (Dockerfile copies stack32-agent-runtime + agent-service).
 steps:
+  # Gate the deploy on the service's own tests. The GitHub Actions CI runs in a
+  # separate system that this trigger never consults, so a red build used to
+  # ship to production anyway — that is how a publish-breaking UnboundLocalError
+  # (which ruff reports as F823) reached users. Fail here and nothing deploys.
+  - name: python:3.12-slim
+    id: Verify
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        pip install --quiet --no-cache-dir ./services/stack32-agent-runtime
+        pip install --quiet --no-cache-dir -e "./services/agent-service[dev]"
+        cd services/agent-service
+        ruff check .
+        pytest -q
+        bandit -r agent_service -ll
+
   - name: gcr.io/cloud-builders/docker
     id: Build
+    waitFor: ["Verify"]
     args:
       - build
       - --platform=linux/amd64
@@ -37,6 +56,10 @@ steps:
       - --platform=managed
       - --image=europe-west1-docker.pkg.dev/stack32/stack32/agent-service:$COMMIT_SHA
       - --region=europe-west1
+      # A coding build with repair iterations can exceed the 300s default. When
+      # Cloud Run kills it, Cloud Tasks retries the same run up to 5 times and
+      # the whole LLM build is paid for again.
+      - --timeout=3600
       - --quiet
 
 images:
@@ -45,4 +68,4 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-timeout: 1200s
+timeout: 2400s

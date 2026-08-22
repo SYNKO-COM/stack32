@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from agent_service.gateway.model_gateway import ModelProfile
 from agent_service.gateway.model_stage_router import (
     CodingStage,

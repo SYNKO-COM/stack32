@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from agent_service.integrations.pipedream.schema import (
-    NormalizedToolSchema,
-    NormalizedProp,
     normalize_configurable_props,
 )
 from agent_service.integrations.pipedream.tool_config import (

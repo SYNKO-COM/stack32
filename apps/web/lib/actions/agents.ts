@@ -92,6 +92,16 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
     .maybeSingle();
 
   if (sourceVersion) {
+    // The generated project files are the agent, not the spec. Copying only the
+    // spec produced a duplicate that looked configured but had no code — and
+    // inheriting test_status let that empty copy sail through the publish gate.
+    const { data: sourceFiles } = await supabase
+      .from("agent_project_files")
+      .select("path, content, content_type, checksum")
+      .eq("agent_id", agentId);
+    const copiedFiles = sourceFiles ?? [];
+    const hasCode = copiedFiles.length > 0;
+
     const { data: version } = await supabase
       .from("agent_versions")
       .insert({
@@ -101,12 +111,26 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
         change_summary: "Duplicated from existing agent",
         source_prompt: sourceVersion.source_prompt,
         validation_status: sourceVersion.validation_status,
-        test_status: sourceVersion.test_status,
+        // Only a copy that carries its code may inherit a verified test result.
+        test_status: hasCode ? sourceVersion.test_status : "not_run",
         created_by: user.id,
       })
       .select("id")
       .single();
     if (version) {
+      if (hasCode) {
+        await supabase.from("agent_project_files").insert(
+          copiedFiles.map((file) => ({
+            user_id: user.id,
+            agent_id: copy.id,
+            version_id: version.id,
+            path: file.path,
+            content: file.content,
+            content_type: file.content_type,
+            checksum: file.checksum,
+          })),
+        );
+      }
       await supabase.from("agents").update({ draft_version_id: version.id }).eq("id", copy.id);
     }
   }

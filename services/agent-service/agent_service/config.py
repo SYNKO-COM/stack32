@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     # 2048 output tokens truncates any file over ~150 lines mid-write, which
     # sends the agent straight into a repair loop it cannot win. Real coding
     # agents need room to emit a whole file or a large patch in one turn.
+    # A Cloud Tasks delivery that is retried while the first attempt is still
+    # executing must not restart the run: the whole LLM build would be paid for
+    # again. Treat a run as in-flight until its lease expires.
+    RUN_LEASE_SECONDS: int = 1800
     CODING_MAX_OUTPUT_TOKENS: int = 8192
     # ReAct turns per coding/repair session (gather -> act -> verify -> repair).
     CODING_MAX_TURNS: int = 25

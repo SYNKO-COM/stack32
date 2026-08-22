@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from agent_service.builder.repair_contract import build_repair_contract
 from agent_service.builder.spec_diff_guard import (
     clamp_spec_to_repair_contract,

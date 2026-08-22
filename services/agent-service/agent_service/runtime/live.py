@@ -49,6 +49,48 @@ def _real_citations(chunks: list[dict[str, Any]], *, require: bool) -> list[dict
     return out
 
 
+def llm_configuration_required_metadata(
+    spec: Any,
+    installation_id: str | None,
+) -> dict[str, Any]:
+    """Message metadata that renders the "connect your LLM" form.
+
+    Both BYOK gates must return this. The runtime gate used to send only
+    ``{"tone", "code"}``, so the client had no ui_component to render and showed
+    the generic "something went wrong, try again" error — leaving the user with
+    no way to supply the key the run was actually waiting for.
+    """
+    suggested_provider = getattr(getattr(spec, "model", None), "provider", None) or "openai"
+    return {
+        "tone": "warning",
+        "code": "LLM_CONFIGURATION_REQUIRED",
+        "installation_id": installation_id,
+        "ui_component": {
+            "type": "secret_form",
+            "version": "2",
+            "request_id": str(uuid.uuid4()),
+            "context": "live",
+            "installation_id": installation_id,
+            "auth_mode": "pipedream",
+            "fields": [
+                {
+                    "key": "provider",
+                    "type": "select",
+                    "required": True,
+                    "suggested_value": suggested_provider,
+                    "options": ["openai", "anthropic", "xai", "mistral"],
+                },
+                {
+                    "key": "model_id",
+                    "type": "text",
+                    "required": True,
+                    "suggested_value": getattr(getattr(spec, "model", None), "model_id", None) or "",
+                },
+            ],
+        },
+    }
+
+
 class LiveRuntime:
     def __init__(self, persistence: Persistence | None = None) -> None:
         self.db = persistence or Persistence()
@@ -282,50 +324,12 @@ class LiveRuntime:
         )
         if settings.LIVE_REQUIRE_USER_LLM_KEY and not user_creds:
             # Ask the user to connect the LLM via Pipedream — never platform keys.
-            suggested_provider = (
-                getattr(getattr(spec, "model", None), "provider", None) or "openai"
-            )
             await self.db.insert_assistant_message(
                 thread_id=thread_id,
                 agent_id=agent_id,
                 user_id=user_id,
                 content="live:errors.missingUserLlmKey",
-                metadata={
-                    "tone": "warning",
-                    "code": "LLM_CONFIGURATION_REQUIRED",
-                    "installation_id": installation_id,
-                    "ui_component": {
-                        "type": "secret_form",
-                        "version": "2",
-                        "request_id": str(uuid.uuid4()),
-                        "context": "live",
-                        "installation_id": installation_id,
-                        "auth_mode": "pipedream",
-                        "fields": [
-                            {
-                                "key": "provider",
-                                "type": "select",
-                                "required": True,
-                                "suggested_value": suggested_provider,
-                                "options": [
-                                    "openai",
-                                    "anthropic",
-                                    "xai",
-                                    "mistral",
-                                ],
-                            },
-                            {
-                                "key": "model_id",
-                                "type": "text",
-                                "required": True,
-                                "suggested_value": getattr(
-                                    getattr(spec, "model", None), "model_id", None
-                                )
-                                or "",
-                            },
-                        ],
-                    },
-                },
+                metadata=llm_configuration_required_metadata(spec, installation_id),
                 table="live_messages",
             )
             return {
@@ -467,7 +471,7 @@ class LiveRuntime:
                     user_id=user_id,
                     run_id=run_id,
                     content="live:errors.missingUserLlmKey",
-                    metadata={"tone": "warning", "code": "LLM_CONFIGURATION_REQUIRED"},
+                    metadata=llm_configuration_required_metadata(spec, installation_id),
                 )
                 return {"error": "LLM_CONFIGURATION_REQUIRED"}
 

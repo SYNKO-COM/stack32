@@ -19,7 +19,7 @@ def _sign(key: str, body: bytes, ts: int | None = None) -> str:
     timestamp = str(ts if ts is not None else int(time.time()))
     digest = hmac.new(
         key.encode("utf-8"),
-        f"{timestamp}.".encode("utf-8") + body,
+        f"{timestamp}.".encode() + body,
         hashlib.sha256,
     ).hexdigest()
     return f"t={timestamp},v1={digest}"
