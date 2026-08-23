@@ -24,21 +24,48 @@ const CREATING_VERBS = [
 
 const MUTATING_VERBS = ["update", "delete", "remove", "archive", "modify", "move"];
 
+/**
+ * Objects that hold other objects. Creating one is setting up a workspace, not
+ * the path the agent writes down every run — and it asks for a different
+ * destination: `trello-create-board` wants an organisation, where
+ * `trello-create-card` wants the board and list the agent will actually fill.
+ */
+const CONTAINER_OBJECTS = [
+  "board",
+  "base",
+  "workspace",
+  "database",
+  "worksheet",
+  "spreadsheet",
+  "label",
+  "list",
+  "channel",
+  "project",
+  "folder",
+  "table",
+];
+
 function actionOf(toolId: string): string {
   return String(toolId || "")
     .replace(/^pd:/, "")
     .toLowerCase();
 }
 
+function createsAContainer(action: string): boolean {
+  return CONTAINER_OBJECTS.some(
+    (o) => action.endsWith(`-${o}`) || action.endsWith(`-${o}s`),
+  );
+}
+
 function score(toolId: string): number {
   const action = actionOf(toolId);
   if (CREATING_VERBS.some((v) => action.includes(`-${v}-`) || action.includes(`-${v}`))) {
-    return 0;
+    return createsAContainer(action) ? 1 : 0;
   }
   if (MUTATING_VERBS.some((v) => action.includes(`-${v}-`) || action.includes(`-${v}`))) {
-    return 2;
+    return 3;
   }
-  return 1;
+  return 2;
 }
 
 export function representativeToolId(toolIds: readonly string[]): string | undefined {

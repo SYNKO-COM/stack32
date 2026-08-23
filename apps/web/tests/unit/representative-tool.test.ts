@@ -50,6 +50,24 @@ describe("representative tool for an app drawer", () => {
     ).toBe("pd:notion-create-page");
   });
 
+  it("prefers the record the agent writes over the container that holds it", () => {
+    // create-board asks for an organisation; create-card asks for the board and
+    // list the agent will actually fill.
+    expect(
+      representativeToolId(["pd:trello-create-board", "pd:trello-create-card"]),
+    ).toBe("pd:trello-create-card");
+    expect(
+      representativeToolId([
+        "pd:airtable_oauth-create-base",
+        "pd:airtable_oauth-create-single-record",
+      ]),
+    ).toBe("pd:airtable_oauth-create-single-record");
+  });
+
+  it("still uses a container action when it is all there is", () => {
+    expect(representativeToolId(["pd:trello-create-board"])).toBe("pd:trello-create-board");
+  });
+
   it("returns nothing when there is nothing bound", () => {
     expect(representativeToolId([])).toBeUndefined();
     expect(representativeToolId(["", "   "])).toBeUndefined();
