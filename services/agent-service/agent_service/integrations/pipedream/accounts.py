@@ -199,10 +199,16 @@ async def resolve_pipedream_auth_for_tool(
     tool_id: str,
     app_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Resolve the exact bound Pipedream account for this agent + tool.
+    """Resolve the bound Pipedream account for this agent + tool.
 
-    Falls back to any agent-bound (then user-level) Pipedream connection for the
-    same app, and auto-binds the tool so readiness/runtime stay in sync.
+    Falls back to any *agent-bound* connection for the same app, auto-binding
+    the tool so readiness and runtime stay in sync. It deliberately stops
+    there: an unbound user-level account is never used, or agent A could
+    quietly act through an account its owner only ever connected to agent B.
+    So a new agent needs the account bound to it once — one click in the tool
+    drawer, no re-authorisation — and until then its tools answer
+    CONNECTION_REQUIRED.
+
     Never returns a connection for a different product app.
     """
     from agent_service.connections.manager import ConnectionManager
