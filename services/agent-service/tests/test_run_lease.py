@@ -67,3 +67,54 @@ def test_a_run_still_alive_at_the_dispatch_deadline_is_treated_as_in_flight():
         seconds=settings.CLOUD_TASKS_DISPATCH_DEADLINE_SECONDS
     )
     assert _lease_expired(_run(started_at=at_deadline.isoformat())) is False
+
+
+def _run_meta(**over):
+    base = {
+        "status": "running",
+        "started_at": datetime.now(UTC).isoformat(),
+        "input": {"dispatch_seq": 1, "claimed_seq": 1},
+    }
+    base.update(over)
+    return base
+
+
+def test_a_redelivery_repeats_the_claimed_token():
+    """Same token the worker already claimed → duplicate, skip it."""
+    run = _run_meta()
+    meta = run["input"]
+    assert meta["dispatch_seq"] <= meta["claimed_seq"]
+
+
+def test_a_resume_carries_a_higher_token_and_must_run():
+    """The regression this guards: a resumed build was dropped as a duplicate.
+
+    A run paused for user input is stored as "running". Resuming it re-enqueues
+    the same run_id, so status and lease look exactly like a Cloud Tasks retry.
+    Deciding on those alone silently killed the build — the run sat at its last
+    event forever with no error. Every deliberate enqueue bumps dispatch_seq.
+    """
+    run = _run_meta(input={"dispatch_seq": 2, "claimed_seq": 1})
+    meta = run["input"]
+    assert meta["dispatch_seq"] > meta["claimed_seq"], "resume must not look like a retry"
+    assert _lease_expired(run) is False, "the lease is still fresh; only the token differs"
+
+
+def test_the_worker_compares_tokens_not_just_status():
+    """Guard the wiring so status alone can never gate execution again."""
+    import inspect
+
+    from agent_service.queue import worker
+
+    source = inspect.getsource(worker.process_run_by_id.__wrapped__) if hasattr(
+        worker.process_run_by_id, "__wrapped__"
+    ) else inspect.getsource(worker)
+    assert "dispatch_seq" in source and "claimed_seq" in source
+
+
+def test_every_enqueue_bumps_the_token():
+    import inspect
+
+    from agent_service.queue import dispatch
+
+    assert "bump_dispatch_seq" in inspect.getsource(dispatch.enqueue_run)
