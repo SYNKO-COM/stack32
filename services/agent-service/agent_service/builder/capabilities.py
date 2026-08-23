@@ -832,18 +832,27 @@ def filter_unsolicited_database_tools(
 
 def _intent_verbs(prompt_lower: str) -> list[str]:
     verbs: list[str] = []
+    # French carries most of these missions and was largely missing: "surveille
+    # ma boîte, détecte les prospects, rédige un brouillon" matched no verb at
+    # all, so the plan fell back to its defaults and searched the bare app name.
     mapping = [
+        (r"\b(draft|brouillon|rédige|redige|rédiger|rediger|compose|prépare|prepare)\b", "draft"),
         (r"\b(create|créer|creer|crée|cree|add|ajouter|new|génér|gener|présentation|presentation|design|slide)\b", "create"),
-        (r"\b(send|envoie|envoyer|post|message|notify)\b", "send"),
-        (r"\b(update|mettre à jour|append|edit|modify)\b", "update"),
-        (r"\b(list|lire|read|get|fetch|search|find)\b", "list"),
-        (r"\b(delete|remove|supprimer)\b", "delete"),
+        (r"\b(send|envoie|envoyer|post|message|notify|répond|repond|répondre|repondre|reply)\b", "send"),
+        (r"\b(update|mettre à jour|append|edit|modify|modifie|met à jour)\b", "update"),
+        (
+            r"\b(list|lire|lis|read|get|fetch|search|find|cherche|recherche|rechercher|"
+            r"surveille|surveiller|détecte|detecte|détecter|detecter|consulte|consulter|"
+            r"analyse|analyser|trie|trier)\b",
+            "find",
+        ),
+        (r"\b(delete|remove|supprimer|supprime|archive|archiver)\b", "delete"),
     ]
     for pattern, verb in mapping:
         if re.search(pattern, prompt_lower):
             verbs.append(verb)
     # Prefer create for design/docs apps when nothing matched.
-    return verbs or ["create", "list", "send"]
+    return verbs or ["find", "create", "send"]
 
 
 def _app_slug_from_tool_id(tool_id: str | None) -> str | None:
@@ -1482,21 +1491,45 @@ async def resolve_pipedream_app(
     # Try several action queries — wrong first verb (e.g. "send" from "envoie les infos")
     # previously returned only Gmail natives, then a loose canva search bound Canvas.
     query_attempts: list[str] = []
-    for candidate in (f"{app_id} {verbs[0]}", app_id, f"{app_id} create", f"{app_id} design"):
+    for verb in verbs:
+        candidate = f"{app_id} {verb}"
+        if candidate not in query_attempts:
+            query_attempts.append(candidate)
+    for candidate in (app_id, f"{app_id} create", f"{app_id} design"):
         if candidate not in query_attempts:
             query_attempts.append(candidate)
 
-    pd_matches: list[Any] = []
+    # Every intent the mission expresses gets its own query, and each one gets
+    # its best action before any of them gets a second. Stopping at the first
+    # query that returned anything is how "watch the inbox and draft a reply"
+    # came back with label and signature actions and no way to read an inbox.
+    ranked_per_intent: list[list[Any]] = []
     matches: list[Any] = []
     action_query = query_attempts[0]
     for action_query in query_attempts:
         matches = await search(action_query, limit=15)
         pd_raw = [m for m in matches if getattr(m, "provider", None) == "pipedream"]
-        pd_matches = _prefer_action_tools(
+        ranked = _prefer_action_tools(
             _filter_actions_for_app(pd_raw, app_id), prompt_lower
         )
-        if pd_matches:
+        if ranked:
+            ranked_per_intent.append(ranked)
+        if sum(len(r) for r in ranked_per_intent) >= max_actions and len(
+            ranked_per_intent
+        ) >= min(len(verbs), len(query_attempts)):
             break
+
+    pd_matches: list[Any] = []
+    seen_action_ids: set[str] = set()
+    for rank in range(max(len(r) for r in ranked_per_intent) if ranked_per_intent else 0):
+        for ranked in ranked_per_intent:
+            if rank >= len(ranked):
+                continue
+            tool_id = str(getattr(ranked[rank], "tool_id", "") or "")
+            if not tool_id or tool_id in seen_action_ids:
+                continue
+            seen_action_ids.add(tool_id)
+            pd_matches.append(ranked[rank])
 
     if not pd_matches:
         # Surface near-misses so the Builder can ask the user instead of binding Canvas.
