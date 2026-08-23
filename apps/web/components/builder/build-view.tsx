@@ -741,6 +741,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   const cancelRun = useCancelBuilderRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
+  const formClosedAtRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
@@ -837,10 +838,21 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (hasOpenBuilderForm) {
       setStaleBuilding(false);
       staleRecoveredRef.current = false;
+      formClosedAtRef.current = null;
       return;
     }
+    if (formClosedAtRef.current === null) {
+      formClosedAtRef.current = Date.now();
+    }
     const STALE_MS = 150_000;
-    const anchor = lastMessageAt ? new Date(lastMessageAt).getTime() : Date.now();
+    // A form the user sat on for ten minutes leaves lastMessageAt ten minutes
+    // old. The moment they answered it, the guard lifted and this watchdog
+    // declared the just-resumed run stuck and cancelled it — the build died one
+    // second after the user unblocked it. Answering a form restarts the clock.
+    const anchor = Math.max(
+      lastMessageAt ? new Date(lastMessageAt).getTime() : 0,
+      formClosedAtRef.current,
+    ) || Date.now();
     const tick = () => {
       if (Date.now() - anchor < STALE_MS) return;
       setStaleBuilding(true);
