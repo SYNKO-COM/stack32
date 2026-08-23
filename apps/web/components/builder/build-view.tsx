@@ -740,7 +740,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   }, [thread]);
   const cancelRun = useCancelBuilderRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const didInitialPin = useRef(false);
+  const pinnedRef = useRef(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
@@ -1317,26 +1317,19 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (!root) return;
 
     const NEAR_BOTTOM_PX = 160;
-    // On the very first run the history is already laid out, so the reader sits
-    // 1600px from the bottom through no choice of their own — and the
-    // near-bottom test read that as "scrolled up to read" and left them at the
-    // top of the thread. Opening a conversation means opening it at its newest
-    // message; only after that does scrolling up mean anything.
-    if (!didInitialPin.current) {
-      didInitialPin.current = true;
-      root.scrollTop = root.scrollHeight;
-    }
-    let pinned =
-      root.scrollHeight - root.scrollTop - root.clientHeight <= NEAR_BOTTOM_PX;
-
+    // Whether we follow the bottom is the reader's choice, and it has to
+    // outlive this effect: re-deriving it from the scroll position on every
+    // re-run measured the moment before the history had been laid out, decided
+    // the reader had scrolled up, and left them at the top of the thread. Start
+    // pinned, and let only an actual scroll gesture change that.
     const stick = () => {
-      if (!pinned) return;
+      if (!pinnedRef.current) return;
       root.scrollTop = root.scrollHeight;
     };
 
     const onScroll = () => {
       const distance = root.scrollHeight - root.scrollTop - root.clientHeight;
-      pinned = distance <= NEAR_BOTTOM_PX;
+      pinnedRef.current = distance <= NEAR_BOTTOM_PX;
     };
     root.addEventListener("scroll", onScroll, { passive: true });
 
