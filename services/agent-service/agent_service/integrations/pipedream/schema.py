@@ -357,10 +357,17 @@ def normalize_configurable_props(
             # every one of them ended up under "Options avancées".
             prop.required = True
 
-        # Resource pickers (sheet, channel, table…) must be configured in Structure
-        # even when Pipedream marks them optional — deploy fails without them.
+        # Resource pickers (sheet, channel, table…) are usually mandatory even
+        # when the catalogue is silent about them. But when it says `optional:
+        # true` outright, it knows better than our list: akeneo's `page` and
+        # algomo's `conversationId` are genuinely optional, and demanding them
+        # blocked those apps on a field nobody needed to fill.
         compact = prop.name.lower().replace("_", "").replace("-", "")
-        if prop.kind == "static" and compact in _CRITICAL_REQUIRED_STATIC:
+        if (
+            prop.kind == "static"
+            and compact in _CRITICAL_REQUIRED_STATIC
+            and raw.get("optional") is not True
+        ):
             prop.required = True
         # A picker Pipedream explicitly marked optional stays optional. Promoting
         # every remote-options prop demanded seven fields to create one Trello

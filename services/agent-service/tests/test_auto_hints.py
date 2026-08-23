@@ -20,7 +20,9 @@ SLACK_COMPONENT = {
             "type": "string",
             "label": "Channel",
             "remoteOptions": True,
-            "optional": True,
+            # No `optional` key — which is how the live component arrives, and
+            # Pipedream's way of saying required. The fixture used to claim
+            # `optional: True`, so it asserted a channel could be skipped.
         },
         {
             "name": "text",

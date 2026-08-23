@@ -171,8 +171,12 @@ _CAPABILITY_CATALOG: dict[str, dict[str, Any]] = {
             "envoie un mail",
             "envoie des mails",
             "envoyer des mails",
-            "automatiquement",
-            "automatically",
+            "boite mail",
+            "boîte mail",
+            "messagerie",
+            # "automatiquement" / "automatically" used to live here. They say
+            # nothing about email — every agent that "se déclenche
+            # automatiquement" was offered Gmail and its owner had to decline it.
         ],
     },
     "calendar": {
@@ -185,7 +189,12 @@ _CAPABILITY_CATALOG: dict[str, dict[str, Any]] = {
             "schedule",
             "rdv",
             "appointment",
-            "event",
+            # A bare "event" matched our own trigger note — "Event trigger: New
+            # Message on app discord" — and offered Calendar to an agent that
+            # watches a chat room. An event needs a calendar beside it to count.
+            "calendar event",
+            "événement d'agenda",
+            "evenement d'agenda",
         ],
     },
     "research": {

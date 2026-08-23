@@ -94,25 +94,33 @@ def test_number_bool_array_options() -> None:
     assert by_name["mode"].enum == ["a", "b"]
 
 
-def test_critical_static_forced_required_even_if_optional() -> None:
+def test_the_destination_is_required_and_the_trimmings_are_not() -> None:
+    """Shape taken from the live google_sheets components.
+
+    The spreadsheet and worksheet arrive with no `optional` key at all, which
+    is how Pipedream says "required"; `drive` and `hasHeaders` say
+    `optional: true` outright. This fixture used to claim the spreadsheet was
+    optional too, and so asserted that our curated list had to override the
+    catalogue — it does not, and overriding it demanded fields that apps like
+    akeneo and algomo genuinely leave open.
+    """
     component = {
-        "key": "google_sheets-new-row-added",
+        "key": "google_sheets-add-single-row",
         "app": {"name_slug": "google_sheets"},
         "configurable_props": [
             {"name": "googleSheets", "type": "app", "app": "google_sheets"},
+            {"name": "drive", "type": "string", "remoteOptions": True, "optional": True},
             {
                 "name": "sheetId",
                 "type": "string",
                 "label": "Spreadsheet",
                 "remoteOptions": True,
-                "optional": True,
             },
             {
                 "name": "worksheetId",
-                "type": "string",
+                "type": "integer",
                 "label": "Worksheet",
                 "remoteOptions": True,
-                "optional": True,
             },
             {
                 "name": "hasHeaders",
@@ -128,3 +136,4 @@ def test_critical_static_forced_required_even_if_optional() -> None:
     assert by_name["sheetId"].required is True
     assert by_name["worksheetId"].required is True
     assert by_name["hasHeaders"].required is False
+    assert by_name["drive"].required is False

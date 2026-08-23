@@ -651,6 +651,9 @@ async def run_langgraph_agent(
                                 "status": obs.get("status"),
                             },
         )
+                        from agent_service.runtime.tool_guidance import with_guidance
+
+                        obs = with_guidance(obs, str(fail_code or ""), str(err_msg or ""))
                         try:
                             from agent_service.learning import record_error_observation
 
@@ -683,7 +686,11 @@ async def run_langgraph_agent(
                         "pipedream" if call.tool_id.startswith("pd:") else "native"
                     )
                     app_hint = None
-                    obs = {"error": exc.code, "message": str(exc)}
+                    from agent_service.runtime.tool_guidance import with_guidance
+
+                    obs = with_guidance(
+                        {"error": exc.code, "message": str(exc)}, exc.code, str(exc)
+                    )
                     await emit(
             "runtime.tool.failed",
             {
