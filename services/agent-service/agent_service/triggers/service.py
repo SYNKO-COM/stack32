@@ -313,8 +313,15 @@ async def _deploy_source(
     inner = _unwrap_pd(deployed)
     source_id = str(inner.get("id") or deployed.get("id") or "")
     webhook_meta = inner.get("webhook") if isinstance(inner.get("webhook"), dict) else {}
+    # Pipedream names it `webhook_signing_key` on the deploy response. Looking
+    # only for `signing_key` meant no key was ever stored, so every delivery
+    # failed its signature check and the endpoint answered 401 — a tool trigger
+    # could fire perfectly and still never reach the agent.
     signing_key = str(
-        inner.get("signing_key")
+        inner.get("webhook_signing_key")
+        or deployed.get("webhook_signing_key")
+        or webhook_meta.get("webhook_signing_key")
+        or inner.get("signing_key")
         or deployed.get("signing_key")
         or webhook_meta.get("signing_key")
         or ""
