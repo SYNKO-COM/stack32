@@ -588,6 +588,26 @@ def _email_tool_ids(prompt_lower: str) -> list[str]:
     return out
 
 
+def _native_capability_words() -> set[str]:
+    """Words that name something the platform already does itself.
+
+    The builder asked which SaaS app provides "current datetime" — a tool
+    Stack32 ships natively and the agent already had. Deriving this from the
+    native catalogue keeps it true as that catalogue grows, instead of a list
+    that silently falls behind.
+    """
+    from agent_service.integrations.native.provider import _NATIVE_BY_ID
+
+    words: set[str] = set()
+    for tool_id in _NATIVE_BY_ID:
+        compact = str(tool_id).lower()
+        words.add(compact)
+        words.add(compact.replace("_", " "))
+        words.add(compact.replace("_", ""))
+        words.update(part for part in compact.split("_") if len(part) > 2)
+    return words
+
+
 def extract_external_app_queries(
     prompt: str, *, llm_hints: list[str] | None = None
 ) -> list[str]:
@@ -638,7 +658,7 @@ def extract_external_app_queries(
             _add(slug)
 
     # Free-form LLM hints: treat unknown tokens as app search queries.
-    reserved = set(_CAPABILITY_CATALOG) | {
+    reserved = set(_CAPABILITY_CATALOG) | _native_capability_words() | {
         "web",
         "search",
         "research",
@@ -663,6 +683,8 @@ def extract_external_app_queries(
         else:
             # "notion create page" → prefer first token as app
             token = re.split(r"[\s:/]+", h)[0]
+            if token in reserved:
+                continue
             if token in _PIPEDREAM_APP_ALIASES:
                 _add(_PIPEDREAM_APP_ALIASES[token])
             elif len(token) >= 3:
@@ -1373,6 +1395,14 @@ async def resolve_pipedream_app(
     (e.g. Canva vs Canvas vs GoCanvas). Those cases are pushed to `ambiguous`
     for a Builder interrupt form.
     """
+    # Second guard, deliberately close to the form: a native capability must
+    # never reach the "which app is this?" question. Asking someone to name the
+    # SaaS behind "current datetime" or "calculator" is asking about something
+    # the platform already does, and it stops the build until they answer.
+    if _normalize_app_slug(app_query) in _native_capability_words():
+        logger.info("native_capability_not_an_app query=%s", app_query)
+        return None
+
     from agent_service.integrations.pipedream import PipedreamToolProvider
 
     pd = registry.get_provider("pipedream") if hasattr(registry, "get_provider") else None
