@@ -742,6 +742,8 @@ export function BuildView({ agentId }: { agentId: string }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
   const formClosedAtRef = useRef<number | null>(null);
+  /** When the current run id was first observed — the watchdog's real anchor. */
+  const runSeenAtRef = useRef<{ id: string | null; at: number }>({ id: null, at: Date.now() });
   const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
@@ -845,14 +847,17 @@ export function BuildView({ agentId }: { agentId: string }) {
       formClosedAtRef.current = Date.now();
     }
     const STALE_MS = 150_000;
-    // A form the user sat on for ten minutes leaves lastMessageAt ten minutes
-    // old. The moment they answered it, the guard lifted and this watchdog
-    // declared the just-resumed run stuck and cancelled it — the build died one
-    // second after the user unblocked it. Answering a form restarts the clock.
-    const anchor = Math.max(
-      lastMessageAt ? new Date(lastMessageAt).getTime() : 0,
-      formClosedAtRef.current,
-    ) || Date.now();
+    // "Stuck" means *this run* has gone quiet, so the clock belongs to the run.
+    // Anchoring it on the last message measured the wait before it instead: a
+    // tool-review form the user considered for twelve minutes left that
+    // timestamp twelve minutes old, and the run resumed straight into a verdict
+    // of stuck — cancelled one second after the user unblocked it.
+    const anchor =
+      Math.max(
+        lastMessageAt ? new Date(lastMessageAt).getTime() : 0,
+        formClosedAtRef.current,
+        runSeenAtRef.current.at,
+      ) || Date.now();
     const tick = () => {
       if (Date.now() - anchor < STALE_MS) return;
       setStaleBuilding(true);
@@ -990,6 +995,14 @@ export function BuildView({ agentId }: { agentId: string }) {
     ? null
     : ((messageRunId && !stoppedRunIds.has(messageRunId) ? messageRunId : null) ??
       (serverBuildRunId && !stoppedRunIds.has(serverBuildRunId) ? serverBuildRunId : null));
+
+  // A run id we have not seen before starts its own clock.
+  useEffect(() => {
+    if (runSeenAtRef.current.id === (activeRunId ?? null)) return;
+    runSeenAtRef.current = { id: activeRunId ?? null, at: Date.now() };
+    setStaleBuilding(false);
+    staleRecoveredRef.current = false;
+  }, [activeRunId]);
 
   // Resume local "turn in progress" UI after refresh when the server still has a build.
   // Skip while a form is open — that is intentional waiting, not an in-flight compile.
