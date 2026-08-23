@@ -42,6 +42,8 @@ export function AgentCapabilitiesForm({
   const [componentLabel, setComponentLabel] = useState("");
   const [events, setEvents] = useState<Array<{ value: string; label: string }>>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  /** True when the trigger list failed to load, so the empty dropdown is explained. */
+  const [eventsFailed, setEventsFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function AgentCapabilitiesForm({
     }
     let cancelled = false;
     setEventsLoading(true);
+    setEventsFailed(false);
     void searchIntegrationTriggers("", appId, 80)
       .then((result) => {
         if (cancelled) return;
@@ -63,8 +66,14 @@ export function AgentCapabilitiesForm({
           })),
         );
       })
-      .catch(() => {
-        if (!cancelled) setEvents([]);
+      .catch((error) => {
+        if (cancelled) return;
+        // An empty dropdown and a failed request look identical to the user, and
+        // "this app has no triggers" is a very different message from "we could
+        // not reach the integrations service". Say which one it is.
+        console.error("trigger list failed for app", appId, error);
+        setEvents([]);
+        setEventsFailed(true);
       })
       .finally(() => {
         if (!cancelled) setEventsLoading(false);
@@ -192,9 +201,11 @@ export function AgentCapabilitiesForm({
                 disabled={submitting || !appId || events.length === 0}
                 placeholder={
                   appId
-                    ? events.length === 0
-                      ? t("builder:capabilities.toolTriggerEmpty")
-                      : t("builder:capabilities.toolTriggerEventPlaceholder")
+                    ? eventsFailed
+                      ? t("builder:capabilities.toolTriggerFailed")
+                      : events.length === 0
+                        ? t("builder:capabilities.toolTriggerEmpty")
+                        : t("builder:capabilities.toolTriggerEventPlaceholder")
                     : t("builder:capabilities.toolTriggerPickAppFirst")
                 }
                 options={events.map((row) => ({

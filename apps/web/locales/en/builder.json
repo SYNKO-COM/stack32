@@ -286,7 +286,8 @@
     "toolTriggerRequired": "Choose a tool, then the event that should start the agent.",
     "continue": "Build my agent",
     "submitting": "Building…",
-    "formClosed": "Triggers saved. Building now."
+    "formClosed": "Triggers saved. Building now.",
+    "toolTriggerFailed": "Could not load events — try again"
   },
   "providers": {
     "prompt": "To wire the right tool, pick the app you actually use (Gmail, Stripe, HubSpot…). You can also paste the website URL. No account linking yet.",

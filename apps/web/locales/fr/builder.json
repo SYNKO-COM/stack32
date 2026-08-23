@@ -286,7 +286,8 @@
     "toolTriggerRequired": "Choisissez un outil puis l’événement qui doit lancer l’agent.",
     "continue": "Construire mon agent",
     "submitting": "Construction…",
-    "formClosed": "Déclencheurs enregistrés. Construction en cours."
+    "formClosed": "Déclencheurs enregistrés. Construction en cours.",
+    "toolTriggerFailed": "Impossible de charger les événements — réessayez"
   },
   "providers": {
     "prompt": "Pour brancher le bon outil, choisissez l’app que vous utilisez vraiment (Gmail, Stripe, HubSpot…). Vous pouvez aussi coller le lien du site. Pas besoin de connecter le compte pour l’instant.",
