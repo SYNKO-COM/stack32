@@ -226,6 +226,20 @@ async def run_langgraph_agent(
     settings = get_settings()
     gateway = get_model_gateway()
     enabled_tools = [t.tool_id for t in spec.tools if t.enabled]
+    try:
+        from agent_service.tools.runtime import native_google_tools_to_hide
+
+        hidden = await native_google_tools_to_hide(
+            enabled_tools, user_id=user_id, agent_id=agent_id
+        )
+    except Exception:  # noqa: BLE001 - never lose a tool over a lookup failure
+        logger.exception("native_google_tool_filter_failed agent_id=%s", agent_id)
+        hidden = set()
+    if hidden:
+        logger.info(
+            "native_google_tools_hidden agent_id=%s tools=%s", agent_id, sorted(hidden)
+        )
+        enabled_tools = [t for t in enabled_tools if t not in hidden]
     tool_configs: dict[str, dict] = {}
     try:
         from agent_service.integrations.pipedream.tool_config import (

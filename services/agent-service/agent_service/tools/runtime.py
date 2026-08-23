@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import logging
 import operator
+from collections.abc import Iterable
 from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
@@ -125,6 +126,73 @@ _GOOGLE_TOOLS = frozenset(
         "google_docs_append",
     }
 )
+
+_GOOGLE_TOOL_APPS = {
+    "gmail_list": "gmail",
+    "gmail_read": "gmail",
+    "gmail_send": "gmail",
+    "gmail_create_draft": "gmail",
+    "gmail_send_message": "gmail",
+    "calendar_list": "google_calendar",
+    "calendar_create_event": "google_calendar",
+    "google_docs_create": "google_docs",
+    "google_docs_append": "google_docs",
+}
+
+
+async def native_google_tools_to_hide(
+    tool_ids: Iterable[str], *, user_id: str, agent_id: str
+) -> set[str]:
+    """Native Google tools that must not be offered to the model.
+
+    These call the Google API directly with an OAuth access token. An account
+    connected through Pipedream Connect never yields one: Pipedream's managed
+    OAuth does not export raw credentials, so ``list_accounts`` comes back with
+    ``credentials: None`` and the tool can only ever answer CONNECTION_REQUIRED.
+
+    Offering them anyway is worse than not having them. The model reaches for
+    ``gmail_list`` long before ``pd:gmail-list-thread-messages``, so the run
+    dead-ends asking the user to connect an account they already connected.
+
+    Only hide a tool when the same app is genuinely covered otherwise: the user
+    holds a Pipedream account for it *and* the spec enables Pipedream actions
+    for it. With nothing connected at all, the native tool stays — its
+    "connect your account" prompt is then the right answer.
+    """
+    from agent_service.integrations.app_keys import app_key_from_tool_id
+
+    ids = [str(t) for t in tool_ids]
+    candidates = {t for t in ids if t in _GOOGLE_TOOL_APPS}
+    if not candidates:
+        return set()
+
+    covered_apps = {
+        app_key_from_tool_id(t) for t in ids if t.startswith("pd:")
+    }
+    apps_at_stake = {
+        _GOOGLE_TOOL_APPS[t] for t in candidates if _GOOGLE_TOOL_APPS[t] in covered_apps
+    }
+    if not apps_at_stake:
+        return set()
+
+    from agent_service.integrations.pipedream.accounts import (
+        resolve_pipedream_auth_for_tool,
+    )
+
+    connected: set[str] = set()
+    for app in apps_at_stake:
+        try:
+            auth = await resolve_pipedream_auth_for_tool(
+                user_id=user_id, agent_id=agent_id, tool_id="", app_id=app
+            )
+        except Exception:  # noqa: BLE001 - a lookup failure must not drop tools
+            logger.warning("pipedream_account_lookup_failed app=%s", app, exc_info=True)
+            continue
+        if auth:
+            connected.add(app)
+
+    return {t for t in candidates if _GOOGLE_TOOL_APPS[t] in connected}
+
 
 _SAFE_OPS = {
     ast.Add: operator.add,
