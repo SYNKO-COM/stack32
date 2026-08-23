@@ -88,3 +88,46 @@ describe("summarizeActivity", () => {
     expect(lines[0]).toMatchObject({ baseKey: "repairRejected", kind: "error" });
   });
 });
+
+describe("tool detail extraction", () => {
+  it("names the file a coding tool touched, even when it sits under args", () => {
+    // builder.file.read reports {tool, args:{path}} while builder.file.created
+    // reports {path}. Reading only the top level left every file the agent
+    // opened showing as a nameless "Reading …".
+    const { lines } = summarizeActivity([
+      { eventType: "builder.file.read", sequence: 1, path: "/home/user/workspace/src/agent/tools.py" },
+    ]);
+    expect(lines[0].params?.path).toBe("tools.py");
+  });
+
+  it("says which command ran instead of just 'ran a command'", () => {
+    const { lines } = summarizeActivity([
+      { eventType: "builder.command.completed", sequence: 1, command: "python -m pytest -q" },
+    ]);
+    expect(lines[0].key).toBe("ranCommandDetail");
+    expect(String(lines[0].params?.detail)).toContain("pytest");
+  });
+
+  it("unwraps bash -c so the inner command is shown", () => {
+    const { lines } = summarizeActivity([
+      { eventType: "builder.command.completed", sequence: 1, command: 'bash -c "ruff check . --fix"' },
+    ]);
+    expect(String(lines[0].params?.detail)).toContain("ruff");
+    expect(String(lines[0].params?.detail)).not.toContain("bash");
+  });
+
+  it("surfaces the search term for grep steps", () => {
+    const { lines } = summarizeActivity([
+      { eventType: "builder.context.searching", sequence: 1, query: "build_registry" },
+    ]);
+    expect(lines[0].key).toBe("searchingDetail");
+    expect(lines[0].params?.detail).toBe("build_registry");
+  });
+
+  it("falls back to the plain label when there is no detail", () => {
+    const { lines } = summarizeActivity([
+      { eventType: "builder.command.completed", sequence: 1 },
+    ]);
+    expect(lines[0].key).toBe("ranCommand");
+  });
+});

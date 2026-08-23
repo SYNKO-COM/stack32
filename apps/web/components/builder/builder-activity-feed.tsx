@@ -16,8 +16,9 @@ export type ActivityLine = {
   kind?: ActivityKind;
 };
 
-/** How many finished steps stay visible above the current one. */
-const VISIBLE_HISTORY = 2;
+/** Finished steps kept above the current one. One: the eye follows the agent,
+ * not a growing checklist. The full run stays behind the step counter. */
+const VISIBLE_HISTORY = 1;
 
 const KIND_DOT: Record<ActivityKind, string> = {
   read: "bg-sky-400/70",

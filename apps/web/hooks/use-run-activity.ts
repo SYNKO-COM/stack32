@@ -8,6 +8,12 @@ export type RunActivityEvent = {
   eventType: string;
   sequence: number;
   path?: string;
+  /** Coding tool that produced the event, e.g. "workspace.read_file". */
+  tool?: string;
+  /** Shell command for exec events, already joined for display. */
+  command?: string;
+  /** Search term for grep events. */
+  query?: string;
   mappingKey?: string;
   createdAt?: string;
 };
@@ -54,10 +60,32 @@ export function useRunActivity(runId: string | null | undefined, enabled: boolea
           row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
             ? (row.payload as Record<string, unknown>)
             : {};
+        // Tool events carry their target inside `args`, not at the top level:
+        // builder.file.read is {tool, args:{path}} while builder.file.created is
+        // {path}. Reading only the top level left every file the coding agent
+        // opened showing as a nameless "Reading …".
+        const args =
+          payload.args && typeof payload.args === "object" && !Array.isArray(payload.args)
+            ? (payload.args as Record<string, unknown>)
+            : {};
+        const rawCommand = args.command;
+        const command = Array.isArray(rawCommand)
+          ? rawCommand.map(String).join(" ")
+          : typeof rawCommand === "string"
+            ? rawCommand
+            : undefined;
         return {
           eventType: String(row.event_type ?? ""),
           sequence: Number(row.sequence ?? 0),
-          path: typeof payload.path === "string" ? payload.path : undefined,
+          path:
+            typeof payload.path === "string"
+              ? payload.path
+              : typeof args.path === "string"
+                ? args.path
+                : undefined,
+          tool: typeof payload.tool === "string" ? payload.tool : undefined,
+          command,
+          query: typeof args.query === "string" ? args.query : undefined,
           mappingKey:
             typeof payload.mapping_key === "string" ? payload.mapping_key : undefined,
           createdAt: row.created_at ?? undefined,
@@ -65,6 +93,17 @@ export function useRunActivity(runId: string | null | undefined, enabled: boolea
       });
     },
   });
+}
+
+
+function shortCommand(command?: string): string | undefined {
+  if (!command) return undefined;
+  const trimmed = command.trim();
+  // `bash -c "..."` is how the agent runs most things; show the inner command.
+  const inner = trimmed.match(/^(?:bash|sh)\s+-c\s+["']?(.+?)["']?$/s);
+  const effective = (inner?.[1] ?? trimmed).trim();
+  const head = effective.split(/\s+/).slice(0, 3).join(" ");
+  return head.length > 42 ? `${head.slice(0, 42)}…` : head;
 }
 
 function shortPath(path?: string): string {
@@ -146,6 +185,14 @@ export function summarizeActivity(
     if (readOnly && MUTATION_KEYS.has(mapping.key)) continue;
 
     const path = mapping.usesPath ? shortPath(event.path) : undefined;
+    // Name what the agent is actually doing: the binary it ran, the term it
+    // searched for. "Ran a command" tells the user nothing; "Ran pytest" does.
+    const detail =
+      mapping.key === "ranCommand"
+        ? shortCommand(event.command)
+        : mapping.key === "searching"
+          ? event.query
+          : undefined;
     const previous = steps[steps.length - 1];
 
     // Merge a repeat of the same beat instead of stacking near-identical lines.
@@ -162,12 +209,12 @@ export function summarizeActivity(
 
     steps.push({
       id: `${mapping.key}-${event.sequence}`,
-      key: mapping.key,
+      key: detail ? `${mapping.key}Detail` : mapping.key,
       baseKey: mapping.key,
       kind: mapping.kind,
       count: 1,
       sequence: event.sequence,
-      params: path ? { path: path || "…" } : undefined,
+      params: path ? { path: path || "…" } : detail ? { detail } : undefined,
     });
   }
 

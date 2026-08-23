@@ -112,7 +112,9 @@
     "repairExhausted": "Correction interrompue",
     "ready": "Agent prêt",
     "moreSteps": "{{count}} étapes précédentes",
-    "collapse": "Réduire"
+    "collapse": "Réduire",
+    "ranCommandDetail": "Exécution de {{detail}}",
+    "searchingDetail": "Recherche de « {{detail}} »"
   },
   "topbar": {
     "publish": "Publier",

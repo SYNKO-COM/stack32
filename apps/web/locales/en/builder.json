@@ -112,7 +112,9 @@
     "repairExhausted": "Repair stopped",
     "ready": "Agent ready",
     "moreSteps": "{{count}} earlier steps",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "ranCommandDetail": "Ran {{detail}}",
+    "searchingDetail": "Searched for “{{detail}}”"
   },
   "topbar": {
     "publish": "Publish",
