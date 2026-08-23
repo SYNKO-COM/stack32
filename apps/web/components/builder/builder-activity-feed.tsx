@@ -29,6 +29,25 @@ const KIND_DOT: Record<ActivityKind, string> = {
   error: "bg-amber-500",
 };
 
+/**
+ * The active step keeps the same wording for many seconds at a time. A slow
+ * opacity drift on its text reads as "still working" without adding noise.
+ * Settled history lines stay put — their opacity is the depth fade, and a
+ * second animation on top of it would just make the list restless.
+ */
+export function breathing(
+  active: boolean | undefined,
+  reduceMotion: boolean | null,
+) {
+  if (!active || reduceMotion) {
+    return { animate: { opacity: 1 }, transition: { duration: 0 } };
+  }
+  return {
+    animate: { opacity: [1, 0.55, 1] },
+    transition: { duration: 2.1, repeat: Infinity, ease: "easeInOut" as const },
+  };
+}
+
 function Dot({ kind, active }: { kind: ActivityKind; active: boolean }) {
   const color = KIND_DOT[kind] ?? KIND_DOT.think;
   if (!active) {
@@ -129,7 +148,9 @@ export function BuilderActivityFeed({
                   )}
                 >
                   <Dot kind={line.kind ?? "think"} active={Boolean(line.active)} />
-                  <span className="min-w-0 break-words">{line.text}</span>
+                  <motion.span className="min-w-0 break-words" {...breathing(line.active, reduceMotion)}>
+                    {line.text}
+                  </motion.span>
                 </motion.li>
               );
             })}
