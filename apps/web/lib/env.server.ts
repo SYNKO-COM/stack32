@@ -40,9 +40,16 @@ export function getServerEnv(): ServerEnv {
 
   // Production runtime must never silently fall back to mock billing / mock AI.
   // Use VERCEL_ENV / ENVIRONMENT — not NODE_ENV — so `next build` in CI still works.
+  //
+  // A preproduction deployment is its own Vercel project, so VERCEL_ENV is
+  // "production" there too and this guard fired on every server action touching
+  // billing — the whole Build page answered 503 with no message in the UI. The
+  // guard was right, it just had no way to tell the two apart. STACK32_ENV is an
+  // explicit, auditable opt-out that production never sets.
+  const isPreproduction = process.env.STACK32_ENV === "preproduction";
   const isProductionRuntime =
-    process.env.VERCEL_ENV === "production" ||
-    process.env.ENVIRONMENT === "production";
+    !isPreproduction &&
+    (process.env.VERCEL_ENV === "production" || process.env.ENVIRONMENT === "production");
   if (isProductionRuntime) {
     if (parsed.data.BILLING_MODE !== "whop") {
       throw new Error(
@@ -54,6 +61,11 @@ export function getServerEnv(): ServerEnv {
         "[stack32] AI_EXECUTION_MODE=mock is forbidden in production.",
       );
     }
+  }
+
+  // Mock billing outside a developer machine is always worth a line in the logs.
+  if (isPreproduction && parsed.data.BILLING_MODE === "mock") {
+    console.warn("[stack32] preproduction: mock billing is active; no real charges occur");
   }
 
   cached = parsed.data;

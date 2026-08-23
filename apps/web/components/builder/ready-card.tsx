@@ -41,7 +41,10 @@ export function IdentityConfirmedMessage({
     "",
     t("identity.confirmedNext"),
   ]
-    .filter(Boolean)
+    // Drop only the optional tone line when there is no tone. `filter(Boolean)`
+    // also ate the "" spacers, so every paragraph ran into the next one and the
+    // card rendered "**Ton** — Professionnel Prochaine étape :" as one line.
+    .filter((line) => line !== null)
     .join("\n");
 
   const finish = () => {
