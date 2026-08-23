@@ -87,10 +87,10 @@ async def _process_run_by_id_inner(
         return {"status": status, "run_id": run_id}
 
     meta = run.get("input") or {}
-    dispatch_seq = int(meta.get("dispatch_seq") or 0)
-    claimed_seq = int(meta.get("claimed_seq") or 0)
+    dispatch_token = int(meta.get("dispatch_token") or 0)
+    claimed_token = int(meta.get("claimed_token") or 0)
 
-    if status == "running" and not _lease_expired(run) and dispatch_seq <= claimed_seq:
+    if status == "running" and not _lease_expired(run) and dispatch_token <= claimed_token:
         # Cloud Tasks retries (maxAttempts=5) deliver the same run_id again when a
         # long build outlives the request timeout; restarting would re-run the
         # whole build and bill the user for every attempt.
@@ -98,19 +98,19 @@ async def _process_run_by_id_inner(
         # Status alone cannot tell a retry from a legitimate resume: a run that
         # paused for user input is *also* stored as "running", and resuming it
         # re-enqueues the same run_id. Compare the fencing token instead — a
-        # deliberate enqueue bumps dispatch_seq, a redelivery repeats the value
+        # deliberate enqueue writes a fresh dispatch_token, a redelivery repeats
         # this worker already claimed.
         if not _is_waiting_for_input(run):
             logger.info(
-                "run_already_in_flight run=%s seq=%s started_at=%s",
+                "run_already_in_flight run=%s token=%s started_at=%s",
                 run_id,
-                dispatch_seq,
+                dispatch_token,
                 run.get("started_at"),
             )
             return {"status": "running", "run_id": run_id, "duplicate_delivery": True}
 
-    if dispatch_seq > claimed_seq:
-        await db.merge_run_input(run_id, user_id, {"claimed_seq": dispatch_seq})
+    if dispatch_token > claimed_token:
+        await db.merge_run_input(run_id, user_id, {"claimed_token": dispatch_token})
 
     if run_type == "build":
         # If interrupted for identity, do not auto-continue

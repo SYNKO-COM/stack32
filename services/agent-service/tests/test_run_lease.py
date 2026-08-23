@@ -73,7 +73,7 @@ def _run_meta(**over):
     base = {
         "status": "running",
         "started_at": datetime.now(UTC).isoformat(),
-        "input": {"dispatch_seq": 1, "claimed_seq": 1},
+        "input": {"dispatch_token": 1, "claimed_token": 1},
     }
     base.update(over)
     return base
@@ -83,7 +83,7 @@ def test_a_redelivery_repeats_the_claimed_token():
     """Same token the worker already claimed → duplicate, skip it."""
     run = _run_meta()
     meta = run["input"]
-    assert meta["dispatch_seq"] <= meta["claimed_seq"]
+    assert meta["dispatch_token"] <= meta["claimed_token"]
 
 
 def test_a_resume_carries_a_higher_token_and_must_run():
@@ -92,11 +92,11 @@ def test_a_resume_carries_a_higher_token_and_must_run():
     A run paused for user input is stored as "running". Resuming it re-enqueues
     the same run_id, so status and lease look exactly like a Cloud Tasks retry.
     Deciding on those alone silently killed the build — the run sat at its last
-    event forever with no error. Every deliberate enqueue bumps dispatch_seq.
+    event forever with no error. Every deliberate enqueue bumps dispatch_token.
     """
-    run = _run_meta(input={"dispatch_seq": 2, "claimed_seq": 1})
+    run = _run_meta(input={"dispatch_token": 2, "claimed_token": 1})
     meta = run["input"]
-    assert meta["dispatch_seq"] > meta["claimed_seq"], "resume must not look like a retry"
+    assert meta["dispatch_token"] > meta["claimed_token"], "resume must not look like a retry"
     assert _lease_expired(run) is False, "the lease is still fresh; only the token differs"
 
 
@@ -109,12 +109,23 @@ def test_the_worker_compares_tokens_not_just_status():
     source = inspect.getsource(worker.process_run_by_id.__wrapped__) if hasattr(
         worker.process_run_by_id, "__wrapped__"
     ) else inspect.getsource(worker)
-    assert "dispatch_seq" in source and "claimed_seq" in source
+    assert "dispatch_token" in source and "claimed_token" in source
 
 
-def test_every_enqueue_bumps_the_token():
+def test_every_enqueue_stamps_a_fresh_token():
     import inspect
 
     from agent_service.queue import dispatch
 
-    assert "bump_dispatch_seq" in inspect.getsource(dispatch.enqueue_run)
+    assert "stamp_dispatch_token" in inspect.getsource(dispatch.enqueue_run)
+
+
+async def test_stamping_never_blocks_dispatch_when_the_write_fails():
+    """Fencing is best-effort: a metadata write must not stop a build starting."""
+    from agent_service.queue.dispatch import stamp_dispatch_token
+
+    class _Broken:
+        async def merge_run_input(self, *_a, **_k):
+            raise RuntimeError("db down")
+
+    assert await stamp_dispatch_token(_Broken(), "run-1", "user-1") > 0
