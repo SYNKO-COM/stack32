@@ -116,6 +116,35 @@ async def _list_agent_tool_rows(
     return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
 
 
+async def configured_tool_trigger(*, user_id: str, agent_id: str) -> dict[str, Any] | None:
+    """The event trigger this agent already has, straight from its own table.
+
+    The spec is rebuilt from the capabilities the builder is carrying, so an
+    interrupted turn — a form answered late, a run resumed from a fresh
+    message — arrives with no memory of the trigger the user picked, and the
+    rebuilt spec silently drops it. The row survives all of that, so it is the
+    honest place to ask what this agent is wired to listen for.
+    """
+    from agent_service.supabase_client import get_supabase_admin_client
+
+    try:
+        async with get_supabase_admin_client() as client:
+            rows = await _list_agent_tool_rows(client, user_id=user_id, agent_id=agent_id)
+    except Exception:  # noqa: BLE001 - a spec rebuild must never fail over this
+        logger.warning("tool_trigger_lookup_failed agent=%s", agent_id, exc_info=True)
+        return None
+    for row in rows:
+        if not row.get("enabled", True) or not row.get("component_id"):
+            continue
+        return {
+            "app_id": row.get("app_id"),
+            "component_id": row.get("component_id"),
+            "label": row.get("label"),
+            "extra_props": row.get("extra_props") or {},
+        }
+    return None
+
+
 async def _patch_trigger(client: Any, trigger_id: str, payload: dict[str, Any]) -> None:
     payload = {**payload, "updated_at": datetime.now(UTC).isoformat()}
     await client.patch("/agent_triggers", params={"id": f"eq.{trigger_id}"}, json=payload)

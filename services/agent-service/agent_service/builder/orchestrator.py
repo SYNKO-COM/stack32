@@ -3755,6 +3755,22 @@ class BuilderOrchestrator:
                 "component_id": caps.get("tool_trigger_component_id"),
                 "label": caps.get("tool_trigger_label"),
             }
+        if tool_trigger is None and not any(
+            getattr(t, "kind", None) == "tool" for t in (current.triggers if current else []) or []
+        ):
+            # Neither this turn's capabilities nor the spec remember the event
+            # trigger — but the agent's own trigger row does, and it outlives
+            # every interruption. Without this the agent quietly went back to
+            # chat-only after any resumed build.
+            from agent_service.triggers.service import configured_tool_trigger
+
+            tool_trigger = await configured_tool_trigger(user_id=user_id, agent_id=agent_id)
+            if tool_trigger:
+                logger.info(
+                    "tool_trigger_recovered_from_row agent=%s component=%s",
+                    agent_id,
+                    tool_trigger.get("component_id"),
+                )
         triggers = _resolve_spec_triggers(
             current=current,
             schedule_hourly=schedule_hourly,
