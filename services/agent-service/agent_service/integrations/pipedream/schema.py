@@ -330,7 +330,12 @@ def normalize_configurable_props(
                 label=str(entry.get("label") or name),
                 default=entry.get("default"),
                 enum=enum,
-                remote_options=bool(entry.get("remoteOptions") or entry.get("useQuery")),
+                # A `$.<app>.<resource>` type is a picker even when Pipedream
+                # does not set remoteOptions: the values come from the user's
+                # account and its configure endpoint will list them. Without
+                # this the Discord trigger asked for a channel id by hand.
+                remote_options=bool(entry.get("remoteOptions") or entry.get("useQuery"))
+                or _is_account_resource_type(prop_type),
                 app_slug=app_slug,
                 raw=entry,
             )

@@ -93,3 +93,27 @@ def test_advanced_only_props_never_block():
 def test_the_connection_prop_is_not_asked_of_the_user():
     _, all_props = config([APP, {"name": "conversation", "type": "string", "remoteOptions": True}])
     assert "demo" not in all_props
+
+
+def test_a_resource_type_is_offered_as_a_picker():
+    """Values live in the user's account, so the drawer must list them.
+
+    Pipedream does not set remoteOptions on `$.discord.channel[]`, but its
+    configure endpoint will enumerate the channels. Without this the trigger
+    asked the user to type a channel id by hand.
+    """
+    schema = normalize_configurable_props(
+        component([APP, {"name": "channels", "type": "$.discord.channel[]"}], "discord"),
+        action_id="discord-new-message",
+    )
+    prop = next(p for p in schema.props if p.name == "channels")
+    assert prop.remote_options is True
+
+
+def test_a_plain_string_is_not_turned_into_a_picker():
+    schema = normalize_configurable_props(
+        component([APP, {"name": "text", "type": "string"}], "slack"),
+        action_id="slack-send",
+    )
+    prop = next(p for p in schema.props if p.name == "text")
+    assert prop.remote_options is False
