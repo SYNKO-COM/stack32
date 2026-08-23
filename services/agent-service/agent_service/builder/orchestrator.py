@@ -1653,6 +1653,32 @@ class BuilderOrchestrator:
             if binding.tool_id not in seen:
                 new_tools.append(binding)
                 seen.add(binding.tool_id)
+        # A modify round rebuilds the set from what was proposed this time, so
+        # anything not re-proposed disappeared: asking for a draft tool cost the
+        # agent the email search it had minutes earlier. Carry the rest forward.
+        if str(draft.get("tool_review_mode") or "") == "modify":
+            try:
+                existing_spec = await self.db.load_draft_spec(agent_id, user_id)
+            except Exception:  # noqa: BLE001 - never fail a build over this
+                logger.warning("carry_over_spec_load_failed agent_id=%s", agent_id, exc_info=True)
+                existing_spec = None
+            if existing_spec is not None:
+                from agent_service.builder.tool_review import (
+                    HIDDEN_FROM_REVIEW,
+                    _app_key,
+                    carry_over_existing_tools,
+                )
+
+                confirmed_apps = {
+                    _app_key(t) for t in new_tools if t.tool_id not in HIDDEN_FROM_REVIEW
+                }
+                new_tools = carry_over_existing_tools(
+                    current=list(existing_spec.tools),
+                    new_tools=new_tools,
+                    offered=list(pending_spec.tools),
+                    confirmed_apps=confirmed_apps,
+                )
+
         new_tools = new_tools[:MAX_AGENT_TOOLS]
 
         connection_requirements = await build_connection_requirements(new_tools)

@@ -445,10 +445,15 @@ export function AgentIaView({
     productGraph.nodes,
   ]);
 
+  // Readiness lands a beat after the graph does. Judging on the graph alone in
+  // the meantime flashed "À configurer" on a fully configured agent every time
+  // the page loaded, then corrected itself — so say nothing until it is known.
+  const readinessSettled = readinessQuery.isFetched && !readinessQuery.isLoading;
   const showSetupBadge =
-    readinessQuery.data?.status === "needs_setup" ||
-    readinessQuery.data?.status === "needs_attention" ||
-    productGraph.nodes.some((n) => n.configurationStatus === "setup_required");
+    readinessSettled &&
+    (readinessQuery.data?.status === "needs_setup" ||
+      readinessQuery.data?.status === "needs_attention" ||
+      productGraph.nodes.some((n) => n.configurationStatus === "setup_required"));
 
   const resetStructureExecution = () => {
     startRefresh(async () => {

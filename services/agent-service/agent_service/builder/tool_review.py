@@ -64,6 +64,41 @@ def reviewable_app_keys(tools: list[ToolBinding] | None) -> set[str]:
     return {_app_key(t) for t in (tools or []) if _is_reviewable(t)}
 
 
+def carry_over_existing_tools(
+    *,
+    current: list[ToolBinding] | None,
+    new_tools: list[ToolBinding],
+    offered: list[ToolBinding] | None,
+    confirmed_apps: set[str],
+) -> list[ToolBinding]:
+    """Keep what the agent already had when a change only meant to add.
+
+    A review rebuilds the tool set from what the builder proposed this round,
+    so anything it did not propose again silently vanished. Asking for a draft
+    tool cost the agent its email search — the capability it had five minutes
+    earlier — and it said so itself: "l'action Find Emails n'est pas
+    disponible".
+
+    An existing tool survives unless the user was actually asked about its app
+    and turned it down. Apps this change never raised are none of its business,
+    and an app the user confirmed keeps everything it already had plus whatever
+    is new. Declining an app still removes it, tools and all.
+    """
+    kept = list(new_tools)
+    seen = {t.tool_id for t in kept}
+    offered_apps = {_app_key(t) for t in (offered or []) if _is_reviewable(t)}
+
+    for tool in current or []:
+        if tool.tool_id in seen or not _is_reviewable(tool):
+            continue
+        app = _app_key(tool)
+        if app in offered_apps and app not in confirmed_apps:
+            continue  # the user was asked about this app and said no
+        kept.append(tool)
+        seen.add(tool.tool_id)
+    return kept
+
+
 def enabled_tool_ids(tools: list[ToolBinding] | None) -> set[str]:
     return {t.tool_id for t in (tools or []) if _is_reviewable(t)}
 

@@ -308,8 +308,14 @@ export function LiveView({
   const agentName = agent?.name || t("builder:sidebar.untitledAgent");
   const hasUnpublishedDraft = agentHasUnpublishedDraft(agent);
 
+  // The first paint has to *start* at the bottom. Animating there from the top
+  // is what made every page load look like it dropped the reader mid-thread.
+  const didInitialScroll = useRef(false);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!displayMessages.length) return;
+    const behavior: ScrollBehavior = didInitialScroll.current ? "smooth" : "auto";
+    didInitialScroll.current = true;
+    bottomRef.current?.scrollIntoView({ behavior, block: "end" });
   }, [displayMessages.length, composerBusy]);
 
   useEffect(() => {
