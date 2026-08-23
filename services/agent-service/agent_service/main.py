@@ -53,10 +53,23 @@ def _check_production_runtime(settings) -> None:
         raise RuntimeError("Production startup checks failed: " + "; ".join(errors))
 
 
+# Values operators use as "not configured yet". Secret Manager has no concept of
+# an empty secret, so a placeholder string is the usual stand-in.
+_PLACEHOLDER_SECRETS = frozenset({"unset", "none", "null", "todo", "changeme", "-", "n/a"})
+
+
 def _maybe_init_sentry(settings) -> None:
-    """Optional Sentry init — no-op when SENTRY_DSN is unset or SDK missing."""
+    """Optional Sentry init. Must never prevent the service from starting.
+
+    Error reporting is a nice-to-have; serving traffic is not. A malformed DSN
+    used to propagate BadDsn out of create_app and crash the container on boot —
+    caught in preproduction where the mounted secret held the placeholder
+    "unset". Degrade to no reporting and say so loudly instead.
+    """
     dsn = (getattr(settings, "SENTRY_DSN", None) or "").strip()
-    if not dsn:
+    if not dsn or dsn.lower() in _PLACEHOLDER_SECRETS:
+        if dsn:
+            logger.warning("SENTRY_DSN is a placeholder (%r); error reporting disabled", dsn)
         return
     try:
         import sentry_sdk
@@ -65,6 +78,15 @@ def _maybe_init_sentry(settings) -> None:
     except ImportError:
         logger.warning("SENTRY_DSN set but sentry-sdk is not installed; skipping Sentry init")
         return
+    try:
+        _init_sentry_sdk(sentry_sdk, FastApiIntegration, LoggingIntegration, dsn, settings)
+    except Exception:  # noqa: BLE001 - never let telemetry setup take down the service
+        logger.exception("sentry_init_failed; continuing without error reporting")
+        return
+    logger.info("sentry_initialized environment=%s", settings.ENVIRONMENT)
+
+
+def _init_sentry_sdk(sentry_sdk, FastApiIntegration, LoggingIntegration, dsn, settings) -> None:
     sentry_sdk.init(
         dsn=dsn,
         environment=getattr(settings, "ENVIRONMENT", "development") or "development",
@@ -76,7 +98,6 @@ def _maybe_init_sentry(settings) -> None:
         traces_sample_rate=0.0,
         send_default_pii=False,
     )
-    logger.info("sentry_initialized environment=%s", settings.ENVIRONMENT)
 
 
 def create_app() -> FastAPI:

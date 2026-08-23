@@ -41,3 +41,28 @@ def test_sentry_init_is_a_no_op_without_a_dsn():
     from agent_service.main import _maybe_init_sentry
 
     _maybe_init_sentry(SimpleNamespace(SENTRY_DSN="", ENVIRONMENT="test"))
+
+
+def test_a_malformed_dsn_never_takes_the_service_down():
+    """Caught in preproduction: BadDsn escaped create_app and crashed the boot.
+
+    The mounted secret held the placeholder "unset". Because the image had just
+    started installing sentry-sdk, a previously inert code path ran for the
+    first time and the container failed its startup probe. Error reporting is
+    optional; serving traffic is not.
+    """
+    from types import SimpleNamespace
+
+    from agent_service.main import _maybe_init_sentry
+
+    for dsn in ("unset", "not-a-dsn", "://broken", "http://", "changeme", "TODO"):
+        _maybe_init_sentry(SimpleNamespace(SENTRY_DSN=dsn, ENVIRONMENT="production"))
+
+
+def test_the_app_still_builds_with_a_placeholder_dsn(monkeypatch):
+    from agent_service.config import get_settings
+    from agent_service.main import create_app
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "SENTRY_DSN", "unset", raising=False)
+    assert create_app() is not None

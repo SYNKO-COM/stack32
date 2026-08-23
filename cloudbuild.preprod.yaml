@@ -1,4 +1,6 @@
 # Cloud Build — agent-service → Cloud Run PREPROD.
+# Tagged with $BUILD_ID, not $SHORT_SHA: manual `gcloud builds submit` runs have
+# no source commit, so $SHORT_SHA expands to nothing and the tag is rejected.
 # Same gates as production: nothing deploys unless the service's own tests pass.
 # Build context MUST be services/ (Dockerfile copies stack32-agent-runtime + agent-service).
 steps:
@@ -25,14 +27,14 @@ steps:
       - -f
       - services/agent-service/Dockerfile
       - -t
-      - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$SHORT_SHA
+      - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$BUILD_ID
       - -t
       - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod
       - services
 
   - name: gcr.io/cloud-builders/docker
     id: Push-sha
-    args: [push, "europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$SHORT_SHA"]
+    args: [push, "europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$BUILD_ID"]
 
   - name: gcr.io/cloud-builders/docker
     id: Push-preprod
@@ -47,13 +49,13 @@ steps:
       - update
       - stack32-agent-api-preprod
       - --platform=managed
-      - --image=europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$SHORT_SHA
+      - --image=europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$BUILD_ID
       - --region=europe-west1
       - --timeout=3600
       - --quiet
 
 images:
-  - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$SHORT_SHA
+  - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$BUILD_ID
   - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod
 
 options:
