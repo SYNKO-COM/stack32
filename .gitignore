@@ -54,3 +54,8 @@ rightful-uncomplaining-picturesque_-_CLI_Quickstart-oauth-credentials.txt
 **/tfplan
 **/*.tfplan
 apps/web/test-results/
+
+# macOS/cloud-sync duplicates ("file 2.ts"). A stale "routes.d 2.ts" in .next
+# breaks `tsc --noEmit` with duplicate-identifier errors that look like source
+# problems, and a committed "pnpm-lock 2.yaml" is a lockfile nobody reads.
+*[[:space:]][0-9].*
