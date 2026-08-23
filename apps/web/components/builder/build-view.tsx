@@ -270,7 +270,7 @@ function BuilderBubble({
   /** Only the head of the reveal queue animates; others wait. */
   animateNow: boolean;
   onRevealDone?: () => void;
-  activityLines?: { id: string; text: string; active?: boolean }[];
+  activityLines?: import("@/components/builder/builder-activity-feed").ActivityLine[];
   userPrompt?: string;
 }) {
   const { t, i18n } = useTranslation(["builder", "common"]);
@@ -1032,6 +1032,7 @@ export function BuildView({ agentId }: { agentId: string }) {
           id: line.id,
           text: text.charAt(0).toUpperCase() + text.slice(1),
           active: line.active,
+          kind: line.kind,
         };
       })
     : [];

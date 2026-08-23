@@ -99,7 +99,20 @@
     "sandbox": "Sandbox ready",
     "scaffold": "Scaffolding project",
     "snapshot": "Snapshot created",
-    "thinking": "Thinking"
+    "thinking": "Thinking",
+    "readOnePlus": "Read {{path}} +{{count}}",
+    "wroteOnePlus": "Updated {{path}} +{{count}}",
+    "patchedOne": "Edited {{path}}",
+    "patchedOnePlus": "Edited {{path}} +{{count}}",
+    "searching": "Searching the project",
+    "ranCommand": "Ran a command",
+    "securityCheck": "Security check",
+    "escalated": "Escalating to a stronger model",
+    "repairRejected": "Fix rejected — it had weakened the quality gates",
+    "repairExhausted": "Repair stopped",
+    "ready": "Agent ready",
+    "moreSteps": "{{count}} earlier steps",
+    "collapse": "Collapse"
   },
   "topbar": {
     "publish": "Publish",

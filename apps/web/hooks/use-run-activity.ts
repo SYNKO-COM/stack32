@@ -16,6 +16,11 @@ export type ActivityLineSpec = {
   id: string;
   /** i18n key under builder:activity.* */
   key: string;
+  /** Key before pluralisation — used to merge consecutive identical beats. */
+  baseKey?: string;
+  kind?: ActivityKind;
+  count?: number;
+  sequence?: number;
   params?: Record<string, string | number>;
   active?: boolean;
 };
@@ -68,145 +73,120 @@ function shortPath(path?: string): string {
   return parts[parts.length - 1] || path;
 }
 
-/** Collapse raw events into Cursor-like status line specs (i18n keys). */
+export type ActivityKind = "read" | "write" | "exec" | "think" | "milestone" | "error";
+
+type Mapping = { kind: ActivityKind; key: string; usesPath?: boolean };
+
+/**
+ * One event type → one timeline step. Order matters: the first match wins, so
+ * the specific patterns sit above the generic ones.
+ */
+const EVENT_MAP: [(t: string) => boolean, Mapping][] = [
+  [(t) => t.includes("file.read"), { kind: "read", key: "readOne", usesPath: true }],
+  [(t) => t.includes("file.created") || t.includes("file.write"), { kind: "write", key: "wroteOne", usesPath: true }],
+  [(t) => t.includes("file.patch"), { kind: "write", key: "patchedOne", usesPath: true }],
+  [(t) => t.includes("context.indexing"), { kind: "think", key: "indexed" }],
+  [(t) => t.includes("context.search"), { kind: "read", key: "searching" }],
+  [(t) => t.includes("tests.started") || t.includes("test.started"), { kind: "exec", key: "testsRun" }],
+  [(t) => t.includes("tests.passed") || t.includes("test.completed"), { kind: "milestone", key: "testsOk" }],
+  [(t) => t.includes("tests.failed"), { kind: "error", key: "testsFail" }],
+  [(t) => t.includes("repair.rejected"), { kind: "error", key: "repairRejected" }],
+  [(t) => t.includes("repair.exhausted"), { kind: "error", key: "repairExhausted" }],
+  [(t) => t.includes("repair"), { kind: "exec", key: "repair" }],
+  [(t) => t.includes("command.completed"), { kind: "exec", key: "ranCommand" }],
+  [(t) => t.includes("security.check"), { kind: "exec", key: "securityCheck" }],
+  [(t) => t.includes("model.escalated"), { kind: "think", key: "escalated" }],
+  [(t) => t.includes("model.call"), { kind: "think", key: "thinking" }],
+  [(t) => t.includes("sandbox"), { kind: "milestone", key: "sandbox" }],
+  [(t) => t.includes("scaffolding"), { kind: "milestone", key: "scaffold" }],
+  [(t) => t.includes("plan.created") || t.includes("architecture"), { kind: "milestone", key: "planning" }],
+  [(t) => t.includes("analysis") || t.includes("understanding"), { kind: "milestone", key: "understood" }],
+  [(t) => t.includes("identity"), { kind: "milestone", key: "identity" }],
+  [(t) => t.includes("spec.updated"), { kind: "milestone", key: "spec" }],
+  [(t) => t.includes("graph.updated"), { kind: "milestone", key: "graph" }],
+  [(t) => t.includes("validation"), { kind: "milestone", key: "validation" }],
+  [(t) => t.includes("snapshot"), { kind: "milestone", key: "snapshot" }],
+  [(t) => t.includes("ready"), { kind: "milestone", key: "ready" }],
+];
+
+/** Events that only describe a mutation — hidden when viewing someone else's run. */
+const MUTATION_KEYS = new Set([
+  "wroteOne", "patchedOne", "testsRun", "testsOk", "testsFail", "repair",
+  "repairRejected", "repairExhausted", "ranCommand", "sandbox", "scaffold",
+  "planning", "identity", "spec", "graph", "validation", "snapshot", "ready",
+]);
+
+function classify(eventType: string): Mapping | null {
+  for (const [match, mapping] of EVENT_MAP) {
+    if (match(eventType)) return mapping;
+  }
+  return null;
+}
+
+/**
+ * Turn raw run events into a chronological timeline of what the agent did.
+ *
+ * The previous version collapsed every event into ~20 fixed aggregate lines
+ * ("read 5 files") and kept them all on screen, which read as a static stacked
+ * checklist rather than an agent working. Steps are now emitted in order, and
+ * consecutive events of the same kind merge into one step with a count so a
+ * hundred file reads stay one line without losing the sequence.
+ */
 export function summarizeActivity(
   events: RunActivityEvent[],
   opts?: { readOnly?: boolean },
-): {
-  lines: ActivityLineSpec[];
-} {
+): { lines: ActivityLineSpec[] } {
   const readOnly = Boolean(opts?.readOnly);
-  const fileCreates = readOnly
-    ? []
-    : events.filter(
-        (e) => e.eventType.includes("file.created") || e.eventType.includes("file.write"),
-      );
-  const fileReads = events.filter((e) => e.eventType.includes("file.read"));
-  const searches = events.filter(
-    (e) =>
-      e.eventType.includes("context.search") || e.eventType.includes("context.indexing"),
-  );
+  const ordered = [...events].sort((a, b) => a.sequence - b.sequence);
+  const steps: ActivityLineSpec[] = [];
 
-  const lines: (ActivityLineSpec & { order: number })[] = [];
-  const seen = new Set<string>();
+  for (const event of ordered) {
+    const mapping = classify(event.eventType);
+    if (!mapping) continue;
+    if (readOnly && MUTATION_KEYS.has(mapping.key)) continue;
 
-  const firstSequence = (matching: RunActivityEvent[]): number =>
-    matching.reduce((min, e) => Math.min(min, e.sequence), Number.MAX_SAFE_INTEGER);
+    const path = mapping.usesPath ? shortPath(event.path) : undefined;
+    const previous = steps[steps.length - 1];
 
-  const push = (spec: ActivityLineSpec, order: number) => {
-    if (seen.has(spec.id)) return;
-    seen.add(spec.id);
-    lines.push({ ...spec, order });
-  };
-
-  if (fileReads.length > 0) {
-    push(
-      fileReads.length === 1
-        ? {
-            id: "reads",
-            key: "readOne",
-            params: { path: shortPath(fileReads[0]?.path) || "…" },
-          }
-        : { id: "reads", key: "readMany", params: { count: fileReads.length } },
-      firstSequence(fileReads),
-    );
-  }
-  if (fileCreates.length > 0) {
-    push(
-      fileCreates.length === 1
-        ? {
-            id: "writes",
-            key: "wroteOne",
-            params: { path: shortPath(fileCreates[0]?.path) || "…" },
-          }
-        : { id: "writes", key: "wroteMany", params: { count: fileCreates.length } },
-      firstSequence(fileCreates),
-    );
-  }
-  if (searches.length > 0) {
-    push(
-      searches.length === 1
-        ? { id: "search", key: "indexed" }
-        : { id: "search", key: "searched", params: { count: searches.length } },
-      firstSequence(searches),
-    );
-  }
-
-  const milestones: { match: (t: string) => boolean; key: string; id: string }[] = [
-    {
-      id: "understood",
-      match: (t) => t.includes("analysis") || t.includes("understanding"),
-      key: "understood",
-    },
-    {
-      id: "planning",
-      match: (t) => t.includes("plan.created") || t.includes("architecture"),
-      key: "planning",
-    },
-    { id: "identity", match: (t) => t.includes("identity"), key: "identity" },
-    { id: "spec", match: (t) => t.includes("spec.updated"), key: "spec" },
-    { id: "graph", match: (t) => t.includes("graph.updated"), key: "graph" },
-    { id: "validation", match: (t) => t.includes("validation"), key: "validation" },
-    {
-      id: "tests-run",
-      match: (t) => t.includes("test.started") || t.includes("tests.started"),
-      key: "testsRun",
-    },
-    {
-      id: "tests-ok",
-      match: (t) => t.includes("test.completed") || t.includes("tests.passed"),
-      key: "testsOk",
-    },
-    { id: "tests-fail", match: (t) => t.includes("tests.failed"), key: "testsFail" },
-    { id: "repair", match: (t) => t.includes("repair"), key: "repair" },
-    { id: "sandbox", match: (t) => t.includes("sandbox"), key: "sandbox" },
-    {
-      id: "scaffold",
-      match: (t) => t.includes("scaffolding") || t.includes("project.scaffolding"),
-      key: "scaffold",
-    },
-    { id: "snapshot", match: (t) => t.includes("snapshot"), key: "snapshot" },
-    {
-      id: "thinking",
-      match: (t) =>
-        t.includes("model.call") || t.includes("builder.model") || t.includes("builder.chat"),
-      key: "thinking",
-    },
-  ];
-
-  const mutationIds = new Set([
-    "planning",
-    "identity",
-    "spec",
-    "graph",
-    "validation",
-    "tests-run",
-    "tests-ok",
-    "tests-fail",
-    "repair",
-    "sandbox",
-    "scaffold",
-    "snapshot",
-  ]);
-
-  for (const m of milestones) {
-    if (readOnly && mutationIds.has(m.id)) continue;
-    const matching = events.filter((e) => m.match(e.eventType));
-    if (matching.length > 0) {
-      push({ id: m.id, key: m.key }, firstSequence(matching));
+    // Merge a repeat of the same beat instead of stacking near-identical lines.
+    if (previous && previous.kind === mapping.kind && previous.baseKey === mapping.key) {
+      const count = (previous.count ?? 1) + 1;
+      previous.count = count;
+      previous.key = mapping.usesPath ? `${mapping.key}Plus` : mapping.key;
+      previous.params = mapping.usesPath
+        ? { path: path || previous.params?.path || "…", count: count - 1 }
+        : { count };
+      previous.sequence = event.sequence;
+      continue;
     }
+
+    steps.push({
+      id: `${mapping.key}-${event.sequence}`,
+      key: mapping.key,
+      baseKey: mapping.key,
+      kind: mapping.kind,
+      count: 1,
+      sequence: event.sequence,
+      params: path ? { path: path || "…" } : undefined,
+    });
   }
 
-  if (lines.length === 0) {
-    push({ id: "boot", key: readOnly ? "thinking" : "planning", active: true }, 0);
-    return { lines };
+  if (steps.length === 0) {
+    return {
+      lines: [
+        {
+          id: "boot",
+          key: readOnly ? "thinking" : "planning",
+          baseKey: readOnly ? "thinking" : "planning",
+          kind: "think",
+          sequence: 0,
+          active: true,
+        },
+      ],
+    };
   }
 
-  // Chronological, and never truncated: a line must not vanish once shown.
-  const ordered = [...lines]
-    .sort((a, b) => a.order - b.order)
-    .map(({ order: _order, ...spec }) => spec);
-  const last = ordered[ordered.length - 1];
+  const last = steps[steps.length - 1];
   if (last) last.active = true;
-  return { lines: ordered };
+  return { lines: steps };
 }

@@ -99,7 +99,20 @@
     "sandbox": "Bac à sable prêt",
     "scaffold": "Génération du projet",
     "snapshot": "Instantané créé",
-    "thinking": "Réflexion"
+    "thinking": "Réflexion",
+    "readOnePlus": "Lecture de {{path}} +{{count}}",
+    "wroteOnePlus": "Mise à jour de {{path}} +{{count}}",
+    "patchedOne": "Modification de {{path}}",
+    "patchedOnePlus": "Modification de {{path}} +{{count}}",
+    "searching": "Recherche dans le projet",
+    "ranCommand": "Exécution d’une commande",
+    "securityCheck": "Contrôle de sécurité",
+    "escalated": "Passage à un modèle plus puissant",
+    "repairRejected": "Correction refusée — les garde-fous avaient été affaiblis",
+    "repairExhausted": "Correction interrompue",
+    "ready": "Agent prêt",
+    "moreSteps": "{{count}} étapes précédentes",
+    "collapse": "Réduire"
   },
   "topbar": {
     "publish": "Publier",

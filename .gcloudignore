@@ -1,0 +1,11 @@
+# Keep the Cloud Build upload small: the build installs its own dependencies.
+.git
+node_modules
+**/node_modules
+apps/web/.next
+**/.venv
+**/__pycache__
+**/*.pyc
+test-results
+.vercel
+supabase/.temp
