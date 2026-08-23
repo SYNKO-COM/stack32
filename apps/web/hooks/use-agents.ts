@@ -16,8 +16,12 @@ const agentKeys = {
 export function useAgents(workspaceId?: string | null) {
   return useQuery({
     queryKey: [...agentKeys.list, workspaceId ?? "all"] as const,
+    // A null workspace means "not scoped yet", not "do not ask". Listing without
+    // one returns every agent the caller owns (RLS scopes it to them anyway).
+    // Disabling the query here left a user with no workspace on a spinner
+    // forever: the page waits for agents, the agents query waits for a
+    // workspace, and the workspace is only created by creating an agent.
     queryFn: () => getAgentRepository().listAgents(workspaceId ?? undefined),
-    enabled: workspaceId !== null,
     refetchOnWindowFocus: false,
   });
 }

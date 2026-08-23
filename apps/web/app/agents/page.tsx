@@ -27,14 +27,18 @@ export default function AgentsIndexPage() {
   const { t } = useTranslation(["common", "errors"]);
   const router = useRouter();
   const openDialog = useUiStore((s) => s.openDialog);
-  const { activeWorkspaceId } = useActiveWorkspace();
+  const { activeWorkspaceId, isLoading: workspacesLoading } = useActiveWorkspace();
   const { data: agents, isLoading } = useAgents(activeWorkspaceId);
   const createAgent = useCreateAgent();
   const handledRef = useRef(false);
   const [creating, startCreate] = useTransition();
 
   useEffect(() => {
-    if (isLoading || handledRef.current || !agents || !activeWorkspaceId) return;
+    // Do NOT gate on activeWorkspaceId. A user with no workspace yet would wait
+    // forever: create_agent_workspace is what creates the first workspace, so
+    // requiring one before calling it is a deadlock — an endless spinner with no
+    // error and no way out.
+    if (isLoading || workspacesLoading || handledRef.current || !agents) return;
 
     const pending = getPendingPrompt();
     if (!pending && agents.length === 0) return;
@@ -54,7 +58,9 @@ export default function AgentsIndexPage() {
           return;
         }
 
-        const agent = await createAgent.mutateAsync({ workspaceId: activeWorkspaceId });
+        const agent = await createAgent.mutateAsync({
+          workspaceId: activeWorkspaceId ?? undefined,
+        });
         const prompt = consumePendingPrompt();
         if (prompt?.trim()) {
           setPrefillDraft(prompt.trim(), { autoSend: true });
@@ -81,9 +87,9 @@ export default function AgentsIndexPage() {
       }
     };
     void go();
-  }, [agents, isLoading, createAgent, router, activeWorkspaceId, openDialog]);
+  }, [agents, isLoading, workspacesLoading, createAgent, router, activeWorkspaceId, openDialog]);
 
-  if (isLoading || !agents || !activeWorkspaceId) {
+  if (isLoading || workspacesLoading || !agents) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <BrandLoader label={t("common:loading")} size="lg" />
@@ -105,7 +111,7 @@ export default function AgentsIndexPage() {
             startCreate(async () => {
               try {
                 const created = await createAgent.mutateAsync({
-                  workspaceId: activeWorkspaceId,
+                  workspaceId: activeWorkspaceId ?? undefined,
                 });
                 router.replace(`/agents/${created.id}/build`);
               } catch (error) {
