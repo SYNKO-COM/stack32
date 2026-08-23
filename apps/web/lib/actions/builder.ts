@@ -594,6 +594,8 @@ export async function submitBuilderProviders(input: {
 /** Stop the in-flight Builder run (square Stop button). */
 export async function cancelBuilderRun(input: {
   agentId: string;
+  /** "watchdog" marks an automatic cancel — the server checks it is warranted. */
+  reason?: "watchdog";
 }): Promise<{ status: string; id?: string }> {
   const { userId } = await requireOwnedAgent(input.agentId);
   if (currentAiExecutionMode() !== "agent-service") {
@@ -602,8 +604,9 @@ export async function cancelBuilderRun(input: {
 
   try {
     const accessToken = await requireAccessToken();
+    const query = input.reason ? `?reason=${input.reason}` : "";
     return await agentServiceFetch<{ status: string; id?: string }>(
-      `/v1/agents/${input.agentId}/builder/cancel`,
+      `/v1/agents/${input.agentId}/builder/cancel${query}`,
       {
         method: "POST",
         accessToken,

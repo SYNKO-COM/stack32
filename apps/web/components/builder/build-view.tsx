@@ -875,7 +875,9 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (hasOpenBuilderForm) return;
     if (staleRecoveredRef.current) return;
     staleRecoveredRef.current = true;
-    void cancelRun.mutateAsync().catch(() => {
+    // Marked automatic: the server refuses it unless the run really has gone
+    // quiet, so a mis-measured clock can no longer kill a healthy build.
+    void cancelRun.mutateAsync("watchdog").catch(() => {
       /* local UI already freed */
     });
   }, [staleBuilding, rawBuilding, cancelRun, hasOpenBuilderForm]);
@@ -1179,7 +1181,8 @@ export function BuildView({ agentId }: { agentId: string }) {
     setUserStopped(true);
     setPendingToken(null);
     setAwaitingReply(false);
-    void cancelRun.mutateAsync().catch(() => {
+    // No reason: the user pressed Stop, and that is always honoured.
+    void cancelRun.mutateAsync(undefined).catch(() => {
       /* local fallback already handled in cancelBuilderRun */
     });
   };

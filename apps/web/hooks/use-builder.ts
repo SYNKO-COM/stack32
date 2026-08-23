@@ -169,7 +169,7 @@ export function useSendBuilderMessage(agentId: string) {
 export function useCancelBuilderRun(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => cancelBuilderRun({ agentId }),
+    mutationFn: (reason?: "watchdog") => cancelBuilderRun({ agentId, reason }),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ["builder", agentId] });
       await queryClient.cancelQueries({ queryKey: ["active-build-run", agentId] });

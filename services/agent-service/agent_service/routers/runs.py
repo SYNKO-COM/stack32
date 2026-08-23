@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +14,8 @@ from fastapi.responses import StreamingResponse
 
 from agent_service.auth import CurrentUser
 from agent_service.supabase_client import get_persistence
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["runs"])
 
@@ -104,9 +108,57 @@ async def cancel_active_live_run(
     return last or {"status": "idle"}
 
 
+#: A build the browser believes is stuck must have been silent at least this
+#: long before an automatic cancel is honoured.
+WATCHDOG_SILENCE_SECONDS = 150
+
+
+def _seconds_since(value: Any) -> float | None:
+    if not value:
+        return None
+    try:
+        stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - stamp).total_seconds()
+
+
+async def _run_is_silent_enough_to_cancel(db: Any, row: dict[str, Any], user_id: str) -> bool:
+    """True when this run really has gone quiet, not merely looked quiet.
+
+    The browser cancels a build that stops producing activity, so a worker that
+    exited early cannot spin forever. But its clock ran from the last thread
+    message, which is minutes old whenever the user has just answered a form —
+    so answering one cancelled the run it had just unblocked, and the build
+    stopped dead with "Arrêté" one second after being resumed. An automatic
+    cancel is now only honoured against a run that has actually been silent.
+    """
+    ages = [_seconds_since(row.get("started_at")), _seconds_since(row.get("created_at"))]
+    try:
+        events = await db.list_run_events(str(row["id"]), user_id)
+    except Exception:  # noqa: BLE001 - fall back to the run's own timestamps
+        events = []
+    if events:
+        ages.append(_seconds_since(events[-1].get("created_at")))
+    known = [a for a in ages if a is not None]
+    if not known:
+        return True
+    return min(known) >= WATCHDOG_SILENCE_SECONDS
+
+
 @router.post("/agents/{agent_id}/builder/cancel")
-async def cancel_active_builder_run(agent_id: UUID, user: CurrentUser) -> dict[str, Any]:
-    """Cancel every in-flight build run for this agent (Stop button)."""
+async def cancel_active_builder_run(
+    agent_id: UUID, user: CurrentUser, request: Request
+) -> dict[str, Any]:
+    """Cancel in-flight build runs for this agent.
+
+    ``reason=watchdog`` marks an automatic cancel from the browser's stuck-build
+    detector; those are checked against the run's real activity first. A cancel
+    without a reason is the user pressing Stop and is always honoured.
+    """
+    automatic = request.query_params.get("reason") == "watchdog"
     db = get_persistence()
     actives = await db.list_active_build_runs(
         agent_id=str(agent_id), user_id=user.user_id
@@ -120,11 +172,20 @@ async def cancel_active_builder_run(agent_id: UUID, user: CurrentUser) -> dict[s
     if not actives:
         return {"status": "idle"}
     last: dict[str, Any] | None = None
+    skipped = 0
     for row in actives:
+        if automatic and not await _run_is_silent_enough_to_cancel(db, row, user.user_id):
+            logger.info(
+                "watchdog_cancel_refused run=%s agent=%s", row.get("id"), agent_id
+            )
+            skipped += 1
+            continue
         try:
             last = await _cancel_run_impl(str(row["id"]), user, silent=False)
         except HTTPException:
             continue
+    if last is None and skipped:
+        return {"status": "running", "reason": "still_active"}
     return last or {"status": "idle"}
 
 
