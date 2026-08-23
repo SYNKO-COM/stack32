@@ -86,10 +86,16 @@ def create_app() -> FastAPI:
     _check_production_runtime(settings)
     _maybe_init_sentry(settings)
 
+    # /docs and /openapi.json publish the full 87-endpoint surface to anyone.
+    # Useful in development, needless disclosure in production.
+    expose_docs = not (settings.is_production or settings.is_production_like)
     app = FastAPI(
         title="Stack32 Agent Service",
         version=__version__,
         description="API for building and running Stack32 AI agents.",
+        docs_url="/docs" if expose_docs else None,
+        redoc_url="/redoc" if expose_docs else None,
+        openapi_url="/openapi.json" if expose_docs else None,
     )
 
     app.add_middleware(RequestIDMiddleware)
