@@ -103,13 +103,17 @@ def _pyproject(bp: ProjectBlueprint) -> str:
         "[tool.pytest.ini_options]\n"
         'testpaths = ["tests"]\n'
         'asyncio_mode = "auto"\n'
-        'pythonpath = ["src"]\n\n'
+        # "vendor" carries stack32_agent_runtime, which the sandbox image does not
+        # provide. Without it pytest fails at import on every generated project.
+        'pythonpath = ["src", "vendor"]\n\n'
         # Without this, ruff treats `agent` as third-party and reports I001 on
         # every freshly generated project — so each build failed the lint gate
         # at birth and entered a repair loop it could never win.
         "[tool.ruff]\n"
         'line-length = 100\n'
-        'src = ["src", "tests"]\n\n'
+        'src = ["src", "tests"]\n'
+        # Vendored runtime is not this project's code to lint.
+        'exclude = ["vendor"]\n\n'
         "[tool.ruff.lint]\n"
         'select = ["E", "F", "I", "UP", "B"]\n'
         # Generated lines embed user-chosen tool names and example args, so their

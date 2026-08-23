@@ -2760,11 +2760,14 @@ class BuilderOrchestrator:
                         )
                     except Exception:  # noqa: BLE001
                         logger.exception("sandbox_failure_observation_failed")
-                    # Platform LLM/budget failures are not agent bugs — don't block readiness.
+                    # Platform failures are not the user's agent misbehaving, so they
+                    # must not block readiness. TURN_LIMIT_REACHED is deliberately NOT
+                    # in this set: running out of turns means the coding agent did not
+                    # finish the job, and silently reporting "built" hid a real failure
+                    # behind a green result. Let it surface so the user is offered a fix.
                     if build_failure_reason in {
                         "MODEL_PROVIDER_UNAVAILABLE",
                         "MODEL_BUDGET_EXCEEDED",
-                        "TURN_LIMIT_REACHED",
                     }:
                         build_ok = None
                         build_failure_reason = None

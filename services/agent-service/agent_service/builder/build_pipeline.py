@@ -124,6 +124,16 @@ class CodeBuildPipeline:
         for f in files:
             await provider.write_file(handle, f["path"], f["content"])
 
+        # The generated project imports stack32_agent_runtime, which does not
+        # exist in a stock sandbox image. Without this every build failed at
+        # import and the coding agent burned its turns on `pip download` and
+        # `find /` instead of writing the user's agent.
+        from agent_service.builder.runtime_vendor import vendor_runtime_into
+
+        vendored = await vendor_runtime_into(provider, handle)
+        if vendored:
+            logger.info("vendored stack32_agent_runtime into sandbox files=%s", vendored)
+
         return await self.build_from_workspace(
             handle=handle, blueprint=blueprint, files=files,
             user_id=user_id, agent_id=agent_id, run_id=run_id,
