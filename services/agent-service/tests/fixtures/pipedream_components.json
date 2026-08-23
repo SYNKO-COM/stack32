@@ -1,0 +1,1786 @@
+[
+ {
+  "key": "_0codekit-read-barcode",
+  "app": {
+   "name_slug": "_0codekit"
+  },
+  "configurable_props": [
+   {
+    "name": "_0codekit",
+    "type": "app",
+    "app": "_0codekit"
+   },
+   {
+    "name": "file",
+    "type": "string",
+    "label": "File Path or URL"
+   },
+   {
+    "name": "syncDir",
+    "type": "dir",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "_1crm-update-lead",
+  "app": {
+   "name_slug": "_1crm"
+  },
+  "configurable_props": [
+   {
+    "name": "_1crm",
+    "type": "app",
+    "app": "_1crm"
+   },
+   {
+    "name": "checkDuplicates",
+    "type": "boolean",
+    "label": "Check Duplicates"
+   },
+   {
+    "name": "leadId",
+    "type": "string",
+    "label": "Lead ID",
+    "remoteOptions": true
+   }
+  ]
+ },
+ {
+  "key": "_2markdown-url-to-markdown",
+  "app": {
+   "name_slug": "_2markdown"
+  },
+  "configurable_props": [
+   {
+    "name": "_2markdown",
+    "type": "app",
+    "app": "_2markdown"
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "label": "URL"
+   },
+   {
+    "name": "js",
+    "type": "boolean",
+    "label": "Include Javascript Support",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "_46elks-send-sms",
+  "app": {
+   "name_slug": "_46elks"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "_46elks"
+   },
+   {
+    "name": "from",
+    "type": "string",
+    "label": "From Phone Number",
+    "remoteOptions": true
+   },
+   {
+    "name": "to",
+    "type": "string",
+    "label": "To Phone Number",
+    "remoteOptions": true
+   },
+   {
+    "name": "message",
+    "type": "string",
+    "label": "Message Text"
+   },
+   {
+    "name": "whendelivered",
+    "type": "string",
+    "label": "Webhook URL",
+    "optional": true
+   },
+   {
+    "name": "flashSms",
+    "type": "boolean",
+    "label": "Flash SMS",
+    "optional": true
+   },
+   {
+    "name": "dontLog",
+    "type": "boolean",
+    "label": "Don't Log",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "_8x8_connect-send-sms",
+  "app": {
+   "name_slug": "_8x8_connect"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "_8x8_connect"
+   },
+   {
+    "name": "destination",
+    "type": "string",
+    "label": "Destination"
+   },
+   {
+    "name": "text",
+    "type": "string",
+    "label": "Text"
+   }
+  ]
+ },
+ {
+  "key": "slack_v2-set-channel-description",
+  "app": {
+   "name_slug": "_descript"
+  },
+  "configurable_props": [
+   {
+    "name": "slack",
+    "type": "app",
+    "app": "slack_v2"
+   },
+   {
+    "name": "conversation",
+    "type": "string",
+    "label": "Channel",
+    "remoteOptions": true
+   },
+   {
+    "name": "purpose",
+    "type": "string",
+    "label": "Purpose"
+   }
+  ]
+ },
+ {
+  "key": "_twocaptcha-submit-captcha",
+  "app": {
+   "name_slug": "_twocaptcha"
+  },
+  "configurable_props": [
+   {
+    "name": "_twocaptcha",
+    "type": "app",
+    "app": "_twocaptcha"
+   },
+   {
+    "name": "taskType",
+    "type": "string",
+    "label": "Task Type"
+   },
+   {
+    "name": "languagePool",
+    "type": "string",
+    "label": "Language Pool",
+    "optional": true
+   },
+   {
+    "name": "softId",
+    "type": "integer",
+    "label": "Soft Id",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "ably-publish-push-notification",
+  "app": {
+   "name_slug": "ably"
+  },
+  "configurable_props": [
+   {
+    "name": "ably",
+    "type": "app",
+    "app": "ably"
+   },
+   {
+    "name": "channelName",
+    "label": "Channel Name",
+    "type": "string"
+   },
+   {
+    "name": "notificationTitle",
+    "label": "Notification Title",
+    "type": "string"
+   },
+   {
+    "name": "notificationBody",
+    "label": "Notification Body",
+    "type": "string"
+   },
+   {
+    "name": "notificationData",
+    "label": "Notification Data",
+    "type": "object"
+   }
+  ]
+ },
+ {
+  "key": "abstract-validate-email",
+  "app": {
+   "name_slug": "abstract"
+  },
+  "configurable_props": [
+   {
+    "name": "abstract",
+    "type": "app",
+    "app": "abstract"
+   },
+   {
+    "name": "emailAddress",
+    "type": "string",
+    "label": "Email Address"
+   },
+   {
+    "name": "autoCorrect",
+    "type": "boolean",
+    "label": "Auto Correct",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "accelo-update-contact",
+  "app": {
+   "name_slug": "accelo"
+  },
+  "configurable_props": [
+   {
+    "name": "accelo",
+    "type": "app",
+    "app": "accelo"
+   },
+   {
+    "name": "contactId",
+    "label": "Contact ID",
+    "type": "string",
+    "remoteOptions": true
+   },
+   {
+    "name": "firstname",
+    "label": "First Name",
+    "type": "string",
+    "optional": true
+   },
+   {
+    "name": "middlename",
+    "label": "Middle Name",
+    "type": "string",
+    "optional": true
+   },
+   {
+    "name": "surname",
+    "label": "Surname",
+    "type": "string",
+    "optional": true
+   },
+   {
+    "name": "username",
+    "label": "Username",
+    "type": "string",
+    "optional": true
+   },
+   {
+    "name": "password",
+    "label": "Password",
+    "type": "string",
+    "optional": true
+   },
+   {
+    "name": "title",
+    "label": "Title",
+    "type": "string",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "accredible-update-credential",
+  "app": {
+   "name_slug": "accredible"
+  },
+  "configurable_props": [
+   {
+    "name": "accredible",
+    "type": "app",
+    "app": "accredible"
+   },
+   {
+    "name": "credentialId",
+    "type": "string",
+    "label": "Credential ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "email",
+    "type": "string",
+    "label": "Recipient Email"
+   },
+   {
+    "name": "name",
+    "type": "string",
+    "label": "Recipient Name"
+   },
+   {
+    "name": "groupId",
+    "type": "string",
+    "label": "Group ID",
+    "remoteOptions": true,
+    "optional": true
+   },
+   {
+    "name": "credentialData",
+    "type": "object",
+    "label": "Credential Data",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "accuranker-list-domain-id-options",
+  "app": {
+   "name_slug": "accuranker"
+  },
+  "configurable_props": [
+   {
+    "name": "accuranker",
+    "type": "app",
+    "app": "accuranker"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "accuweather-get-location-key",
+  "app": {
+   "name_slug": "accuweather"
+  },
+  "configurable_props": [
+   {
+    "name": "accuweather",
+    "type": "app",
+    "app": "accuweather"
+   },
+   {
+    "name": "locationQuery",
+    "type": "string",
+    "label": "Location Query"
+   }
+  ]
+ },
+ {
+  "key": "acelle_mail-subscribe-customer-to-plan",
+  "app": {
+   "name_slug": "acelle_mail"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "acelle_mail"
+   },
+   {
+    "name": "customerId",
+    "type": "string",
+    "label": "Customer ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "planId",
+    "type": "string",
+    "label": "Plan ID",
+    "remoteOptions": true
+   }
+  ]
+ },
+ {
+  "key": "actitime-modify-leave-time",
+  "app": {
+   "name_slug": "actitime"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "actitime"
+   },
+   {
+    "name": "userId",
+    "type": "string",
+    "label": "User ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "date",
+    "type": "string",
+    "label": "Date"
+   },
+   {
+    "name": "leaveTypeId",
+    "type": "string",
+    "label": "Leave Type ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "leaveTime",
+    "type": "integer",
+    "label": "Leave Time"
+   }
+  ]
+ },
+ {
+  "key": "activecalculator-list-calculator-ids-options",
+  "app": {
+   "name_slug": "activecalculator"
+  },
+  "configurable_props": [
+   {
+    "name": "activecalculator",
+    "type": "app",
+    "app": "activecalculator"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "acymailing-list-list-ids-options",
+  "app": {
+   "name_slug": "acymailing"
+  },
+  "configurable_props": [
+   {
+    "name": "acymailing",
+    "type": "app",
+    "app": "acymailing"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "adalo-update-record",
+  "app": {
+   "name_slug": "adalo"
+  },
+  "configurable_props": [
+   {
+    "name": "adalo",
+    "type": "app",
+    "app": "adalo"
+   },
+   {
+    "name": "recordId",
+    "label": "Record ID",
+    "type": "integer"
+   },
+   {
+    "name": "data",
+    "label": "Data",
+    "type": "string"
+   }
+  ]
+ },
+ {
+  "key": "addevent-list-event-id-options",
+  "app": {
+   "name_slug": "addevent"
+  },
+  "configurable_props": [
+   {
+    "name": "addevent",
+    "type": "app",
+    "app": "addevent"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "addressfinder-verify-email",
+  "app": {
+   "name_slug": "addressfinder"
+  },
+  "configurable_props": [
+   {
+    "name": "addressfinder",
+    "type": "app",
+    "app": "addressfinder"
+   },
+   {
+    "name": "email",
+    "type": "string",
+    "label": "Email Address"
+   },
+   {
+    "name": "domain",
+    "type": "string",
+    "label": "Domain",
+    "optional": true
+   },
+   {
+    "name": "features",
+    "type": "string[]",
+    "label": "Features",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "addresszen-verify-correct-us-address-zip-code",
+  "app": {
+   "name_slug": "addresszen"
+  },
+  "configurable_props": [
+   {
+    "name": "addresszen",
+    "type": "app",
+    "app": "addresszen"
+   },
+   {
+    "name": "addressLine",
+    "type": "string",
+    "label": "Address Line"
+   },
+   {
+    "name": "zipCode",
+    "type": "string",
+    "label": "Zip Code"
+   }
+  ]
+ },
+ {
+  "key": "adhook-list-post-id-options",
+  "app": {
+   "name_slug": "adhook"
+  },
+  "configurable_props": [
+   {
+    "name": "adhook",
+    "type": "app",
+    "app": "adhook"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "adobe_pdf_services-extract-text-from-pdf",
+  "app": {
+   "name_slug": "adobe_pdf_services"
+  },
+  "configurable_props": [
+   {
+    "name": "adobe",
+    "type": "app",
+    "app": "adobe_pdf_services"
+   },
+   {
+    "name": "filePath",
+    "type": "string",
+    "label": "File Path"
+   },
+   {
+    "name": "filename",
+    "type": "string",
+    "label": "File Name"
+   },
+   {
+    "name": "syncDir",
+    "type": "dir"
+   }
+  ]
+ },
+ {
+  "key": "adobe_photoshop-remove-background-from-image",
+  "app": {
+   "name_slug": "adobe_photoshop"
+  },
+  "configurable_props": [
+   {
+    "name": "adobePhotoshop",
+    "type": "app",
+    "app": "adobe_photoshop"
+   },
+   {
+    "name": "inputHref",
+    "type": "string",
+    "label": "Input Href"
+   },
+   {
+    "name": "inputStorage",
+    "type": "string",
+    "label": "Input Storage"
+   },
+   {
+    "name": "optimize",
+    "type": "string",
+    "label": "Optimize",
+    "optional": true
+   },
+   {
+    "name": "outputHref",
+    "type": "string",
+    "label": "Output Href"
+   },
+   {
+    "name": "outputStorage",
+    "type": "string",
+    "label": "Output Storage"
+   },
+   {
+    "name": "overwrite",
+    "type": "boolean",
+    "label": "Overwrite",
+    "optional": true
+   },
+   {
+    "name": "maskFormat",
+    "type": "string",
+    "label": "Mask Format",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "adrapid-list-template-id-options",
+  "app": {
+   "name_slug": "adrapid"
+  },
+  "configurable_props": [
+   {
+    "name": "adrapid",
+    "type": "app",
+    "app": "adrapid"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "adversus-create-or-update-lead",
+  "app": {
+   "name_slug": "adversus"
+  },
+  "configurable_props": [
+   {
+    "name": "adversus",
+    "type": "app",
+    "app": "adversus"
+   },
+   {
+    "name": "firstName",
+    "type": "string",
+    "label": "First Name",
+    "optional": true
+   },
+   {
+    "name": "lastName",
+    "type": "string",
+    "label": "Last Name",
+    "optional": true
+   },
+   {
+    "name": "email",
+    "type": "string",
+    "label": "Email",
+    "optional": true
+   },
+   {
+    "name": "phone",
+    "type": "string",
+    "label": "Phone",
+    "optional": true
+   },
+   {
+    "name": "leadId",
+    "type": "string",
+    "label": "Lead ID",
+    "optional": true
+   },
+   {
+    "name": "additionalFields",
+    "type": "object",
+    "label": "Additional Fields",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "adyen-submit-details",
+  "app": {
+   "name_slug": "adyen"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "adyen"
+   },
+   {
+    "name": "details",
+    "type": "object",
+    "label": "Details"
+   },
+   {
+    "name": "authenticationData",
+    "type": "string",
+    "label": "Authentication Data",
+    "optional": true
+   },
+   {
+    "name": "paymentData",
+    "type": "string",
+    "label": "Payment Data",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "adyntel-tiktok-search",
+  "app": {
+   "name_slug": "adyntel"
+  },
+  "configurable_props": [
+   {
+    "name": "adyntel",
+    "type": "app",
+    "app": "adyntel"
+   },
+   {
+    "name": "keyword",
+    "type": "string",
+    "label": "Keyword"
+   }
+  ]
+ },
+ {
+  "key": "aftership-list-tracking-id-options",
+  "app": {
+   "name_slug": "aftership"
+  },
+  "configurable_props": [
+   {
+    "name": "aftership",
+    "type": "app",
+    "app": "aftership"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "agentset-search-namespace",
+  "app": {
+   "name_slug": "agentset"
+  },
+  "configurable_props": [
+   {
+    "name": "agentset",
+    "type": "app",
+    "app": "agentset"
+   },
+   {
+    "name": "namespaceId",
+    "type": "string",
+    "label": "Namespace ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "label": "Query"
+   },
+   {
+    "name": "topK",
+    "type": "integer",
+    "label": "Top K",
+    "optional": true
+   },
+   {
+    "name": "rerank",
+    "type": "boolean",
+    "label": "Rerank",
+    "optional": true
+   },
+   {
+    "name": "rerankLimit",
+    "type": "integer",
+    "label": "Rerank Limit",
+    "optional": true
+   },
+   {
+    "name": "filter",
+    "type": "object",
+    "label": "Filter",
+    "optional": true
+   },
+   {
+    "name": "minScore",
+    "type": "string",
+    "label": "Minimum Score",
+    "optional": true
+   },
+   {
+    "name": "includeRelationship",
+    "type": "boolean",
+    "label": "Include Relationship",
+    "optional": true
+   },
+   {
+    "name": "includeMetadata",
+    "type": "boolean",
+    "label": "Include Metadata",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "agify-get-age-from-names",
+  "app": {
+   "name_slug": "agify"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "agify"
+   },
+   {
+    "name": "names",
+    "type": "string[]",
+    "label": "Names"
+   },
+   {
+    "name": "countryId",
+    "type": "string",
+    "label": "Country",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "agiliron-list-contact-name-options",
+  "app": {
+   "name_slug": "agiliron"
+  },
+  "configurable_props": [
+   {
+    "name": "agiliron",
+    "type": "app",
+    "app": "agiliron"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "agility_cms-get-item",
+  "app": {
+   "name_slug": "agility_cms"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "agility_cms"
+   },
+   {
+    "name": "locale",
+    "type": "string",
+    "label": "Locale"
+   },
+   {
+    "name": "itemId",
+    "type": "string",
+    "label": "Item ID",
+    "remoteOptions": true
+   }
+  ]
+ },
+ {
+  "key": "agrello-list-folder-id-options",
+  "app": {
+   "name_slug": "agrello"
+  },
+  "configurable_props": [
+   {
+    "name": "agrello",
+    "type": "app",
+    "app": "agrello"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "ahrefs-get-referring-domains",
+  "app": {
+   "name_slug": "ahrefs"
+  },
+  "configurable_props": [
+   {
+    "name": "ahrefs",
+    "type": "app",
+    "app": "ahrefs"
+   },
+   {
+    "name": "target",
+    "type": "string",
+    "label": "Target"
+   },
+   {
+    "name": "select",
+    "type": "string[]",
+    "label": "Select"
+   },
+   {
+    "name": "mode",
+    "type": "string",
+    "label": "Mode",
+    "optional": true
+   },
+   {
+    "name": "limit",
+    "type": "integer",
+    "label": "Limit",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "ai_textraction-extract-data",
+  "app": {
+   "name_slug": "ai_textraction"
+  },
+  "configurable_props": [
+   {
+    "name": "aiTextraction",
+    "type": "app",
+    "app": "ai_textraction"
+   },
+   {
+    "name": "text",
+    "type": "string",
+    "label": "Text"
+   },
+   {
+    "name": "entities",
+    "type": "string[]",
+    "label": "Entities"
+   }
+  ]
+ },
+ {
+  "key": "cloudflare_api_key-create-key-value-pairs",
+  "app": {
+   "name_slug": "air"
+  },
+  "configurable_props": [
+   {
+    "name": "cloudflare",
+    "type": "app",
+    "app": "cloudflare_api_key"
+   },
+   {
+    "name": "account",
+    "type": "string",
+    "label": "Account ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "namespace",
+    "type": "string",
+    "label": "Namespace",
+    "remoteOptions": true
+   },
+   {
+    "name": "values",
+    "type": "object",
+    "label": "Values"
+   }
+  ]
+ },
+ {
+  "key": "airbrake-list-project-id-options",
+  "app": {
+   "name_slug": "airbrake"
+  },
+  "configurable_props": [
+   {
+    "name": "airbrake",
+    "type": "app",
+    "app": "airbrake"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "aircall-list-call-options",
+  "app": {
+   "name_slug": "aircall"
+  },
+  "configurable_props": [
+   {
+    "name": "aircall",
+    "type": "app",
+    "app": "aircall"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "airfocus-update-item",
+  "app": {
+   "name_slug": "airfocus"
+  },
+  "configurable_props": [
+   {
+    "name": "airfocus",
+    "type": "app",
+    "app": "airfocus"
+   },
+   {
+    "name": "workspaceId",
+    "type": "string",
+    "label": "Workspace ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "itemId",
+    "type": "string",
+    "label": "Item ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "name",
+    "type": "string",
+    "label": "Name",
+    "optional": true
+   },
+   {
+    "name": "statusId",
+    "type": "string",
+    "label": "Status ID",
+    "remoteOptions": true,
+    "optional": true
+   },
+   {
+    "name": "description",
+    "type": "object",
+    "label": "Description",
+    "optional": true
+   },
+   {
+    "name": "fields",
+    "type": "object",
+    "label": "Fields",
+    "optional": true
+   },
+   {
+    "name": "color",
+    "type": "string",
+    "label": "Color",
+    "optional": true
+   },
+   {
+    "name": "archived",
+    "type": "boolean",
+    "label": "Archived",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "airops-run-workflow",
+  "app": {
+   "name_slug": "airops"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "airops"
+   },
+   {
+    "name": "appId",
+    "label": "App ID",
+    "type": "string"
+   },
+   {
+    "name": "inputs",
+    "label": "Inputs",
+    "type": "object"
+   },
+   {
+    "name": "asynchronous",
+    "label": "Run Asynchronous",
+    "type": "boolean",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "airplane-submit-prompt",
+  "app": {
+   "name_slug": "airplane"
+  },
+  "configurable_props": [
+   {
+    "name": "airplane",
+    "type": "app",
+    "app": "airplane"
+   },
+   {
+    "name": "runId",
+    "type": "string",
+    "label": "Run",
+    "remoteOptions": true
+   },
+   {
+    "name": "promptId",
+    "type": "string",
+    "label": "Prompt",
+    "remoteOptions": true
+   }
+  ]
+ },
+ {
+  "key": "airtable_oauth-update-table",
+  "app": {
+   "name_slug": "airtable_oauth"
+  },
+  "configurable_props": [
+   {
+    "name": "airtable",
+    "type": "app",
+    "app": "airtable_oauth"
+   },
+   {
+    "name": "baseId",
+    "type": "string",
+    "label": "Base",
+    "remoteOptions": true
+   },
+   {
+    "name": "warningAlert",
+    "type": "alert"
+   },
+   {
+    "name": "tableId",
+    "type": "string",
+    "label": "Table",
+    "remoteOptions": true
+   },
+   {
+    "name": "name",
+    "type": "string",
+    "label": "Name",
+    "optional": true
+   },
+   {
+    "name": "description",
+    "type": "string",
+    "label": "Description",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "airtop-list-session-id-options",
+  "app": {
+   "name_slug": "airtop"
+  },
+  "configurable_props": [
+   {
+    "name": "airtop",
+    "type": "app",
+    "app": "airtop"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "airweave-trigger-sync",
+  "app": {
+   "name_slug": "airweave"
+  },
+  "configurable_props": [
+   {
+    "name": "airweave",
+    "type": "app",
+    "app": "airweave"
+   },
+   {
+    "name": "collectionId",
+    "type": "string",
+    "label": "Collection",
+    "remoteOptions": true
+   },
+   {
+    "name": "sourceConnectionId",
+    "type": "string",
+    "label": "Source Connection",
+    "remoteOptions": true
+   }
+  ]
+ },
+ {
+  "key": "aivoov-convert-text-to-speech",
+  "app": {
+   "name_slug": "aivoov"
+  },
+  "configurable_props": [
+   {
+    "name": "aivoov",
+    "type": "app",
+    "app": "aivoov"
+   },
+   {
+    "name": "provider",
+    "type": "string",
+    "label": "Provider"
+   },
+   {
+    "name": "voiceId",
+    "type": "string",
+    "label": "Voice ID",
+    "remoteOptions": true
+   },
+   {
+    "name": "transcribeText",
+    "type": "string[]",
+    "label": "Transcribe Text"
+   },
+   {
+    "name": "engine",
+    "type": "string",
+    "label": "Engine"
+   },
+   {
+    "name": "transcribeSsmlStyle",
+    "type": "string",
+    "label": "Transcribe SSML Style",
+    "optional": true
+   },
+   {
+    "name": "transcribeSsmlSpkRate",
+    "type": "integer",
+    "label": "Transcribe SSML Speak Rate",
+    "optional": true
+   },
+   {
+    "name": "transcribeSsmlVolume",
+    "type": "integer",
+    "label": "Transcribe SSML Volume",
+    "optional": true
+   },
+   {
+    "name": "transcribeSsmlPitchRate",
+    "type": "integer",
+    "label": "Transcribe SSML Pitch Rate",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "akeneo-submit-product-for-approval",
+  "app": {
+   "name_slug": "akeneo"
+  },
+  "configurable_props": [
+   {
+    "name": "akeneo",
+    "type": "app",
+    "app": "akeneo"
+   },
+   {
+    "name": "productId",
+    "type": "string",
+    "label": "Product Identifier",
+    "remoteOptions": true
+   }
+  ]
+ },
+ {
+  "key": "akismet-submit-spam",
+  "app": {
+   "name_slug": "akismet"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "akismet"
+   },
+   {
+    "name": "blog",
+    "type": "string",
+    "label": "Blog URL"
+   },
+   {
+    "name": "userIp",
+    "type": "string",
+    "label": "User IP"
+   },
+   {
+    "name": "permalink",
+    "type": "string",
+    "label": "Permalink"
+   },
+   {
+    "name": "userAgent",
+    "type": "string",
+    "label": "User Agent",
+    "optional": true
+   },
+   {
+    "name": "referrer",
+    "type": "string",
+    "label": "Referrer URL",
+    "optional": true
+   },
+   {
+    "name": "commentAuthor",
+    "type": "string",
+    "label": "Comment Author Name",
+    "optional": true
+   },
+   {
+    "name": "commentAuthorEmail",
+    "type": "string",
+    "label": "Comment Author Email",
+    "optional": true
+   },
+   {
+    "name": "commentAuthorUrl",
+    "type": "string",
+    "label": "Comment Author URL",
+    "optional": true
+   },
+   {
+    "name": "commentContent",
+    "type": "string",
+    "label": "Comment Content",
+    "optional": true
+   },
+   {
+    "name": "commentType",
+    "type": "string",
+    "label": "Comment Type",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "akkio-make-prediction",
+  "app": {
+   "name_slug": "akkio"
+  },
+  "configurable_props": [
+   {
+    "name": "akkio",
+    "type": "app",
+    "app": "akkio"
+   },
+   {
+    "name": "data",
+    "type": "string[]",
+    "label": "Data"
+   },
+   {
+    "name": "modelId",
+    "type": "string",
+    "label": "Model ID",
+    "remoteOptions": true
+   }
+  ]
+ },
+ {
+  "key": "albus-ask-question",
+  "app": {
+   "name_slug": "albus"
+  },
+  "configurable_props": [
+   {
+    "name": "albus",
+    "type": "app",
+    "app": "albus"
+   },
+   {
+    "name": "prompt",
+    "type": "string",
+    "label": "Prompt"
+   },
+   {
+    "name": "waitForCompletion",
+    "type": "boolean",
+    "label": "Wait for Completion",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "alegra-list-warehouse-options",
+  "app": {
+   "name_slug": "alegra"
+  },
+  "configurable_props": [
+   {
+    "name": "alegra",
+    "type": "app",
+    "app": "alegra"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "alerty-notify-devices",
+  "app": {
+   "name_slug": "alerty"
+  },
+  "configurable_props": [
+   {
+    "name": "alerty",
+    "type": "app",
+    "app": "alerty"
+   },
+   {
+    "name": "message",
+    "type": "string",
+    "label": "Message"
+   },
+   {
+    "name": "title",
+    "type": "string",
+    "label": "Title",
+    "optional": true
+   },
+   {
+    "name": "image",
+    "type": "string",
+    "label": "Image URL",
+    "optional": true
+   },
+   {
+    "name": "icon",
+    "type": "string",
+    "label": "Icon URL",
+    "optional": true
+   },
+   {
+    "name": "deviceId",
+    "type": "string[]",
+    "label": "Device ID",
+    "optional": true
+   },
+   {
+    "name": "urgency",
+    "type": "string",
+    "label": "Urgency",
+    "optional": true
+   },
+   {
+    "name": "actions",
+    "type": "string[]",
+    "label": "Actions",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "algodocs-upload-file",
+  "app": {
+   "name_slug": "algodocs"
+  },
+  "configurable_props": [
+   {
+    "name": "algodocs",
+    "type": "app",
+    "app": "algodocs"
+   },
+   {
+    "name": "extractorId",
+    "type": "string",
+    "label": "Extractor ID"
+   },
+   {
+    "name": "folderId",
+    "type": "string",
+    "label": "Folder ID"
+   },
+   {
+    "name": "file",
+    "type": "string",
+    "label": "File"
+   },
+   {
+    "name": "syncDir",
+    "type": "dir",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "algomo-send-message-to-chatbot",
+  "app": {
+   "name_slug": "algomo"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "algomo"
+   },
+   {
+    "name": "messageText",
+    "type": "string",
+    "label": "Message Text"
+   },
+   {
+    "name": "conversationId",
+    "type": "string",
+    "label": "Conversation ID",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "all_images_ai-list-image-id-options",
+  "app": {
+   "name_slug": "all_images_ai"
+  },
+  "configurable_props": [
+   {
+    "name": "all_images_ai",
+    "type": "app",
+    "app": "all_images_ai"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ },
+ {
+  "key": "allocadence-create-purchase-order",
+  "app": {
+   "name_slug": "allocadence"
+  },
+  "configurable_props": [
+   {
+    "name": "allocadence",
+    "type": "app",
+    "app": "allocadence"
+   },
+   {
+    "name": "supplierId",
+    "type": "integer",
+    "label": "Supplier Id",
+    "optional": true
+   },
+   {
+    "name": "supplierName",
+    "type": "string",
+    "label": "Supplier Name",
+    "optional": true
+   },
+   {
+    "name": "warehouseId",
+    "type": "integer",
+    "label": "Warehouse Id",
+    "optional": true
+   },
+   {
+    "name": "warehouseName",
+    "type": "string",
+    "label": "Warehouse Name",
+    "optional": true
+   },
+   {
+    "name": "clientId",
+    "type": "integer",
+    "label": "Client Id",
+    "optional": true
+   },
+   {
+    "name": "clientName",
+    "type": "string",
+    "label": "Client Name",
+    "optional": true
+   },
+   {
+    "name": "orderNumber",
+    "type": "string",
+    "label": "Order Number",
+    "optional": true
+   },
+   {
+    "name": "draft",
+    "type": "boolean",
+    "label": "Draft",
+    "optional": true
+   },
+   {
+    "name": "requiredByDate",
+    "type": "string",
+    "label": "Required By.",
+    "optional": true
+   },
+   {
+    "name": "projectNumber",
+    "type": "string",
+    "label": "Project Number",
+    "optional": true
+   },
+   {
+    "name": "notes",
+    "type": "string",
+    "label": "Notes",
+    "optional": true
+   },
+   {
+    "name": "items",
+    "type": "string[]",
+    "label": "Items",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "alpaca-get-account-info",
+  "app": {
+   "name_slug": "alpaca"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "alpaca"
+   },
+   {
+    "name": "isPaperAPI",
+    "type": "boolean",
+    "label": "Paper API",
+    "optional": true
+   }
+  ]
+ },
+ {
+  "key": "alt_text_generator_ai-generate-alt-text",
+  "app": {
+   "name_slug": "alt_text_generator_ai"
+  },
+  "configurable_props": [
+   {
+    "name": "altTextGeneratorAi",
+    "type": "app",
+    "app": "alt_text_generator_ai"
+   },
+   {
+    "name": "image",
+    "type": "string",
+    "label": "Image URL"
+   }
+  ]
+ },
+ {
+  "key": "altiria-send-sms",
+  "app": {
+   "name_slug": "altiria"
+  },
+  "configurable_props": [
+   {
+    "name": "app",
+    "type": "app",
+    "app": "altiria"
+   },
+   {
+    "name": "destination",
+    "type": "string[]",
+    "label": "Destination Phone Numbers"
+   },
+   {
+    "name": "msg",
+    "type": "string",
+    "label": "Message"
+   }
+  ]
+ },
+ {
+  "key": "altoviz-list-invoice-id-options",
+  "app": {
+   "name_slug": "altoviz"
+  },
+  "configurable_props": [
+   {
+    "name": "altoviz",
+    "type": "app",
+    "app": "altoviz"
+   },
+   {
+    "name": "page",
+    "type": "integer",
+    "label": "Page"
+   }
+  ]
+ }
+]

@@ -79,6 +79,88 @@ def _provider_event_id(payload: Any, raw_body: bytes) -> str:
     return hashlib.sha256(raw_body).hexdigest()[:40]
 
 
+#: Fields that change between two deliveries of the same underlying event.
+_VOLATILE_EVENT_KEYS = frozenset(
+    {
+        "id",
+        "event_id",
+        "delivery_id",
+        "timestamp",
+        "ts",
+        "received_at",
+        "created_at",
+        "updated_at",
+        "edited_timestamp",
+        "nonce",
+        "webhook_id",
+        "attempt",
+    }
+)
+
+#: How far back a replay still counts as the same event.
+DUPLICATE_WINDOW_SECONDS = 900
+
+
+def _content_fingerprint(payload: Any) -> str:
+    """Identify an event by what it says, not by the id it arrived under.
+
+    Redeploying a source — which publishing an agent does — makes Pipedream
+    replay recent history under fresh event ids, so id-based dedup let one
+    Discord message be handled twice: two Trello cards, two Airtable rows, two
+    Notion pages and two Slack posts for a single question. Hashing the payload
+    minus its volatile parts catches the replay.
+    """
+    def strip(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                k: strip(v)
+                for k, v in sorted(value.items())
+                if k.lower() not in _VOLATILE_EVENT_KEYS
+            }
+        if isinstance(value, list):
+            return [strip(v) for v in value]
+        return value
+
+    try:
+        canonical = json.dumps(strip(payload), sort_keys=True, default=str)
+    except Exception:  # noqa: BLE001 - a fingerprint must never break ingestion
+        canonical = repr(payload)
+    return hashlib.sha256(canonical.encode()).hexdigest()[:40]
+
+
+async def _seen_recently(client: Any, trigger_id: str, fingerprint: str) -> bool:
+    """True when this trigger already handled the same content moments ago."""
+    since = (datetime.now(UTC) - timedelta(seconds=DUPLICATE_WINDOW_SECONDS)).isoformat()
+    try:
+        response = await client.get(
+            "/agent_trigger_events",
+            params={
+                "trigger_id": f"eq.{trigger_id}",
+                "created_at": f"gte.{since}",
+                "select": "payload",
+                "order": "created_at.desc",
+                "limit": "25",
+            },
+        )
+    except Exception:  # noqa: BLE001 - never drop an event over a lookup failure
+        logger.warning("duplicate_lookup_failed trigger=%s", trigger_id, exc_info=True)
+        return False
+    if response.status_code >= 400:
+        return False
+    for row in response.json() or []:
+        if not isinstance(row, dict):
+            continue
+        stored = row.get("payload")
+        if isinstance(stored, str):
+            try:
+                stored = json.loads(stored)
+            except ValueError:
+                continue
+        if _content_fingerprint(stored) == fingerprint:
+            return True
+    return False
+
+
 def _unwrap_pd(data: Any) -> dict[str, Any]:
     if isinstance(data, dict) and isinstance(data.get("data"), dict):
         return data["data"]
@@ -688,6 +770,15 @@ async def ingest_pipedream_event(
             return {"accepted": False, "code": "listen_expired"}
 
     event_id = _provider_event_id(payload, raw_body)
+
+    # Publishing an agent redeploys its source, and Pipedream then replays
+    # recent history under fresh ids — so id-based dedup let one Discord
+    # message be handled twice, with two of everything it creates.
+    fingerprint = _content_fingerprint(payload)
+    if await _seen_recently(client, trigger_id, fingerprint):
+        logger.info("trigger_event_replayed trigger=%s event=%s", trigger_id, event_id)
+        return {"accepted": True, "duplicate": True, "code": "replayed"}
+
     insert = await client.post(
         "/agent_trigger_events",
         json={
