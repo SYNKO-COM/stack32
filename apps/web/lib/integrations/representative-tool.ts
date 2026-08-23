@@ -43,6 +43,8 @@ const CONTAINER_OBJECTS = [
   "project",
   "folder",
   "table",
+  "field",
+  "column",
 ];
 
 function actionOf(toolId: string): string {
@@ -77,9 +79,11 @@ function score(toolId: string): number {
 export function representativeToolId(toolIds: readonly string[]): string | undefined {
   const usable = toolIds.filter((id) => typeof id === "string" && id.trim().length > 0);
   if (usable.length === 0) return undefined;
-  // Ties keep the order they came in. That order is the builder's own ranking
-  // of the mission, so the first action it chose for the app is the one the
-  // agent is most likely to run — sorting it away picked `create-reminder` to
-  // stand for Slack on an agent that posts summaries to a channel.
-  return [...usable].sort((a, b) => score(a) - score(b))[0];
+  // Among equally good actions the shortest name is the canonical one: an app
+  // calls its everyday write `create-page` and reserves longer names for the
+  // variants — `create-page-from-database`, `send-file-upload`. Original order
+  // breaks any remaining tie, so the drawer asks the same thing every visit.
+  return [...usable].sort(
+    (a, b) => score(a) - score(b) || actionOf(a).length - actionOf(b).length,
+  )[0];
 }

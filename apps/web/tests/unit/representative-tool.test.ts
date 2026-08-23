@@ -38,16 +38,33 @@ describe("representative tool for an app drawer", () => {
     expect(b).toBe("pd:slack-send-message");
   });
 
-  it("keeps the builder's ranking when several actions are equally good", () => {
-    // The spec lists tools in the order the builder chose them for the
-    // mission, so the first equally-good action is the likeliest to run.
+  it("picks the canonical write among equally good actions", () => {
+    // An app names its everyday write plainly and reserves longer names for
+    // the variants, so the shortest of the equals is the one the agent runs.
     expect(
       representativeToolId([
-        "pd:slack_v2-send-message",
         "pd:slack_v2-create-reminder",
         "pd:slack_v2-send-message-advanced",
+        "pd:slack_v2-send-message",
       ]),
     ).toBe("pd:slack_v2-send-message");
+    expect(
+      representativeToolId([
+        "pd:notion-send-file-upload",
+        "pd:notion-create-page-from-database",
+        "pd:notion-create-page",
+      ]),
+    ).toBe("pd:notion-create-page");
+  });
+
+  it("treats a schema object as structure, not as a record", () => {
+    // Creating a field is adding a column, not writing the row the agent fills.
+    expect(
+      representativeToolId([
+        "pd:airtable_oauth-create-field",
+        "pd:airtable_oauth-create-or-update-record",
+      ]),
+    ).toBe("pd:airtable_oauth-create-or-update-record");
   });
 
   it("does not mistake a destination for a container", () => {
