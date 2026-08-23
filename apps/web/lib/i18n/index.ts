@@ -5,14 +5,13 @@ import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "./locales";
 import { NAMESPACES, resources } from "./resources";
 
 /**
- * Always initialize on the default locale.
+ * Initialize on the default locale.
  *
- * Do NOT auto-detect language at module load: Client Components are SSR'd
- * with this singleton, and a browser LanguageDetector would switch to `fr`
- * on the client before hydration while the server stayed on `en` — causing
- * a hydration mismatch (and a costly client re-render).
+ * Never auto-detect at module load: a browser LanguageDetector would switch
+ * the client to `fr` before hydration while the server stayed on `en`.
  *
- * Preferred language is applied after mount in `I18nProvider`.
+ * The request locale is applied through `I18nProvider`, which renders server
+ * and client from the same cookie-derived value — see `getI18nForLocale`.
  */
 if (!i18n.isInitialized) {
   void i18n.use(initReactI18next).init({
@@ -43,3 +42,30 @@ for (const [lng, namespaces] of Object.entries(resources)) {
 }
 
 export default i18n;
+
+/**
+ * Return an i18next instance already set to `locale`, for the current render.
+ *
+ * Rendering the server in English and switching to French after mount only
+ * avoided a mismatch on the very first page of a session: once
+ * `changeLanguage` had run, every later SSR render produced English markup
+ * while the client rendered French. React then threw away the server tree and
+ * re-rendered — losing event handlers for a beat and logging a hydration
+ * error on every navigation.
+ *
+ * On the server each request gets its own clone, so two concurrent visitors
+ * with different locales can never observe each other's language. On the
+ * client the singleton is reused, so component state survives.
+ */
+export function getI18nForLocale(locale: string) {
+  if (typeof window === "undefined") {
+    // Per-request clone: mutating the shared singleton here would leak one
+    // visitor's language into another's response.
+    return i18n.cloneInstance({ lng: locale });
+  }
+  if (i18n.language !== locale) {
+    // Resources are bundled, so this resolves synchronously — safe before paint.
+    void i18n.changeLanguage(locale);
+  }
+  return i18n;
+}
