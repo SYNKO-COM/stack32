@@ -120,9 +120,40 @@ async def _file_tree(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     return {"tree": tree[:400]}
 
 
+# Paths the coding agent must never write to. `vendor/` carries the platform
+# runtime the generated project imports; it is shipped so the sandbox can run at
+# all, not as material to edit. Left writable, the agent treats a failing import
+# as a bug in the runtime and starts patching platform code — a real run spent
+# four of its twenty-five turns rewriting vendor/stack32_agent_runtime/context.py
+# instead of the user's agent.
+PROTECTED_PREFIXES = ("vendor/",)
+
+
+def _reject_if_protected(path: str) -> dict[str, Any] | None:
+    # Accept both workspace-relative and absolute sandbox paths.
+    normalized = str(path).replace("\\", "/")
+    marker = "/workspace/"
+    if marker in normalized:
+        normalized = normalized.split(marker, 1)[1]
+    normalized = normalized.lstrip("./")
+    if normalized.startswith(PROTECTED_PREFIXES):
+        return {
+            "ok": False,
+            "error": (
+                "This path is the platform runtime, shipped read-only so the project "
+                "can run. Fix the generated agent under src/ or tests/ instead."
+            ),
+            "code": "PROTECTED_PATH",
+            "path": path,
+        }
+    return None
+
+
 async def _create_file(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     path = str(args["path"])
     content = str(args["content"])
+    if (refused := _reject_if_protected(path)) is not None:
+        return refused
     await ctx.provider.write_file(ctx.handle, path, content)
     await ctx.engine.on_file_written(path, content)
     ctx.files_touched.add(path)
@@ -138,6 +169,8 @@ async def _apply_patch(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]
     """
     path = str(args["path"])
     old = str(args["old_string"])
+    if (refused := _reject_if_protected(path)) is not None:
+        return refused
     new = str(args["new_string"])
     current = await ctx.provider.read_file(ctx.handle, path)
     count = current.count(old)
@@ -155,6 +188,8 @@ async def _apply_patch(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]
 
 async def _delete_file(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     path = str(args["path"])
+    if (refused := _reject_if_protected(path)) is not None:
+        return refused
     await ctx.provider.delete_file(ctx.handle, path)
     ctx.files_touched.add(path)
     return {"ok": True, "path": path}

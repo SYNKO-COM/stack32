@@ -80,3 +80,79 @@ def test_vendoring_degrades_quietly_when_the_runtime_is_absent(monkeypatch):
 
     monkeypatch.setattr(rv, "_package_root", lambda: None)
     assert rv.runtime_files() == []
+
+
+async def _workspace():
+    from agent_service.sandbox.base import SandboxConfig
+    from agent_service.sandbox.local import LocalSandbox
+
+    provider = LocalSandbox()
+    handle = await provider.create_workspace(SandboxConfig(command_timeout_seconds=30))
+    return provider, handle
+
+
+async def test_the_agent_cannot_edit_the_vendored_runtime():
+    """A real run spent four of twenty-five turns rewriting the platform runtime.
+
+    Shipping the runtime into the workspace makes the project runnable, but the
+    agent then reads a failing import as a bug in the runtime and starts patching
+    platform code instead of the user's agent. Refuse the write outright.
+    """
+    from agent_service.builder.coding.tools import ToolContext, build_registry
+    from agent_service.builder.context.engine import ContextEngine
+
+    provider, handle = await _workspace()
+    try:
+        ctx = ToolContext(provider, handle, ContextEngine(provider, handle))
+        registry = build_registry()
+        for tool_id, args in (
+            ("workspace.create_file", {"path": "vendor/stack32_agent_runtime/model.py", "content": "x = 1"}),
+            ("workspace.apply_patch", {"path": "vendor/stack32_agent_runtime/model.py", "old_string": "a", "new_string": "b"}),
+            ("workspace.delete_file", {"path": "vendor/stack32_agent_runtime/__init__.py"}),
+        ):
+            result = await registry.get(tool_id).run(ctx, args)
+            assert result.get("code") == "PROTECTED_PATH", (tool_id, result)
+    finally:
+        await provider.destroy_workspace(handle)
+
+
+async def test_absolute_sandbox_paths_are_protected_too():
+    """The model works in absolute paths like /home/user/workspace/vendor/..."""
+    from agent_service.builder.coding.tools import ToolContext, build_registry
+    from agent_service.builder.context.engine import ContextEngine
+
+    provider, handle = await _workspace()
+    try:
+        ctx = ToolContext(provider, handle, ContextEngine(provider, handle))
+        result = await build_registry().get("workspace.create_file").run(
+            ctx,
+            {"path": "/home/user/workspace/vendor/stack32_agent_runtime/context.py", "content": "x = 1"},
+        )
+        assert result.get("code") == "PROTECTED_PATH", result
+    finally:
+        await provider.destroy_workspace(handle)
+
+
+async def test_the_agent_can_still_edit_its_own_project():
+    from agent_service.builder.coding.tools import ToolContext, build_registry
+    from agent_service.builder.context.engine import ContextEngine
+
+    provider, handle = await _workspace()
+    try:
+        ctx = ToolContext(provider, handle, ContextEngine(provider, handle))
+        result = await build_registry().get("workspace.create_file").run(
+            ctx, {"path": "src/agent/tools.py", "content": "x = 1\n"}
+        )
+        assert result.get("code") != "PROTECTED_PATH"
+        assert result.get("path") == "src/agent/tools.py"
+    finally:
+        await provider.destroy_workspace(handle)
+
+
+def test_the_indexer_skips_the_vendored_runtime():
+    from agent_service.builder.context.indexer import _is_vendored
+
+    root = "/home/user/workspace/"
+    assert _is_vendored(f"{root}vendor/stack32_agent_runtime/model.py", root) is True
+    assert _is_vendored(f"{root}src/agent/tools.py", root) is False
+    assert _is_vendored("vendor/stack32_agent_runtime/model.py", root) is True

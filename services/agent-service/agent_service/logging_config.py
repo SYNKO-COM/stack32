@@ -13,12 +13,30 @@ user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)
 agent_id_var: ContextVar[str | None] = ContextVar("agent_id", default=None)
 
 
+# Python level names map 1:1 onto Cloud Logging severities except WARN/FATAL.
+_CLOUD_SEVERITY = {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARNING": "WARNING",
+    "WARN": "WARNING",
+    "ERROR": "ERROR",
+    "CRITICAL": "CRITICAL",
+    "FATAL": "CRITICAL",
+}
+
+
 class JSONFormatter(logging.Formatter):
     """Format log records as single-line JSON objects."""
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, object] = {
             "timestamp": datetime.now(UTC).isoformat(),
+            # Cloud Logging reads "severity"; it ignores "level" entirely. Emitting
+            # only "level" meant every ERROR landed with default severity, so
+            # `severity>=ERROR` queries returned nothing and production errors were
+            # invisible — the sandbox build failures in this run had to be found by
+            # grepping raw text. "level" is kept for local readers.
+            "severity": _CLOUD_SEVERITY.get(record.levelname, record.levelname),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

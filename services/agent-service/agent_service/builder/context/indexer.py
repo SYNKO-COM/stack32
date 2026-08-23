@@ -132,6 +132,12 @@ def chunk_file(path: str, content: str) -> list[CodeChunk]:
     return _chunk_window(path, content)
 
 
+def _is_vendored(path: str, root_prefix: str) -> bool:
+    """The vendored platform runtime is not the project's code to read."""
+    rel = path[len(root_prefix):] if path.startswith(root_prefix) else path
+    return rel.lstrip("./").startswith("vendor/")
+
+
 async def index_workspace(
     provider: SandboxProvider,
     handle: WorkspaceHandle,
