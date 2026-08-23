@@ -57,6 +57,51 @@ def _with_checkpoint_search_path(db_url: str) -> str:
     )
 
 
+#: Asked of the checkpointer connection after setup(), to prove the search_path
+#: scoping actually took effect.
+_CHECKPOINT_SCHEMA_PROBE = """
+select n.nspname
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+ where c.relkind = 'r' and c.relname = 'checkpoints'
+"""
+
+
+async def _warn_if_checkpoints_escaped_the_runtime_schema(saver: Any) -> None:
+    """Say so, loudly, when checkpoint tables are not where we think they are.
+
+    Forcing search_path=agent_runtime,public only sends *new* tables to the
+    runtime schema. Where a `public.checkpoints` already existed, setup() found
+    it on the search_path and kept writing there — and `public` is the schema
+    PostgREST exposes, so run state sat next to a table anon can read. That
+    happened, and nothing complained. It complains now.
+    """
+    conn = getattr(saver, "conn", None)
+    if conn is None:
+        return
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(_CHECKPOINT_SCHEMA_PROBE)
+            schemas = {row[0] for row in await cur.fetchall()}
+    except Exception:  # noqa: BLE001 - a probe must never keep the service down
+        logger.debug("could not probe the checkpoint schema", exc_info=True)
+        return
+
+    if "public" in schemas:
+        logger.error(
+            "checkpoint tables are in `public`, which PostgREST exposes; "
+            "run state is reachable outside the service. Apply the migration "
+            "that moves them into %s.",
+            CHECKPOINT_SCHEMA,
+        )
+    elif schemas and CHECKPOINT_SCHEMA not in schemas:
+        logger.warning(
+            "checkpoint tables landed in %s rather than %s",
+            ", ".join(sorted(schemas)),
+            CHECKPOINT_SCHEMA,
+        )
+
+
 async def _get_checkpointer():
     """Return a LangGraph checkpointer suitable for async runs.
 
@@ -84,6 +129,7 @@ async def _get_checkpointer():
                 _pg_acm = acm
                 if hasattr(saver, "setup"):
                     await saver.setup()
+                await _warn_if_checkpoints_escaped_the_runtime_schema(saver)
                 _checkpointers[key] = saver
             except ImportError:
                 # Sync fallback (won't support aget_* — only for rare installs).
