@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -24,6 +25,52 @@ class PipedreamError(Exception):
         super().__init__(message or code)
         self.code = code
         self.status = status
+
+
+_RANK_STOPWORDS = frozenset(
+    {"a", "an", "and", "for", "from", "in", "my", "of", "on", "the", "to", "with"}
+)
+
+
+def _rank_tokens(query: str) -> list[str]:
+    return [
+        t
+        for t in re.split(r"[^a-z0-9]+", query.lower())
+        if t and t not in _RANK_STOPWORDS
+    ]
+
+
+def rank_actions(rows: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """Order an app's actions by how well they answer the query.
+
+    Pipedream returns an app's catalog in its own order, so "Find Emails" —
+    the one action an inbox-watching agent needs — came back twelfth out of
+    twelve for "gmail", behind signature and alias management. Taking the
+    first N actions therefore equipped the agent with everything except the
+    thing it was built to do.
+
+    Scoring stays deliberately blunt: count query terms hit in the name, count
+    them again at lower weight in the description, and keep Pipedream's order
+    for ties. A single-word app query scores every row zero and the original
+    order survives untouched.
+    """
+    tokens = _rank_tokens(query)
+    if len(tokens) < 2:
+        return rows
+
+    def score(row: dict[str, Any]) -> int:
+        name = str(row.get("name") or "").lower()
+        summary = str(row.get("summary") or "").lower()
+        total = 0
+        for token in tokens:
+            if token in name:
+                total += 3
+            elif token in summary:
+                total += 1
+        return total
+
+    ranked = sorted(enumerate(rows), key=lambda pair: (-score(pair[1]), pair[0]))
+    return [row for _, row in ranked]
 
 
 class PipedreamClient:
@@ -274,12 +321,10 @@ class PipedreamClient:
                 out[slug] = _ICON_CACHE[slug]
         return out
 
-    async def search_actions(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]:
-        if not self.configured():
-            return []
+    async def _fetch_action_rows(self, query: str, limit: int) -> list[Any]:
         params: dict[str, Any] = {"limit": min(limit, 50)}
-        if query.strip():
-            params["q"] = query.strip()[:200]
+        if query:
+            params["q"] = query[:200]
         data = await self._request(
             "GET",
             f"/connect/{self._project_id()}/actions",
@@ -291,11 +336,26 @@ class PipedreamClient:
         if not data:
             return []
         if isinstance(data, list):
-            rows = data
-        else:
-            rows = data.get("data") or data.get("actions") or data.get("components") or []
+            return data
+        return data.get("data") or data.get("actions") or data.get("components") or []
+
+    async def search_actions(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        if not self.configured():
+            return []
+        q = query.strip()
+        rows = await self._fetch_action_rows(q, limit if " " not in q else 50)
+        if not rows and " " in q:
+            # Pipedream's `q` filters on the app, not on free text: "gmail" returns
+            # the app's catalog while "gmail find email" returns nothing at all.
+            # That silence is what left the builder picking whichever actions came
+            # back first for the bare app name — signatures and aliases for an
+            # agent whose whole job was reading the inbox. Ask for the app, then
+            # rank the catalog here.
+            rows = await self._fetch_action_rows(q.split()[0], 50)
+        if not rows:
+            return []
         out: list[dict[str, Any]] = []
-        for row in rows[:limit]:
+        for row in rows:
             if not isinstance(row, dict):
                 continue
             key = row.get("key") or row.get("id") or row.get("name")
@@ -311,7 +371,7 @@ class PipedreamClient:
                     "raw": row,
                 }
             )
-        return out
+        return rank_actions(out, q)[:limit]
 
     async def get_component(self, component_key: str) -> dict[str, Any] | None:
         if not self.configured() or not component_key:
