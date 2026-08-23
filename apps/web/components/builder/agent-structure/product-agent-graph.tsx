@@ -412,7 +412,6 @@ function ProductAgentGraphCanvas({
         agentId={agentId}
         connections={connections}
         bindings={bindings}
-        toolApprovals={toolApprovals}
         onConnectionsChanged={onConnectionsChanged}
         executionError={errorForSelectedNode(selected, executionVisual)}
       />

@@ -1,7 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
+
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { ToolConfigForm } from "@/components/builder/tool-config-form";
+import { representativeToolId } from "@/lib/integrations/representative-tool";
 import {
   MemoryConfigForm,
   memoryFormResetKey,
@@ -172,7 +175,6 @@ export function IntegrationDrawer({
   agentId,
   connections,
   bindings,
-  toolApprovals,
   onConnectionsChanged,
   executionError,
 }: {
@@ -182,7 +184,6 @@ export function IntegrationDrawer({
   agentId: string;
   connections: AgentConnectionInfo[];
   bindings: AgentBindingInfo[];
-  toolApprovals?: Record<string, ApprovalMode | string>;
   onConnectionsChanged?: () => void;
   executionError?: ExecutionErrorInfo | null;
 }) {
@@ -204,6 +205,9 @@ export function IntegrationDrawer({
   // Don't show "connection needed" when the drawer already proves Connected.
   const waitingConnection =
     node?.executionStatus === "waiting_for_connection" && !connected;
+
+  // Computed before the early return so the hook order never changes.
+  const configToolId = useMemo(() => representativeToolId(toolIds), [toolIds]);
 
   if (!node?.integration) return null;
 
@@ -247,24 +251,6 @@ export function IntegrationDrawer({
           </p>
         </div>
       ) : null}
-      <div className="rounded-2xl border border-border/60 bg-foreground/[0.02] p-4">
-        <p className="mb-3 text-sm font-medium">
-          {t("structure:product.capabilities", { defaultValue: "Capabilities" })}
-        </p>
-        <ul className="space-y-2 text-sm">
-          {node.integration.actions.map((action) => (
-            <li key={action.toolId} className="flex items-center justify-between gap-2">
-              <span>{action.label}</span>
-              {toolApprovals?.[action.toolId] ? (
-                <span className="text-xs text-muted-foreground">
-                  {String(toolApprovals[action.toolId])}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </div>
-
       {node.integration.provider !== "native" ? (
         <IntegrationConnectionCard
           provider={node.integration.provider}
@@ -289,11 +275,11 @@ export function IntegrationDrawer({
         </p>
       )}
 
-      {toolIds[0] ? (
+      {configToolId ? (
         <div className="rounded-2xl border border-border/50 p-3">
           <ToolConfigForm
             agentId={agentId}
-            toolId={toolIds[0]}
+            toolId={configToolId}
             appId={node.integration.appKey}
             onSaved={onConnectionsChanged}
           />
