@@ -13,6 +13,7 @@ from agent_service.config import get_settings
 from agent_service.integrations.pipedream.client import PipedreamClient, PipedreamError
 from agent_service.integrations.pipedream.schema import (
     build_configured_props,
+    coerce_prop_value,
     normalize_configurable_props,
 )
 from agent_service.triggers.signature import WebhookSignatureError, verify_webhook_signature
@@ -219,9 +220,11 @@ async def _build_configured_props(
         configured[schema.auth_prop_name] = {"authProvisionId": auth_provision_id}
     elif app_id and app_id not in configured and not schema.auth_prop_name:
         configured[app_id] = {"authProvisionId": auth_provision_id}
+    by_name = {p.name: p for p in schema.props}
     for key, value in (extra_props or {}).items():
         if key not in configured and key not in {"authProvisionId", "auth_provision_id"}:
-            configured[key] = value
+            prop = by_name.get(key)
+            configured[key] = coerce_prop_value(prop, value) if prop else value
     return configured
 
 

@@ -389,6 +389,25 @@ def normalize_configurable_props(
     )
 
 
+def coerce_prop_value(prop: NormalizedProp, value: Any) -> Any:
+    """Shape a saved value the way the catalogue declared the prop.
+
+    Pipedream types a multi-select as `$.discord.channel[]` or `string[]`, and
+    rejects a bare string with a 500 that says nothing. The Discord trigger
+    could not be deployed at all: the drawer stores one channel, the deploy
+    endpoint wanted `["1541…"]`. Every array-typed picker had the same fault —
+    Gmail label ids, Trello members and labels.
+    """
+    declared = str((prop.raw or {}).get("type") or "")
+    if not declared.endswith("[]"):
+        return value
+    if value is None or value == "":
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
 def build_configured_props(
     schema: NormalizedToolSchema,
     *,
@@ -429,11 +448,11 @@ def build_configured_props(
 
     for prop in schema.props_of("static"):
         if prop.name in static_config:
-            configured[prop.name] = static_config[prop.name]
+            configured[prop.name] = coerce_prop_value(prop, static_config[prop.name])
 
     for prop in schema.props_of("runtime"):
         if prop.name in runtime_args:
-            configured[prop.name] = runtime_args[prop.name]
+            configured[prop.name] = coerce_prop_value(prop, runtime_args[prop.name])
         elif prop.name in static_config and prop.name not in configured:
             # Allow static form to pre-fill runtime fields when user configured them
             configured[prop.name] = static_config[prop.name]
