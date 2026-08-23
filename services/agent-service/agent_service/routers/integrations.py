@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -266,7 +267,15 @@ async def tool_dynamic_options(
     user: CurrentUser,
     prop: str = Query(..., max_length=128),
     agent_id: str | None = Query(default=None),
+    draft: str | None = Query(default=None, max_length=4000),
 ) -> dict[str, Any]:
+    """Options for one prop, honouring choices the user has not saved yet.
+
+    Pipedream cannot list a board's lists without knowing the board, and the
+    board is chosen in the drawer moments before. Reading only the saved config
+    left every dependent picker — list after board, table after base, worksheet
+    after spreadsheet — as an empty text box asking for an id.
+    """
     registry = get_provider_registry()
     pd = registry.get_provider("pipedream")
     if pd is None:
@@ -287,6 +296,15 @@ async def tool_dynamic_options(
         context["config"] = await load_agent_tool_config(
             user_id=user.user_id, agent_id=agent_id, tool_id=tool_id
         )
+    if draft:
+        try:
+            pending = json.loads(draft)
+        except ValueError:
+            pending = None
+        if isinstance(pending, dict):
+            merged = dict(context.get("config") or {})
+            merged.update({k: v for k, v in pending.items() if v not in (None, "")})
+            context["config"] = merged
     options = await pd.get_dynamic_options(
         ToolRef(tool_id=tool_id, provider="pipedream", provider_tool_id=tool_id.removeprefix("pd:")),
         prop,

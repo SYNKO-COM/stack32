@@ -81,6 +81,7 @@ export function ToolConfigForm({
     keys: string[],
     cancelled: () => boolean,
     propsMap?: Record<string, FieldSchema>,
+    draft?: Record<string, string>,
   ) => {
     const map = propsMap ?? fields;
     const loading: Record<string, boolean> = {};
@@ -92,7 +93,7 @@ export function ToolConfigForm({
     if (Object.keys(loading).length === 0) return;
     setLoadingOptions((prev) => ({ ...prev, ...loading }));
     for (const key of Object.keys(loading)) {
-      void getToolDynamicOptions({ toolId, prop: key, agentId })
+      void getToolDynamicOptions({ toolId, prop: key, agentId, draft })
         .then((res) => {
           if (cancelled()) return;
           setRemoteOptions((prev) => ({
@@ -134,6 +135,16 @@ export function ToolConfigForm({
     setSaved(false);
     const nextValues = { ...values, [name]: value };
     setValues(nextValues);
+
+    // A choice can unlock its dependants: Pipedream lists a board's lists only
+    // once it knows the board. Refresh the other pickers with the choice in
+    // hand, or they stay empty text boxes asking for an id.
+    if (value.trim()) {
+      const dependants = Object.keys(fields).filter((k) => k !== name);
+      if (dependants.length > 0) {
+        loadRemoteOptionsForKeys(dependants, () => false, fields, nextValues);
+      }
+    }
 
     if (!reloadTriggers.has(name) || !value.trim()) return;
 

@@ -240,6 +240,8 @@ export async function getToolDynamicOptions(input: {
   toolId: string;
   prop: string;
   agentId?: string;
+  /** Choices made in the drawer but not saved yet — a list needs its board. */
+  draft?: Record<string, string>;
 }): Promise<{ options: Array<{ value: unknown; label?: string }> }> {
   if (currentAiExecutionMode() !== "agent-service") {
     return { options: [] };
@@ -247,6 +249,13 @@ export async function getToolDynamicOptions(input: {
   const accessToken = await requireAccessToken();
   const params = new URLSearchParams({ prop: input.prop });
   if (input.agentId) params.set("agent_id", input.agentId);
+  const filled = Object.fromEntries(
+    Object.entries(input.draft ?? {}).filter(([, v]) => String(v ?? "").trim() !== ""),
+  );
+  if (Object.keys(filled).length > 0) {
+    const encoded = JSON.stringify(filled);
+    if (encoded.length <= 4000) params.set("draft", encoded);
+  }
   return agentServiceFetch(
     `/v1/integrations/tools/${encodeURIComponent(input.toolId)}/options?${params}`,
     { method: "GET", accessToken },
