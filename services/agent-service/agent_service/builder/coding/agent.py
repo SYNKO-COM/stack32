@@ -387,12 +387,25 @@ class CodingAgent:
         ledger.tool_call_count += 1
 
         event = _EVENT_BY_TOOL.get(tool_id, "builder.tool.called")
-        await self.emit(event, {"tool": tool_id, "args": _safe_args(args)})
         try:
             result = await tool.run(ctx, args)
         except Exception as exc:  # noqa: BLE001
             logger.warning("tool %s failed: %s", tool_id, exc)
+            await self.emit(event, {"tool": tool_id, "args": _safe_args(args), "ok": False})
             return {"error": "TOOL_RUNTIME", "tool": tool_id, "message": str(exc)[:300]}
+
+        # Emit after the call, not before it. Announcing the intent meant the live
+        # feed reported edits that never happened: a write refused by the
+        # protected-path guard still showed as "Edited context.py". The feed must
+        # describe what the agent did, not what it was about to try.
+        await self.emit(
+            event,
+            {
+                "tool": tool_id,
+                "args": _safe_args(args),
+                "ok": not (isinstance(result, dict) and (result.get("error") or result.get("ok") is False)),
+            },
+        )
 
         # Post-processing: ledger facts, touched files, verification status.
         if tool_id in ("workspace.create_file", "workspace.apply_patch", "workspace.delete_file"):

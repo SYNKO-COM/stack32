@@ -131,3 +131,23 @@ describe("tool detail extraction", () => {
     expect(lines[0].key).toBe("ranCommand");
   });
 });
+
+describe("failed tool calls", () => {
+  it("never narrates an action the agent failed to perform", () => {
+    // A write refused by the protected-path guard used to appear as a completed
+    // edit, because the event was emitted before the tool ran.
+    const { lines } = summarizeActivity([
+      { eventType: "builder.file.patch.completed", sequence: 1, path: "vendor/runtime/context.py", ok: false },
+      { eventType: "builder.file.created", sequence: 2, path: "src/agent/tools.py" },
+    ]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].params?.path).toBe("tools.py");
+  });
+
+  it("still shows successful calls that omit the flag", () => {
+    const { lines } = summarizeActivity([
+      { eventType: "builder.file.created", sequence: 1, path: "src/agent/main.py" },
+    ]);
+    expect(lines).toHaveLength(1);
+  });
+});

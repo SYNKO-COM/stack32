@@ -10,6 +10,8 @@ export type RunActivityEvent = {
   path?: string;
   /** Coding tool that produced the event, e.g. "workspace.read_file". */
   tool?: string;
+  /** False when the tool call was refused or errored. */
+  ok?: boolean;
   /** Shell command for exec events, already joined for display. */
   command?: string;
   /** Search term for grep events. */
@@ -84,6 +86,9 @@ export function useRunActivity(runId: string | null | undefined, enabled: boolea
                 ? args.path
                 : undefined,
           tool: typeof payload.tool === "string" ? payload.tool : undefined,
+          // Tool events now carry their outcome. A refused write must not be
+          // announced as an edit that happened.
+          ok: payload.ok === false ? false : undefined,
           command,
           query: typeof args.query === "string" ? args.query : undefined,
           mappingKey:
@@ -182,6 +187,8 @@ export function summarizeActivity(
   for (const event of ordered) {
     const mapping = classify(event.eventType);
     if (!mapping) continue;
+    // Never narrate something the agent tried and failed to do.
+    if (event.ok === false) continue;
     if (readOnly && MUTATION_KEYS.has(mapping.key)) continue;
 
     const path = mapping.usesPath ? shortPath(event.path) : undefined;
