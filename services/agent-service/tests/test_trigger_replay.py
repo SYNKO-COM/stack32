@@ -92,7 +92,11 @@ async def test_the_window_is_bounded_so_old_events_do_not_block_new_ones():
     client = FakeClient([])
     await _seen_recently(client, "t1", "abc")
     assert "created_at" in (client.params or {})
-    assert DUPLICATE_WINDOW_SECONDS > 0
+
+
+def test_the_window_covers_the_replay_that_was_actually_seen():
+    """22:17:17 to 22:49:20 — a quarter-hour window would have missed it."""
+    assert DUPLICATE_WINDOW_SECONDS >= 32 * 60
 
 
 @pytest.mark.asyncio

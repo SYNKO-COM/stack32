@@ -97,8 +97,11 @@ _VOLATILE_EVENT_KEYS = frozenset(
     }
 )
 
-#: How far back a replay still counts as the same event.
-DUPLICATE_WINDOW_SECONDS = 900
+#: How far back a replay still counts as the same event. The replay seen live
+#: landed 32 minutes after the original, so a quarter-hour would have missed
+#: it. An hour is generous, and a byte-identical message from the same author
+#: inside one is a repeat in every practical sense.
+DUPLICATE_WINDOW_SECONDS = 3600
 
 
 def _content_fingerprint(payload: Any) -> str:
