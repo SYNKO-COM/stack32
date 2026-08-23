@@ -21,6 +21,8 @@ import {
 import { getCachedIntegrationIcon } from "@/lib/integrations/icon-resolver";
 import { Check, Loader2, Pause, X } from "lucide-react";
 
+import { useTranslation } from "@/hooks/use-translation";
+
 function CompactStatusBadge({ status }: { status: string }) {
   if (statusShowsPause(status)) {
     return (
@@ -102,6 +104,7 @@ function ToolTriggerIcon({
 }
 
 export function TriggerNode({ data }: NodeProps<Node<ProductNodeData>>) {
+  const { t } = useTranslation("structure");
   const node = data.productNode;
   const status = String(displayStatus(node, data.executionStatus as never));
   const isTool = node.kind === "trigger_tool";
@@ -126,7 +129,10 @@ export function TriggerNode({ data }: NodeProps<Node<ProductNodeData>>) {
           <StructureKindIcon kind={node.kind} status={status} className="size-14" />
         )}
         <p className="max-w-full truncate text-center text-sm font-medium leading-tight">
-          {node.label}
+          {/* The module says what it is, not which event it listens to. The
+              event name lives in the drawer, where it can be read in full and
+              changed; on a 118px tile "New Message (Instant)" only truncates. */}
+          {isTool ? t("nodes.toolTrigger") : node.label}
         </p>
       </SquareCard>
     </div>

@@ -34,6 +34,7 @@ _STATIC_NAME_HINTS = frozenset(
         "databaseid",
         "page",
         "pageid",
+        "parent",
         "parentpageid",
         "pipeline",
         "pipelineid",
@@ -74,6 +75,10 @@ _CRITICAL_REQUIRED_STATIC = frozenset(
         "page",
         "pageid",
         "parentpageid",
+        # Notion names its destination `parent` and offers no picker for it, so
+        # nothing structural marks it — one of the few places the curated list
+        # still earns its keep.
+        "parent",
         "baseid",
         "tableid",
         "documentid",
@@ -216,6 +221,18 @@ def _map_json_type(prop_type: str) -> str:
     return "string"
 
 
+def _is_account_resource_type(prop_type: str) -> bool:
+    """True for Pipedream types that name a resource inside the user's account.
+
+    Pipedream writes these as `$.<app>.<resource>`, e.g. `$.discord.channel[]`
+    or `$.airtable.baseId`. That prefix is the catalogue's own, structural way
+    of saying "pick one of yours" — which is precisely the line between what
+    the person configures once and what the agent decides per run. Reading it
+    covers every app Pipedream offers; a hand-kept list of names never could.
+    """
+    return prop_type.strip().startswith("$.")
+
+
 def _classify(prop: dict[str, Any]) -> ParamKind:
     prop_type = str(prop.get("type") or "").lower()
     name = str(prop.get("name") or "").lower().replace("_", "").replace("-", "")
@@ -223,6 +240,8 @@ def _classify(prop: dict[str, Any]) -> ParamKind:
         return "connection"
     if name in {"authprovisionid", "auth", "account", "connectedaccount"}:
         return "connection"
+    if _is_account_resource_type(prop_type):
+        return "static"
     if prop.get("remoteOptions") is True or prop.get("useQuery") is True:
         return "static"
     if name in _STATIC_NAME_HINTS:
@@ -325,21 +344,35 @@ def normalize_configurable_props(
         elif "required" in raw:
             prop.required = bool(raw.get("required"))
         else:
-            # Auth app props are required for execution but never LLM-facing
-            prop.required = prop.kind == "connection"
+            # Pipedream omits `optional` entirely on mandatory props — absent is
+            # its default for "required", not for "optional". Reading absence as
+            # optional buried the one field that matters: the Discord trigger's
+            # `channels`, Slack's `conversation`, Airtable's `baseId`/`tableId`
+            # and Trello's `board` all arrive with no `optional` key at all, and
+            # every one of them ended up under "Options avancées".
+            prop.required = True
 
         # Resource pickers (sheet, channel, table…) must be configured in Structure
         # even when Pipedream marks them optional — deploy fails without them.
         compact = prop.name.lower().replace("_", "").replace("-", "")
         if prop.kind == "static" and compact in _CRITICAL_REQUIRED_STATIC:
             prop.required = True
-        # Any remoteOptions picker is a Structure resource — required unless advanced-only.
+        # A picker Pipedream explicitly marked optional stays optional. Promoting
+        # every remote-options prop demanded seven fields to create one Trello
+        # card — members, labels, mime type, card source, custom fields — none of
+        # which the catalogue asks for. Offer them; do not block on them.
         if (
             prop.kind == "static"
             and prop.remote_options
+            and raw.get("optional") is not True
             and compact not in _ADVANCED_ONLY_STATIC
         ):
             prop.required = True
+
+        # Last word: a prop on the advanced-only list never blocks the user,
+        # whatever the catalogue says about it.
+        if prop.kind == "static" and compact in _ADVANCED_ONLY_STATIC:
+            prop.required = False
 
     return NormalizedToolSchema(
         tool_id=tool_id or (f"pd:{action_id}" if action_id else "pd:unknown"),

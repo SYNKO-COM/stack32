@@ -88,7 +88,8 @@
     "approval": "Approbation",
     "transform": "Transformation",
     "sub_agent": "Sous-agent",
-    "output": "Sortie"
+    "output": "Sortie",
+    "toolTrigger": "Déclencheur"
   },
   "modules": {
     "title": "Structure de l'agent",

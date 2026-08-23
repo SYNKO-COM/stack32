@@ -89,21 +89,28 @@ export function layoutProductGraph(graph: ProductAgentGraph): {
     positioned.push(nodePosition(node, leftX, leftStartY + index * LAYOUT.rowGap));
   });
 
-  const columns = integrations.length <= 4 ? 1 : integrations.length <= 8 ? 2 : 3;
+  // An agent with five or six integrations was drawn as a ragged block: the
+  // last row kept the grid's left edge, so a lone tool sat under the first
+  // column with a gap beside it. Rows are laid out on their own centre now, so
+  // the column keeps a shape whatever the count.
+  const columns = integrationColumns(integrations.length);
   const rightX = agentX + LAYOUT.nodeWidth.agent + LAYOUT.sideGap;
   const rows = Math.max(1, Math.ceil(integrations.length / columns));
   const rightStartY = agentMidY - ((rows - 1) * LAYOUT.rowGap) / 2 - 40;
-  integrations.forEach((node, index) => {
-    const col = index % columns;
-    const row = Math.floor(index / columns);
-    positioned.push(
-      nodePosition(
-        node,
-        rightX + col * LAYOUT.rightColGap,
-        rightStartY + row * LAYOUT.rowGap,
-      ),
-    );
-  });
+  const blockCentreX = rightX + ((columns - 1) * LAYOUT.rightColGap) / 2;
+  for (let row = 0; row < rows; row += 1) {
+    const rowNodes = integrations.slice(row * columns, row * columns + columns);
+    const rowStartX = blockCentreX - ((rowNodes.length - 1) * LAYOUT.rightColGap) / 2;
+    rowNodes.forEach((node, col) => {
+      positioned.push(
+        nodePosition(
+          node,
+          rowStartX + col * LAYOUT.rightColGap,
+          rightStartY + row * LAYOUT.rowGap,
+        ),
+      );
+    });
+  }
 
   return { nodes: positioned, edges: graph.edges };
 }
@@ -140,9 +147,16 @@ function nodePosition(node: ProductNode, x: number, y: number): Node {
   };
 }
 
+/** How many columns the integration block uses — never more than three. */
+export function integrationColumns(count: number): number {
+  if (count <= 4) return 1;
+  if (count <= 8) return 2;
+  return 3;
+}
+
 /** Minimum canvas height from integration count — used by tests. */
 export function estimateCanvasHeight(integrationCount: number): number {
-  const columns = integrationCount <= 4 ? 1 : integrationCount <= 8 ? 2 : 3;
+  const columns = integrationColumns(integrationCount);
   const rows = Math.ceil(Math.max(1, integrationCount) / columns);
   return LAYOUT.agentY + LAYOUT.agentHeight + LAYOUT.outputGap + rows * LAYOUT.rowGap;
 }

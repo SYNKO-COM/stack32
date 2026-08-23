@@ -66,7 +66,13 @@ def test_hint_from_unknown_app() -> None:
     hint = hint_from_component(UNKNOWN_APP_COMPONENT)
     assert hint is not None
     assert hint["_auto_generated"] is True
-    assert "workspaceId" in hint["required_props"]
+    # workspaceId is a picker Pipedream marks `optional: true`. It stays on
+    # offer — the fixture keeps it among the static hints — but it must not be
+    # demanded: promoting every picker is what made creating one Trello card
+    # ask for members, labels, mime type, card source and custom fields.
+    keys = [k for row in hint["required_static_hints"] for k in row.get("keys", [])]
+    assert "workspaceId" in keys
+    assert "workspaceId" not in hint["required_props"]
 
 
 def test_merge_curated_wins_over_auto() -> None:

@@ -88,7 +88,8 @@
     "approval": "Approval",
     "transform": "Transform",
     "sub_agent": "Sub-agent",
-    "output": "Output"
+    "output": "Output",
+    "toolTrigger": "Trigger"
   },
   "modules": {
     "title": "Agent structure",
