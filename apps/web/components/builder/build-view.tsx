@@ -743,7 +743,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   const pinnedRef = useRef(true);
   const formClosedAtRef = useRef<number | null>(null);
   /** When the current run id was first observed — the watchdog's real anchor. */
-  const runSeenAtRef = useRef<{ id: string | null; at: number }>({ id: null, at: Date.now() });
+  const runSeenAtRef = useRef<{ id: string | null; at: number }>({ id: null, at: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
@@ -1000,7 +1000,8 @@ export function BuildView({ agentId }: { agentId: string }) {
 
   // A run id we have not seen before starts its own clock.
   useEffect(() => {
-    if (runSeenAtRef.current.id === (activeRunId ?? null)) return;
+    const seen = runSeenAtRef.current;
+    if (seen.at !== 0 && seen.id === (activeRunId ?? null)) return;
     runSeenAtRef.current = { id: activeRunId ?? null, at: Date.now() };
     setStaleBuilding(false);
     staleRecoveredRef.current = false;
@@ -1070,14 +1071,20 @@ export function BuildView({ agentId }: { agentId: string }) {
   // then came back. Hold the last beat while the turn is still in flight, and
   // drop it the moment activity stops — a finished Ready card must never carry
   // stale "Repairing" work underneath it.
-  const lastActivityRef = useRef<typeof activityLines>([]);
-  if (!activityEnabled) {
-    lastActivityRef.current = [];
-  } else if (activityLines.length) {
-    lastActivityRef.current = activityLines;
-  }
+  const [lastActivity, setLastActivity] = useState<typeof activityLines>([]);
+  const activitySignature = activityLines.map((l) => `${l.id}:${l.text}`).join("|");
+  useEffect(() => {
+    if (!activityEnabled) {
+      setLastActivity((prev) => (prev.length ? [] : prev));
+      return;
+    }
+    if (activitySignature) setLastActivity(activityLines);
+    // Keyed on the signature so a fresh array with identical beats does not
+    // re-enter this effect forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activityEnabled, activitySignature]);
   const steadyActivityLines =
-    activityEnabled && !activityLines.length ? lastActivityRef.current : activityLines;
+    activityEnabled && !activityLines.length ? lastActivity : activityLines;
 
   const lastMessage = visibleMessages.at(-1) ?? messages.at(-1);
   const lastIsUser = lastMessage?.role === "user";
