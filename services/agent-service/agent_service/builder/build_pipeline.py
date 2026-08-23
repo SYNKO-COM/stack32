@@ -177,6 +177,13 @@ class CodeBuildPipeline:
 
         repaired = False
         stop_reason = "COMPLETED"
+        # Capture the quality policy before the agent can touch it. A repair that
+        # disables ruff rules, deletes a failing test or marks it skipped turns
+        # the gate green without fixing anything, and ships a "ready" agent that
+        # does not work.
+        from agent_service.verifier.gate_integrity import detect_weakened_gates, snapshot_gates
+
+        gates_before = snapshot_gates(files)
         # 5. Autonomous multi-iteration repair with model escalation.
         # Never stop on first failure — escalate Terra → Sol → Claude before surfacing.
         from agent_service.config import get_settings
@@ -407,6 +414,21 @@ class CodeBuildPipeline:
                         },
                     )
                     if test_status == "passed" and lint_status == "passed":
+                        tampering = detect_weakened_gates(gates_before, snapshot_gates(files))
+                        if tampering:
+                            logger.warning(
+                                "coding_repair_weakened_gates agent=%s reasons=%s",
+                                agent_id,
+                                tampering,
+                            )
+                            await emit(
+                                "builder.repair.rejected",
+                                {"reason": "GATES_WEAKENED", "details": tampering[:5]},
+                            )
+                            test_status = "failed"
+                            stop_reason = "REPAIR_WEAKENED_GATES"
+                            repaired = False
+                            break
                         stop_reason = "COMPLETED"
                         try:
                             from agent_service.learning import record_repair_lesson

@@ -6,6 +6,7 @@ import logging
 import re
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from agent_service.compiler.graph_compiler import GraphCompileError, compile_graph
 from agent_service.models.agent_spec import AgentSpec
@@ -13,6 +14,17 @@ from agent_service.models.graph_spec import GraphSpec
 from agent_service.supabase_client import Persistence, get_supabase_admin_client
 
 logger = logging.getLogger(__name__)
+
+
+def _is_unique_violation(response: Any) -> bool:
+    """True when PostgREST rejected a write on a unique constraint (SQLSTATE 23505)."""
+    if getattr(response, "status_code", 0) != 409:
+        return False
+    try:
+        body = response.json()
+    except Exception:  # noqa: BLE001 - a non-JSON 409 is still a conflict
+        return True
+    return str((body or {}).get("code") or "") == "23505" or "duplicate key" in str(body).lower()
 
 
 class PublishService:
@@ -76,14 +88,29 @@ class PublishService:
                 candidate = f"{desired}-{int(datetime.now(UTC).timestamp())}"
                 break
 
-        if candidate != current:
+        # The SELECT above is advisory only: two concurrent publishes of the same
+        # name both observe the slug as free. `agents_user_slug_active_key` is
+        # the authority, so treat a unique violation as "taken" and move to the
+        # next suffix instead of surfacing a 500.
+        while candidate != current:
             async with get_supabase_admin_client() as client:
-                await client.patch(
+                response = await client.patch(
                     "/agents",
                     params={"id": f"eq.{agent_id}", "user_id": f"eq.{user_id}"},
                     json={"slug": candidate},
                 )
-            agent["slug"] = candidate
+            if response.status_code < 400 or not _is_unique_violation(response):
+                agent["slug"] = candidate
+                return candidate
+            logger.info(
+                "publish_slug_taken_retrying agent_id=%s candidate=%s",
+                agent_id,
+                candidate,
+            )
+            candidate = f"{desired}-{suffix}"
+            suffix += 1
+            if suffix > 60:
+                candidate = f"{desired}-{uuid4().hex[:8]}"
         return candidate
 
     async def publish(self, *, user_id: str, agent_id: str) -> dict[str, Any]:

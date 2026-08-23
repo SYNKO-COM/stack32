@@ -149,3 +149,24 @@ class SandboxProvider(Protocol):
         cwd: str = ".",
         timeout_seconds: int | None = None,
     ) -> CommandResult: ...
+
+
+def truncate_output(text: str, cap: int) -> str:
+    """Keep both ends of oversized output.
+
+    Head-only truncation drops exactly what the repair loop needs: pytest and
+    ruff print their verdict ("4 failed, 317 passed", "Found 6 errors") on the
+    final line, so a large run lost its summary and the progress parser saw
+    nothing — reading as "no progress" and stalling the loop. The first failure
+    is usually near the top and the verdict is always at the bottom, so keep
+    both and mark the gap.
+    """
+    if cap <= 0 or len(text) <= cap:
+        return text
+    marker = "\n... [output truncated] ...\n"
+    if cap <= len(marker):
+        return text[-cap:]
+    budget = cap - len(marker)
+    head = budget // 3
+    tail = budget - head
+    return text[:head] + marker + text[-tail:]

@@ -22,6 +22,7 @@ from agent_service.sandbox.base import (
     SandboxTimeoutError,
     WorkspaceHandle,
     normalize_project_path,
+    truncate_output,
 )
 
 _ROOT = "/home/user/workspace"
@@ -183,8 +184,8 @@ class E2BSandbox:
         exit_code = int(getattr(res, "exit_code", 0) or 0)
         return CommandResult(
             exit_code=exit_code,
-            stdout=stdout[:cap],
-            stderr=stderr[:cap],
+            stdout=truncate_output(stdout, cap),
+            stderr=truncate_output(stderr, cap),
             duration_ms=duration_ms,
             truncated=len(stdout) > cap or len(stderr) > cap,
         )

@@ -25,6 +25,7 @@ from agent_service.sandbox.base import (
     SandboxTimeoutError,
     WorkspaceHandle,
     normalize_project_path,
+    truncate_output,
 )
 
 _ROOT = "/workspace"
@@ -218,8 +219,8 @@ class LocalSandbox:
         truncated = len(stdout) > cap or len(stderr) > cap
         return CommandResult(
             exit_code=proc.returncode if proc.returncode is not None else -1,
-            stdout=stdout[:cap],
-            stderr=stderr[:cap],
+            stdout=truncate_output(stdout, cap),
+            stderr=truncate_output(stderr, cap),
             duration_ms=duration_ms,
             truncated=truncated,
         )
