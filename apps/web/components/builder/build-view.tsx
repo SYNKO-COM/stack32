@@ -740,6 +740,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   }, [thread]);
   const cancelRun = useCancelBuilderRun(agentId);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const didInitialPin = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const celebratedIdsRef = useRef<Set<string>>(new Set());
@@ -1037,6 +1038,19 @@ export function BuildView({ agentId }: { agentId: string }) {
       })
     : [];
 
+  // A new run swaps the query key, so the list emptied between the first
+  // optimistic beat and the first server event: the step appeared, vanished,
+  // then came back. Hold the last beat while the turn is still in flight, and
+  // drop it the moment activity stops — a finished Ready card must never carry
+  // stale "Repairing" work underneath it.
+  const lastActivityRef = useRef<typeof activityLines>([]);
+  if (!activityEnabled) {
+    lastActivityRef.current = [];
+  } else if (activityLines.length) {
+    lastActivityRef.current = activityLines;
+  }
+  const steadyActivityLines =
+    activityEnabled && !activityLines.length ? lastActivityRef.current : activityLines;
 
   const lastMessage = visibleMessages.at(-1) ?? messages.at(-1);
   const lastIsUser = lastMessage?.role === "user";
@@ -1074,7 +1088,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   const showLocalWorking =
     buildTurnActive && !waitingOnForm && !hasVisibleWorkingBubble;
   const resumeWorking =
-    Boolean(serverBuildRunId) || Boolean(activeRunId && activityLines.length > 0);
+    Boolean(serverBuildRunId) || Boolean(activeRunId && steadyActivityLines.length > 0);
   // Keep Stop available for the whole in-flight turn (not only while awaitingReply).
   // Ready is terminal — never keep Stop / busy composer over a Ready card.
   const composerBusy =
@@ -1303,6 +1317,15 @@ export function BuildView({ agentId }: { agentId: string }) {
     if (!root) return;
 
     const NEAR_BOTTOM_PX = 160;
+    // On the very first run the history is already laid out, so the reader sits
+    // 1600px from the bottom through no choice of their own — and the
+    // near-bottom test read that as "scrolled up to read" and left them at the
+    // top of the thread. Opening a conversation means opening it at its newest
+    // message; only after that does scrolling up mean anything.
+    if (!didInitialPin.current) {
+      didInitialPin.current = true;
+      root.scrollTop = root.scrollHeight;
+    }
     let pinned =
       root.scrollHeight - root.scrollTop - root.clientHeight <= NEAR_BOTTOM_PX;
 
@@ -1323,7 +1346,7 @@ export function BuildView({ agentId }: { agentId: string }) {
       awaitingReply ||
       pendingToken !== null ||
       Boolean(activeRevealId) ||
-      activityLines.length > 0;
+      steadyActivityLines.length > 0;
 
     let raf = 0;
     const tick = () => {
@@ -1363,7 +1386,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     awaitingReply,
     pendingToken,
     activeRevealId,
-    activityLines.length,
+    steadyActivityLines.length,
     messages.length,
     revealedIds.size,
   ]);
@@ -1487,7 +1510,7 @@ export function BuildView({ agentId }: { agentId: string }) {
                     activityLines={
                       isWorking &&
                       message.id === (visibleMessages.at(-1)?.id ?? "")
-                        ? activityLines
+                        ? steadyActivityLines
                         : undefined
                     }
                     onRevealDone={
@@ -1523,7 +1546,7 @@ export function BuildView({ agentId }: { agentId: string }) {
                 <MessageEntrance active>
                   <BuilderWorkingPanel
                     operations={workingOperations}
-                    activityLines={activityLines}
+                    activityLines={steadyActivityLines}
                     persistKey={agentId}
                     resumeMode={resumeWorking || Boolean(serverBuildRunId)}
                   />
