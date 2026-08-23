@@ -52,8 +52,14 @@ function actionOf(toolId: string): string {
 }
 
 function createsAContainer(action: string): boolean {
-  return CONTAINER_OBJECTS.some(
-    (o) => action.endsWith(`-${o}`) || action.endsWith(`-${o}s`),
+  // Only when the container is what the verb makes: `trello-create-board`,
+  // `slack-create-channel`. A container named as the destination —
+  // `slack-send-message-to-channel` — is the opposite: it is exactly the
+  // action we want to represent the app.
+  return CREATING_VERBS.some((v) =>
+    CONTAINER_OBJECTS.some(
+      (o) => action.endsWith(`-${v}-${o}`) || action.endsWith(`-${v}-${o}s`),
+    ),
   );
 }
 
@@ -71,7 +77,9 @@ function score(toolId: string): number {
 export function representativeToolId(toolIds: readonly string[]): string | undefined {
   const usable = toolIds.filter((id) => typeof id === "string" && id.trim().length > 0);
   if (usable.length === 0) return undefined;
-  // Stable: same bindings always pick the same action, so the drawer does not
-  // change what it asks for between two visits.
-  return [...usable].sort((a, b) => score(a) - score(b) || a.localeCompare(b))[0];
+  // Ties keep the order they came in. That order is the builder's own ranking
+  // of the mission, so the first action it chose for the app is the one the
+  // agent is most likely to run — sorting it away picked `create-reminder` to
+  // stand for Slack on an agent that posts summaries to a channel.
+  return [...usable].sort((a, b) => score(a) - score(b))[0];
 }

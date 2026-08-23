@@ -219,7 +219,7 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
     activeWorkspaceId,
     setActiveWorkspaceId,
   } = useActiveWorkspace();
-  const { data: agents } = useAgents(activeWorkspaceId);
+  const { data: agents, isPending: agentsPending } = useAgents(activeWorkspaceId);
   const createAgent = useCreateAgent();
   const createWorkspace = useCreateWorkspace();
   const openDialog = useUiStore((s) => s.openDialog);
@@ -352,6 +352,15 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
                     onNavigate={onNavigate}
                   />
                 ))
+              ) : agentsPending || !activeWorkspaceId ? (
+                // Saying "no agents yet" before the answer arrives told the
+                // owner of three agents they had none, for as long as the load
+                // took. Claim emptiness only once it is known.
+                <div className="space-y-2 px-3 py-4" aria-hidden>
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-9 animate-pulse rounded-xl bg-foreground/[0.06]" />
+                  ))}
+                </div>
               ) : (
                 <p className="px-3 py-6 text-sm text-muted-foreground">
                   {t("builder:sidebar.empty")}

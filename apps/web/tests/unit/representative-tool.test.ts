@@ -31,11 +31,36 @@ describe("representative tool for an app drawer", () => {
     );
   });
 
-  it("is stable for the same bindings whatever their order", () => {
+  it("prefers a write over a read whatever the order", () => {
     const a = representativeToolId(["pd:slack-send-message", "pd:slack-find-message"]);
     const b = representativeToolId(["pd:slack-find-message", "pd:slack-send-message"]);
-    expect(a).toBe(b);
     expect(a).toBe("pd:slack-send-message");
+    expect(b).toBe("pd:slack-send-message");
+  });
+
+  it("keeps the builder's ranking when several actions are equally good", () => {
+    // The spec lists tools in the order the builder chose them for the
+    // mission, so the first equally-good action is the likeliest to run.
+    expect(
+      representativeToolId([
+        "pd:slack_v2-send-message",
+        "pd:slack_v2-create-reminder",
+        "pd:slack_v2-send-message-advanced",
+      ]),
+    ).toBe("pd:slack_v2-send-message");
+  });
+
+  it("does not mistake a destination for a container", () => {
+    // "…-to-channel" names where the message goes; it is not creating a channel.
+    expect(
+      representativeToolId(["pd:slack_v2-send-message-to-channel"]),
+    ).toBe("pd:slack_v2-send-message-to-channel");
+    expect(
+      representativeToolId([
+        "pd:slack_v2-create-channel",
+        "pd:slack_v2-send-message-to-channel",
+      ]),
+    ).toBe("pd:slack_v2-send-message-to-channel");
   });
 
   it("handles airtable and notion the same way", () => {
