@@ -462,6 +462,33 @@ async def run_langgraph_agent(
         turn_content = content[:8000] + untrusted
     seed_messages.append({"role": "user", "content": turn_content})
 
+    # A live run measured 43k input tokens per call while every visible
+    # component is capped; guessing at the composition wasted an evening once.
+    # One structured line per run names where the weight actually sits.
+    try:
+        import json as _json
+
+        _hist_chars = sum(len(str(m.get("content") or "")) for m in (history or []))
+        _turn_chars = (
+            sum(len(_json.dumps(b, default=str)) for b in turn_content)
+            if isinstance(turn_content, list)
+            else len(turn_content)
+        )
+        logger.info(
+            "live_seed_composition run=%s system_chars=%d history_msgs=%d "
+            "history_chars=%d turn_chars=%d untrusted_chars=%d tools=%d tools_chars=%d",
+            run_id,
+            len(system),
+            len(history or []),
+            _hist_chars,
+            _turn_chars,
+            len(untrusted),
+            len(tool_schemas or []),
+            sum(len(_json.dumps(t, default=str)) for t in (tool_schemas or [])),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
     profile = ModelProfile.BALANCED
     if spec.model_policy.profile == "fast":
         profile = ModelProfile.FAST
