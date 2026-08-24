@@ -64,6 +64,19 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        // Structure was merged into the "Agent IA" tab. Answering this at the
+        // edge keeps old links working without booting the agent workspace
+        // client tree just to throw it away — rendering that tree around a
+        // page whose only job is to redirect crashed with React error #310.
+        source: "/agents/:agentId/structure",
+        destination: "/agents/:agentId/agent",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
