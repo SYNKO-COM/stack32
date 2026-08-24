@@ -1836,3 +1836,96 @@ async def resolve_tools_for_capabilities(
     # Build connection requirements for OAuth / connection_required tools.
     requirements = await build_connection_requirements(selected, registry=reg)
     return selected[:MAX_SELECTED_TOOLS], requirements, ambiguous
+
+
+#: Phrases that say "start when something happens" rather than "do this".
+#: French first — the product speaks French to most of its users today.
+_EVENT_OPENERS: tuple[str, ...] = (
+    "chaque fois qu",
+    "chaque fois que",
+    "à chaque fois qu",
+    "a chaque fois qu",
+    "dès qu",
+    "des qu",
+    "dès que",
+    "des que",
+    "lorsqu",
+    "lorsque",
+    "quand",
+    "sitôt qu",
+    "whenever",
+    "every time",
+    "each time",
+    "as soon as",
+    "when ",
+)
+
+#: Words that mark a clock-driven start, which is a schedule and not an event.
+_SCHEDULE_MARKERS: tuple[str, ...] = (
+    "chaque lundi",
+    "chaque mardi",
+    "chaque mercredi",
+    "chaque jeudi",
+    "chaque vendredi",
+    "chaque samedi",
+    "chaque dimanche",
+    "chaque matin",
+    "chaque soir",
+    "chaque jour",
+    "chaque semaine",
+    "tous les jours",
+    "toutes les heures",
+    "every morning",
+    "every day",
+    "every week",
+    "every hour",
+    "every monday",
+)
+
+
+def suggest_tool_trigger_app(prompt: str) -> str | None:
+    """Name the app whose events should start the agent, when the user said so.
+
+    "Quand une carte arrive dans mon tableau Trello, ajoute une ligne dans
+    Airtable" names two apps, and only the first one is the source of the
+    event — the trigger form was leaving the user to pick it by hand even
+    though the sentence already said it.
+
+    Returns an app slug, or None when the prompt does not describe an
+    event-driven start. A clock-driven start ("chaque lundi matin") is a
+    schedule, not a tool event, so it yields None too.
+    """
+    text = (prompt or "").strip().lower()
+    if not text:
+        return None
+
+    opener_at = -1
+    for opener in _EVENT_OPENERS:
+        found = text.find(opener)
+        if found != -1 and (opener_at == -1 or found < opener_at):
+            opener_at = found
+    if opener_at == -1:
+        return None
+
+    # The clause the opener introduces runs to the first comma or full stop —
+    # past that we are in the "then do this" half, where the apps are targets.
+    clause_end = len(text)
+    for mark in (",", ".", ";", " puis ", " then "):
+        found = text.find(mark, opener_at)
+        if found != -1:
+            clause_end = min(clause_end, found)
+    clause = text[opener_at:clause_end]
+
+    # A clock inside that same clause means a schedule, not a tool event.
+    if any(marker in clause for marker in _SCHEDULE_MARKERS):
+        return None
+
+    # Only offer a slug the alias table vouches for. extract_external_app_queries
+    # also returns free-text search queries for the long tail, and filling the
+    # picker with one of those would point the event lookup at an app id that
+    # does not exist — worse than leaving the field empty.
+    known_slugs = set(_PIPEDREAM_APP_ALIASES.values())
+    for candidate in extract_external_app_queries(clause):
+        if candidate in known_slugs:
+            return candidate
+    return None

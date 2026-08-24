@@ -913,6 +913,8 @@ class BuilderOrchestrator:
         identity: AgentIdentity,
         after_secret: bool = False,
     ) -> dict[str, Any]:
+        from agent_service.builder.capabilities import suggest_tool_trigger_app
+
         await self.db.emit_event(
             run_id,
             "builder.capabilities.requested",
@@ -948,6 +950,16 @@ class BuilderOrchestrator:
                             "type": "toggle",
                             "required": False,
                             "suggested_value": "false",
+                        },
+                        {
+                            # The prompt often already says which app's events
+                            # should start the agent. Offering it here saves the
+                            # user ticking the box and retyping a name they just
+                            # wrote; empty means the sentence did not say.
+                            "key": "tool_trigger_app",
+                            "type": "app",
+                            "required": False,
+                            "suggested_value": suggest_tool_trigger_app(prompt) or "",
                         },
                     ],
                 },

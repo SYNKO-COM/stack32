@@ -151,7 +151,10 @@
   "empty": {
     "title": "Décrivez l'agent dont vous avez besoin",
     "subtitle": "Une phrase claire suffit. Stack32 construit une première version, la teste, et vous pouvez l'essayer tout de suite.",
-    "examplesTitle": "Essayez par exemple"
+    "examplesTitle": "Essayez par exemple",
+    "example1": "Quand un message arrive dans mon canal Discord, classe-le et crée une carte Trello.",
+    "example2": "Chaque lundi matin, résume les nouvelles lignes de ma base Airtable dans Slack.",
+    "example3": "Recherche une entreprise, note le prospect et rédige un email personnalisé."
   },
   "steps": {
     "understanding": "Compréhension de votre objectif",

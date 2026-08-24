@@ -1467,8 +1467,13 @@ export function BuildView({ agentId }: { agentId: string }) {
     }
   };
 
+  // The one example used to be an English string hardcoded here, sitting under
+  // a French heading. Localised, and phrased like the agents people actually
+  // build here — a trigger, a schedule, a research task.
   const examples = [
-    "Create an agent that researches a company, scores the lead and drafts a personalized email.",
+    t("builder:empty.example1"),
+    t("builder:empty.example2"),
+    t("builder:empty.example3"),
   ];
 
   return (

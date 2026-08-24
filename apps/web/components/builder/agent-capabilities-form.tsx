@@ -14,6 +14,7 @@ import { agentServiceErrorKey } from "@/lib/ai/agent-service-errors";
 import type { BuilderUiComponent } from "@/lib/domain/types";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
+import { appDisplayName } from "@/lib/integrations/app-name";
 
 interface CapabilitiesFormProps {
   uiComponent: BuilderUiComponent;
@@ -35,9 +36,14 @@ export function AgentCapabilitiesForm({
   const [scheduleHourly, setScheduleHourly] = useState(
     () => fieldDefault(uiComponent.fields, "schedule_hourly") === "true",
   );
-  const [toolTrigger, setToolTrigger] = useState(false);
-  const [appId, setAppId] = useState("");
-  const [appName, setAppName] = useState("");
+  // "Quand une carte arrive dans mon tableau Trello, ..." already names the app
+  // whose events start the agent. When the builder read one out of the prompt,
+  // open on that choice instead of making the user tick the box and retype a
+  // name they just wrote. Empty suggestion means the sentence did not say.
+  const suggestedTriggerApp = fieldDefault(uiComponent.fields, "tool_trigger_app");
+  const [toolTrigger, setToolTrigger] = useState(() => suggestedTriggerApp !== "");
+  const [appId, setAppId] = useState(() => suggestedTriggerApp);
+  const [appName, setAppName] = useState(() => appDisplayName(suggestedTriggerApp));
   const [componentId, setComponentId] = useState("");
   const [componentLabel, setComponentLabel] = useState("");
   const [events, setEvents] = useState<Array<{ value: string; label: string }>>([]);

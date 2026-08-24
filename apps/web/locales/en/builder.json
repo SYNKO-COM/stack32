@@ -151,7 +151,10 @@
   "empty": {
     "title": "Describe the agent you need",
     "subtitle": "One clear sentence is enough. Stack32 will build a first version, test it, and let you try it right away.",
-    "examplesTitle": "Try something like"
+    "examplesTitle": "Try something like",
+    "example1": "When a message lands in my Discord channel, classify it and create a Trello card.",
+    "example2": "Every Monday morning, summarise my Airtable base's new rows into Slack.",
+    "example3": "Research a company, score the lead and draft a personalised email."
   },
   "steps": {
     "understanding": "Understanding your goal",

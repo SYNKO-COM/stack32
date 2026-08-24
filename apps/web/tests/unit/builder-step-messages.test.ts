@@ -13,9 +13,12 @@ import { describe, expect, it } from "vitest";
 import enBuilder from "@/locales/en/builder.json";
 import frBuilder from "@/locales/fr/builder.json";
 
-const LOCALES = { fr: frBuilder, en: enBuilder } as Record<
+// Some bundle sections nest a further level, so widen through `unknown` and
+// read the two string fields this file cares about.
+type StepBundle = Record<string, Record<string, string> | undefined>;
+const LOCALES = { fr: frBuilder, en: enBuilder } as unknown as Record<
   string,
-  Record<string, Record<string, string>>
+  StepBundle
 >;
 
 const PAIRED_STEPS = [
