@@ -36,7 +36,7 @@ class TestReadingTheSubjectOutOfTheKey:
             ("trello-update-card", "card"),
             ("slack_v2-send-message", "message"),
             ("_1crm-update-lead", "lead"),
-            ("google_sheets-add-single-row", "single"),
+            ("google_sheets-add-single-row", "row"),
             ("algodocs-upload-file", "file"),
         ],
     )
@@ -152,3 +152,78 @@ class TestDisplayOnlyTypes:
     def test_a_real_field_is_not(self):
         for t in ("string", "boolean", "string[]", "$.airtable.baseId"):
             assert is_display_only(t) is False
+
+
+class TestTheObjectIsOftenMoreThanOneWord:
+    """The subject used to be the single token after the verb.
+
+    That read `update-blog-post-draft` as acting on a "blog", so `blogPostId`
+    did not match and the readiness gate asked the user to pin which blog post
+    the agent would edit before it could publish. Same for
+    `reply-to-side-conversation` and its `sideConversationId`. Six actions on a
+    live agent were blocked this way, none of them fillable by a person.
+    """
+
+    def test_it_reads_the_whole_object_phrase(self):
+        from agent_service.integrations.pipedream.schema import action_object_tokens
+
+        assert action_object_tokens("hubspot-update-blog-post-draft") == (
+            "blog",
+            "post",
+            "draft",
+        )
+
+    def test_a_connector_right_after_the_verb_introduces_the_object(self):
+        from agent_service.integrations.pipedream.schema import action_object_tokens
+
+        assert action_object_tokens("zendesk-reply-to-side-conversation") == (
+            "side",
+            "conversation",
+        )
+
+    def test_a_later_connector_ends_the_object_and_names_the_container(self):
+        # `send-message-to-channel` acts on the message; the channel is where it
+        # goes, which is a setting a person pins once. Swallowing the whole tail
+        # made the channel per-call and Slack lost its configuration.
+        from agent_service.integrations.pipedream.schema import action_object_tokens
+
+        assert action_object_tokens("slack_v2-send-message-to-channel") == ("message",)
+
+    def test_a_prop_matching_any_run_of_the_phrase_is_per_call(self):
+        from agent_service.integrations.pipedream.schema import (
+            _is_action_subject,
+            action_object_tokens,
+        )
+
+        tokens = action_object_tokens("hubspot-update-blog-post-draft")
+        assert _is_action_subject("blogPostId", tokens)
+        # The blog that contains the post is not the post.
+        assert not _is_action_subject("contentGroupId", tokens)
+
+    def test_a_bare_id_is_always_the_thing_acted_on(self):
+        from agent_service.integrations.pipedream.schema import (
+            _is_action_subject,
+            action_object_tokens,
+        )
+
+        # Stripe calls the invoice `id`, so stripping the tail leaves nothing to
+        # compare and the old rule filed it as a setting to pin.
+        for key in ("stripe-send-invoice", "stripe-finalize-invoice"):
+            assert _is_action_subject("id", action_object_tokens(key)), key
+
+    def test_the_containers_of_a_record_stay_settings(self):
+        from agent_service.integrations.pipedream.schema import (
+            _is_action_subject,
+            action_object_tokens,
+        )
+
+        tokens = action_object_tokens("airtable_oauth-update-record")
+        assert _is_action_subject("recordId", tokens)
+        for container in ("baseId", "tableId"):
+            assert not _is_action_subject(container, tokens), container
+
+    def test_a_padding_word_does_not_become_the_object(self):
+        from agent_service.integrations.pipedream.schema import action_object_tokens
+
+        # "single" is padding; the row is what gets added.
+        assert action_object_tokens("google_sheets-add-single-row") == ("row",)

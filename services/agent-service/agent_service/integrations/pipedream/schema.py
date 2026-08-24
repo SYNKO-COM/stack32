@@ -233,13 +233,27 @@ def _is_account_resource_type(prop_type: str) -> bool:
     return prop_type.strip().startswith("$.")
 
 
-#: Verbs Pipedream starts an action key with. The noun right after one of them
-#: is what the action acts on.
+#: Verbs Pipedream builds an action key around. Everything after one of them
+#: names what the action acts on.
 _ACTION_VERBS: tuple[str, ...] = (
     "create", "update", "delete", "remove", "get", "list", "search", "send",
     "add", "move", "rename", "archive", "find", "fetch", "upload", "download",
     "post", "reply", "close", "convert", "publish", "cancel", "approve",
     "duplicate", "copy", "invite", "assign", "complete", "start", "stop",
+    "finalize", "void", "refund", "capture", "pay", "mark", "restore",
+    "unarchive", "activate", "deactivate", "enable", "disable", "share",
+    "upsert", "append", "retrieve", "resolve", "merge", "split", "schedule",
+)
+
+#: Words that glue a Pipedream action key together without naming anything:
+#: `reply-to-side-conversation`, `send-email-single-recipient`. They sit inside
+#: the object phrase but are not part of the object's name.
+_CONNECTOR_WORDS: frozenset[str] = frozenset(
+    {
+        "a", "an", "the", "to", "in", "on", "of", "for", "from", "by", "with",
+        "into", "at", "or", "and", "new", "single", "multiple", "many", "all",
+        "as", "via", "batch", "bulk",
+    }
 )
 
 #: Prop types Pipedream renders as a notice in its own form. They are not
@@ -247,46 +261,103 @@ _ACTION_VERBS: tuple[str, ...] = (
 #: required parameter is asking it to fill in a paragraph of prose.
 _DISPLAY_ONLY_TYPES: frozenset[str] = frozenset({"alert"})
 
+#: Suffixes Pipedream hangs off a name that still names the same thing:
+#: `blogPost`, `blogPostId`, `blogPostIds`, `blogPostKey`.
+_ID_SUFFIXES: tuple[str, ...] = ("ids", "id", "key", "keys", "uuid", "guid")
+
 
 def is_display_only(prop_type: str) -> bool:
     """True for a prop that is a notice rather than a field."""
     return prop_type.strip().lower() in _DISPLAY_ONLY_TYPES
 
 
-def action_subject(action_id: str) -> str | None:
-    """The thing an action acts on, read out of its own key.
+def action_object_tokens(action_id: str) -> tuple[str, ...]:
+    """The words naming what an action acts on, read out of its own key.
 
-    `airtable_oauth-update-record` acts on a record; `trello-update-card` on a
-    card. Pipedream writes the verb and its object straight into the key, so
-    this holds for the whole catalogue without a list of app-specific names.
+    Pipedream writes `<app>-<verb>-<object>` straight into the key, so the
+    object is everything after the verb. It is often more than one word —
+    `update-blog-post-draft`, `reply-to-side-conversation` — which is why this
+    returns the whole phrase rather than the single token that follows the verb.
     """
     key = (action_id or "").strip().lower()
     if not key:
-        return None
-    # Keys are `<app>-<verb>-<object>...`; the app slug may itself contain a
-    # dash, so find the verb rather than assuming the app is one segment.
+        return ()
+    # The app slug may itself contain a dash, so find the verb rather than
+    # assuming the app is one segment.
     parts = key.split("-")
     for i, part in enumerate(parts):
         if part in _ACTION_VERBS and i + 1 < len(parts):
-            return parts[i + 1]
-    return None
+            rest = [p for p in parts[i + 1 :] if p]
+            # A connector right after the verb introduces the object —
+            # `reply-to-side-conversation`. A connector later in the phrase ends
+            # it and introduces the container instead: in
+            # `send-message-to-channel` the message is the object and the
+            # channel is where it goes, which is a setting, not a per-call
+            # choice. So skip a leading connector, then stop at the next one.
+            start = 0
+            while start < len(rest) and rest[start] in _CONNECTOR_WORDS:
+                start += 1
+            out: list[str] = []
+            for token in rest[start:]:
+                if token in _CONNECTOR_WORDS:
+                    break
+                out.append(token)
+            return tuple(out)
+    return ()
 
 
-def _is_action_subject(prop_name: str, subject: str | None) -> bool:
+def action_subject(action_id: str) -> str | None:
+    """The first word of the object phrase, kept for callers that want one word."""
+    tokens = action_object_tokens(action_id)
+    return tokens[0] if tokens else None
+
+
+def _strip_id_suffix(name: str) -> str:
+    for suffix in _ID_SUFFIXES:
+        if name.endswith(suffix) and len(name) > len(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+def _is_action_subject(prop_name: str, subject: str | tuple[str, ...] | None) -> bool:
     """True when this prop names the very thing the action acts on.
 
     The record an update writes to is chosen per call, not pinned once in a
     settings drawer — unlike the base and table that contain it. Both are
     `remoteOptions` pickers and Pipedream marks both required, so only the
     action's own key tells them apart.
+
+    A prop matches when its name — less any `Id`/`Key` tail — is a run of
+    consecutive words from the object phrase. `blogPostId` matches
+    `update-blog-post-draft`; `sideConversationId` matches
+    `reply-to-side-conversation`; `contentGroupId`, which names the blog that
+    contains the post, matches neither and stays a setting.
     """
     if not subject:
         return False
     name = prop_name.strip().lower().replace("_", "").replace("-", "")
-    return name in {subject, f"{subject}id", f"{subject}ids", f"{subject}key"}
+    if not name:
+        return False
+    # `stripe-send-invoice` calls the invoice `id`. A bare id is never anything
+    # but the thing being acted on.
+    if name in {"id", "ids"}:
+        return True
+    tokens = (subject,) if isinstance(subject, str) else tuple(subject)
+    if not tokens:
+        return False
+    stem = _strip_id_suffix(name)
+    if not stem:
+        return False
+    for start in range(len(tokens)):
+        for end in range(start + 1, len(tokens) + 1):
+            if stem == "".join(tokens[start:end]):
+                return True
+    return False
 
 
-def _classify(prop: dict[str, Any], *, subject: str | None = None) -> ParamKind:
+def _classify(
+    prop: dict[str, Any], *, subject: str | tuple[str, ...] | None = None
+) -> ParamKind:
     prop_type = str(prop.get("type") or "").lower()
     name = str(prop.get("name") or "").lower().replace("_", "").replace("-", "")
     if prop_type == "app" or prop.get("app") or prop.get("authProvisionId") is not None:
@@ -351,7 +422,7 @@ def normalize_configurable_props(
 
     props: list[NormalizedProp] = []
     auth_prop_name: str | None = None
-    subject = action_subject(action_id)
+    subject = action_object_tokens(action_id)
     for entry in _prop_entries(raw_props):
         name = str(entry.get("name") or "")
         if not name:
