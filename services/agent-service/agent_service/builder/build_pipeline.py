@@ -363,11 +363,15 @@ class CodeBuildPipeline:
                         lint_result, lint_status = await _lint_with_autofix(registry, ctx)
                         continue
 
-                    # Escalation: 1st Terra (patch), 2nd Sol (repair_hard), 3rd+ Claude (repair_expert).
+                    # Climb the OpenAI ladder before changing vendor. This used
+                    # to hand the third iteration to Claude, which is how 412
+                    # LiteLLM calls went to Sonnet in a day against 42 for sol.
+                    # terra twice, then sol twice at its heaviest reasoning, and
+                    # only a fifth attempt is worth another vendor.
                     iter_n = decision.iteration
                     if iter_n <= 1:
                         stage = "patch"
-                    elif iter_n == 2:
+                    elif iter_n <= 3:
                         stage = "repair_hard"
                     else:
                         stage = "repair_expert"

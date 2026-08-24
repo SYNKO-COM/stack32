@@ -81,3 +81,41 @@ class TestTheLadderOnlyEverClimbs:
     def test_the_second_failure_no_longer_jumps_to_the_top(self):
         # This is the exact case that produced the Anthropic bill.
         assert _repair(2, 2).escalation_tier != 3
+
+
+def _pipeline_stage(iteration: int) -> str:
+    """The ladder the pipeline actually walks — the router only sees the result."""
+    if iteration <= 1:
+        return "patch"
+    if iteration <= 3:
+        return "repair_hard"
+    return "repair_expert"
+
+
+class TestThePipelineLadderMatchesTheRouter:
+    """The pipeline names the stage, so the router's thresholds never fire on
+    their own. Changing one without the other is how the third iteration kept
+    going to Claude while the router believed it waited for the fourth."""
+
+    def test_the_first_two_iterations_stay_on_the_primary(self):
+        assert _pipeline_stage(0) == "patch"
+        assert _pipeline_stage(1) == "patch"
+
+    def test_the_next_two_stay_with_openai(self):
+        assert _pipeline_stage(2) == "repair_hard"
+        assert _pipeline_stage(3) == "repair_hard"
+
+    def test_only_a_fifth_attempt_changes_vendor(self):
+        assert _pipeline_stage(4) == "repair_expert"
+
+    def test_the_third_iteration_no_longer_reaches_anthropic(self):
+        s = Settings()
+        stage = _pipeline_stage(2)
+        route = route_coding_stage(CodingStage(stage))
+        assert route.model == s.MODEL_CODING_EXPERT
+        assert not route.model.startswith("anthropic/")
+
+    def test_the_source_still_says_repair_expert_when_it_gets_there(self):
+        s = Settings()
+        route = route_coding_stage(CodingStage(_pipeline_stage(4)))
+        assert route.model == s.MODEL_CODING_EXTERNAL_EXPERT
