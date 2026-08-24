@@ -150,3 +150,23 @@ describe("gaps that name no app", () => {
     expect(appLess([{ type: "brain", message: "" }])).toHaveLength(1);
   });
 });
+
+describe("an explicitly optional prop is never demanded", () => {
+  // HubSpot's send-message declares fileId `optional: true`; the drawer put it
+  // in the critical list as "fileid" and refused to save four filled fields
+  // over an empty file picker the action never needed.
+  it("lets the schema's explicit false overrule the critical list", async () => {
+    const { isStructureRequiredProp } = await import("@/lib/integrations/prop-labels");
+    expect(isStructureRequiredProp({ name: "fileId", required: false })).toBe(false);
+  });
+
+  it("still promotes the same name when nothing declared it", async () => {
+    const { isStructureRequiredProp } = await import("@/lib/integrations/prop-labels");
+    expect(isStructureRequiredProp({ name: "fileId" })).toBe(true);
+  });
+
+  it("keeps an explicit true, of course", async () => {
+    const { isStructureRequiredProp } = await import("@/lib/integrations/prop-labels");
+    expect(isStructureRequiredProp({ name: "fileId", required: true })).toBe(true);
+  });
+});

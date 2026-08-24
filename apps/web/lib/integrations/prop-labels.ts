@@ -139,11 +139,11 @@ const PROP_COPY: Record<string, PropCopy> = {
   },
   folderId: {
     label: "Dossier",
-    hint: "Le dossier Google Drive cible",
+    hint: "Le dossier à utiliser dans l’app connectée",
   },
   fileId: {
     label: "Fichier",
-    hint: "Le fichier Google Drive cible",
+    hint: "Le fichier à utiliser dans l’app connectée",
   },
   owner: {
     label: "Propriétaire du dépôt",
@@ -259,6 +259,13 @@ export function isStructureRequiredProp(prop: {
   const compact = compactPropName(prop.name);
   if (ADVANCED_ONLY_PROPS.has(compact)) return false;
   if (prop.required === true) return true;
+  // The backend already promotes the critical pickers it can justify, so an
+  // explicit `false` is the schema speaking and the list must not overrule it.
+  // HubSpot's optional fileId sat in this list as "fileid" and the drawer
+  // demanded a file upload the action never needed — the save button refused
+  // four filled fields over it. The list now only covers props whose
+  // requiredness nothing ever declared.
+  if (prop.required === false) return false;
   return CRITICAL_STRUCTURE_PROPS.has(compact);
 }
 
