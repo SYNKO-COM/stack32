@@ -56,6 +56,7 @@ describe("billing plans", () => {
   it("clamps credits to plan ladder", () => {
     expect(clampCreditsForPlan("pro", 100)).toBe(200);
     expect(clampCreditsForPlan("starter", 10_000)).toBe(10_000);
-    expect(clampCreditsForPlan("free", 500)).toBe(5);
+    // Free grew from 5 to 25 credits so one full first build fits the budget.
+    expect(clampCreditsForPlan("free", 500)).toBe(25);
   });
 });
