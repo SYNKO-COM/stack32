@@ -471,7 +471,8 @@
       "never": "Act directly",
       "always": "Always ask me",
       "conditional": "Ask when risky"
-    }
+    },
+    "checking": "Checking…"
   },
   "connection": {
     "prompt": "To finish building, connect the account(s) below. Once everything is linked, I’ll continue and confirm when your agent is ready.",

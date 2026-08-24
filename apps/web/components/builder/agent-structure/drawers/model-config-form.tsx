@@ -38,10 +38,14 @@ export function ModelConfigForm({
 }) {
   const { t } = useTranslation(["structure", "builder", "errors"]);
   const queryClient = useQueryClient();
-  const { data: connectionPayload, isFetching: connectionsLoading } = useQuery({
+  const { data: connectionPayload } = useQuery({
     queryKey: ["connections", agentId],
     queryFn: () => listAgentConnections(agentId),
   });
+  //: Until the first answer lands there is nothing to report. Saying
+  //: "not connected" in the meantime told people their account had dropped
+  //: every time they reloaded the page.
+  const connectionsKnown = connectionPayload !== undefined;
   const current = node.subtitle?.split(" · ") ?? [];
   const [provider, setProvider] = useState<LiveLlmProviderId>(() =>
     normalizeLiveProvider(current[0]),
@@ -78,9 +82,9 @@ export function ModelConfigForm({
   const connected = Boolean(connection);
   const connectStatus = connected
     ? "connected"
-    : connectionsLoading
-      ? "needs_setup"
-      : "disconnected";
+    : connectionsKnown
+      ? "disconnected"
+      : "checking";
 
   const handleProviderChange = (next: string) => {
     const normalized = normalizeLiveProvider(next);

@@ -471,7 +471,8 @@
       "never": "Agir directement",
       "always": "Toujours me demander",
       "conditional": "Demander si c'est risqué"
-    }
+    },
+    "checking": "Vérification…"
   },
   "connection": {
     "prompt": "Pour terminer, connectez le(s) compte(s) ci-dessous. Une fois tout lié, je continue et je vous confirme quand votre agent est prêt.",

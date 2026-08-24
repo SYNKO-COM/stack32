@@ -14,6 +14,8 @@ export type IntegrationConnectionStatus =
   | "connected"
   | "disconnected"
   | "needs_setup"
+  /** The answer has not arrived yet. Say so instead of guessing "not connected". */
+  | "checking"
   | "error"
   | string;
 
@@ -511,7 +513,9 @@ export function IntegrationConnectionCard({
               ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
               : status === "error"
                 ? "bg-destructive/10 text-destructive"
-                : "bg-amber-500/10 text-amber-800 dark:text-amber-300",
+                : status === "checking"
+                  ? "bg-muted text-muted-foreground"
+                  : "bg-amber-500/10 text-amber-800 dark:text-amber-300",
           )}
         >
           {connected
@@ -520,7 +524,9 @@ export function IntegrationConnectionCard({
               ? t("connections.waiting", { defaultValue: "Waiting…" })
               : status === "error"
                 ? t("connections.errorStatus", { defaultValue: "Error" })
-                : t("connections.needsSetup", { defaultValue: "Needs setup" })}
+                : status === "checking"
+                  ? t("connections.checking", { defaultValue: "Checking…" })
+                  : t("connections.needsSetup", { defaultValue: "Needs setup" })}
         </span>
       </div>
 
