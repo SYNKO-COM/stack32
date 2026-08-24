@@ -385,6 +385,60 @@ class BuilderOrchestrator:
             )
 
             current_spec = await self.db.load_draft_spec(agent_id, user_id)
+
+            # A message that states settings ("mon email d'expéditeur est …")
+            # is configuration, not a rebuild. Save what it states through the
+            # same path as the drawer; when that is all it asked, answer here.
+            from agent_service.builder.capabilities import is_live_tool_repair_prompt
+
+            if current_spec is not None and not is_live_tool_repair_prompt(content):
+                try:
+                    from agent_service.builder.config_from_chat import (
+                        apply_settings_from_chat,
+                        compose_settings_reply,
+                    )
+
+                    applied = await apply_settings_from_chat(
+                        db=self.db,
+                        gateway=self.gateway,
+                        user_id=user_id,
+                        agent_id=agent_id,
+                        content=content,
+                        locale=locale,
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception("config_from_chat_failed run=%s", run_id)
+                    applied = None
+                if applied is not None and applied.did_anything and not applied.wants_other_changes:
+                    reply = compose_settings_reply(applied, locale)
+                    await self.db.clear_thinking_messages(thread_id=thread_id)
+                    await self.db.insert_assistant_message(
+                        thread_id=thread_id,
+                        agent_id=agent_id,
+                        user_id=user_id,
+                        content=reply,
+                        metadata={"tone": "normal", "card": "settings_saved", "run_id": run_id},
+                    )
+                    prev_status = str(agent.get("status") or "draft")
+                    next_status = (
+                        "ready"
+                        if applied.ready and prev_status in {"draft", "building", "ready", "needs_attention"}
+                        else (prev_status if prev_status != "building" else "draft")
+                    )
+                    await self.db.update_agent_status(agent_id, user_id, next_status)
+                    await self.db.emit_event(
+                        run_id,
+                        "run.completed",
+                        {"mapping_key": "builder.progress.completed", "mode": "settings"},
+                    )
+                    await self.db.complete_run(run_id)
+                    return {
+                        "status": "completed",
+                        "run_id": run_id,
+                        "mode": "settings",
+                        "answer": reply,
+                    }
+
             needs_identity = self._needs_identity_setup(agent, current_spec)
             run_row_early = await self.db.get_owned_run(run_id, user_id)
             payload_early = (run_row_early or {}).get("input") or {}

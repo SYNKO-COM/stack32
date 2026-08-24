@@ -42,8 +42,13 @@ def test_an_account_resource_type_is_configured_by_the_user():
     assert "channels" in all_props
 
 
-def test_explicit_optional_is_offered_but_never_demanded():
-    """Trello's members, labels and custom fields are pickers, not obligations."""
+def test_a_picker_that_names_no_container_is_the_agents_choice():
+    """Which labels go on a card is decided per card, not pinned in a drawer.
+
+    A remote-options widget used to mean "setting"; now only a prop naming a
+    container or an identity is one. Trello's board stays pinned; its labels
+    travel with each call.
+    """
     req, all_props = config(
         [
             APP,
@@ -53,7 +58,7 @@ def test_explicit_optional_is_offered_but_never_demanded():
         "trello",
     )
     assert "board" in req
-    assert "idLabels" in all_props
+    assert "idLabels" not in all_props
     assert "idLabels" not in req
 
 

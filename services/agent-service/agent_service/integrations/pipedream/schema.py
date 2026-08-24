@@ -52,6 +52,34 @@ _STATIC_NAME_HINTS = frozenset(
         "fileid",
         "inboxid",
         "designtype",
+        # Sender identities: pinned once, like a signature.
+        "fromemail",
+        "fromname",
+        "sender",
+        "senderemail",
+        "sendername",
+        "senderactorid",
+        "channelaccountid",
+        "replytoemail",
+        # More workspace containers, named the way other apps name them.
+        "space",
+        "spaceid",
+        "project",
+        "projectid",
+        "site",
+        "siteid",
+        "bucket",
+        "bucketid",
+        "drive",
+        "driveid",
+        "audience",
+        "audienceid",
+        "blogid",
+        "contentgroupid",
+        "organization",
+        "organizationid",
+        "orgid",
+        "storeid",
     }
 )
 
@@ -371,13 +399,18 @@ def _classify(
         return "runtime"
     if _is_account_resource_type(prop_type):
         return "static"
-    if prop.get("remoteOptions") is True or prop.get("useQuery") is True:
+    # Trello writes `idList`, Slack writes `channelId`, and a workspace picker
+    # may be `workspaceId` — all the same word under Pipedream's id dressing.
+    stem = _strip_id_suffix(name.removeprefix("id") if name.startswith("id") and len(name) > 2 else name)
+    if name in _STATIC_NAME_HINTS or stem in _STATIC_NAME_HINTS:
         return "static"
-    if name in _STATIC_NAME_HINTS:
-        return "static"
-    # Optional selects with static options often are configuration
-    if prop.get("options") and name in _STATIC_NAME_HINTS:
-        return "static"
+    # A remote-options picker is not, by itself, a setting. Stripe's
+    # create-subscription marks `customer` required with a picker, but which
+    # customer is the whole point of a call — pinning one in a drawer would
+    # make an agent that only ever bills the same person. Only a prop that
+    # names a container (board, base, inbox) or an identity (fromEmail) is
+    # pinned once; the rest is the agent's per-call business, whatever widget
+    # Pipedream renders for it.
     return "runtime"
 
 
