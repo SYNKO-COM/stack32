@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -14,6 +15,8 @@ from agent_service.integrations.pipedream.accounts import sync_pipedream_account
 from agent_service.integrations.pipedream.client import PipedreamClient
 from agent_service.integrations.registry import get_provider_registry
 from agent_service.supabase_client import get_supabase_admin_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["integrations"])
 
@@ -463,13 +466,34 @@ async def trigger_dynamic_options(
                     break
             if auth_id:
                 auth_block = {"authProvisionId": str(auth_id)}
+                # The component says what its auth prop is called. Guessing it
+                # from the app slug works only while the two agree — Slack's
+                # app is `slack_v2` and its prop is `slack` — and a wrong name
+                # means Pipedream is asked to list a board with no account, so
+                # it answers nothing and a required picker renders as a text
+                # box asking for a raw id.
                 configured[app_id] = auth_block
+                try:
+                    from agent_service.integrations.pipedream.schema import (
+                        normalize_configurable_props,
+                    )
+
+                    component = await client.get_trigger_component(component_id)
+                    schema = normalize_configurable_props(
+                        component, tool_id=f"pd:{component_id}", action_id=component_id
+                    )
+                    if schema.auth_prop_name:
+                        configured[schema.auth_prop_name] = auth_block
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "trigger_auth_prop_lookup_failed component=%s", component_id
+                    )
                 hint = hint_for_app(app_id)
                 guess = hint.get("auth_prop_guess") if isinstance(hint, dict) else None
                 if isinstance(guess, str) and guess.strip():
                     configured[guess.strip()] = auth_block
         except Exception:  # noqa: BLE001
-            pass
+            logger.exception("trigger_options_auth_failed component=%s", component_id)
     try:
         rows = await client.configure_prop(
             action_id=component_id,
@@ -477,7 +501,15 @@ async def trigger_dynamic_options(
             external_user_id=user.user_id,
             configured_props=configured,
         )
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # Swallowing this silently is what made an empty picker and a broken
+        # one look identical from the outside.
+        logger.warning(
+            "trigger_configure_failed component=%s prop=%s err=%s",
+            component_id,
+            prop,
+            exc,
+        )
         rows = []
     options: list[dict[str, Any]] = []
     for row in rows or []:

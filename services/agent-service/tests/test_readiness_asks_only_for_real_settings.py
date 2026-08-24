@@ -79,3 +79,24 @@ class TestTheListenErrorNamesWhatIsMissing:
 
         src = inspect.getsource(agents.start_trigger_listen)
         assert '"fields": exc.fields' in src
+
+
+class TestTheTriggerPickerUsesTheSchemasAuthName:
+    def test_it_reads_the_auth_prop_from_the_component(self):
+        import inspect
+
+        from agent_service.routers import integrations
+
+        src = inspect.getsource(integrations.trigger_dynamic_options)
+        # Guessing the auth prop from the app slug holds only while the two
+        # agree; Slack's app is `slack_v2` and its prop is `slack`.
+        assert "schema.auth_prop_name" in src
+
+    def test_a_failed_configure_call_is_no_longer_silent(self):
+        import inspect
+
+        from agent_service.routers import integrations
+
+        src = inspect.getsource(integrations.trigger_dynamic_options)
+        assert "trigger_configure_failed" in src
+        assert "except Exception:  # noqa: BLE001\n        rows = []" not in src
