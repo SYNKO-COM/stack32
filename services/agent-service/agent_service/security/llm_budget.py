@@ -44,6 +44,11 @@ class RunLlmBudget:
     #: What the person has left to spend this period, in USD. None means the
     #: ceiling could not be read and the run is not gated on it.
     max_cost_usd: float | None = None
+    #: True when the tokens were billed to the person's own LLM account
+    #: (Pipedream Connect), not to a Stack32 platform key. Their OpenAI
+    #: invoice already charged them; deducting the same dollars from their
+    #: Stack32 credits would charge them twice for one call.
+    user_funded_llm: bool = False
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -69,7 +74,17 @@ class RunLlmBudget:
             raise LlmCallBudgetExceeded()
         # Checked before the increment so the call that would cross the plan's
         # ceiling is the one that stops the run, not the one after it.
-        if self.max_cost_usd is not None and self.cost_usd >= self.max_cost_usd:
+        #
+        # The ceiling guards the person's Stack32 budget, which only funds
+        # platform-key tokens. A run on their own LLM account spends their
+        # provider balance, so cutting it off against our ceiling would stop
+        # work they are already paying for elsewhere; that run is billed one
+        # flat service credit at roll-up instead.
+        if (
+            not self.user_funded_llm
+            and self.max_cost_usd is not None
+            and self.cost_usd >= self.max_cost_usd
+        ):
             raise UserBudgetExhausted()
         self.calls += 1
         self.input_tokens += max(0, input_tokens)
@@ -212,6 +227,7 @@ async def llm_run_budget(
     max_calls: int | None = None,
     source: str = "builder",
     enforce_user_budget: bool = True,
+    user_funded_llm: bool = False,
 ):
     settings = get_settings()
     ceiling = await remaining_budget_usd(user_id) if enforce_user_budget else None
@@ -222,6 +238,7 @@ async def llm_run_budget(
         max_calls=max_calls or settings.MAX_LLM_CALLS_PER_RUN,
         source=source,
         max_cost_usd=ceiling,
+        user_funded_llm=user_funded_llm,
     )
     token = _current_budget.set(budget)
     try:
@@ -241,6 +258,20 @@ async def llm_run_budget(
             try:
                 from agent_service.supabase_client import get_persistence
 
+                # A run on the person's own key costs Stack32 no tokens, so
+                # the gauge bills the service instead of the LLM: one flat
+                # credit per execution. Platform-funded runs (every build)
+                # still deduct what they really cost.
+                billed_usd = budget.cost_usd
+                pricing_basis = "llm_cost"
+                if budget.user_funded_llm:
+                    from agent_service.billing.economics import (
+                        service_cost_usd_per_live_run,
+                    )
+
+                    billed_usd = service_cost_usd_per_live_run()
+                    pricing_basis = "service_flat"
+
                 await get_persistence().record_usage_event(
                     user_id=budget.user_id,
                     agent_id=budget.agent_id,
@@ -248,12 +279,17 @@ async def llm_run_budget(
                     event_name="llm.run",
                     quantity=budget.calls,
                     unit="calls",
-                    estimated_cost=budget.cost_usd,
+                    estimated_cost=billed_usd,
                     metadata={
                         "input_tokens": budget.input_tokens,
                         "output_tokens": budget.output_tokens,
                         "models": budget.models,
+                        # What the tokens really cost, kept for margin analysis
+                        # even when it is the person's own provider bill.
                         "cost_usd": budget.cost_usd,
+                        "billed_usd": billed_usd,
+                        "pricing_basis": pricing_basis,
+                        "user_funded_llm": budget.user_funded_llm,
                     },
                 )
             except Exception:  # noqa: BLE001

@@ -55,3 +55,23 @@ def usd_per_credit(plan_key: PlanKey, credits_monthly: int, billing_interval: Bi
     )
     credits = max(credits_monthly, 1)
     return budget / credits
+
+
+#: What one live execution costs in credits when the person's own LLM key paid
+#: for the tokens. Stack32 bills the service it actually provides — the
+#: orchestration, the triggers, the 24/7 listening, the sandbox — not tokens it
+#: never bought. One credit is ~$0.05 on every plan, against ~$0.0006 of real
+#: infrastructure per run: a wide margin that stays honest because the person
+#: is not charged twice for the same tokens.
+SERVICE_CREDITS_PER_LIVE_RUN: float = 1.0
+
+
+def service_cost_usd_per_live_run(
+    plan_key: PlanKey = "pro",
+    credits_monthly: int = 200,
+    billing_interval: BillingInterval = "monthly",
+) -> float:
+    """The USD the gauge should deduct for one user-key live run."""
+    return SERVICE_CREDITS_PER_LIVE_RUN * usd_per_credit(
+        plan_key, credits_monthly, billing_interval
+    )

@@ -210,6 +210,11 @@ class ModelGateway:
             logger.warning("LLM call timed out after %ss profile=%s", timeout, profile)
             raise RuntimeError("MODEL_PROVIDER_UNAVAILABLE") from exc
 
+        # A call made with the caller's own provider key spends their LLM
+        # account, not ours. The budget records that so the roll-up can bill
+        # the service instead of tokens Stack32 never bought.
+        if budget is not None and api_key:
+            budget.user_funded_llm = True
         if budget is not None and hasattr(result, "model"):
             budget.register_call(
                 model=str(getattr(result, "model", profile.value)),
