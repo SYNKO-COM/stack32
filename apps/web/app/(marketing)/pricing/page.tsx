@@ -77,9 +77,14 @@ export default function PricingPage() {
                 amount: formatUsd(priced.chargeUsd, locale),
               })
             : null,
-          creditsLabel: t("pricing.creditsPerMonth", {
-            count: formatCredits(priced.creditsMonthly, locale),
-          }),
+          // Free's grant is one-time for the life of the account, so it must
+          // not read "per month" — that promise is what made it look renewable.
+          creditsLabel: t(
+            PLANS[id].creditsRenew
+              ? "pricing.creditsPerMonth"
+              : "pricing.creditsLifetime",
+            { count: formatCredits(priced.creditsMonthly, locale) },
+          ),
         };
       }),
     [creditByPlan, interval, locale, t],
@@ -231,7 +236,15 @@ export default function PricingPage() {
               <p className="mt-4 text-sm text-muted-foreground">{plan.creditsLabel}</p>
             )}
 
-            <ul className="mt-6 flex-1 space-y-2.5">
+            <Button
+              className="mt-6 w-full rounded-full"
+              variant={plan.popular ? "default" : "outline"}
+              disabled={activate.isPending}
+              onClick={() => void handleCta(plan.id)}
+            >
+              {plan.cta}
+            </Button>
+            <ul className="mt-7 flex-1 space-y-2.5 border-t border-border/60 pt-6">
               {plan.features.map((feature) => (
                 <li key={feature} className="flex items-start gap-2 text-sm">
                   <Check className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
@@ -239,14 +252,6 @@ export default function PricingPage() {
                 </li>
               ))}
             </ul>
-            <Button
-              className="mt-8 w-full rounded-full"
-              variant={plan.popular ? "default" : "outline"}
-              disabled={activate.isPending}
-              onClick={() => void handleCta(plan.id)}
-            >
-              {plan.cta}
-            </Button>
           </div>
         ))}
       </div>

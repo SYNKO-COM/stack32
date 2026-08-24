@@ -59,9 +59,14 @@ export function PricingPlansPreview() {
                 amount: formatUsd(priced.chargeUsd, locale),
               })
             : null,
-          creditsLabel: t("marketing:pricing.creditsPerMonth", {
-            count: formatCredits(priced.creditsMonthly, locale),
-          }),
+          // Free's grant is one-time for the life of the account, so it must
+          // not read "per month" — that promise is what made it look renewable.
+          creditsLabel: t(
+            PLANS[id].creditsRenew
+              ? "marketing:pricing.creditsPerMonth"
+              : "marketing:pricing.creditsLifetime",
+            { count: formatCredits(priced.creditsMonthly, locale) },
+          ),
         };
       }),
     [interval, locale, t],

@@ -18,6 +18,10 @@ class PlanDefinition:
     annual_monthly_price_usd: float
     base_credits: int
     base_budget_usd: float
+    #: False when the grant is one-time for the life of the account. Free gets
+    #: 25 credits once — not 25 a month — until the person subscribes; the
+    #: entitlements RPC enforces this by opening a period that never closes.
+    credits_renew: bool
     max_workspaces: int | None
     max_agents: int | None
     max_live_messages: int | None
@@ -41,6 +45,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         # with the paid plans.
         base_credits=25,
         base_budget_usd=1.30,
+        credits_renew=False,
         max_workspaces=1,
         max_agents=1,
         max_live_messages=10,
@@ -56,6 +61,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         annual_monthly_price_usd=20,
         base_credits=100,
         base_budget_usd=6.0,
+        credits_renew=True,
         max_workspaces=1,
         max_agents=5,
         max_live_messages=None,
@@ -70,6 +76,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         annual_monthly_price_usd=40,
         base_credits=200,
         base_budget_usd=11.0,
+        credits_renew=True,
         max_workspaces=None,
         max_agents=30,
         max_live_messages=None,
@@ -84,6 +91,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         annual_monthly_price_usd=80,
         base_credits=400,
         base_budget_usd=21.0,
+        credits_renew=True,
         max_workspaces=None,
         max_agents=None,
         max_live_messages=None,

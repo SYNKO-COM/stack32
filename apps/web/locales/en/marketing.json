@@ -230,7 +230,7 @@
       "features": [
         "1 workspace",
         "1 agent (not publishable, lifetime)",
-        "25 Builder credits / month",
+        "25 Builder credits — once, for the life of the account",
         "Running your agents included (10 Live messages)",
         "Build, Live and Structure views",
         "Live with your own LLM key (BYOK)",
@@ -342,7 +342,8 @@
         }
       ]
     },
-    "note": "Secure checkout by Whop. Cancel anytime from your settings."
+    "note": "Secure checkout by Whop. Cancel anytime from your settings.",
+    "creditsLifetime": "{{count}} credits · lifetime"
   },
   "faq": {
     "title": "Frequently asked questions",

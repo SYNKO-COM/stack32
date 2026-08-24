@@ -32,6 +32,8 @@ export interface PlanDefinition {
   maxLiveMessages: number | null;
   /** Total consumers across ALL of this creator's published agents. */
   maxSubscribers: number | null;
+  /** False when the grant is one-time for the life of the account (free). */
+  creditsRenew: boolean;
   canPublish: boolean;
   canMonetize: boolean;
   betaAccess: boolean;
@@ -51,6 +53,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     maxAgents: 1,
     maxLiveMessages: 10,
     maxSubscribers: 0,
+    creditsRenew: false,
     canPublish: false,
     canMonetize: false,
     betaAccess: false,
@@ -66,6 +69,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     maxAgents: 5,
     maxLiveMessages: null,
     maxSubscribers: 500,
+    creditsRenew: true,
     canPublish: true,
     canMonetize: false,
     betaAccess: false,
@@ -82,6 +86,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     maxAgents: 30,
     maxLiveMessages: null,
     maxSubscribers: 1000,
+    creditsRenew: true,
     canPublish: true,
     canMonetize: true,
     betaAccess: true,
@@ -98,6 +103,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     maxAgents: null,
     maxLiveMessages: null,
     maxSubscribers: 2000,
+    creditsRenew: true,
     canPublish: true,
     canMonetize: true,
     betaAccess: true,

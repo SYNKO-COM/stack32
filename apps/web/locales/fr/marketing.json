@@ -230,7 +230,7 @@
       "features": [
         "1 workspace",
         "1 agent (non publiable, à vie)",
-        "25 crédits Builder / mois",
+        "25 crédits Builder — une seule fois, à vie",
         "Exécutions de vos agents incluses (10 messages Live)",
         "Vues Build, Live et Structure",
         "Live avec votre propre clé LLM (BYOK)",
@@ -342,7 +342,8 @@
         }
       ]
     },
-    "note": "Paiement sécurisé par Whop. Annulation possible à tout moment depuis vos paramètres."
+    "note": "Paiement sécurisé par Whop. Annulation possible à tout moment depuis vos paramètres.",
+    "creditsLifetime": "{{count}} crédits · à vie"
   },
   "faq": {
     "title": "Questions fréquentes",
