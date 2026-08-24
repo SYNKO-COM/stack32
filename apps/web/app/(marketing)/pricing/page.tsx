@@ -233,7 +233,22 @@ export default function PricingPage() {
                 <p className="text-[11px] text-muted-foreground/80">{plan.creditsLabel}</p>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-muted-foreground">{plan.creditsLabel}</p>
+              // Free has no credit picker; reserve the same height so all four
+              // CTAs sit on one line instead of the free one floating up.
+              <div className="mt-4 space-y-1.5">
+                <p className="text-xs font-medium text-transparent select-none" aria-hidden="true">
+                  —
+                </p>
+                <p className="flex h-9 items-center text-sm text-muted-foreground">
+                  {plan.creditsLabel}
+                </p>
+                <p
+                  className="text-[11px] text-transparent select-none"
+                  aria-hidden="true"
+                >
+                  —
+                </p>
+              </div>
             )}
 
             <Button
