@@ -151,7 +151,15 @@
       "connect": "Connectez votre compte {{app}}.",
       "chooseFor": "{{app}} — choisissez {{fields}}.",
       "finishFor": "{{app}} — terminez le réglage.",
-      "chooseModel": "Choisissez le modèle qui fait réfléchir l’agent."
+      "chooseModel": "Choisissez le modèle qui fait réfléchir l’agent.",
+      "check": {
+        "brain": "Choisissez le modèle qui fait réfléchir l’agent.",
+        "connections": "Liez les comptes dont l’agent a besoin.",
+        "tool_config": "Un outil attend encore un réglage.",
+        "tools_resolve": "Un outil demandé n’a pas pu être branché.",
+        "memory": "La mémoire externe attend un compte.",
+        "build": "La dernière construction n’a pas abouti."
+      }
     }
   },
   "nodeStates": {

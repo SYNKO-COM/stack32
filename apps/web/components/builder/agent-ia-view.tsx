@@ -477,6 +477,18 @@ export function AgentIaView({
       items.push(t("structure:modules.setup.connect", { app: appDisplayName(appId) }));
     }
 
+    // A failing check that produces no missing item still turns the chip red.
+    // The banner said nothing at all in that case, which is how "À configurer"
+    // ended up sitting over an empty card with every node badge cleared.
+    for (const c of readinessQuery.data?.checks ?? []) {
+      if (c.ok || c.severity !== "error") continue;
+      items.push(
+        t(`structure:modules.setup.check.${c.key}`, {
+          defaultValue: c.message ?? "",
+        }),
+      );
+    }
+
     // Gaps that name no app — a model still to pick, and anything added later.
     // Grouping by app silently dropped these, so the chip said "À configurer"
     // over an empty banner and the person had nothing to act on.
@@ -505,6 +517,7 @@ export function AgentIaView({
 
     return [...new Set(items)];
   }, [
+    readinessQuery.data?.checks,
     readinessQuery.data?.missingConnections,
     readinessQuery.data?.missingConfig,
     i18n.language,

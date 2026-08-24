@@ -151,7 +151,15 @@
       "connect": "Link your {{app}} account.",
       "chooseFor": "{{app}} — choose {{fields}}.",
       "finishFor": "{{app}} — finish the setup.",
-      "chooseModel": "Pick the model that does the agent's thinking."
+      "chooseModel": "Pick the model that does the agent's thinking.",
+      "check": {
+        "brain": "Pick the model that does the agent's thinking.",
+        "connections": "Link the accounts this agent needs.",
+        "tool_config": "A tool is still waiting on a setting.",
+        "tools_resolve": "A requested tool could not be wired up.",
+        "memory": "External memory is waiting on an account.",
+        "build": "The last build did not finish."
+      }
     }
   },
   "nodeStates": {
