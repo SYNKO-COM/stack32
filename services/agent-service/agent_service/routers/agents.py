@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -16,6 +17,8 @@ from agent_service.supabase_client import (
     get_persistence,
     get_repository,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -183,6 +186,24 @@ async def get_agent_readiness(
         db=db,
         installation_id=str(install["id"]),
     )
+    # Persist what was just evaluated. The installations route already did;
+    # this one — the structure page's — did not, so an installation created
+    # before its settings were filled stayed `setup_required` forever and the
+    # published page kept asking for accounts the agent already had.
+    mapped = {
+        "ready": "ready",
+        "needs_setup": "setup_required",
+        "needs_attention": "needs_attention",
+    }.get(result.status, "setup_required")
+    if install.get("status") != mapped:
+        try:
+            await InstallationService(db).update_status(
+                installation_id=str(install["id"]),
+                user_id=user.user_id,
+                status=mapped,  # type: ignore[arg-type]
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("installation_status_sync_failed", exc_info=True)
     return {
         "scope": "installation",
         "status": result.status,
