@@ -185,10 +185,10 @@ def match_option(stated: str, options: list[Any]) -> Any | None:
     for v, _, value in norm:
         if v == wanted:
             return value
-    for _, l, value in norm:
-        if l == wanted:
+    for _, lbl, value in norm:
+        if lbl == wanted:
             return value
-    contains = [value for _, l, value in norm if wanted in l or l in wanted]
+    contains = [value for _, lbl, value in norm if wanted in lbl or lbl in wanted]
     if len(contains) == 1:
         return contains[0]
     return None
