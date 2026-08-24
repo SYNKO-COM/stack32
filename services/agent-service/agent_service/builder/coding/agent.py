@@ -251,17 +251,25 @@ class CodingAgent:
                     prior_failures=verification_repairs,
                 )
             except Exception as exc:  # noqa: BLE001
-                from agent_service.security.llm_budget import LlmCallBudgetExceeded
+                from agent_service.security.llm_budget import (
+                    LlmCallBudgetExceeded,
+                    UserBudgetExhausted,
+                )
 
                 logger.warning("coding model call failed: %s", exc)
-                stop = (
-                    "MODEL_BUDGET_EXCEEDED"
-                    if isinstance(exc, LlmCallBudgetExceeded) or "BUDGET" in str(exc)
-                    else "MODEL_PROVIDER_UNAVAILABLE"
-                )
+                # Two different budgets, two different audiences. Our per-run
+                # call cap is a platform limit and gets soft-skipped; the
+                # person's plan running out has to reach them, so it must not
+                # be folded into the same code by a substring match.
+                if isinstance(exc, UserBudgetExhausted):
+                    stop = "BUDGET_EXCEEDED"
+                elif isinstance(exc, LlmCallBudgetExceeded) or "MODEL_BUDGET" in str(exc):
+                    stop = "MODEL_BUDGET_EXCEEDED"
+                else:
+                    stop = "MODEL_PROVIDER_UNAVAILABLE"
                 return CodingResult(
                     success=False,
-                    final_message="Model provider unavailable." if stop != "MODEL_BUDGET_EXCEEDED" else "LLM call budget exceeded during repair.",
+                    final_message=_stop_message(stop),
                     ledger=ledger,
                     files_touched=sorted(ctx.files_touched),
                     stop_reason=stop,
@@ -422,6 +430,15 @@ class CodingAgent:
         if tool_id == "exec.run_lint":
             ledger.verification["lint"] = "passed" if result.get("ok") else "failed"
         return result
+
+
+def _stop_message(stop: str) -> str:
+    """One line the caller can show, matched to which budget ran out."""
+    if stop == "BUDGET_EXCEEDED":
+        return "Out of credits for this billing period."
+    if stop == "MODEL_BUDGET_EXCEEDED":
+        return "LLM call budget exceeded during repair."
+    return "Model provider unavailable."
 
 
 def _safe_args(args: dict[str, Any]) -> dict[str, Any]:

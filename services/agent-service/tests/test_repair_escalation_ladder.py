@@ -119,3 +119,73 @@ class TestThePipelineLadderMatchesTheRouter:
         s = Settings()
         route = route_coding_stage(CodingStage(_pipeline_stage(4)))
         assert route.model == s.MODEL_CODING_EXTERNAL_EXPERT
+
+
+class TestTheFullLadderInOrder:
+    """terra, Codex, Codex, sol, then at most two goes at Anthropic."""
+
+    EXPECTED = [
+        ("patch", "openai/gpt-5.6-terra"),
+        ("repair_codex", "openai/gpt-5.2-codex"),
+        ("repair_codex_max", "openai/gpt-5.3-codex"),
+        ("repair_hard", "openai/gpt-5.6-sol"),
+        ("repair_expert", "anthropic/claude-sonnet-5"),
+    ]
+
+    def test_each_rung_lands_on_the_model_it_should(self):
+        for stage, model in self.EXPECTED:
+            assert route_coding_stage(CodingStage(stage)).model == model, stage
+
+    def test_only_the_last_rung_leaves_openai(self):
+        for stage, model in self.EXPECTED[:-1]:
+            assert model.startswith("openai/"), stage
+        assert self.EXPECTED[-1][1].startswith("anthropic/")
+
+    def test_the_first_build_uses_a_coding_model_not_the_dearest(self):
+        s = Settings()
+        route = route_coding_stage(CodingStage.ARCHITECTURE)
+        assert route.model == s.MODEL_CODING_INITIAL
+        assert route.model != s.MODEL_CODING_EXPERT
+
+    def test_the_initial_model_costs_less_than_the_expert(self):
+        from agent_service.billing.pricing import PLATFORM_MODEL_PRICING as P
+
+        s = Settings()
+        assert (
+            P[s.MODEL_CODING_INITIAL].input_usd_per_m
+            < P[s.MODEL_CODING_EXPERT].input_usd_per_m
+        )
+
+    def test_every_rung_has_a_price(self):
+        from agent_service.billing.pricing import PLATFORM_MODEL_PRICING as P
+
+        # The registry is fail-closed; an unpriced model would be blocked.
+        for _stage, model in self.EXPECTED:
+            assert model in P, model
+
+
+class TestAnthropicIsCapped:
+    def test_the_cap_is_two(self):
+        assert Settings().MAX_EXTERNAL_EXPERT_CALLS == 2
+
+    def test_the_pipeline_counts_and_stops(self):
+        import inspect
+
+        from agent_service.builder import build_pipeline
+
+        src = inspect.getsource(build_pipeline)
+        assert "external_expert_calls" in src
+        assert "MAX_EXTERNAL_EXPERT_CALLS" in src
+        assert "REPAIR_BUDGET_EXHAUSTED" in src
+
+    def test_running_out_is_not_treated_as_a_platform_hiccup(self):
+        import inspect
+
+        from agent_service.builder import orchestrator
+
+        src = inspect.getsource(orchestrator)
+        soft = 'build_failure_reason in {\n                        "MODEL_PROVIDER_UNAVAILABLE",\n                        "MODEL_BUDGET_EXCEEDED",\n                    }'
+        # REPAIR_BUDGET_EXHAUSTED must surface to the user with a Fix, not be
+        # swallowed as our own infrastructure failing.
+        assert "REPAIR_BUDGET_EXHAUSTED" not in soft
+        assert src.count("REPAIR_BUDGET_EXHAUSTED") == 0

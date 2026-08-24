@@ -308,6 +308,7 @@ class CodeBuildPipeline:
                 max_calls=settings.MAX_LLM_CALLS_PER_CODING_REPAIR,
                 source="coding",
             ):
+                external_expert_calls = 0
                 while test_status != "passed" or lint_status != "passed":
                     failure_excerpt = summarise_exec_failure(test_result, lint_result)
                     error_code = (
@@ -363,18 +364,31 @@ class CodeBuildPipeline:
                         lint_result, lint_status = await _lint_with_autofix(registry, ctx)
                         continue
 
-                    # Climb the OpenAI ladder before changing vendor. This used
-                    # to hand the third iteration to Claude, which is how 412
-                    # LiteLLM calls went to Sonnet in a day against 42 for sol.
-                    # terra twice, then sol twice at its heaviest reasoning, and
-                    # only a fifth attempt is worth another vendor.
+                    # Climb the whole OpenAI ladder before changing vendor:
+                    # terra, then two rungs of Codex, then sol. This used to
+                    # hand the third iteration straight to Claude, which is how
+                    # 412 LiteLLM calls went to Sonnet in a day against 42 for
+                    # sol. Anthropic is the last resort and is capped below.
                     iter_n = decision.iteration
                     if iter_n <= 1:
                         stage = "patch"
-                    elif iter_n <= 3:
+                    elif iter_n == 2:
+                        stage = "repair_codex"
+                    elif iter_n == 3:
+                        stage = "repair_codex_max"
+                    elif iter_n == 4:
                         stage = "repair_hard"
                     else:
                         stage = "repair_expert"
+
+                    if stage == "repair_expert":
+                        external_expert_calls += 1
+                        if external_expert_calls > settings.MAX_EXTERNAL_EXPERT_CALLS:
+                            # Two goes at the dearest vendor is the whole budget
+                            # this stage gets. Past that, stop and hand it back
+                            # to the person with a Fix they can send.
+                            stop_reason = "REPAIR_BUDGET_EXHAUSTED"
+                            break
 
                     await emit(
                         "builder.repair.started",

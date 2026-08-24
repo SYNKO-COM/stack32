@@ -12,6 +12,19 @@ from agent_service.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+class UserBudgetExhausted(Exception):
+    """The person's remaining credits ran out while a run was under way.
+
+    Blocking the next message is not enough: a build already in flight kept
+    spending past the plan's ceiling, which is how an $11 run sat behind a bar
+    reading 42 of 200. This stops the run itself.
+    """
+
+    def __init__(self, code: str = "BUDGET_EXCEEDED") -> None:
+        self.code = code
+        super().__init__(code)
+
+
 class LlmCallBudgetExceeded(Exception):
     """Raised when a single run exceeds its LLM call budget."""
 
@@ -28,6 +41,9 @@ class RunLlmBudget:
     max_calls: int
     #: Which half of the product spent this — "builder" or "live".
     source: str = "builder"
+    #: What the person has left to spend this period, in USD. None means the
+    #: ceiling could not be read and the run is not gated on it.
+    max_cost_usd: float | None = None
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -51,6 +67,10 @@ class RunLlmBudget:
     ) -> None:
         if self.calls >= self.max_calls:
             raise LlmCallBudgetExceeded()
+        # Checked before the increment so the call that would cross the plan's
+        # ceiling is the one that stops the run, not the one after it.
+        if self.max_cost_usd is not None and self.cost_usd >= self.max_cost_usd:
+            raise UserBudgetExhausted()
         self.calls += 1
         self.input_tokens += max(0, input_tokens)
         self.output_tokens += max(0, output_tokens)
@@ -151,6 +171,38 @@ async def llm_budget_bypass():
         _current_budget.reset(token)
 
 
+async def remaining_budget_usd(user_id: str) -> float | None:
+    """What this person may still spend this period, or None if unknown.
+
+    Read once when a run opens rather than per call: one round trip, and the
+    run cannot outspend the ceiling by more than the call in flight.
+    """
+    try:
+        from agent_service.supabase_client import get_supabase_admin_client
+
+        async with get_supabase_admin_client() as client:
+            response = await client.post(
+                "/rpc/resolve_user_entitlements",
+                json={"p_user_id": user_id},
+            )
+            if response.status_code >= 400:
+                return None
+            rows = response.json() or []
+            row = rows[0] if isinstance(rows, list) and rows else rows
+            if not isinstance(row, dict):
+                return None
+            budget = float(row.get("budget_usd") or 0)
+
+            spent = await client.post(
+                "/rpc/user_period_usage_usd", json={"p_user_id": user_id}
+            )
+            used = float(spent.json() or 0) if spent.status_code < 400 else 0.0
+        return max(0.0, budget - used)
+    except Exception:  # noqa: BLE001
+        logger.warning("remaining_budget_lookup_failed user=%s", user_id, exc_info=True)
+        return None
+
+
 @asynccontextmanager
 async def llm_run_budget(
     *,
@@ -159,14 +211,17 @@ async def llm_run_budget(
     agent_id: str,
     max_calls: int | None = None,
     source: str = "builder",
+    enforce_user_budget: bool = True,
 ):
     settings = get_settings()
+    ceiling = await remaining_budget_usd(user_id) if enforce_user_budget else None
     budget = RunLlmBudget(
         run_id=run_id,
         user_id=user_id,
         agent_id=agent_id,
         max_calls=max_calls or settings.MAX_LLM_CALLS_PER_RUN,
         source=source,
+        max_cost_usd=ceiling,
     )
     token = _current_budget.set(budget)
     try:

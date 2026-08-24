@@ -18,6 +18,11 @@ class CodingStage(StrEnum):
     DIAGNOSE = "diagnose"
     PATCH = "patch"
     REPAIR_NORMAL = "repair_normal"
+    #: Two Codex rungs between the primary and sol. Cheaper on input than
+    #: either, and built for code, so the ladder climbs in ability without
+    #: jumping straight to the dearest model in the registry.
+    REPAIR_CODEX = "repair_codex"
+    REPAIR_CODEX_MAX = "repair_codex_max"
     REPAIR_HARD = "repair_hard"
     REPAIR_EXPERT = "repair_expert"
     VALIDATE = "validate"
@@ -59,6 +64,12 @@ def platform_model_chain(profile: ModelProfile, *, stage: CodingStage | None = N
     if profile == ModelProfile.VALIDATOR:
         return _dedupe([s.MODEL_VALIDATOR_PRIMARY, s.MODEL_VALIDATOR_FALLBACK])
     if profile == ModelProfile.CODING:
+        if stage in {CodingStage.REPAIR_CODEX, CodingStage.REPAIR_CODEX_MAX}:
+            return _dedupe([
+                s.MODEL_CODING_CODEX_FIRST,
+                s.MODEL_CODING_CODEX_SECOND,
+                s.MODEL_CODING_PRIMARY,
+            ])
         if stage == CodingStage.REPAIR_EXPERT:
             return _dedupe([
                 s.MODEL_CODING_EXTERNAL_EXPERT,
@@ -114,11 +125,34 @@ def route_coding_stage(
             timeout_seconds=s.LLM_TIMEOUT_CODING_HARD,
             escalation_tier=2,
         )
-    if stage in {CodingStage.ARCHITECTURE, CodingStage.REPAIR_HARD}:
+    if stage in {CodingStage.REPAIR_CODEX, CodingStage.REPAIR_CODEX_MAX}:
+        return StageRoute(
+            model=(
+                s.MODEL_CODING_CODEX_FIRST
+                if stage == CodingStage.REPAIR_CODEX
+                else s.MODEL_CODING_CODEX_SECOND
+            ),
+            profile=ModelProfile.CODING,
+            reasoning_effort=ReasoningEffort.HIGH,
+            timeout_seconds=s.LLM_TIMEOUT_CODING_HARD,
+            escalation_tier=1,
+        )
+    if stage == CodingStage.ARCHITECTURE:
+        # The first version of an agent decides how much repairing follows, so
+        # it gets a model built for code rather than the dearest one in the
+        # registry: same class of result, roughly a third of sol's input price.
+        return StageRoute(
+            model=s.MODEL_CODING_INITIAL,
+            profile=ModelProfile.CODING,
+            reasoning_effort=ReasoningEffort.HIGH,
+            timeout_seconds=s.LLM_TIMEOUT_CODING_HARD,
+            escalation_tier=1,
+        )
+    if stage == CodingStage.REPAIR_HARD:
         return StageRoute(
             model=s.MODEL_CODING_EXPERT,
             profile=ModelProfile.CODING,
-            reasoning_effort=ReasoningEffort.HIGH if stage == CodingStage.ARCHITECTURE else ReasoningEffort.XHIGH,
+            reasoning_effort=ReasoningEffort.XHIGH,
             timeout_seconds=s.LLM_TIMEOUT_CODING_HARD,
             escalation_tier=1,
         )

@@ -69,7 +69,18 @@ class Settings(BaseSettings):
     # something cheaper. sol stays the expert; it is no longer the safety net.
     MODEL_REASONING_FALLBACK: str = "openai/gpt-5.6-terra"
     MODEL_CODING_PRIMARY: str = "openai/gpt-5.6-terra"
+    #: The first build of an agent decides how much repairing follows, so it
+    #: gets a model built for code. At $1.75/M in, gpt-5.3-codex writes that
+    #: first version for roughly a third of what sol charges — the difference
+    #: between a build that costs a dollar and one that costs five.
+    MODEL_CODING_INITIAL: str = "openai/gpt-5.3-codex"
+    #: Two rungs of Codex between terra and sol, cheaper on input than either.
+    MODEL_CODING_CODEX_FIRST: str = "openai/gpt-5.2-codex"
+    MODEL_CODING_CODEX_SECOND: str = "openai/gpt-5.3-codex"
     MODEL_CODING_EXPERT: str = "openai/gpt-5.6-sol"
+    #: Anthropic is the last resort and stays that way: at most this many calls
+    #: per run, after which the run stops and the user is offered a Fix.
+    MAX_EXTERNAL_EXPERT_CALLS: int = 2
     MODEL_CODING_EXTERNAL_EXPERT: str = "anthropic/claude-sonnet-5"
     MODEL_CODING_FALLBACK: str = "openai/gpt-5.6-terra"
     MODEL_VALIDATOR_PRIMARY: str = "openai/gpt-5.6-terra"

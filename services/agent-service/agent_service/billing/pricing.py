@@ -24,6 +24,12 @@ PLATFORM_MODEL_PRICING: dict[str, ModelPricing] = {
     "openai/gpt-5.6-luna": ModelPricing("openai", "gpt-5.6-luna", 0.20, 0.02, 1.20),
     "openai/gpt-5.6-terra": ModelPricing("openai", "gpt-5.6-terra", 2.00, 0.20, 12.00),
     "openai/gpt-5.6-sol": ModelPricing("openai", "gpt-5.6-sol", 5.00, 0.50, 30.00),
+    # Codex sits between terra and sol on input and is built for code. At
+    # $1.75/M it writes the first version of an agent for about a third of what
+    # sol charges, which is the difference between a build that costs a dollar
+    # and one that costs five.
+    "openai/gpt-5.2-codex": ModelPricing("openai", "gpt-5.2-codex", 1.75, 0.175, 14.00),
+    "openai/gpt-5.3-codex": ModelPricing("openai", "gpt-5.3-codex", 1.75, 0.175, 14.00),
     "anthropic/claude-sonnet-5": ModelPricing(
         "anthropic",
         "claude-sonnet-5",
