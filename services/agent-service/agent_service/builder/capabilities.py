@@ -562,6 +562,12 @@ _EMAIL_PROVIDER_SLUGS: frozenset[str] = frozenset({
 })
 
 
+def is_email_provider_slug(app: str) -> bool:
+    """True when this app slug is itself an email sender (SendGrid, Mailgun…)."""
+    slug = (app or "").strip().lower().replace("-", "_")
+    return slug in _EMAIL_PROVIDER_SLUGS or slug in {"gmail", "microsoft_outlook", "outlook"}
+
+
 def names_its_own_email_provider(prompt: str) -> bool:
     """True when the mission already says which service sends the mail."""
     hay = (prompt or "").lower()

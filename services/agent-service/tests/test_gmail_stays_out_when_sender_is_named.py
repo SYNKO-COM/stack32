@@ -52,3 +52,25 @@ def test_outlook_still_wins_when_asked():
     prompt = "Envoie la relance par email depuis Outlook."
     apps = _email_apps(prompt)
     assert "gmail" not in apps
+
+
+def test_answering_the_mailbox_form_with_any_sender_counts():
+    # The clarification form only accepted Gmail or Outlook as an answer, so
+    # "SendGrid" re-opened the same form on every turn of a live build.
+    from agent_service.builder.capabilities import is_email_provider_slug
+
+    for app in ("sendgrid", "SendGrid", "mailgun", "postmark", "gmail", "outlook"):
+        assert is_email_provider_slug(app), app
+    for app in ("stripe", "hubspot", "zendesk", ""):
+        assert not is_email_provider_slug(app), app
+
+
+def test_the_form_condition_reads_the_helper():
+    import inspect
+
+    from agent_service.builder import orchestrator
+
+    src = inspect.getsource(
+        orchestrator.BuilderOrchestrator._maybe_interrupt_for_provider_clarification
+    )
+    assert "is_email_provider_slug" in src

@@ -1349,8 +1349,13 @@ class BuilderOrchestrator:
             return None
 
         fields: list[dict[str, Any]] = []
+        from agent_service.builder.capabilities import is_email_provider_slug
+
+        # Any named sender settles the question — answering "SendGrid" used to
+        # re-open this same form on every turn, because only Gmail and Outlook
+        # counted as answers.
         if "email_provider" in plan.ambiguities and not any(
-            a in {"gmail", "microsoft_outlook", "outlook"} for a in preferred
+            is_email_provider_slug(a) for a in preferred
         ):
             fields.append(
                 {
