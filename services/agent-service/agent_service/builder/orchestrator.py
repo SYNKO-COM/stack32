@@ -458,7 +458,9 @@ class BuilderOrchestrator:
                 import asyncio
 
                 # Short beat so "Demande comprise" is readable — keep cancel-aware.
-                draft_task = asyncio.create_task(self._suggest_identity(content))
+                draft_task = asyncio.create_task(
+                    self._suggest_identity(content, locale=locale)
+                )
                 await asyncio.sleep(0.35)
                 if await self._run_was_canceled(run_id, user_id):
                     draft_task.cancel()
@@ -3510,7 +3512,7 @@ class BuilderOrchestrator:
             logger.exception("builder reply composition failed")
         return fallback
 
-    async def _suggest_identity(self, content: str) -> IdentityDraft:
+    async def _suggest_identity(self, content: str, locale: str = "en") -> IdentityDraft:
         # Sensible defaults — never echo the raw user prompt as the agent name.
         name = "Research Assistant"
         role = "Research companies, score leads, and draft outreach"
@@ -3536,6 +3538,13 @@ class BuilderOrchestrator:
                         "role": "system",
                         "content": (
                             "You invent a short product identity for an AI agent. "
+                            + (
+                                "Write name, role and description in FRENCH — the app is in French. "
+                                if str(locale).lower().startswith("fr")
+                                else ""
+                            )
+                            + "The name must reflect THIS mission — never a generic "
+                            "assistant name that could fit any agent. "
                             "Return ONLY compact JSON with keys: name, role, tone, description. "
                             "name: 2-4 words, never start with Create/Build/Make. "
                             "role: one short sentence describing what the agent does. "
