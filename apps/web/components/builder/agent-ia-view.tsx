@@ -481,7 +481,9 @@ export function AgentIaView({
     // The banner said nothing at all in that case, which is how "À configurer"
     // ended up sitting over an empty card with every node badge cleared.
     for (const c of readinessQuery.data?.checks ?? []) {
-      if (c.ok || c.severity !== "error") continue;
+      // Warnings turn the chip red too, so hiding them leaves the same empty
+      // card with a red chip above it. Anything not ok gets a line.
+      if (c.ok || c.severity === "info") continue;
       items.push(
         t(`structure:modules.setup.check.${c.key}`, {
           defaultValue: c.message ?? "",
