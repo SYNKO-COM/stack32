@@ -56,3 +56,29 @@ class TestAFailedWriteIsNoLongerSilent:
         # Without the run, the model and the source, an alert cannot be acted on.
         assert "self.run_id" in src
         assert "self.source" in src
+
+
+class TestTheGaugeSumsWhatTheRunSpent:
+    """`usage_events` is the roll-up get_my_credit_usage sums for the bar."""
+
+    def test_the_rollup_uses_the_budget_run_id(self):
+        src = inspect.getsource(llm_budget)
+        assert "run_id=budget.run_id" in src
+
+    def test_a_failed_rollup_is_reported_at_warning(self):
+        src = inspect.getsource(llm_budget)
+        assert "usage_event_write_failed" in src
+        assert 'logger.debug("usage_events write skipped"' not in src
+
+    def test_the_warning_names_the_lost_amount(self):
+        src = inspect.getsource(llm_budget)
+        assert "budget.cost_usd" in src
+        assert "budget.calls" in src
+
+    def test_both_ledgers_now_share_one_run_id(self):
+        # The per-call ledger and the roll-up are written from the same budget,
+        # so a run id the uuid column rejects loses both at once — which is
+        # exactly what happened.
+        src = inspect.getsource(llm_budget)
+        assert "run_id=self.run_id" in src
+        assert "run_id=budget.run_id" in src

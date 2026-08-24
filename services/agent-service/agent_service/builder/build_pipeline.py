@@ -43,6 +43,51 @@ async def _noop_emit(_t: str, _p: dict[str, Any]) -> None:
     return None
 
 
+#: How much failure output the repair prompt gets. 500 characters truncated a
+#: pytest traceback before the assertion line, which is the one that matters.
+FAILURE_EXCERPT_CHARS = 2500
+
+
+def summarise_exec_failure(*results: dict | None) -> str:
+    """Say what went wrong, from whichever result actually carries it.
+
+    A sandbox that refuses to run the tests returns {"ok": False, "error": ...,
+    "code": "SANDBOX_ERROR"} — no exit code, no stdout. Reading only stdout and
+    stderr produced an empty excerpt, so the repair loop was handed a prompt
+    that said a verification had failed and nothing about how. It could not
+    succeed, escalated through every model tier, and reached Claude Sonnet
+    still knowing nothing. Parsed diagnostics come first because they are the
+    shortest true statement of the failure.
+    """
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        diagnostics = result.get("diagnostics")
+        if isinstance(diagnostics, list) and diagnostics:
+            lines = []
+            for d in diagnostics[:12]:
+                if not isinstance(d, dict):
+                    continue
+                where = ":".join(
+                    str(d[k]) for k in ("file", "line") if d.get(k) not in (None, "")
+                )
+                message = str(d.get("message") or d.get("rule") or "").strip()
+                lines.append(f"{where} {message}".strip())
+            joined = "\n".join(x for x in lines if x)
+            if joined:
+                return joined[:FAILURE_EXCERPT_CHARS]
+        for key in ("stdout", "stderr"):
+            text = str(result.get(key) or "").strip()
+            if text:
+                return text[:FAILURE_EXCERPT_CHARS]
+        # The sandbox never ran the command; that is the failure.
+        error = str(result.get("error") or "").strip()
+        code = str(result.get("code") or "").strip()
+        if error or code:
+            return f"{code or 'SANDBOX_ERROR'}: {error}"[:FAILURE_EXCERPT_CHARS]
+    return ""
+
+
 @dataclass
 class BuildReport:
     success: bool
@@ -228,9 +273,7 @@ class CodeBuildPipeline:
                     record_error_observation,
                 )
 
-                failure_excerpt0 = str(
-                    test_result.get("stdout") or test_result.get("stderr") or ""
-                )[:500]
+                failure_excerpt0 = summarise_exec_failure(test_result, lint_result)
                 await record_error_observation(
                     error_code="SANDBOX_TESTS_FAILED" if test_status != "passed" else "SANDBOX_LINT_FAILED",
                     reason=failure_excerpt0 or f"tests={test_status} lint={lint_status}",
@@ -266,13 +309,7 @@ class CodeBuildPipeline:
                 source="coding",
             ):
                 while test_status != "passed" or lint_status != "passed":
-                    failure_excerpt = str(
-                        test_result.get("stdout")
-                        or test_result.get("stderr")
-                        or lint_result.get("stdout")
-                        or lint_result.get("stderr")
-                        or ""
-                    )[:500]
+                    failure_excerpt = summarise_exec_failure(test_result, lint_result)
                     error_code = (
                         "SANDBOX_TESTS_FAILED" if test_status != "passed" else "SANDBOX_LINT_FAILED"
                     )

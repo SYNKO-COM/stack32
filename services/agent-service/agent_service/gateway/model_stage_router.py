@@ -89,13 +89,28 @@ def route_coding_stage(
 ) -> StageRoute:
     """Pick model + reasoning for a coding pipeline stage."""
     s = _settings()
-    if stage == CodingStage.REPAIR_EXPERT or (
-        prior_failures >= 2 and repair_attempt >= 2
-    ):
+    # Climb the OpenAI ladder before leaving it. Reaching for the external
+    # expert on the second failure sent 412 LiteLLM calls to Claude Sonnet in a
+    # day — 80% of the bill — often on a verification that had never run, so no
+    # model could have fixed it. terra tries twice, sol takes over with the
+    # heaviest reasoning it has, and only a fourth failure is worth another
+    # vendor.
+    hard_failure = prior_failures >= 2 and repair_attempt >= 2
+    if stage == CodingStage.REPAIR_EXPERT or repair_attempt >= 4 or prior_failures >= 4:
         return StageRoute(
             model=s.MODEL_CODING_EXTERNAL_EXPERT,
             profile=ModelProfile.CODING,
             reasoning_effort=ReasoningEffort.HIGH,
+            timeout_seconds=s.LLM_TIMEOUT_CODING_HARD,
+            escalation_tier=3,
+        )
+    if hard_failure:
+        # Same house, more thinking: the strongest OpenAI model we have, at the
+        # highest effort, before the bill changes vendor.
+        return StageRoute(
+            model=s.MODEL_CODING_EXPERT,
+            profile=ModelProfile.CODING,
+            reasoning_effort=ReasoningEffort.XHIGH,
             timeout_seconds=s.LLM_TIMEOUT_CODING_HARD,
             escalation_tier=2,
         )

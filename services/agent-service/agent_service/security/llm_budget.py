@@ -202,4 +202,13 @@ async def llm_run_budget(
                     },
                 )
             except Exception:  # noqa: BLE001
-                logger.debug("usage_events write skipped", exc_info=True)
+                # This roll-up is what the credit gauge sums. Losing it means
+                # the bar under-reads real consumption, which is how a run that
+                # cost $11 showed 42 credits of 200.
+                logger.warning(
+                    "usage_event_write_failed run=%s calls=%s cost=%.4f",
+                    budget.run_id,
+                    budget.calls,
+                    budget.cost_usd,
+                    exc_info=True,
+                )
