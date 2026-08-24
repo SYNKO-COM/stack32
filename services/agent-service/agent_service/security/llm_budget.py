@@ -115,7 +115,17 @@ class RunLlmBudget:
                     error_code=error_code,
                 )
             except Exception:  # noqa: BLE001
-                logger.debug("llm_usage_event write skipped", exc_info=True)
+                # Not debug. A usage event that fails to write is money already
+                # spent and never billed: the coding pipeline lost every one of
+                # its calls this way for a whole day, and the credit gauge read
+                # a fifth of the real consumption while nothing complained.
+                logger.warning(
+                    "llm_usage_event_write_failed run=%s model=%s source=%s",
+                    self.run_id,
+                    model,
+                    self.source,
+                    exc_info=True,
+                )
 
         try:
             loop = asyncio.get_running_loop()

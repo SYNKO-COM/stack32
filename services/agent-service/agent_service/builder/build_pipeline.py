@@ -252,11 +252,18 @@ class CodeBuildPipeline:
 
             from agent_service.security.llm_budget import llm_run_budget
 
+            # `f"{run_id}:coding"` is not a UUID, and llm_usage_events.run_id
+            # is. Every insert from this budget was rejected and the failure
+            # swallowed, so the whole coding repair loop — including its
+            # escalations to Claude Sonnet, the single largest line on the
+            # Anthropic bill — spent money that never reached the credit
+            # ledger. The scope belongs in `source`, which is text.
             async with llm_run_budget(
-                run_id=f"{run_id}:coding",
+                run_id=run_id,
                 user_id=user_id,
                 agent_id=agent_id,
                 max_calls=settings.MAX_LLM_CALLS_PER_CODING_REPAIR,
+                source="coding",
             ):
                 while test_status != "passed" or lint_status != "passed":
                     failure_excerpt = str(
