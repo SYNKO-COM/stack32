@@ -204,17 +204,21 @@ export default function PricingPage() {
                   <span className="text-sm text-muted-foreground">{t("pricing.perMonth")}</span>
                 ) : null}
               </p>
+              {/* The annual-billing note keeps its line even when empty, so the
+                  monthly cards do not jump when the toggle flips. That reserved
+                  line plus the button's own margin is the whole gap under the
+                  price — 16px + 4px — which matches the 20px above it. */}
               {plan.billedAnnuallyHint ? (
-                <p className="mt-1.5 text-xs text-muted-foreground">{plan.billedAnnuallyHint}</p>
+                <p className="h-4 text-xs text-muted-foreground">{plan.billedAnnuallyHint}</p>
               ) : (
-                <p className="mt-1.5 text-xs text-transparent select-none" aria-hidden="true">
+                <p className="h-4 text-xs text-transparent select-none" aria-hidden="true">
                   —
                 </p>
               )}
             </div>
 
             <Button
-              className="mt-5 w-full rounded-full"
+              className="mt-1 w-full rounded-full"
               variant={plan.popular ? "default" : "outline"}
               disabled={activate.isPending}
               onClick={() => void handleCta(plan.id)}
