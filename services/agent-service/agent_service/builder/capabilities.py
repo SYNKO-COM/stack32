@@ -342,7 +342,14 @@ def build_capability_plan(
     )
     mentions_gmail = "gmail" in lower or "google mail" in lower
     mentions_outlook = "outlook" in lower or "microsoft mail" in lower
-    if mentions_email and not mentions_gmail and not mentions_outlook:
+    # "envoie-lui une relance par email via SendGrid" names its sender; the
+    # word "email" alone must not also drag Gmail into the review card.
+    if (
+        mentions_email
+        and not mentions_gmail
+        and not mentions_outlook
+        and not names_its_own_email_provider(lower)
+    ):
         if not any(a in {"gmail", "microsoft_outlook", "outlook"} for a in apps):
             # Email automation prompts default to Gmail — OAuth via Pipedream Connect.
             if re.search(
