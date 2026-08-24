@@ -66,6 +66,8 @@ steps:
       - -c
       - |
         set -euo pipefail
+        # The build SA cannot resolve the project via Resource Manager; name it.
+        gcloud config set project stack32 --quiet
         gcloud run services describe stack32-agent-api-preprod \
           --region=europe-west1 --format=export > /tmp/worker.yaml
         sed -i \
@@ -73,13 +75,13 @@ steps:
           -e 's/containerConcurrency: 20/containerConcurrency: 5/' \
           -e 's#https://stack32-agent-api-preprod-732339494633.europe-west1.run.app/v1/internal/tasks/run#https://stack32-agent-worker-preprod-732339494633.europe-west1.run.app/v1/internal/tasks/run#' \
           /tmp/worker.yaml
-        gcloud run services replace /tmp/worker.yaml --region=europe-west1 --quiet
+        gcloud run services replace /tmp/worker.yaml --region=europe-west1 --project=stack32 --quiet
         gcloud run services add-iam-policy-binding stack32-agent-worker-preprod \
-          --region=europe-west1 \
+          --region=europe-west1 --project=stack32 \
           --member=serviceAccount:stack32-task-invoker@stack32.iam.gserviceaccount.com \
           --role=roles/run.invoker --quiet
         gcloud run services update stack32-agent-api-preprod \
-          --region=europe-west1 --quiet \
+          --region=europe-west1 --project=stack32 --quiet \
           --update-env-vars=CLOUD_TASKS_TARGET_URL=https://stack32-agent-worker-preprod-732339494633.europe-west1.run.app/v1/internal/tasks/run
 
 images:
