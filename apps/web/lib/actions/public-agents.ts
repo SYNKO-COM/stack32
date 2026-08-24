@@ -1,5 +1,6 @@
 "use server";
 
+import { PLANS } from "@/lib/billing/plans";
 import { openMarketplaceAgentAction } from "@/lib/actions/marketplace";
 import { getOrCreateInstallation } from "@/lib/actions/installations";
 import type { PublicAgentDto } from "@/lib/domain/types";
@@ -102,7 +103,45 @@ export type PublicAgentAudienceState = {
   accessStatus: "none" | "pending" | "approved" | "denied";
   isOwner: boolean;
   installationId: string | null;
+  /** The creator's plan-wide subscriber cap is met — subscribing would fail. */
+  audienceFull?: boolean;
 };
+
+/**
+ * A creator's plan carries an audience: 500 subscribers on Starter, 1000 on
+ * Pro, 2000 on Scale, across all their agents. The backend refuses past the
+ * cap; this mirror lets the public page grey its button before the click.
+ */
+async function isCreatorAudienceFull(creatorUserId: string): Promise<boolean> {
+  try {
+    const { requireSupabaseAdminClient } = await import("@/lib/supabase/admin");
+    const admin = requireSupabaseAdminClient();
+    const { data: ent } = await admin.rpc("resolve_user_entitlements", {
+      p_user_id: creatorUserId,
+    });
+    const row = Array.isArray(ent) ? ent[0] : ent;
+    const planKey = (row?.plan_key ?? "free") as keyof typeof PLANS;
+    const limit = PLANS[planKey]?.maxSubscribers ?? 0;
+    if (limit === null) return false;
+    const { data: agents } = await admin
+      .from("agents")
+      .select("id")
+      .eq("user_id", creatorUserId)
+      .is("deleted_at", null);
+    const ids = (agents ?? []).map((a: { id: string }) => a.id);
+    if (ids.length === 0) return limit <= 0;
+    const { count } = await admin
+      .from("agent_installations")
+      .select("id", { count: "exact", head: true })
+      .in("agent_id", ids)
+      .neq("user_id", creatorUserId);
+    return (count ?? 0) >= limit;
+  } catch {
+    // The cap guards the creator's plan, not safety — never lock the page up
+    // over a lookup hiccup; the backend still refuses past the cap.
+    return false;
+  }
+}
 
 /** Landing-safe audience state — never auto-installs. */
 export async function getPublishedAgentAudienceAction(
@@ -125,6 +164,7 @@ export async function getPublishedAgentAudienceAction(
       accessStatus: "none",
       isOwner: false,
       installationId: null,
+      audienceFull: await isCreatorAudienceFull(agent.creatorUserId),
     };
   }
 
@@ -148,13 +188,17 @@ export async function getPublishedAgentAudienceAction(
     .maybeSingle();
 
   if (isOwner || visibility === "public") {
+    const subscribed = Boolean(install) || isOwner;
     return {
       favorited: Boolean(fav),
-      subscribed: Boolean(install) || isOwner,
+      subscribed,
       needsAccess: false,
       accessStatus: "approved",
       isOwner,
       installationId: install ? String(install.id) : null,
+      audienceFull: subscribed
+        ? false
+        : await isCreatorAudienceFull(agent.creatorUserId),
     };
   }
 

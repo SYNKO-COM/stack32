@@ -264,7 +264,9 @@
     "roleTitle": "Role",
     "goalTitle": "Objective",
     "instructionsTitle": "Instructions",
-    "rulesTitle": "Rules"
+    "rulesTitle": "Rules",
+    "audienceFull": "Full — no seats left",
+    "audienceFullHint": "This creator has reached their subscriber limit. Try again later."
   },
   "account": {
     "dangerZone": "Danger zone",

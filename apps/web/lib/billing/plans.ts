@@ -30,6 +30,8 @@ export interface PlanDefinition {
   maxAgents: number | null;
   /** Max Live (Agent IA) user messages (null = unlimited). */
   maxLiveMessages: number | null;
+  /** Total consumers across ALL of this creator's published agents. */
+  maxSubscribers: number | null;
   canPublish: boolean;
   canMonetize: boolean;
   betaAccess: boolean;
@@ -48,6 +50,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     maxWorkspaces: 1,
     maxAgents: 1,
     maxLiveMessages: 10,
+    maxSubscribers: 0,
     canPublish: false,
     canMonetize: false,
     betaAccess: false,
@@ -62,6 +65,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     maxWorkspaces: 1,
     maxAgents: 5,
     maxLiveMessages: null,
+    maxSubscribers: 500,
     canPublish: true,
     canMonetize: false,
     betaAccess: false,
@@ -77,6 +81,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     maxWorkspaces: null,
     maxAgents: 30,
     maxLiveMessages: null,
+    maxSubscribers: 1000,
     canPublish: true,
     canMonetize: true,
     betaAccess: true,
@@ -92,6 +97,7 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     maxWorkspaces: null,
     maxAgents: null,
     maxLiveMessages: null,
+    maxSubscribers: 2000,
     canPublish: true,
     canMonetize: true,
     betaAccess: true,

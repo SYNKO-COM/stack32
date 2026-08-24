@@ -80,6 +80,16 @@ async def post_live_message(
 
     try:
         await check_installation_rate_limit(rows[0].get("installation_id"))
+        # Consumers of someone else's published agent also carry an hourly
+        # cap — sustained hammering of a viral link, not normal use.
+        agent_rows = await db._select(
+            "agents",
+            {"id": f"eq.{rows[0]['agent_id']}", "select": "user_id", "limit": "1"},
+        )
+        owner_id = str(agent_rows[0].get("user_id")) if agent_rows else None
+        from agent_service.security.rate_limit import check_consumer_abuse
+
+        await check_consumer_abuse(user_id=user.user_id, agent_owner_id=owner_id)
     except RateLimitExceeded as exc:
         raise HTTPException(status_code=429, detail={"code": exc.code, "message": "Rate limit."}) from exc
 

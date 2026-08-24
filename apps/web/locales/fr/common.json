@@ -264,7 +264,9 @@
     "roleTitle": "Rôle",
     "goalTitle": "Objectif",
     "instructionsTitle": "Instructions",
-    "rulesTitle": "Règles"
+    "rulesTitle": "Règles",
+    "audienceFull": "Complet — plus de places",
+    "audienceFullHint": "Ce créateur a atteint sa limite d’abonnés. Réessayez plus tard."
   },
   "account": {
     "dangerZone": "Zone de danger",

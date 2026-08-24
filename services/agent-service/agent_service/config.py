@@ -143,6 +143,10 @@ class Settings(BaseSettings):
     BUILDER_USE_RESPONSES_API: bool = False
     BUILDER_BROWSER_DEBUG_ENABLED: bool = False
     RATE_LIMIT_PER_USER_PER_MINUTE: int = 20
+    #: Sustained-hammering guard for consumers of OTHER people's published
+    #: agents. 120/h is two runs a minute for an hour straight - no human use
+    #: reaches it, a script does. Owners are never subject to it.
+    RATE_LIMIT_CONSUMER_RUNS_PER_HOUR: int = 120
     RATE_LIMIT_PER_IP_PER_MINUTE: int = 60
     WEB_SEARCH_API_KEY: str = ""
     WEB_SEARCH_PROVIDER: str = "tavily"

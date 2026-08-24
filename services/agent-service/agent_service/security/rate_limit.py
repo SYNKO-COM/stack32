@@ -87,6 +87,38 @@ async def check_ip_rate_limit(ip_hash: str | None) -> None:
         logger.debug("ip rate limit check skipped")
 
 
+async def check_consumer_abuse(*, user_id: str, agent_owner_id: str | None) -> None:
+    """Hourly cap for consumers running someone ELSE's published agent.
+
+    The per-minute limits stop bursts; this stops sustained hammering of a
+    viral public agent. Generous enough that no real person meets it, and
+    owners are exempt on their own agents.
+    """
+    if not agent_owner_id or agent_owner_id == user_id:
+        return
+    settings = get_settings()
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
+        return
+    try:
+        from agent_service.supabase_client import get_supabase_admin_client
+
+        async with get_supabase_admin_client() as client:
+            response = await client.post(
+                "/rpc/consume_rate_limit",
+                json={
+                    "p_bucket_key": f"consumer:{user_id}:rph",
+                    "p_limit": settings.RATE_LIMIT_CONSUMER_RUNS_PER_HOUR,
+                    "p_window_seconds": 3600,
+                },
+            )
+        if response.status_code < 400 and response.json() is False:
+            raise RateLimitExceeded("CONSUMER_RATE_LIMIT")
+    except RateLimitExceeded:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.debug("consumer abuse check skipped")
+
+
 async def check_monthly_budget(user_id: str) -> None:
     """Enforce plan period budget (monthly or annual pool) from entitlements."""
     settings = get_settings()

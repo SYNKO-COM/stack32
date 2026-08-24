@@ -70,8 +70,10 @@ class TestTheRollupPicksTheRightBasis:
         from agent_service.security import llm_budget
 
         src = inspect.getsource(llm_budget)
-        assert "service_cost_usd_per_live_run()" in src
+        assert "service_cost_usd_per_live_run(" in src
         assert '"pricing_basis"' in src
+        # And free is waived outright: the ten-message box is the price.
+        assert '"free_plan_included"' in src
 
     def test_the_real_token_cost_is_still_recorded_for_margin(self):
         import inspect

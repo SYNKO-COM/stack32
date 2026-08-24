@@ -81,6 +81,19 @@ class InstallationService:
         if not agent:
             raise InstallationError("AGENT_NOT_INSTALLABLE", "Agent not found or not installable.")
 
+        # A creator's plan carries an audience: 500 subscribers on Starter,
+        # 1000 on Pro, 2000 on Scale — total across all their agents, owner
+        # installs excluded. The check lives here because every subscribe
+        # path funnels through this method; when the audience is full, the
+        # public page greys its button on this same error code.
+        owner_id = str(agent.get("user_id") or "")
+        if owner_id and owner_id != user_id:
+            if await self._owner_audience_full(owner_id):
+                raise InstallationError(
+                    "SUBSCRIBER_LIMIT_REACHED",
+                    "This creator's subscriber limit is reached.",
+                )
+
         version_id = pinned_version_id or agent.get("published_version_id") or agent.get(
             "draft_version_id"
         )
@@ -122,6 +135,67 @@ class InstallationService:
             metadata={"status": "setup_required"},
         )
         return created
+
+    async def _owner_audience_full(self, owner_id: str) -> bool:
+        """True when the creator's total consumer installations meet their cap."""
+        from agent_service.billing.plans import PLANS
+
+        limit: int | None
+        try:
+            async with get_supabase_admin_client() as client:
+                ent = await client.post(
+                    "/rpc/resolve_user_entitlements", json={"p_user_id": owner_id}
+                )
+                plan_key = "free"
+                if ent.status_code < 400:
+                    payload = ent.json()
+                    row = payload[0] if isinstance(payload, list) and payload else payload
+                    if isinstance(row, dict) and row.get("plan_key"):
+                        plan_key = str(row["plan_key"])
+                plan = PLANS.get(plan_key)  # type: ignore[arg-type]
+                limit = plan.max_subscribers if plan else 0
+                if limit is None:
+                    return False
+
+                agents = await client.get(
+                    "/agents",
+                    params={
+                        "user_id": f"eq.{owner_id}",
+                        "deleted_at": "is.null",
+                        "select": "id",
+                    },
+                )
+                ids = [
+                    str(r.get("id"))
+                    for r in (agents.json() if agents.status_code < 400 else [])
+                    if r.get("id")
+                ]
+                if not ids:
+                    return limit <= 0
+                count = await client.get(
+                    "/agent_installations",
+                    params={
+                        "agent_id": f"in.({','.join(ids)})",
+                        "user_id": f"neq.{owner_id}",
+                        "select": "id",
+                    },
+                    headers={"Prefer": "count=exact", "Range": "0-0"},
+                )
+                total = 0
+                content_range = count.headers.get("content-range") or ""
+                if "/" in content_range:
+                    try:
+                        total = int(content_range.rsplit("/", 1)[1])
+                    except ValueError:
+                        total = 0
+                return total >= limit
+        except InstallationError:
+            raise
+        except Exception:  # noqa: BLE001
+            # The cap protects the creator's plan, not the platform's safety.
+            # A lookup hiccup must not lock every subscriber out.
+            logger.warning("subscriber_cap_lookup_failed owner=%s", owner_id, exc_info=True)
+            return False
 
     async def ensure_owner_installation(
         self, *, agent_id: str, owner_user_id: str

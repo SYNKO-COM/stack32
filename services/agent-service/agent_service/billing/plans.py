@@ -21,6 +21,9 @@ class PlanDefinition:
     max_workspaces: int | None
     max_agents: int | None
     max_live_messages: int | None
+    #: Total consumers across ALL of this creator's published agents — the
+    #: audience their plan carries, not a per-agent quota. None = unlimited.
+    max_subscribers: int | None
     can_publish: bool
     can_monetize: bool
     beta_access: bool
@@ -41,6 +44,8 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         max_workspaces=1,
         max_agents=1,
         max_live_messages=10,
+        # Free cannot publish, so nobody can subscribe to a free creator.
+        max_subscribers=0,
         can_publish=False,
         can_monetize=False,
         beta_access=False,
@@ -54,6 +59,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         max_workspaces=1,
         max_agents=5,
         max_live_messages=None,
+        max_subscribers=500,
         can_publish=True,
         can_monetize=False,
         beta_access=False,
@@ -67,6 +73,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         max_workspaces=None,
         max_agents=30,
         max_live_messages=None,
+        max_subscribers=1000,
         can_publish=True,
         can_monetize=True,
         beta_access=True,
@@ -80,6 +87,7 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         max_workspaces=None,
         max_agents=None,
         max_live_messages=None,
+        max_subscribers=2000,
         can_publish=True,
         can_monetize=True,
         beta_access=True,

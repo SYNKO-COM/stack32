@@ -49,6 +49,11 @@ class RunLlmBudget:
     #: invoice already charged them; deducting the same dollars from their
     #: Stack32 credits would charge them twice for one call.
     user_funded_llm: bool = False
+    #: The caller's plan and credit tier, read once when the run opens, so the
+    #: roll-up can price the service in that plan's own credits — and waive it
+    #: entirely on free, which is already capped at ten live messages.
+    plan_key: str = "free"
+    credits_monthly: int = 0
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -186,6 +191,28 @@ async def llm_budget_bypass():
         _current_budget.reset(token)
 
 
+async def resolve_budget_context(user_id: str) -> tuple[float | None, str, int]:
+    """(remaining_usd, plan_key, credits_monthly) — one lookup per run."""
+    remaining = await remaining_budget_usd(user_id)
+    plan_key, credits = "free", 0
+    try:
+        from agent_service.supabase_client import get_supabase_admin_client
+
+        async with get_supabase_admin_client() as client:
+            response = await client.post(
+                "/rpc/resolve_user_entitlements", json={"p_user_id": user_id}
+            )
+            if response.status_code < 400:
+                rows = response.json() or []
+                row = rows[0] if isinstance(rows, list) and rows else rows
+                if isinstance(row, dict):
+                    plan_key = str(row.get("plan_key") or "free")
+                    credits = int(row.get("credits_monthly") or 0)
+    except Exception:  # noqa: BLE001
+        logger.warning("plan_context_lookup_failed user=%s", user_id, exc_info=True)
+    return remaining, plan_key, credits
+
+
 async def remaining_budget_usd(user_id: str) -> float | None:
     """What this person may still spend this period, or None if unknown.
 
@@ -230,7 +257,10 @@ async def llm_run_budget(
     user_funded_llm: bool = False,
 ):
     settings = get_settings()
-    ceiling = await remaining_budget_usd(user_id) if enforce_user_budget else None
+    ceiling: float | None = None
+    plan_key, credits_monthly = "free", 0
+    if enforce_user_budget:
+        ceiling, plan_key, credits_monthly = await resolve_budget_context(user_id)
     budget = RunLlmBudget(
         run_id=run_id,
         user_id=user_id,
@@ -239,6 +269,8 @@ async def llm_run_budget(
         source=source,
         max_cost_usd=ceiling,
         user_funded_llm=user_funded_llm,
+        plan_key=plan_key,
+        credits_monthly=credits_monthly,
     )
     token = _current_budget.set(budget)
     try:
@@ -265,12 +297,23 @@ async def llm_run_budget(
                 billed_usd = budget.cost_usd
                 pricing_basis = "llm_cost"
                 if budget.user_funded_llm:
-                    from agent_service.billing.economics import (
-                        service_cost_usd_per_live_run,
-                    )
+                    if budget.plan_key == "free":
+                        # Free is already boxed in — ten live messages, five
+                        # credits' worth of budget. Charging a service credit
+                        # on top would spend a fifth of their month on one
+                        # test message; the box is the price, the run is not.
+                        billed_usd = 0.0
+                        pricing_basis = "free_plan_included"
+                    else:
+                        from agent_service.billing.economics import (
+                            service_cost_usd_per_live_run,
+                        )
 
-                    billed_usd = service_cost_usd_per_live_run()
-                    pricing_basis = "service_flat"
+                        billed_usd = service_cost_usd_per_live_run(
+                            budget.plan_key,  # type: ignore[arg-type]
+                            budget.credits_monthly or 1,
+                        )
+                        pricing_basis = "service_flat"
 
                 await get_persistence().record_usage_event(
                     user_id=budget.user_id,

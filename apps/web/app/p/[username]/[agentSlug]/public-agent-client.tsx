@@ -159,6 +159,9 @@ function PublicAgentLanding({
 
   const favorited = favoriteOverride ?? audience.data?.favorited ?? false;
   const subscribed = audience.data?.subscribed ?? false;
+  // The creator's plan-wide subscriber cap is met: the backend would refuse,
+  // so the button says so instead of failing on click.
+  const audienceFull = (audience.data?.audienceFull ?? false) && !subscribed;
   const needsAccess = audience.data?.needsAccess ?? agent.listingVisibility === "private";
   const accessStatus = audience.data?.accessStatus ?? "none";
   const isOwner = audience.data?.isOwner ?? false;
@@ -377,14 +380,26 @@ function PublicAgentLanding({
                 <div className="flex flex-col gap-2">
                   <Button
                     className="rounded-full px-6"
-                    disabled={pending}
+                    disabled={pending || audienceFull}
                     onClick={handleSubscribe}
                   >
                     {pending ? (
                       <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                     ) : null}
-                    {t("common:publicAgent.subscribe")}
+                    {audienceFull
+                      ? t("common:publicAgent.audienceFull", {
+                          defaultValue: "Complet — plus de places",
+                        })
+                      : t("common:publicAgent.subscribe")}
                   </Button>
+                  {audienceFull ? (
+                    <p className="max-w-xs text-xs text-muted-foreground lg:text-right">
+                      {t("common:publicAgent.audienceFullHint", {
+                        defaultValue:
+                          "Ce créateur a atteint sa limite d’abonnés. Réessayez plus tard.",
+                      })}
+                    </p>
+                  ) : null}
                   {!user ? (
                     <p className="max-w-xs text-xs text-muted-foreground lg:text-right">
                       {t("common:publicAgent.signInRequired")}{" "}
