@@ -108,3 +108,45 @@ describe("formatList", () => {
     expect(formatList([], "fr")).toBe("");
   });
 });
+
+describe("gaps that name no app", () => {
+  /** Mirrors the app-less branch in `setupMissing`. */
+  function appLess(missing: Array<{ tool_id?: unknown; type?: string; message?: string }>) {
+    const out: string[] = [];
+    for (const m of missing) {
+      if (typeof m.tool_id === "string") continue;
+      if (m.type === "brain") {
+        out.push("Choisissez le modèle qui fait réfléchir l’agent.");
+        continue;
+      }
+      if (typeof m.message === "string" && m.message.trim()) out.push(m.message);
+    }
+    return out;
+  }
+
+  it("shows a missing model instead of dropping it", () => {
+    // Grouping by app silently discarded this, so the chip read "À configurer"
+    // over an empty banner and nobody could tell what was left to do.
+    const lines = appLess([{ type: "brain", message: "Model credential is missing." }]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("modèle");
+  });
+
+  it("falls back to the message for a kind it does not know", () => {
+    const lines = appLess([{ type: "something_new", message: "Il manque une pièce." }]);
+    expect(lines).toEqual(["Il manque une pièce."]);
+  });
+
+  it("leaves the per-app entries to the grouping", () => {
+    const lines = appLess([
+      { tool_id: "pd:zendesk-create-ticket", fields: ["subject"] } as never,
+      { type: "brain", message: "x" },
+    ]);
+    expect(lines).toHaveLength(1);
+  });
+
+  it("says nothing when there is nothing", () => {
+    expect(appLess([])).toEqual([]);
+    expect(appLess([{ type: "brain", message: "" }])).toHaveLength(1);
+  });
+});

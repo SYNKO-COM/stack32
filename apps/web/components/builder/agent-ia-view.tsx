@@ -477,6 +477,20 @@ export function AgentIaView({
       items.push(t("structure:modules.setup.connect", { app: appDisplayName(appId) }));
     }
 
+    // Gaps that name no app — a model still to pick, and anything added later.
+    // Grouping by app silently dropped these, so the chip said "À configurer"
+    // over an empty banner and the person had nothing to act on.
+    for (const m of readinessQuery.data?.missingConfig ?? []) {
+      if (typeof m.tool_id === "string") continue;
+      if (m.type === "brain") {
+        items.push(t("structure:modules.setup.chooseModel"));
+        continue;
+      }
+      if (typeof m.message === "string" && m.message.trim()) {
+        items.push(m.message);
+      }
+    }
+
     for (const [app, fields] of byApp) {
       const labels = [...fields].map((f) => resolvePropCopy(f).label.toLowerCase());
       items.push(

@@ -150,7 +150,8 @@
     "setup": {
       "connect": "Connectez votre compte {{app}}.",
       "chooseFor": "{{app}} — choisissez {{fields}}.",
-      "finishFor": "{{app}} — terminez le réglage."
+      "finishFor": "{{app}} — terminez le réglage.",
+      "chooseModel": "Choisissez le modèle qui fait réfléchir l’agent."
     }
   },
   "nodeStates": {

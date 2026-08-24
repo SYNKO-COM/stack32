@@ -150,7 +150,8 @@
     "setup": {
       "connect": "Link your {{app}} account.",
       "chooseFor": "{{app}} — choose {{fields}}.",
-      "finishFor": "{{app}} — finish the setup."
+      "finishFor": "{{app}} — finish the setup.",
+      "chooseModel": "Pick the model that does the agent's thinking."
     }
   },
   "nodeStates": {
