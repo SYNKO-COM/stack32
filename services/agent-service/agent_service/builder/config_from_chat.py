@@ -263,21 +263,30 @@ async def apply_settings_from_chat(
         setting = settings[idx]
         value: Any | None = None
         if setting.has_options and pd is not None:
+            import asyncio
+
             try:
-                options = await pd.get_dynamic_options(
+                options = await asyncio.wait_for(
+                    pd.get_dynamic_options(
                     ToolRef(
                         tool_id=setting.tool_id,
                         provider="pipedream",
                         provider_tool_id=setting.tool_id.removeprefix("pd:"),
                     ),
                     setting.name,
-                    context={
-                        "user_id": user_id,
-                        "config": await load_agent_tool_config(
-                            user_id=user_id, agent_id=agent_id, tool_id=setting.tool_id
-                        ),
-                    },
+                        context={
+                            "user_id": user_id,
+                            "config": await load_agent_tool_config(
+                                user_id=user_id, agent_id=agent_id, tool_id=setting.tool_id
+                            ),
+                        },
+                    ),
+                    # A person is waiting on this reply. When the app cannot
+                    # list options this fast, judge the stated value by shape.
+                    timeout=8.0,
                 )
+            except TimeoutError:
+                options = []
             except Exception:  # noqa: BLE001
                 options = []
             value = match_option(stated, options)

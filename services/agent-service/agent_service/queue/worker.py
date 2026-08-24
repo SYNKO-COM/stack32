@@ -147,6 +147,9 @@ async def _process_run_by_id_inner(
                 )
             return {"error": "BUILDER_PROMPT_MISSING", "run_id": run_id}
         builder_mode = _builder_mode_from_run(run)
+        # The person's language rides in the run payload. Dropping it here made
+        # every queued builder reply come back in English on a French app.
+        locale = str(payload.get("locale") or "en")
         return await orch.execute_build_run(
             run_id=run_id,
             user_id=user_id,
@@ -154,6 +157,7 @@ async def _process_run_by_id_inner(
             thread_id=thread_id,
             content=prompt,
             mode=builder_mode,
+            locale=locale,
         )
 
     if run_type == "live":
