@@ -45,10 +45,11 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     key: "free",
     monthlyPriceUsd: 0,
     annualMonthlyPriceUsd: 0,
-    // $1.30 covers one full first build (~$1 measured) plus a few live turns;
-    // $0.20 used to stop every free user mid-build. 25 credits ≈ $0.052/credit.
+    // 25 credits at exactly the Pro rate ($0.055) — covers one full first
+    // build (~$1 measured) plus a few live turns, and a balance carried over
+    // from a lapsed subscription converts one-for-one.
     baseCredits: 25,
-    baseBudgetUsd: 1.3,
+    baseBudgetUsd: 1.375,
     maxWorkspaces: 1,
     maxAgents: 1,
     maxLiveMessages: 10,

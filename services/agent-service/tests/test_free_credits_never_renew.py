@@ -19,7 +19,7 @@ class TestThePlanCatalogueSaysIt:
 
     def test_the_free_grant_is_twenty_five(self):
         assert PLANS["free"].base_credits == 25
-        assert abs(PLANS["free"].base_budget_usd - 1.30) < 0.001
+        assert abs(PLANS["free"].base_budget_usd - 1.375) < 0.001
 
 
 class TestTheMigrationCarriesTheRule:

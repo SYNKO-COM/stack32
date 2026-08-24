@@ -40,10 +40,20 @@ def test_free_budget_covers_one_first_build():
     # (~$1 measured). The free budget now covers one full build with room for
     # a couple of live turns.
     budget = effective_ai_budget_usd("free", billing_interval="monthly", credits_monthly=25)
-    assert abs(budget - 1.30) < 0.01
+    assert abs(budget - 1.375) < 0.01
     assert budget >= 1.0  # the measured first-build cost
 
 
 def test_usd_per_credit_starter():
     rate = usd_per_credit("starter", 100, "monthly")
     assert abs(rate - 0.06) < 0.001
+
+
+def test_a_free_credit_costs_exactly_what_a_pro_credit_costs():
+    """A balance carried over from a lapsed subscription must not drift.
+
+    Dollars are the store of record: at $0.052 a free credit against Pro's
+    $0.055, ten Pro credits spent came back as 10.6 free ones on the gauge.
+    Matching the rate makes the conversion one-for-one.
+    """
+    assert abs(usd_per_credit("free", 25) - usd_per_credit("pro", 200)) < 1e-9
