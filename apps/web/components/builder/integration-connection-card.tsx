@@ -8,6 +8,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { startGoogleConnection, revokeConnection, disconnectAgentApp } from "@/lib/actions/connections";
 import { getConnectToken, syncIntegrationAccounts } from "@/lib/actions/integrations";
 import { cn } from "@/lib/utils";
+import { appDisplayName } from "@/lib/integrations/app-name";
 
 export type IntegrationConnectionStatus =
   | "connected"
@@ -152,42 +153,12 @@ function openConnectPopupShell(copy: ConnectPopupCopy): Window | null {
   return popup;
 }
 
-function humanizeAppSlug(raw: string): string {
-  const slug = raw.trim().toLowerCase();
-  const known: Record<string, string> = {
-    google: "Google",
-    slack: "Slack",
-    slack_v2: "Slack",
-    slack_bot: "Slack",
-    notion: "Notion",
-    stripe: "Stripe",
-    pipedream: "Apps",
-    gmail: "Gmail",
-    google_calendar: "Google Calendar",
-    google_docs: "Google Docs",
-    google_sheets: "Google Sheets",
-    microsoft_outlook: "Outlook",
-    x_ai: "xAI",
-    xai: "xAI",
-    mistral_ai: "Mistral",
-    openai: "OpenAI",
-    anthropic: "Anthropic",
-  };
-  if (known[slug]) return known[slug];
-  return slug
-    .replace(/_v\d+$/i, "")
-    .split(/[_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function providerLabel(
   provider: string,
   t: (key: string, opts?: { defaultValue?: string }) => string,
 ): string {
   const key = `connections.providers.${provider}`;
-  return t(key, { defaultValue: humanizeAppSlug(provider) });
+  return t(key, { defaultValue: appDisplayName(provider) });
 }
 
 export function IntegrationConnectionCard({
@@ -261,15 +232,15 @@ export function IntegrationConnectionCard({
         : parentConnected;
 
   const title = useMemo(() => {
-    if (appId) return humanizeAppSlug(appId);
+    if (appId) return appDisplayName(appId);
     return providerLabel(normalized, t);
   }, [appId, normalized, t]);
 
   const connectLabel = useMemo(() => {
     if (appId) {
       return t("connections.connect", {
-        defaultValue: `Connect ${humanizeAppSlug(appId)}`,
-        provider: humanizeAppSlug(appId),
+        defaultValue: `Connect ${appDisplayName(appId)}`,
+        provider: appDisplayName(appId),
       });
     }
     if (normalized === "google" && !usePipedreamConnect) {

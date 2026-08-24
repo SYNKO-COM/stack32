@@ -1,4 +1,5 @@
 import type { ToolBinding } from "@/lib/domain/types";
+import { appDisplayName } from "@/lib/integrations/app-name";
 
 /** Stable app key used for grouping integration nodes in the Structure canvas. */
 export type AppKey = string;
@@ -186,7 +187,8 @@ export function resolveAppDisplayName(appKey: AppKey, toolId?: string): string {
       if (toolId.toLowerCase().startsWith(row.prefix)) return row.appName;
     }
   }
-  return titleCaseSlug(key);
+  // `key` names an app, so drop the auth flavour Pipedream writes into it.
+  return appDisplayName(key);
 }
 
 export function resolveAppProvider(
