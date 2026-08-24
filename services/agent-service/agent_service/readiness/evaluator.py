@@ -350,6 +350,11 @@ async def evaluate_agent_readiness(
             )
 
             pd = registry.get_provider("pipedream")
+            #: Required-static prop names per action, grouped by app, so we can
+            #: tell a setting the whole app shares from one action's own item.
+            per_app_required: dict[str, list[set[str]]] = {}
+            #: Gaps found per action, judged once every action has been read.
+            pending: list[dict[str, Any]] = []
             for binding in parsed.tools:
                 if not binding.enabled or binding.provider not in {"pipedream", ""}:
                     continue
@@ -378,6 +383,7 @@ async def evaluate_agent_readiness(
                             required_static.append(key)
                 if not required_static:
                     continue
+                per_app_required.setdefault(app_id or "", []).append(set(required_static))
                 stored = await load_agent_tool_config(
                     user_id=user_id,
                     agent_id=agent_id,
@@ -405,11 +411,43 @@ async def evaluate_agent_readiness(
                     if not is_static_prop_configured(k, merged, app_id=app_id)
                 ]
                 if missing_keys:
-                    missing_config.append(
+                    pending.append(
                         {
                             "type": "tool_config",
                             "tool_id": binding.tool_id,
+                            "app_id": app_id or "",
                             "fields": missing_keys,
+                        }
+                    )
+
+            # A setting is what the app needs everywhere; what a single action
+            # needs is an item, and the agent picks that per call.
+            #
+            # This agent bound nine Trello actions, so the card added up their
+            # required props and asked the user to pin a checklist item id, a
+            # member id and a card id before it could run — none of which it can
+            # know in advance. baseId appears in every Airtable action bound
+            # here; recordId in one. Counting how widely a prop is required
+            # separates the two without a list of app-specific names.
+            for item in pending:
+                shapes = per_app_required.get(item["app_id"], [])
+                if not shapes:
+                    # Nothing to compare against — this gates publication, so
+                    # keep what was found rather than passing an agent as ready.
+                    shared = list(item["fields"])
+                else:
+                    threshold = (len(shapes) + 1) // 2
+                    shared = [
+                        field
+                        for field in item["fields"]
+                        if sum(1 for shape in shapes if field in shape) >= threshold
+                    ]
+                if shared:
+                    missing_config.append(
+                        {
+                            "type": "tool_config",
+                            "tool_id": item["tool_id"],
+                            "fields": shared,
                         }
                     )
         except Exception:  # noqa: BLE001
