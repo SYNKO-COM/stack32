@@ -109,3 +109,38 @@ class TestTheEdges:
 
     def test_no_shapes_at_all_keeps_what_was_found(self):
         assert shared_fields([], ["baseId"]) == ["baseId"]
+
+
+class TestASettingCarriesAcrossItsTwoNames:
+    """`board` in create-card is the `idBoard` update-card asks for."""
+
+    def test_identity_strips_the_id_shape(self):
+        from agent_service.integrations.pipedream.tool_config import setting_identity
+
+        assert setting_identity("idBoard") == setting_identity("board")
+        assert setting_identity("idList") == setting_identity("list")
+        assert setting_identity("tableId") == setting_identity("table")
+
+    def test_it_keeps_different_settings_apart(self):
+        from agent_service.integrations.pipedream.tool_config import setting_identity
+
+        assert setting_identity("baseId") != setting_identity("tableId")
+        assert setting_identity("idBoard") != setting_identity("idList")
+
+    def test_a_board_saved_once_satisfies_either_spelling(self):
+        from agent_service.integrations.pipedream.tool_config import (
+            is_static_prop_configured,
+        )
+
+        saved = {"board": "67e4ec5b450bf71141b23584"}
+        assert is_static_prop_configured("board", saved, app_id="trello")
+        assert is_static_prop_configured("idBoard", saved, app_id="trello")
+
+    def test_it_does_not_satisfy_a_setting_nobody_chose(self):
+        from agent_service.integrations.pipedream.tool_config import (
+            is_static_prop_configured,
+        )
+
+        saved = {"board": "67e4ec5b450bf71141b23584"}
+        assert not is_static_prop_configured("idList", saved, app_id="trello")
+        assert not is_static_prop_configured("tableId", saved, app_id="trello")

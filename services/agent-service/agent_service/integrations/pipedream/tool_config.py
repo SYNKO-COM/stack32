@@ -226,6 +226,19 @@ def normalize_static_config_for_schema(
             if _compact(key) == compact:
                 out[prop.name] = value
                 break
+        if prop.name in out:
+            continue
+        # Same thing under the catalogue's other shape: a board saved as
+        # `board` by create-card is the `idBoard` update-card asks for. Without
+        # this the value was dropped for every action spelling it the other
+        # way, and the setup card went on asking for what was already chosen.
+        identity = setting_identity(prop.name)
+        for key, value in raw.items():
+            if value in (None, ""):
+                continue
+            if setting_identity(key) == identity:
+                out[prop.name] = value
+                break
 
     # Fill from alias groups when schema uses any member of the group
     for group in groups:
