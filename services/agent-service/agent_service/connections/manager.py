@@ -335,7 +335,7 @@ class ConnectionManager:
                 params={
                     "id": f"eq.{connection_id}",
                     "user_id": f"eq.{user_id}",
-                    "select": "id,status,provider",
+                    "select": "id,status,provider,provider_metadata",
                     "limit": "1",
                 },
             )
@@ -395,6 +395,37 @@ class ConnectionManager:
                 },
                 headers={"Prefer": "return=representation"},
             )
+            # The tool bindings follow a reconnect, but a tool trigger kept the
+            # revoked connection's id in its config and the next wake died on
+            # dead auth — observed on a live disconnect/reconnect cycle. Point
+            # this agent's triggers for the same app at the account that was
+            # just bound.
+            meta = conn_rows[0].get("provider_metadata")
+            app_id = str((meta or {}).get("app_id") or "").lower()
+            if app_id:
+                triggers = await client.get(
+                    "/agent_triggers",
+                    params={
+                        "agent_id": f"eq.{agent_id}",
+                        "user_id": f"eq.{user_id}",
+                        "select": "id,trigger_type,config",
+                    },
+                )
+                trigger_rows = triggers.json() if triggers.status_code < 400 else []
+                for row in trigger_rows if isinstance(trigger_rows, list) else []:
+                    ttype = str(row.get("trigger_type") or "").lower()
+                    if not ttype.startswith(f"{app_id}-"):
+                        continue
+                    cfg = row.get("config") if isinstance(row.get("config"), dict) else {}
+                    if cfg.get("connection_id") == connection_id:
+                        continue
+                    cfg["connection_id"] = connection_id
+                    await client.patch(
+                        "/agent_triggers",
+                        params={"id": f"eq.{row['id']}"},
+                        json={"config": cfg},
+                    )
+
         rows = response.json() if response.status_code < 400 else []
         return rows[0] if rows else {}
 
