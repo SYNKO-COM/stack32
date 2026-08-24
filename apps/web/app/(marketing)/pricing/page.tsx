@@ -213,8 +213,16 @@ export default function PricingPage() {
               )}
             </div>
 
+            <Button
+              className="mt-5 w-full rounded-full"
+              variant={plan.popular ? "default" : "outline"}
+              disabled={activate.isPending}
+              onClick={() => void handleCta(plan.id)}
+            >
+              {plan.cta}
+            </Button>
             {plan.id !== "free" ? (
-              <div className="mt-4 space-y-1.5">
+              <div className="mt-5 space-y-1.5">
                 <p className="text-xs font-medium text-muted-foreground">
                   {t("pricing.creditsLabel")}
                 </p>
@@ -233,9 +241,9 @@ export default function PricingPage() {
                 <p className="text-[11px] text-muted-foreground/80">{plan.creditsLabel}</p>
               </div>
             ) : (
-              // Free has no credit picker; reserve the same height so all four
-              // CTAs sit on one line instead of the free one floating up.
-              <div className="mt-4 space-y-1.5">
+              // Free has no credit picker; reserve the same height so the
+              // four feature lists still start on the same line.
+              <div className="mt-5 space-y-1.5">
                 <p className="text-xs font-medium text-transparent select-none" aria-hidden="true">
                   —
                 </p>
@@ -251,14 +259,6 @@ export default function PricingPage() {
               </div>
             )}
 
-            <Button
-              className="mt-6 w-full rounded-full"
-              variant={plan.popular ? "default" : "outline"}
-              disabled={activate.isPending}
-              onClick={() => void handleCta(plan.id)}
-            >
-              {plan.cta}
-            </Button>
             <ul className="mt-7 flex-1 space-y-2.5 border-t border-border/60 pt-6">
               {plan.features.map((feature) => (
                 <li key={feature} className="flex items-start gap-2 text-sm">
