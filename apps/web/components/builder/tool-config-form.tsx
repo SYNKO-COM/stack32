@@ -367,7 +367,23 @@ export function ToolConfigForm({
               value: a.connectionId,
               label: a.accountEmail || a.appId || a.connectionId.slice(0, 8),
             }))}
-            onChange={setConnectionId}
+            onChange={(next) => {
+              setConnectionId(next);
+              if (!next) return;
+              // Bind on the spot. The account used to be attached only by
+              // Enregistrer, which needs the required fields — and those are
+              // pickers that stay empty until an account is bound, because
+              // Pipedream cannot list someone's boards without one. Choosing
+              // the account was the only way out of that circle, so it does
+              // the binding, and the pickers fill in straight after.
+              void bindIntegrationConnection({
+                agentId,
+                connectionId: next,
+                toolIds: [toolId],
+              })
+                .then(() => loadRemoteOptionsForKeys(Object.keys(fields), () => false))
+                .catch(() => setError(t("panel.toolConfigSaveError")));
+            }}
           />
         </div>
       ) : null}
