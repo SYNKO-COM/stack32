@@ -186,7 +186,20 @@ class AgentState(TypedDict):
     interrupt: str | None
 
 
-def stable_live_thread_id(live_thread_id: str) -> str:
+def stable_live_thread_id(live_thread_id: str, run_id: str | None = None) -> str:
+    """Checkpointer scope for one run.
+
+    This used to be stable per live thread, so every new run on the same
+    trigger reloaded the checkpointed state of ALL previous runs — seeds,
+    schemas, observations — and operator.add stacked the new seed on top.
+    Two runs in, a support ticket cost 46k input tokens for a 5.5k prompt,
+    and the pile only grew. Nothing reads the checkpoint across runs: resumes
+    are fresh runs, and the seed already carries bounded conversation history
+    via load_live_history. Scoping the checkpoint to the run keeps intra-run
+    step recovery and drops the replay.
+    """
+    if run_id:
+        return f"live:{live_thread_id}:{run_id}"
     return f"live:{live_thread_id}"
 
 
@@ -909,7 +922,7 @@ async def run_langgraph_agent(
 
     checkpointer = await _get_checkpointer()
     compiled = graph.compile(checkpointer=checkpointer)
-    config = {"configurable": {"thread_id": stable_live_thread_id(thread_id)}}
+    config = {"configurable": {"thread_id": stable_live_thread_id(thread_id, run_id)}}
     final = await compiled.ainvoke(
         {
             "messages": seed_messages,
