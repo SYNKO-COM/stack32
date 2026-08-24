@@ -415,6 +415,7 @@ class LiveRuntime:
             user_id=user_id,
             agent_id=agent_id,
             max_calls=self.settings.MAX_LLM_CALLS_PER_RUN,
+            source="live",
         ):
             return await self._execute_live_run_inner(
                 run_id=run_id,

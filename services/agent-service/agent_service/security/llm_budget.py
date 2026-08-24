@@ -26,6 +26,8 @@ class RunLlmBudget:
     user_id: str
     agent_id: str
     max_calls: int
+    #: Which half of the product spent this — "builder" or "live".
+    source: str = "builder"
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -102,6 +104,7 @@ class RunLlmBudget:
                     provider=provider,
                     model=model,
                     reasoning_effort=reasoning_effort,
+                    source=self.source,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     estimated_cost_usd=float(cost_usd or 0),
@@ -145,6 +148,7 @@ async def llm_run_budget(
     user_id: str,
     agent_id: str,
     max_calls: int | None = None,
+    source: str = "builder",
 ):
     settings = get_settings()
     budget = RunLlmBudget(
@@ -152,6 +156,7 @@ async def llm_run_budget(
         user_id=user_id,
         agent_id=agent_id,
         max_calls=max_calls or settings.MAX_LLM_CALLS_PER_RUN,
+        source=source,
     )
     token = _current_budget.set(budget)
     try:

@@ -362,6 +362,7 @@ class Persistence(SupabaseRepository):
         success: bool = True,
         error_code: str | None = None,
         metadata: dict[str, Any] | None = None,
+        source: str = "builder",
     ) -> None:
         async with get_supabase_admin_client() as client:
             await client.post(
@@ -370,7 +371,10 @@ class Persistence(SupabaseRepository):
                     "user_id": user_id,
                     "agent_id": agent_id,
                     "run_id": run_id,
-                    "source": "builder",
+                    # Was hard-coded "builder", so every live run's tokens were
+                    # filed under the builder — 98% of consumption attributed to
+                    # the wrong half of the product on any usage report.
+                    "source": source,
                     "profile": profile,
                     "stage": stage,
                     "provider": provider,
