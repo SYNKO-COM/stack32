@@ -35,9 +35,13 @@ def test_starter_monthly_budget():
     assert abs(budget - 6.0) < 0.01
 
 
-def test_free_budget():
-    budget = effective_ai_budget_usd("free", billing_interval="monthly", credits_monthly=5)
-    assert abs(budget - 0.2) < 0.01
+def test_free_budget_covers_one_first_build():
+    # $0.20 stopped every free user a fifth of the way into their first build
+    # (~$1 measured). The free budget now covers one full build with room for
+    # a couple of live turns.
+    budget = effective_ai_budget_usd("free", billing_interval="monthly", credits_monthly=25)
+    assert abs(budget - 1.30) < 0.01
+    assert budget >= 1.0  # the measured first-build cost
 
 
 def test_usd_per_credit_starter():

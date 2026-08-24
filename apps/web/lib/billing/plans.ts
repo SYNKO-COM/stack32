@@ -41,8 +41,10 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     key: "free",
     monthlyPriceUsd: 0,
     annualMonthlyPriceUsd: 0,
-    baseCredits: 5,
-    baseBudgetUsd: 0.2,
+    // $1.30 covers one full first build (~$1 measured) plus a few live turns;
+    // $0.20 used to stop every free user mid-build. 25 credits ≈ $0.052/credit.
+    baseCredits: 25,
+    baseBudgetUsd: 1.3,
     maxWorkspaces: 1,
     maxAgents: 1,
     maxLiveMessages: 10,

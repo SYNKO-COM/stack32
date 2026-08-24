@@ -31,8 +31,13 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         key="free",
         monthly_price_usd=0,
         annual_monthly_price_usd=0,
-        base_credits=5,
-        base_budget_usd=0.2,
+        # A first real build costs ~$1 on the codex ladder; $0.20 stopped every
+        # free user at a fifth of their first agent, upgrade popup in hand,
+        # without ever seeing it work. $1.30 covers one full build with room
+        # for a couple of live turns. 25 credits keeps ~$0.052/credit, in line
+        # with the paid plans.
+        base_credits=25,
+        base_budget_usd=1.30,
         max_workspaces=1,
         max_agents=1,
         max_live_messages=10,
