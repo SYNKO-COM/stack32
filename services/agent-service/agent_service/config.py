@@ -63,11 +63,15 @@ class Settings(BaseSettings):
     MODEL_BALANCED_FALLBACK: str = "openai/gpt-5.6-luna"
     MODEL_REASONING_PRIMARY: str = "openai/gpt-5.6-terra"
     MODEL_REASONING_EXPERT: str = "openai/gpt-5.6-sol"
-    MODEL_REASONING_FALLBACK: str = "openai/gpt-5.6-sol"
+    # A fallback is the degraded path, not the escalation. These two used to
+    # name the expert, so every failure of a $2/M model retried on a $5/M one —
+    # the opposite of the balanced and validator tiers, which both fall back to
+    # something cheaper. sol stays the expert; it is no longer the safety net.
+    MODEL_REASONING_FALLBACK: str = "openai/gpt-5.6-terra"
     MODEL_CODING_PRIMARY: str = "openai/gpt-5.6-terra"
     MODEL_CODING_EXPERT: str = "openai/gpt-5.6-sol"
     MODEL_CODING_EXTERNAL_EXPERT: str = "anthropic/claude-sonnet-5"
-    MODEL_CODING_FALLBACK: str = "openai/gpt-5.6-sol"
+    MODEL_CODING_FALLBACK: str = "openai/gpt-5.6-terra"
     MODEL_VALIDATOR_PRIMARY: str = "openai/gpt-5.6-terra"
     MODEL_VALIDATOR_FALLBACK: str = "openai/gpt-5.6-luna"
     MODEL_EMBEDDING_PRIMARY: str = "openai/text-embedding-3-small"

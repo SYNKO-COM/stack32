@@ -41,6 +41,24 @@ def _compact(name: str) -> str:
     return name.lower().replace("_", "").replace("-", "")
 
 
+def setting_identity(name: str) -> str:
+    """What a prop names, regardless of which action is asking.
+
+    Pipedream writes the same setting under two shapes: `board` in
+    trello-create-card, `idBoard` in trello-update-card; `list` and `idList`;
+    `member` and `idMember`. A board chosen once satisfied only the action whose
+    spelling happened to match, so the setup card went on asking for a board
+    that was already saved. Reading `idX` as "the id of X" is the catalogue's
+    own convention, so it holds for apps nobody has looked at.
+    """
+    compact = _compact(name)
+    if compact.startswith("id") and len(compact) > 2:
+        compact = compact[2:]
+    if compact.endswith("id") and len(compact) > 2:
+        compact = compact[:-2]
+    return compact
+
+
 _GOOGLE_SHEETS_URL_RE = re.compile(
     r"docs\.google\.com/spreadsheets/d/([a-zA-Z0-9-_]+)",
     re.IGNORECASE,
@@ -237,6 +255,12 @@ def is_static_prop_configured(
         if value in (None, ""):
             continue
         if _compact(key) == compact:
+            return True
+    identity = setting_identity(prop_name)
+    for key, value in cfg.items():
+        if value in (None, ""):
+            continue
+        if setting_identity(key) == identity:
             return True
     for group in prop_alias_groups_for_app(app_id):
         if prop_name not in group:

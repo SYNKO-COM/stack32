@@ -132,8 +132,14 @@ _PIPEDREAM_APP_ALIASES: dict[str, str] = {
 }
 
 # Max Pipedream actions bound per connected app during builder resolution.
-DEFAULT_PIPEDREAM_MAX_ACTIONS = 8
-MAPS_PIPEDREAM_MAX_ACTIONS = 10
+#: Actions to bind per app. Eight meant a "add a row and post a message" agent
+#: arrived with eight Airtable actions including delete-record, and a setup card
+#: that added up all of their required settings. Three covers read, write and
+#: update; anything else the agent needs, it says so and the user adds it in
+#: Build — a short list the person can read beats a long one they cannot.
+DEFAULT_PIPEDREAM_MAX_ACTIONS = 3
+#: Maps research genuinely needs search plus details.
+MAPS_PIPEDREAM_MAX_ACTIONS = 4
 # Single source of truth — AgentSpec.tools rejects anything beyond this cap.
 MAX_SELECTED_TOOLS = MAX_AGENT_TOOLS
 # Key = user query (normalized slug); value = slugs that must not win by default.
@@ -930,6 +936,43 @@ def _filter_actions_for_app(tools: list[Any], app_id: str) -> list[Any]:
     return [m for m in tools if _tool_belongs_to_app(m, app_id)]
 
 
+#: Verbs that take something away. An agent asked to add a row should not
+#: arrive holding delete-record: it is one hallucinated argument away from
+#: destroying the user's data, and it never earned its place in the list.
+_DESTRUCTIVE_VERBS: tuple[str, ...] = (
+    "delete", "remove", "archive", "trash", "purge", "revoke", "cancel",
+    "unpublish", "clear", "reset", "supprime",
+)
+
+
+def _asks_to_destroy(prompt_lower: str) -> bool:
+    """True when the mission itself calls for taking something away."""
+    return bool(
+        re.search(
+            r"\b(supprim\w*|efface\w*|archiv\w*|retire\w*|delete|remove|archive|clean\s*up)\b",
+            prompt_lower,
+        )
+    )
+
+
+def drop_unrequested_destructive_actions(tools: list[Any], prompt_lower: str) -> list[Any]:
+    """Leave destructive actions out unless the mission asked for one.
+
+    Keeps at least one tool: if every candidate destroys something, the mission
+    is about destroying something even when the wording did not say so.
+    """
+    if not tools or _asks_to_destroy(prompt_lower):
+        return tools
+
+    def _destroys(tool: Any) -> bool:
+        tid = str(getattr(tool, "tool_id", None) or "").lower()
+        action = tid.split("-", 1)[1] if "-" in tid else tid
+        return any(action.startswith(v) or f"-{v}-" in f"-{action}-" for v in _DESTRUCTIVE_VERBS)
+
+    kept = [t for t in tools if not _destroys(t)]
+    return kept or tools
+
+
 def _prefer_action_tools(tools: list[Any], prompt_lower: str) -> list[Any]:
     """Rank create/design, outbound (send/post), or Maps actions first when relevant."""
     if not tools:
@@ -1549,7 +1592,10 @@ async def resolve_pipedream_app(
         matches = await search(action_query, limit=15)
         pd_raw = [m for m in matches if getattr(m, "provider", None) == "pipedream"]
         ranked = _prefer_action_tools(
-            _filter_actions_for_app(pd_raw, app_id), prompt_lower
+            drop_unrequested_destructive_actions(
+                _filter_actions_for_app(pd_raw, app_id), prompt_lower
+            ),
+            prompt_lower,
         )
         if ranked:
             ranked_per_intent.append(ranked)
