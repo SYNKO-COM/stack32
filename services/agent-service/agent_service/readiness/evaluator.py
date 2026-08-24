@@ -362,12 +362,20 @@ async def evaluate_agent_readiness(
                     continue
                 static_schema = schema_payload.get("static_schema") or {}
                 required_static = list(static_schema.get("required") or [])
+                declared = set((static_schema.get("properties") or {}).keys())
                 app_id = schema_payload.get("provider_app_id") or getattr(binding, "app_id", None)
                 hint = hint_for_app(app_id) if app_id else None
                 if hint and isinstance(hint.get("required_props"), list):
                     for key in hint["required_props"]:
-                        if isinstance(key, str) and key.strip() and key not in required_static:
-                            required_static.append(key.strip())
+                        key = key.strip() if isinstance(key, str) else ""
+                        # A hint is per app, but it was being applied to every
+                        # action of that app. Trello's hint names checklistItemId,
+                        # so trello-search-boards — which has no such field —
+                        # counted as missing a setting the user could never fill,
+                        # and the agent could never become ready. Only settings
+                        # this action actually declares can be missing from it.
+                        if key and key in declared and key not in required_static:
+                            required_static.append(key)
                 if not required_static:
                     continue
                 stored = await load_agent_tool_config(
@@ -433,7 +441,41 @@ async def evaluate_agent_readiness(
                 )
             )
 
-        if any(m.get("type") == "tool_config" for m in missing_config):
+        # The event trigger has required settings of its own, and nothing was
+        # checking them. An agent whose Trello trigger had no board chosen was
+        # told to configure eight Airtable actions and never told the one thing
+        # that actually stopped it from listening.
+        try:
+            from agent_service.triggers.service import (
+                _missing_required_static,
+                configured_tool_trigger,
+            )
+
+            trigger_row = await configured_tool_trigger(user_id=user_id, agent_id=agent_id)
+            component_id = str((trigger_row or {}).get("component_id") or "").strip()
+            if component_id:
+                cfg = trigger_row.get("config") if isinstance(trigger_row.get("config"), dict) else {}
+                from agent_service.integrations.pipedream.client import PipedreamClient
+
+                trigger_missing = await _missing_required_static(
+                    component_id=component_id,
+                    extra_props=cfg.get("extra_props"),
+                    client=PipedreamClient(),
+                )
+                if trigger_missing:
+                    missing_config.append(
+                        {
+                            "type": "trigger_config",
+                            "tool_id": f"pd:{component_id}",
+                            "fields": trigger_missing,
+                        }
+                    )
+        except Exception:  # noqa: BLE001
+            # A trigger we cannot inspect must not silently pass as ready, but
+            # it must not take the whole readiness check down either.
+            logger.exception("readiness_trigger_config_check_failed agent_id=%s", agent_id)
+
+        if any(m.get("type") in {"tool_config", "trigger_config"} for m in missing_config):
             checks.append(
                 ReadinessCheck(
                     key="tool_config",

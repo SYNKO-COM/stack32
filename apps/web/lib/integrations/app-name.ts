@@ -70,3 +70,28 @@ export function appDisplayName(raw: string | null | undefined): string {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 }
+
+/** The app key inside a Pipedream tool id: `pd:airtable_oauth-update-record`. */
+export function appKeyFromToolId(toolId: string | null | undefined): string {
+  const id = (toolId ?? "").trim().replace(/^(pd|pipedream):/i, "");
+  if (!id) return "";
+  // The app slug runs up to the first dash that starts the action verb; the
+  // slug itself never contains a dash in Pipedream's catalogue (it uses `_`).
+  const dash = id.indexOf("-");
+  return dash === -1 ? id : id.slice(0, dash);
+}
+
+/** "a, b et c" — joined the way the reader's language joins a list. */
+export function formatList(items: string[], locale = "fr"): string {
+  const clean = items.filter(Boolean);
+  if (clean.length === 0) return "";
+  if (clean.length === 1) return clean[0];
+  try {
+    return new Intl.ListFormat(locale, {
+      style: "long",
+      type: "conjunction",
+    }).format(clean);
+  } catch {
+    return clean.join(", ");
+  }
+}

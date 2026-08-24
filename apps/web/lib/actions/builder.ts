@@ -348,6 +348,7 @@ export async function startAgentTriggerListen(agentId: string): Promise<{
   ok: false;
   code: string;
   message: string;
+  fields?: string[];
 }> {
   await requireOwnedAgent(agentId);
   if (currentAiExecutionMode() !== "agent-service") {
@@ -370,7 +371,7 @@ export async function startAgentTriggerListen(agentId: string): Promise<{
     };
   } catch (err) {
     if (err instanceof AgentServiceError) {
-      return { ok: false, code: err.code, message: err.message };
+      return { ok: false, code: err.code, message: err.message, fields: err.fields };
     }
     return {
       ok: false,

@@ -67,20 +67,29 @@ export async function agentServiceFetch<T>(
   if (!res.ok) {
     let code = "AGENT_SERVICE_ERROR";
     let message = "Agent service request failed";
+    let fields: string[] = [];
     try {
       const data = (await res.json()) as {
-        detail?: { code?: string; message?: string } | string;
+        detail?: { code?: string; message?: string; fields?: unknown } | string;
       };
       if (typeof data.detail === "object" && data.detail !== null) {
         if (typeof data.detail.code === "string") code = data.detail.code;
         if (typeof data.detail.message === "string") message = data.detail.message;
+        // The service names the settings it is still missing. Dropping them
+        // here is what left the UI saying "check the connection and the event"
+        // when the real answer was "no Trello board has been chosen".
+        if (Array.isArray(data.detail.fields)) {
+          fields = data.detail.fields.filter(
+            (f): f is string => typeof f === "string" && f.trim() !== "",
+          );
+        }
       } else if (typeof data.detail === "string") {
         message = data.detail;
       }
     } catch {
       // Non-JSON error body — keep generic message.
     }
-    throw new AgentServiceError(code, message, res.status);
+    throw new AgentServiceError(code, message, res.status, fields);
   }
 
   if (res.status === 204) return undefined as T;

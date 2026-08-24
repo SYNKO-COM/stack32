@@ -511,7 +511,11 @@ async def start_trigger_listen(agent_id: UUID, user: CurrentUser) -> dict[str, A
     except TriggerServiceError as exc:
         raise HTTPException(
             status_code=400,
-            detail={"code": exc.code, "message": str(exc) or exc.code},
+            detail={
+                "code": exc.code,
+                "message": str(exc) or exc.code,
+                "fields": exc.fields,
+            },
         ) from exc
 
 

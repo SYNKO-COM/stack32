@@ -146,6 +146,11 @@
         "needs_setup": "Setup needed",
         "needs_attention": "Needs attention"
       }
+    },
+    "setup": {
+      "connect": "Link your {{app}} account.",
+      "chooseFor": "{{app}} — choose {{fields}}.",
+      "finishFor": "{{app}} — finish the setup."
     }
   },
   "nodeStates": {
@@ -200,10 +205,10 @@
     "toolTriggerListenHint": "While the agent is unpublished, Play wakes the agent for 10 minutes. A message or event starts the agent.",
     "toolTriggerListening": "Listening until {{until}}.",
     "toolTriggerListenError": "Could not start listening. Check the connection and event.",
-    "toolTriggerListenError_CONNECTION_REQUIRED": "Connect the trigger app before starting listening.",
-    "toolTriggerListenError_CONFIG_REQUIRED": "Required settings are missing (file, sheet…). Open the trigger and save them.",
+    "toolTriggerListenError_CONNECTION_REQUIRED": "Link the trigger app's account before you start listening.",
+    "toolTriggerListenError_CONFIG_REQUIRED": "The trigger is still missing a required setting. Open it and save one.",
     "toolTriggerListenError_TRIGGER_NOT_CONFIGURED": "Pick a trigger event and save it before listening.",
-    "toolTriggerListenError_DEPLOY_FAILED": "Pipedream deploy failed. Check the selected file/sheet, then try again.",
+    "toolTriggerListenError_DEPLOY_FAILED": "Pipedream refused the trigger. Check the settings you chose, then try again.",
     "toolTriggerMissingFields": "Fill the required fields: {{fields}}",
     "toolTriggerNeedConnection": "Connect the app before saving.",
     "toolTriggerPublishedHint": "Published agent: event listening stays on around the clock.",
@@ -290,6 +295,9 @@
     "toolConfigAccountHint": "If you have several accounts for this app, pick the one this agent should use.",
     "toolConfigAccountPlaceholder": "Choose an account…",
     "toolConfigSelect": "Choose…",
-    "toolConfigSearch": "Search…"
+    "toolConfigSearch": "Search…",
+    "toolTriggerListenMissing": "Open the trigger and choose {{fields}}, then start listening again.",
+    "toolTriggerListenConnect": "Link your {{app}} account before you start listening.",
+    "toolTriggerListenThisApp": "the trigger's app"
   }
 }

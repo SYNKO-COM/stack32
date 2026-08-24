@@ -233,13 +233,71 @@ def _is_account_resource_type(prop_type: str) -> bool:
     return prop_type.strip().startswith("$.")
 
 
-def _classify(prop: dict[str, Any]) -> ParamKind:
+#: Verbs Pipedream starts an action key with. The noun right after one of them
+#: is what the action acts on.
+_ACTION_VERBS: tuple[str, ...] = (
+    "create", "update", "delete", "remove", "get", "list", "search", "send",
+    "add", "move", "rename", "archive", "find", "fetch", "upload", "download",
+    "post", "reply", "close", "convert", "publish", "cancel", "approve",
+    "duplicate", "copy", "invite", "assign", "complete", "start", "stop",
+)
+
+#: Prop types Pipedream renders as a notice in its own form. They are not
+#: inputs: `alert` is a coloured warning box. Offering one to the agent as a
+#: required parameter is asking it to fill in a paragraph of prose.
+_DISPLAY_ONLY_TYPES: frozenset[str] = frozenset({"alert"})
+
+
+def is_display_only(prop_type: str) -> bool:
+    """True for a prop that is a notice rather than a field."""
+    return prop_type.strip().lower() in _DISPLAY_ONLY_TYPES
+
+
+def action_subject(action_id: str) -> str | None:
+    """The thing an action acts on, read out of its own key.
+
+    `airtable_oauth-update-record` acts on a record; `trello-update-card` on a
+    card. Pipedream writes the verb and its object straight into the key, so
+    this holds for the whole catalogue without a list of app-specific names.
+    """
+    key = (action_id or "").strip().lower()
+    if not key:
+        return None
+    # Keys are `<app>-<verb>-<object>...`; the app slug may itself contain a
+    # dash, so find the verb rather than assuming the app is one segment.
+    parts = key.split("-")
+    for i, part in enumerate(parts):
+        if part in _ACTION_VERBS and i + 1 < len(parts):
+            return parts[i + 1]
+    return None
+
+
+def _is_action_subject(prop_name: str, subject: str | None) -> bool:
+    """True when this prop names the very thing the action acts on.
+
+    The record an update writes to is chosen per call, not pinned once in a
+    settings drawer — unlike the base and table that contain it. Both are
+    `remoteOptions` pickers and Pipedream marks both required, so only the
+    action's own key tells them apart.
+    """
+    if not subject:
+        return False
+    name = prop_name.strip().lower().replace("_", "").replace("-", "")
+    return name in {subject, f"{subject}id", f"{subject}ids", f"{subject}key"}
+
+
+def _classify(prop: dict[str, Any], *, subject: str | None = None) -> ParamKind:
     prop_type = str(prop.get("type") or "").lower()
     name = str(prop.get("name") or "").lower().replace("_", "").replace("-", "")
     if prop_type == "app" or prop.get("app") or prop.get("authProvisionId") is not None:
         return "connection"
     if name in {"authprovisionid", "auth", "account", "connectedaccount"}:
         return "connection"
+    # The thing the action acts on is chosen per call, whatever else it looks
+    # like. Checked before the picker rules below, which would otherwise file
+    # `recordId` next to the base and table that merely contain it.
+    if _is_action_subject(str(prop.get("name") or ""), subject):
+        return "runtime"
     if _is_account_resource_type(prop_type):
         return "static"
     if prop.get("remoteOptions") is True or prop.get("useQuery") is True:
@@ -293,11 +351,16 @@ def normalize_configurable_props(
 
     props: list[NormalizedProp] = []
     auth_prop_name: str | None = None
+    subject = action_subject(action_id)
     for entry in _prop_entries(raw_props):
         name = str(entry.get("name") or "")
         if not name:
             continue
-        kind = _classify(entry)
+        # A notice is not a field. Keeping it would demand the agent write the
+        # body of a warning box, and count that box as a missing setting.
+        if is_display_only(str(entry.get("type") or "")):
+            continue
+        kind = _classify(entry, subject=subject)
         prop_type = str(entry.get("type") or "string")
         json_type = _map_json_type(prop_type)
         app_slug = None

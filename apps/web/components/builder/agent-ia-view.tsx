@@ -34,6 +34,9 @@ import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ApprovalMode } from "@/lib/domain/types";
 import { appsEquivalent } from "@/lib/integrations/app-grouping";
 import { cn } from "@/lib/utils";
+import { appDisplayName } from "@/lib/integrations/app-name";
+import { appKeyFromToolId, formatList } from "@/lib/integrations/app-name";
+import { resolvePropCopy } from "@/lib/integrations/prop-labels";
 
 const DRAFT_WAKE_MS = 10 * 60 * 1000;
 
@@ -68,7 +71,7 @@ export function AgentIaView({
   /** Subscriber installation — scopes readiness/connections for public use. */
   installationId?: string | null;
 }) {
-  const { t } = useTranslation(["structure", "builder"]);
+  const { t, i18n } = useTranslation(["structure", "builder"]);
   const queryClient = useQueryClient();
   const { data: agent } = useAgent(agentId);
   const { data: graphResponse } = useAgentGraph(agentId);
@@ -368,6 +371,30 @@ export function AgentIaView({
       const result = await startAgentTriggerListen(agentId);
       if (!result.ok) {
         setWakeUntilMs(null);
+        // Name what is actually missing. The per-code sentences used to be
+        // written for Google Sheets ("Connectez Google Sheets", "fichier,
+        // feuille…"), so a Trello trigger missing its board was told to check
+        // a spreadsheet it does not have.
+        const named = (result.fields ?? []).filter(Boolean);
+        if (result.code === "CONFIG_REQUIRED" && named.length) {
+          setWakeError(
+            t("structure:panel.toolTriggerListenMissing", {
+              fields: formatList(
+                named.map((f) => resolvePropCopy(f).label.toLowerCase()),
+                i18n.language,
+              ),
+            }),
+          );
+          return;
+        }
+        if (result.code === "CONNECTION_REQUIRED") {
+          setWakeError(
+            t("structure:panel.toolTriggerListenConnect", {
+              app: appDisplayName(named[0] ?? "") || t("structure:panel.toolTriggerListenThisApp"),
+            }),
+          );
+          return;
+        }
         const key = `structure:panel.toolTriggerListenError_${result.code}`;
         setWakeError(
           t(key, {
@@ -411,38 +438,51 @@ export function AgentIaView({
   }, [spec?.toolBindings]);
 
   const setupMissing = useMemo(() => {
+    // One line per app, in the reader's language. This used to print the
+    // readiness check messages verbatim in English and then one line per bound
+    // action — "Configure pd:airtable_oauth-update-record: baseId, tableId,
+    // recordId" — which named our plumbing, repeated the same app eight times,
+    // and told nobody what to actually do.
     const items: string[] = [];
-    for (const c of readinessQuery.data?.checks ?? []) {
-      if (!c.ok && c.message) items.push(c.message);
-    }
-    for (const m of readinessQuery.data?.missingConnections ?? []) {
-      const provider = typeof m.provider === "string" ? m.provider : "app";
-      const appId = typeof m.app_id === "string" ? m.app_id : provider;
-      items.push(`Connect ${appId}`);
-    }
+
+    /** Settings still missing, gathered per app rather than per action. */
+    const byApp = new Map<string, Set<string>>();
     for (const m of readinessQuery.data?.missingConfig ?? []) {
-      if (typeof m.message === "string" && m.message) items.push(m.message);
-      else if (typeof m.tool_id === "string") {
-        const fields = Array.isArray(m.fields) ? m.fields.join(", ") : "";
-        items.push(
-          fields
-            ? `Configure ${m.tool_id}: ${fields}`
-            : `Configure ${m.tool_id}`,
-        );
+      if (typeof m.tool_id !== "string") continue;
+      const app = appDisplayName(appKeyFromToolId(m.tool_id)) || m.tool_id;
+      const fields = Array.isArray(m.fields) ? m.fields : [];
+      const bucket = byApp.get(app) ?? new Set<string>();
+      for (const f of fields) {
+        if (typeof f === "string" && f.trim()) bucket.add(f.trim());
       }
+      byApp.set(app, bucket);
     }
-    // Graph nodes still needing setup (UI source of truth for Structure badge)
-    for (const n of productGraph.nodes) {
-      if (n.configurationStatus === "setup_required") {
-        items.push(`${n.label} needs setup`);
-      }
+
+    // Accounts come first: nothing else can be filled until they are linked.
+    for (const m of readinessQuery.data?.missingConnections ?? []) {
+      const provider = typeof m.provider === "string" ? m.provider : "";
+      const appId = typeof m.app_id === "string" ? m.app_id : provider;
+      items.push(t("structure:modules.setup.connect", { app: appDisplayName(appId) }));
     }
+
+    for (const [app, fields] of byApp) {
+      const labels = [...fields].map((f) => resolvePropCopy(f).label.toLowerCase());
+      items.push(
+        labels.length
+          ? t("structure:modules.setup.chooseFor", {
+              app,
+              fields: formatList(labels, i18n.language),
+            })
+          : t("structure:modules.setup.finishFor", { app }),
+      );
+    }
+
     return [...new Set(items)];
   }, [
-    readinessQuery.data?.checks,
     readinessQuery.data?.missingConnections,
     readinessQuery.data?.missingConfig,
-    productGraph.nodes,
+    i18n.language,
+    t,
   ]);
 
   // Readiness lands a beat after the graph does. Judging on the graph alone in

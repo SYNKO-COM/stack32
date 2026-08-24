@@ -3,12 +3,15 @@
 export class AgentServiceError extends Error {
   readonly code: string;
   readonly status: number;
+  /** Setting names the service named as missing, when it named any. */
+  readonly fields: string[];
 
-  constructor(code: string, message: string, status: number) {
+  constructor(code: string, message: string, status: number, fields: string[] = []) {
     super(message);
     this.name = "AgentServiceError";
     this.code = code;
     this.status = status;
+    this.fields = fields;
   }
 }
 

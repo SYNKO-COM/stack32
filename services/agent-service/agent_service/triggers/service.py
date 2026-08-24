@@ -25,9 +25,13 @@ DEFAULT_POLL_SECONDS = 60
 
 
 class TriggerServiceError(Exception):
-    def __init__(self, code: str, message: str = "") -> None:
+    def __init__(self, code: str, message: str = "", fields: list[str] | None = None) -> None:
         super().__init__(message or code)
         self.code = code
+        #: Settings the trigger is still missing, by prop name. The UI labels
+        #: these for the reader — a generic "check the connection and the
+        #: event" told nobody that a Trello board had never been chosen.
+        self.fields = list(fields or [])
 
 
 def public_webhook_url(trigger_id: str) -> str:
@@ -362,7 +366,11 @@ async def _deploy_source(
         connection_id=connection_id,
     )
     if not auth_id:
-        raise TriggerServiceError("CONNECTION_REQUIRED", "Connect the app to listen for events.")
+        raise TriggerServiceError(
+            "CONNECTION_REQUIRED",
+            "Connect the app to listen for events.",
+            fields=[app_id] if app_id else [],
+        )
     missing = await _missing_required_static(
         component_id=component_id,
         extra_props=extra_props,
@@ -372,6 +380,7 @@ async def _deploy_source(
         raise TriggerServiceError(
             "CONFIG_REQUIRED",
             "Configure required fields: " + ", ".join(missing[:6]),
+            fields=missing,
         )
     configured = await _build_configured_props(
         component_id=component_id,

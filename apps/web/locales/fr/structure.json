@@ -146,6 +146,11 @@
         "needs_setup": "À configurer",
         "needs_attention": "À vérifier"
       }
+    },
+    "setup": {
+      "connect": "Connectez votre compte {{app}}.",
+      "chooseFor": "{{app}} — choisissez {{fields}}.",
+      "finishFor": "{{app}} — terminez le réglage."
     }
   },
   "nodeStates": {
@@ -200,10 +205,10 @@
     "toolTriggerListenHint": "Tant que l’agent n’est pas publié, le bouton Play réveille l’agent pendant 10 minutes. Un message ou un événement démarre l’agent.",
     "toolTriggerListening": "En écoute jusqu’à {{until}}.",
     "toolTriggerListenError": "Impossible de démarrer l’écoute. Vérifiez la connexion et l’événement.",
-    "toolTriggerListenError_CONNECTION_REQUIRED": "Connectez Google Sheets (ou l’app du trigger) avant de lancer l’écoute.",
-    "toolTriggerListenError_CONFIG_REQUIRED": "Il manque des réglages obligatoires (fichier, feuille…). Ouvrez le trigger et enregistrez-les.",
+    "toolTriggerListenError_CONNECTION_REQUIRED": "Connectez le compte de l’app du déclencheur avant de lancer l’éveil.",
+    "toolTriggerListenError_CONFIG_REQUIRED": "Il manque un réglage obligatoire sur le déclencheur. Ouvrez-le et enregistrez-le.",
     "toolTriggerListenError_TRIGGER_NOT_CONFIGURED": "Choisissez un événement de trigger et enregistrez-le avant de lancer l’écoute.",
-    "toolTriggerListenError_DEPLOY_FAILED": "Le déploiement Pipedream a échoué. Vérifiez le fichier / la feuille choisis, puis réessayez.",
+    "toolTriggerListenError_DEPLOY_FAILED": "Pipedream a refusé le déclencheur. Vérifiez les réglages choisis, puis réessayez.",
     "toolTriggerMissingFields": "Renseignez les champs obligatoires : {{fields}}",
     "toolTriggerNeedConnection": "Connectez l’application avant d’enregistrer.",
     "toolTriggerPublishedHint": "Agent publié : l’écoute d’événements est active en continu.",
@@ -290,6 +295,9 @@
     "toolConfigAccountHint": "Si vous avez plusieurs comptes pour cette app, choisissez celui que l’agent doit utiliser.",
     "toolConfigAccountPlaceholder": "Choisir un compte…",
     "toolConfigSelect": "Choisir…",
-    "toolConfigSearch": "Rechercher…"
+    "toolConfigSearch": "Rechercher…",
+    "toolTriggerListenMissing": "Ouvrez le déclencheur et choisissez {{fields}}, puis relancez l’éveil.",
+    "toolTriggerListenConnect": "Connectez votre compte {{app}} avant de lancer l’éveil.",
+    "toolTriggerListenThisApp": "l’app du déclencheur"
   }
 }
