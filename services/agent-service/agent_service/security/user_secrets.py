@@ -293,6 +293,51 @@ async def record_llm_validation(
         logger.info("llm_validation record failed status=%s", response.status_code)
 
 
+async def latest_model_config_across_agents(*, user_id: str) -> dict[str, Any] | None:
+    """The model this user already runs on another agent, newest first.
+
+    A new agent's spec leaves `model` empty, and the BYOK restore below only
+    fires when this very agent once validated a pasted key. In the Pipedream
+    world the OpenAI account lives at account level, so every new agent asked
+    the person to re-pick the model they had already chosen — the brain check
+    failed on a fresh build even though their other agents ran fine.
+    """
+    async with get_supabase_admin_client() as client:
+        agents = await client.get(
+            "/agents",
+            params={
+                "user_id": f"eq.{user_id}",
+                "deleted_at": "is.null",
+                "select": "id",
+                "order": "updated_at.desc",
+                "limit": "10",
+            },
+        )
+        if agents.status_code >= 400:
+            return None
+        rows = agents.json() if isinstance(agents.json(), list) else []
+        ids = ",".join(str(r.get("id")) for r in rows if r.get("id"))
+        if not ids:
+            return None
+        versions = await client.get(
+            "/agent_versions",
+            params={
+                "agent_id": f"in.({ids})",
+                "select": "spec,created_at",
+                "order": "created_at.desc",
+                "limit": "30",
+            },
+        )
+        if versions.status_code >= 400:
+            return None
+        for row in versions.json() if isinstance(versions.json(), list) else []:
+            spec = row.get("spec") if isinstance(row.get("spec"), dict) else {}
+            model = spec.get("model") if isinstance(spec.get("model"), dict) else None
+            if model and model.get("provider") and model.get("model_id"):
+                return dict(model)
+    return None
+
+
 async def latest_valid_model_config(
     *, user_id: str, agent_id: str
 ) -> dict[str, Any] | None:

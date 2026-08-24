@@ -129,11 +129,18 @@ async def get_agent_readiness(
     model_cfg = getattr(spec, "model", None)
     if model_cfg is None or not getattr(model_cfg, "is_configured", False):
         from agent_service.models.agent_spec import AgentSpec
-        from agent_service.security.user_secrets import latest_valid_model_config
+        from agent_service.security.user_secrets import (
+            latest_model_config_across_agents,
+            latest_valid_model_config,
+        )
 
         restored = await latest_valid_model_config(
             user_id=user.user_id, agent_id=str(agent_id)
         )
+        if not restored:
+            # The model the person already uses elsewhere carries over; their
+            # Pipedream LLM account is account-level, so nothing else is needed.
+            restored = await latest_model_config_across_agents(user_id=user.user_id)
         if restored:
             data = spec.model_dump()
             data["model"] = restored
