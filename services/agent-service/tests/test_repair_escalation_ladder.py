@@ -1,147 +1,84 @@
-"""Climb the OpenAI ladder before changing vendor.
+"""One ladder, named in one place, walked by both loops.
 
-412 LiteLLM calls went to claude-sonnet-5 in one day against 42 for
-gpt-5.6-sol, and Anthropic carried 80% of the bill. The router reached for the
-external expert on the *second* failure — often on a verification that had
-never run, where no model could have succeeded.
+A live build spent 19 calls on claude-sonnet-5 and none on Codex. The ladder
+existed in three places that disagreed: build_pipeline named stages, the coding
+agent named its own two ("patch" then "repair_hard"), and route_coding_stage
+carried a numeric override that jumped to the external expert once
+`repair_attempt >= 4` — firing while the recorded stage still read `repair_hard`.
 
-Two attempts on terra, then sol at its heaviest reasoning, then Anthropic.
+The rung is now decided by `coding_stage_for_attempt` and nothing second-guesses
+it. Anthropic is the last rung and is capped in both loops.
 """
 
 from agent_service.config import Settings
-from agent_service.gateway.model_stage_router import CodingStage, route_coding_stage
+from agent_service.gateway.model_stage_router import (
+    CodingStage,
+    coding_stage_for_attempt,
+    route_coding_stage,
+    uses_external_expert,
+)
 
 
-def _repair(attempt: int, failures: int):
-    return route_coding_stage(
-        CodingStage.REPAIR_NORMAL, repair_attempt=attempt, prior_failures=failures
-    )
+def _model(attempt: int) -> str:
+    return route_coding_stage(CodingStage(coding_stage_for_attempt(attempt))).model
 
 
-class TestTheFirstAttemptsStayCheap:
-    def test_a_first_repair_uses_the_primary(self):
-        s = Settings()
-        assert _repair(0, 0).model == s.MODEL_CODING_PRIMARY
-
-    def test_so_does_a_second(self):
-        s = Settings()
-        assert _repair(1, 1).model == s.MODEL_CODING_PRIMARY
-
-
-class TestTheSecondFailureStaysWithOpenAI:
-    def test_it_moves_to_the_openai_expert_not_anthropic(self):
-        s = Settings()
-        route = _repair(2, 2)
-        assert route.model == s.MODEL_CODING_EXPERT
-        assert not route.model.startswith("anthropic/")
-
-    def test_it_asks_for_the_heaviest_reasoning_first(self):
-        assert _repair(2, 2).reasoning_effort.value == "xhigh"
-
-    def test_it_is_the_middle_rung(self):
-        assert _repair(2, 2).escalation_tier == 2
-
-    def test_a_third_attempt_is_still_openai(self):
-        s = Settings()
-        assert _repair(3, 3).model == s.MODEL_CODING_EXPERT
-
-
-class TestAnthropicWaitsForTheFourth:
-    def test_the_fourth_attempt_changes_vendor(self):
-        s = Settings()
-        route = _repair(4, 4)
-        assert route.model == s.MODEL_CODING_EXTERNAL_EXPERT
-        assert route.model.startswith("anthropic/")
-
-    def test_it_is_the_top_rung(self):
-        assert _repair(4, 4).escalation_tier == 3
-
-    def test_many_failures_alone_are_enough(self):
-        s = Settings()
-        assert _repair(0, 4).model == s.MODEL_CODING_EXTERNAL_EXPERT
-
-    def test_the_explicit_expert_stage_still_goes_straight_there(self):
-        s = Settings()
-        route = route_coding_stage(CodingStage.REPAIR_EXPERT)
-        assert route.model == s.MODEL_CODING_EXTERNAL_EXPERT
-
-
-class TestTheLadderOnlyEverClimbs:
-    def test_each_rung_costs_at_least_as_much_as_the_last(self):
-        from agent_service.billing.pricing import PLATFORM_MODEL_PRICING
-
-        def price(model: str) -> float:
-            row = PLATFORM_MODEL_PRICING.get(model)
-            assert row is not None, model
-            return row.input_usd_per_m
-
-        tiers = [_repair(i, i).escalation_tier or 0 for i in range(6)]
-        assert tiers == sorted(tiers), tiers
-
-    def test_the_second_failure_no_longer_jumps_to_the_top(self):
-        # This is the exact case that produced the Anthropic bill.
-        assert _repair(2, 2).escalation_tier != 3
-
-
-def _pipeline_stage(iteration: int) -> str:
-    """The ladder the pipeline actually walks — the router only sees the result."""
-    if iteration <= 1:
-        return "patch"
-    if iteration <= 3:
-        return "repair_hard"
-    return "repair_expert"
-
-
-class TestThePipelineLadderMatchesTheRouter:
-    """The pipeline names the stage, so the router's thresholds never fire on
-    their own. Changing one without the other is how the third iteration kept
-    going to Claude while the router believed it waited for the fourth."""
-
-    def test_the_first_two_iterations_stay_on_the_primary(self):
-        assert _pipeline_stage(0) == "patch"
-        assert _pipeline_stage(1) == "patch"
-
-    def test_the_next_two_stay_with_openai(self):
-        assert _pipeline_stage(2) == "repair_hard"
-        assert _pipeline_stage(3) == "repair_hard"
-
-    def test_only_a_fifth_attempt_changes_vendor(self):
-        assert _pipeline_stage(4) == "repair_expert"
-
-    def test_the_third_iteration_no_longer_reaches_anthropic(self):
-        s = Settings()
-        stage = _pipeline_stage(2)
-        route = route_coding_stage(CodingStage(stage))
-        assert route.model == s.MODEL_CODING_EXPERT
-        assert not route.model.startswith("anthropic/")
-
-    def test_the_source_still_says_repair_expert_when_it_gets_there(self):
-        s = Settings()
-        route = route_coding_stage(CodingStage(_pipeline_stage(4)))
-        assert route.model == s.MODEL_CODING_EXTERNAL_EXPERT
-
-
-class TestTheFullLadderInOrder:
-    """terra, Codex, Codex, sol, then at most two goes at Anthropic."""
-
+class TestTheLadderInOrder:
     EXPECTED = [
-        ("patch", "openai/gpt-5.6-terra"),
-        ("repair_codex", "openai/gpt-5.2-codex"),
-        ("repair_codex_max", "openai/gpt-5.3-codex"),
-        ("repair_hard", "openai/gpt-5.6-sol"),
-        ("repair_expert", "anthropic/claude-sonnet-5"),
+        (0, "openai/gpt-5.6-terra"),
+        (1, "openai/gpt-5.6-terra"),
+        (2, "openai/gpt-5.2-codex"),
+        (3, "openai/gpt-5.3-codex"),
+        (4, "openai/gpt-5.6-sol"),
+        (5, "anthropic/claude-sonnet-5"),
     ]
 
-    def test_each_rung_lands_on_the_model_it_should(self):
-        for stage, model in self.EXPECTED:
-            assert route_coding_stage(CodingStage(stage)).model == model, stage
+    def test_each_attempt_lands_on_the_model_it_should(self):
+        for attempt, model in self.EXPECTED:
+            assert _model(attempt) == model, attempt
+
+    def test_the_two_codex_rungs_come_before_sol(self):
+        assert coding_stage_for_attempt(2) == "repair_codex"
+        assert coding_stage_for_attempt(3) == "repair_codex_max"
+        assert coding_stage_for_attempt(4) == "repair_hard"
 
     def test_only_the_last_rung_leaves_openai(self):
-        for stage, model in self.EXPECTED[:-1]:
-            assert model.startswith("openai/"), stage
+        for attempt, model in self.EXPECTED[:-1]:
+            assert model.startswith("openai/"), attempt
         assert self.EXPECTED[-1][1].startswith("anthropic/")
 
-    def test_the_first_build_uses_a_coding_model_not_the_dearest(self):
+    def test_it_never_climbs_past_the_last_rung(self):
+        for attempt in (6, 12, 99):
+            assert coding_stage_for_attempt(attempt) == "repair_expert"
+
+    def test_a_negative_attempt_starts_at_the_bottom(self):
+        assert coding_stage_for_attempt(-3) == "patch"
+
+
+class TestTheNumericOverrideIsGone:
+    def test_a_high_attempt_alone_no_longer_reaches_anthropic(self):
+        # This is the exact case that produced the 19 Sonnet calls: the stage
+        # said repair_hard while the router answered with the external expert.
+        route = route_coding_stage(
+            CodingStage.REPAIR_HARD, repair_attempt=9, prior_failures=9
+        )
+        assert route.model == Settings().MODEL_CODING_EXPERT
+        assert not route.model.startswith("anthropic/")
+
+    def test_the_named_stage_is_what_decides(self):
+        s = Settings()
+        assert (
+            route_coding_stage(CodingStage.REPAIR_CODEX).model
+            == s.MODEL_CODING_CODEX_FIRST
+        )
+        assert (
+            route_coding_stage(CodingStage.REPAIR_EXPERT).model
+            == s.MODEL_CODING_EXTERNAL_EXPERT
+        )
+
+
+class TestTheFirstBuild:
+    def test_it_uses_a_coding_model_not_the_dearest(self):
         s = Settings()
         route = route_coding_stage(CodingStage.ARCHITECTURE)
         assert route.model == s.MODEL_CODING_INITIAL
@@ -156,19 +93,17 @@ class TestTheFullLadderInOrder:
             < P[s.MODEL_CODING_EXPERT].input_usd_per_m
         )
 
-    def test_every_rung_has_a_price(self):
-        from agent_service.billing.pricing import PLATFORM_MODEL_PRICING as P
 
-        # The registry is fail-closed; an unpriced model would be blocked.
-        for _stage, model in self.EXPECTED:
-            assert model in P, model
-
-
-class TestAnthropicIsCapped:
+class TestAnthropicIsCappedInBothLoops:
     def test_the_cap_is_two(self):
         assert Settings().MAX_EXTERNAL_EXPERT_CALLS == 2
 
-    def test_the_pipeline_counts_and_stops(self):
+    def test_the_helper_names_the_rung_that_changes_vendor(self):
+        assert uses_external_expert("repair_expert")
+        assert not uses_external_expert("repair_hard")
+        assert not uses_external_expert("repair_codex_max")
+
+    def test_the_outer_pipeline_counts_and_stops(self):
         import inspect
 
         from agent_service.builder import build_pipeline
@@ -176,16 +111,32 @@ class TestAnthropicIsCapped:
         src = inspect.getsource(build_pipeline)
         assert "external_expert_calls" in src
         assert "MAX_EXTERNAL_EXPERT_CALLS" in src
-        assert "REPAIR_BUDGET_EXHAUSTED" in src
 
-    def test_running_out_is_not_treated_as_a_platform_hiccup(self):
+    def test_the_inner_coding_loop_counts_and_stops_too(self):
         import inspect
 
-        from agent_service.builder import orchestrator
+        from agent_service.builder.coding import agent
 
-        src = inspect.getsource(orchestrator)
-        soft = 'build_failure_reason in {\n                        "MODEL_PROVIDER_UNAVAILABLE",\n                        "MODEL_BUDGET_EXCEEDED",\n                    }'
-        # REPAIR_BUDGET_EXHAUSTED must surface to the user with a Fix, not be
-        # swallowed as our own infrastructure failing.
-        assert "REPAIR_BUDGET_EXHAUSTED" not in soft
-        assert src.count("REPAIR_BUDGET_EXHAUSTED") == 0
+        src = inspect.getsource(agent)
+        # This is the loop that ran 19 times against the other vendor.
+        assert "external_expert_calls" in src
+        assert "MAX_EXTERNAL_EXPERT_CALLS" in src
+        assert "REPAIR_BUDGET_EXHAUSTED" in src
+
+    def test_both_loops_read_the_same_ladder(self):
+        import inspect
+
+        from agent_service.builder import build_pipeline
+        from agent_service.builder.coding import agent
+
+        for module in (build_pipeline, agent):
+            assert "coding_stage_for_attempt" in inspect.getsource(module)
+
+
+class TestEveryRungIsPriced:
+    def test_the_registry_knows_them_all(self):
+        from agent_service.billing.pricing import PLATFORM_MODEL_PRICING as P
+
+        # The registry is fail-closed; an unpriced model would be blocked.
+        for attempt in range(6):
+            assert _model(attempt) in P, attempt

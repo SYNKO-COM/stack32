@@ -237,16 +237,39 @@ class CodingAgent:
         schemas = self.registry.schemas_for(self.tool_ids)
         verification_repairs = 0
         repair_attempt = 0
+        #: Calls that left OpenAI. Capped so a repair loop cannot quietly spend
+        #: a build's whole budget at the dearest vendor.
+        external_expert_calls = 0
         code_changed = False
 
         while ledger.turn_count < self.max_turns:
             ledger.turn_count += 1
             await self.emit("builder.model.call", {"turn": ledger.turn_count})
+            from agent_service.gateway.model_stage_router import (
+                coding_stage_for_attempt,
+                uses_external_expert,
+            )
+
+            turn_stage = coding_stage_for_attempt(repair_attempt)
+            if uses_external_expert(turn_stage):
+                external_expert_calls += 1
+                if external_expert_calls > self.settings.MAX_EXTERNAL_EXPERT_CALLS:
+                    # The outer pipeline capped this, but the inner loop did not,
+                    # so one build still spent 19 calls on the other vendor. Stop
+                    # here and let the person send a Fix.
+                    return CodingResult(
+                        success=False,
+                        final_message="Repair budget exhausted.",
+                        ledger=ledger,
+                        files_touched=sorted(ctx.files_touched),
+                        stop_reason="REPAIR_BUDGET_EXHAUSTED",
+                        transcript=messages,
+                    )
             try:
                 decision = await decide(
                     messages,
                     schemas,
-                    stage="repair_hard" if repair_attempt >= 1 else "patch",
+                    stage=turn_stage,
                     repair_attempt=repair_attempt,
                     prior_failures=verification_repairs,
                 )

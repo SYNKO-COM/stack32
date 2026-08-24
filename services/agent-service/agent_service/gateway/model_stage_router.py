@@ -92,6 +92,33 @@ def platform_model_chain(profile: ModelProfile, *, stage: CodingStage | None = N
     return []
 
 
+#: The repair ladder, in one place. It used to live in three: build_pipeline
+#: named stages, the coding agent named its own two, and route_coding_stage
+#: carried a numeric override that jumped straight to the external expert once
+#: `repair_attempt >= 4`. A live build spent 19 calls on Claude and none on
+#: Codex because the override fired while the stage still said `repair_hard`.
+_REPAIR_LADDER: tuple[str, ...] = (
+    "patch",             # terra
+    "patch",             # terra again
+    "repair_codex",      # gpt-5.2-codex
+    "repair_codex_max",  # gpt-5.3-codex
+    "repair_hard",       # sol, heaviest reasoning
+    "repair_expert",     # anthropic, capped by MAX_EXTERNAL_EXPERT_CALLS
+)
+
+
+def coding_stage_for_attempt(attempt: int) -> str:
+    """Which rung a repair attempt stands on. Zero-based."""
+    if attempt < 0:
+        attempt = 0
+    return _REPAIR_LADDER[min(attempt, len(_REPAIR_LADDER) - 1)]
+
+
+def uses_external_expert(stage: str) -> bool:
+    """True when this rung leaves OpenAI for the other vendor."""
+    return stage == CodingStage.REPAIR_EXPERT.value
+
+
 def route_coding_stage(
     stage: CodingStage,
     *,
@@ -106,24 +133,15 @@ def route_coding_stage(
     # model could have fixed it. terra tries twice, sol takes over with the
     # heaviest reasoning it has, and only a fourth failure is worth another
     # vendor.
-    hard_failure = prior_failures >= 2 and repair_attempt >= 2
-    if stage == CodingStage.REPAIR_EXPERT or repair_attempt >= 4 or prior_failures >= 4:
+    # The caller names the rung; the router no longer second-guesses it with a
+    # numeric override, which is what silently skipped the Codex rungs.
+    if stage == CodingStage.REPAIR_EXPERT:
         return StageRoute(
             model=s.MODEL_CODING_EXTERNAL_EXPERT,
             profile=ModelProfile.CODING,
             reasoning_effort=ReasoningEffort.HIGH,
             timeout_seconds=s.LLM_TIMEOUT_CODING_HARD,
             escalation_tier=3,
-        )
-    if hard_failure:
-        # Same house, more thinking: the strongest OpenAI model we have, at the
-        # highest effort, before the bill changes vendor.
-        return StageRoute(
-            model=s.MODEL_CODING_EXPERT,
-            profile=ModelProfile.CODING,
-            reasoning_effort=ReasoningEffort.XHIGH,
-            timeout_seconds=s.LLM_TIMEOUT_CODING_HARD,
-            escalation_tier=2,
         )
     if stage in {CodingStage.REPAIR_CODEX, CodingStage.REPAIR_CODEX_MAX}:
         return StageRoute(

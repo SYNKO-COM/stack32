@@ -39,6 +39,12 @@ const KNOWN_NAMES: Record<string, string> = {
   linkedin: "LinkedIn",
   whatsapp: "WhatsApp",
   typeform: "Typeform",
+  sendgrid: "SendGrid",
+  zendesk: "Zendesk",
+  mailchimp: "Mailchimp",
+  salesforce: "Salesforce",
+  pipedrive: "Pipedrive",
+  intercom: "Intercom",
   pipedream: "Apps",
 };
 

@@ -369,17 +369,12 @@ class CodeBuildPipeline:
                     # hand the third iteration straight to Claude, which is how
                     # 412 LiteLLM calls went to Sonnet in a day against 42 for
                     # sol. Anthropic is the last resort and is capped below.
+                    from agent_service.gateway.model_stage_router import (
+                        coding_stage_for_attempt,
+                    )
+
                     iter_n = decision.iteration
-                    if iter_n <= 1:
-                        stage = "patch"
-                    elif iter_n == 2:
-                        stage = "repair_codex"
-                    elif iter_n == 3:
-                        stage = "repair_codex_max"
-                    elif iter_n == 4:
-                        stage = "repair_hard"
-                    else:
-                        stage = "repair_expert"
+                    stage = coding_stage_for_attempt(iter_n)
 
                     if stage == "repair_expert":
                         external_expert_calls += 1

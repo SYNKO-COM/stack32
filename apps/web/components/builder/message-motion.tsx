@@ -24,6 +24,11 @@ export function MessageEntrance({
   );
 }
 
+//: A line should feel typed, not endured. Past this the reveal is a flourish
+//: nobody is waiting for, and the person is waiting on the form underneath it.
+const MAX_TYPING_MS = 1200;
+const MIN_TYPING_MS = 180;
+
 function stripForTyping(text: string): string {
   return text
     .replace(/\*\*/g, "")
@@ -80,16 +85,30 @@ export function TypewriterText({
       return;
     }
     setShown("");
-    let i = 0;
-    const id = window.setInterval(() => {
-      i += 1;
-      setShown(plain.slice(0, i));
-      if (i >= plain.length) {
-        window.clearInterval(id);
+
+    // One state update per animation frame, not per character. The old
+    // setInterval fired every ~21ms and re-rendered on each letter; as the
+    // conversation grew each render cost more, so a 140-character line took
+    // minutes to appear while the backend had delivered it instantly, and
+    // clicks were dropped while the main thread was busy.
+    const duration = Math.min(
+      MAX_TYPING_MS,
+      Math.max(MIN_TYPING_MS, (plain.length / Math.max(cps, 1)) * 1000),
+    );
+    const start = performance.now();
+    let frame = 0;
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const count = Math.max(1, Math.round(plain.length * progress));
+      setShown(plain.slice(0, count));
+      if (progress >= 1) {
         notify();
+        return;
       }
-    }, Math.max(12, Math.round(1000 / cps)));
-    return () => window.clearInterval(id);
+      frame = window.requestAnimationFrame(step);
+    };
+    frame = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(frame);
   }, [plain, cps, active]);
 
   return (

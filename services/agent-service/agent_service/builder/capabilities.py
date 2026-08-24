@@ -545,7 +545,31 @@ def extract_capabilities(
     return found
 
 
+#: Apps that send or read mail. When the mission names one of them, the generic
+#: "email" keyword must not also drag in Gmail: a prompt saying "envoie-la par
+#: email avec SendGrid" arrived with both, and the person had to refuse one.
+_EMAIL_PROVIDER_SLUGS: frozenset[str] = frozenset({
+    "sendgrid", "mailgun", "postmark", "brevo", "sendinblue", "mailchimp",
+    "mailjet", "amazon_ses", "resend", "microsoft_outlook", "outlook",
+    "zoho_mail", "front", "sparkpost", "loops", "customer_io",
+})
+
+
+def names_its_own_email_provider(prompt: str) -> bool:
+    """True when the mission already says which service sends the mail."""
+    hay = (prompt or "").lower()
+    for slug in _EMAIL_PROVIDER_SLUGS:
+        needle = slug.replace("_", " ")
+        if needle in hay or slug in hay:
+            return True
+    return False
+
+
 def _email_tool_ids(prompt_lower: str) -> list[str]:
+    # Someone who named SendGrid does not also want Gmail.
+    if names_its_own_email_provider(prompt_lower):
+        return []
+
     """Bind read/draft/send from intent. Automation agents get send by default."""
     wants_send = bool(
         re.search(
