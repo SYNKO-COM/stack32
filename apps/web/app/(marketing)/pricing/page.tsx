@@ -241,14 +241,15 @@ export default function PricingPage() {
                 <p className="text-[11px] text-muted-foreground/80">{plan.creditsLabel}</p>
               </div>
             ) : (
-              // Free has no credit picker; reserve the same height so the
-              // four feature lists still start on the same line.
+              // Free has no credit picker. Its allowance sits on the same line
+              // as the paid plans' label, and the rest of the picker's height
+              // is reserved so the four feature lists start together.
               <div className="mt-5 space-y-1.5">
-                <p className="text-xs font-medium text-transparent select-none" aria-hidden="true">
-                  —
-                </p>
-                <p className="flex h-9 items-center text-sm text-muted-foreground">
+                <p className="text-xs font-medium text-muted-foreground">
                   {plan.creditsLabel}
+                </p>
+                <p className="h-9 text-transparent select-none" aria-hidden="true">
+                  —
                 </p>
                 <p
                   className="text-[11px] text-transparent select-none"
