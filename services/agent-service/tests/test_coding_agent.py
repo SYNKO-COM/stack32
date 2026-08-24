@@ -27,7 +27,8 @@ def test_registry_namespaces():
     assert "exec.run_tests" in ids
     assert "code.find_symbol" in ids
     schemas = reg.schemas_for(["workspace.read_file"])
-    assert schemas[0]["function"]["name"] == "workspace.read_file"
+    # The wire name flattens the namespace dot — OpenAI rejects dotted names.
+    assert schemas[0]["function"]["name"] == "workspace__read_file"
 
 
 def test_loop_detector():

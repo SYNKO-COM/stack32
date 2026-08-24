@@ -50,11 +50,21 @@ class CodingTool:
         return {
             "type": "function",
             "function": {
-                "name": self.id,
+                # OpenAI validates names against ^[a-zA-Z0-9_-]+$ — our ids
+                # carry a namespace dot (workspace.read_file) that the API
+                # started rejecting outright, which took every coding model
+                # down at once with BadRequestError. The wire name flattens
+                # the dot; the registry resolves it back.
+                "name": wire_tool_name(self.id),
                 "description": self.description,
                 "parameters": self.input_schema,
             },
         }
+
+
+def wire_tool_name(tool_id: str) -> str:
+    """The id as OpenAI will accept it: dots become double underscores."""
+    return tool_id.replace(".", "__")
 
 
 class CodingToolRegistry:
@@ -65,7 +75,14 @@ class CodingToolRegistry:
         self._tools[tool.id] = tool
 
     def get(self, tool_id: str) -> CodingTool | None:
-        return self._tools.get(tool_id)
+        """Find a tool by its id, or by the flattened name the model echoes."""
+        hit = self._tools.get(tool_id)
+        if hit is not None:
+            return hit
+        for tool in self._tools.values():
+            if wire_tool_name(tool.id) == tool_id:
+                return tool
+        return None
 
     def ids(self) -> list[str]:
         return sorted(self._tools)

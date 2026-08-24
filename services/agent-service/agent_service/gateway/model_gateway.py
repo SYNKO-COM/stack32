@@ -304,7 +304,14 @@ class ModelGateway:
                 if err_name in {"BadRequestError", "NotFoundError", "AuthenticationError"}:
                     self._breaker.record_hard_failure(model)
                 last_error = exc
-                logger.warning("Model call failed model=%s err=%s", model, err_name)
+                # The class name alone said nothing when OpenAI changed its
+                # API contract; the message is what names the rejected field.
+                logger.warning(
+                    "Model call failed model=%s err=%s detail=%s",
+                    model,
+                    err_name,
+                    str(exc)[:300],
+                )
 
         raise RuntimeError("MODEL_PROVIDER_UNAVAILABLE") from last_error
 
@@ -406,8 +413,15 @@ class ModelGateway:
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
-        if reasoning_effort and _provider_from_model(model) == "openai":
-            kwargs["reasoning_effort"] = reasoning_effort
+        if _provider_from_model(model) == "openai":
+            if tools:
+                # OpenAI's chat-completions endpoint refuses function tools on
+                # reasoning models unless reasoning_effort is explicitly
+                # "none" — the coding loop hit this on every rung at once.
+                # Tools matter more than the effort hint, so the hint yields.
+                kwargs["reasoning_effort"] = "none"
+            elif reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
 
         try:
             response = await acompletion(**kwargs)
