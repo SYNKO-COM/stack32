@@ -202,10 +202,22 @@ export function AgentIaView({
   }, [connectionsQuery.data?.connections]);
 
   const boundAppIds = useMemo(() => {
+    // An account this agent is actually bound to — not merely one the owner
+    // has connected somewhere. The endpoint returns both, and reading the
+    // account-wide list made every app look connected on an agent with no
+    // bindings at all: the drawer said "Connecté", the pickers came back empty
+    // because the service refuses an unbound account, and listening failed with
+    // "check the connection and the event" on a screen showing a green badge.
+    const boundConnectionIds = new Set(
+      (connectionsQuery.data?.bindings ?? [])
+        .filter((b) => b.enabled)
+        .map((b) => String(b.connection_id)),
+    );
     const apps = new Set<string>();
     for (const connection of connectionsQuery.data?.connections ?? []) {
       const status = (connection.status || "active").toLowerCase();
       if (!(status === "active" || status === "connected" || status === "ok")) continue;
+      if (!boundConnectionIds.has(String(connection.id))) continue;
       if (connection.provider === "google") {
         // Suite-level Google OAuth must not mark Calendar/Gmail ready —
         // each product app needs its own Pipedream (or scoped) connection.
@@ -220,7 +232,7 @@ export function AgentIaView({
       if (appId) apps.add(String(appId).toLowerCase());
     }
     return apps;
-  }, [connectionsQuery.data?.connections]);
+  }, [connectionsQuery.data?.connections, connectionsQuery.data?.bindings]);
 
   const brainCheck = readinessQuery.data?.checks?.find((c) => c.key === "brain");
   const modelStatus =
