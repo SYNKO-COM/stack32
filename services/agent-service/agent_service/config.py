@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     #: Anthropic is the last resort and stays that way: at most this many calls
     #: per run, after which the run stops and the user is offered a Fix.
     MAX_EXTERNAL_EXPERT_CALLS: int = 2
+    #: Ceiling one run may reserve from the user's remaining AI budget. Keeps
+    #: several legitimate concurrent runs possible (each takes a slice, the
+    #: sum never exceeds the budget) while the worst measured build (~$1)
+    #: still fits in a single slice.
+    MAX_RESERVED_USD_PER_RUN: float = 2.0
     MODEL_CODING_EXTERNAL_EXPERT: str = "anthropic/claude-sonnet-5"
     MODEL_CODING_FALLBACK: str = "openai/gpt-5.6-terra"
     MODEL_VALIDATOR_PRIMARY: str = "openai/gpt-5.6-terra"

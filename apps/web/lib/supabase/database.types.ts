@@ -1425,6 +1425,33 @@ export type Database = {
           },
         ]
       }
+      budget_reservations: {
+        Row: {
+          amount_usd: number
+          created_at: string
+          run_id: string
+          settled_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount_usd: number
+          created_at?: string
+          run_id: string
+          settled_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount_usd?: number
+          created_at?: string
+          run_id?: string
+          settled_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       builder_error_lessons: {
         Row: {
           context: Json
@@ -3744,6 +3771,10 @@ export type Database = {
         }[]
       }
       prepare_account_deletion: { Args: { p_user_id: string }; Returns: Json }
+      reserve_run_budget: {
+        Args: { p_requested: number; p_run_id: string; p_user_id: string }
+        Returns: number
+      }
       resolve_published_agent: {
         Args: { p_agent_slug: string; p_username: string }
         Returns: Json
@@ -3788,6 +3819,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      settle_run_budget: { Args: { p_run_id: string }; Returns: undefined }
       soft_delete_agent: { Args: { p_agent_id: string }; Returns: undefined }
       support_mark_read: {
         Args: { p_conversation_id: string }

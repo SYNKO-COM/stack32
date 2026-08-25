@@ -245,6 +245,45 @@ async def remaining_budget_usd(user_id: str) -> float | None:
         return None
 
 
+async def _reserve_run_budget(run_id: str, user_id: str, requested: float | None) -> float | None:
+    """Atomically claim this run's slice of the remaining budget.
+
+    Returns the granted amount, or None when the RPC itself failed — the
+    caller then falls back to the plain read (the pre-reservation behaviour),
+    loudly, rather than blocking every run on an infrastructure hiccup.
+    """
+    try:
+        from agent_service.supabase_client import get_supabase_admin_client
+
+        async with get_supabase_admin_client() as client:
+            response = await client.post(
+                "/rpc/reserve_run_budget",
+                json={
+                    "p_run_id": run_id,
+                    "p_user_id": user_id,
+                    "p_requested": requested,
+                },
+            )
+            if response.status_code < 400:
+                return float(response.json() or 0.0)
+    except Exception:  # noqa: BLE001
+        pass
+    logger.error("budget_reservation_failed run=%s — falling back to read", run_id)
+    return None
+
+
+async def _settle_run_budget(run_id: str) -> None:
+    """Release this run's reservation; real spend already sits in usage_events."""
+    try:
+        from agent_service.supabase_client import get_supabase_admin_client
+
+        async with get_supabase_admin_client() as client:
+            await client.post("/rpc/settle_run_budget", json={"p_run_id": run_id})
+    except Exception:  # noqa: BLE001
+        # A held row older than 2h stops counting on its own.
+        logger.warning("budget_settle_failed run=%s", run_id, exc_info=True)
+
+
 @asynccontextmanager
 async def llm_run_budget(
     *,
@@ -259,8 +298,18 @@ async def llm_run_budget(
     settings = get_settings()
     ceiling: float | None = None
     plan_key, credits_monthly = "free", 0
+    reserved = False
     if enforce_user_budget:
         ceiling, plan_key, credits_monthly = await resolve_budget_context(user_id)
+        # The run's ceiling is what it RESERVED, not what it read: concurrent
+        # runs each take an exclusive slice and their sum stays within the
+        # budget, instead of every run believing the same remainder is its own.
+        if ceiling is not None:
+            requested = min(ceiling, settings.MAX_RESERVED_USD_PER_RUN)
+            granted = await _reserve_run_budget(run_id, user_id, requested)
+            if granted is not None:
+                ceiling = granted
+                reserved = True
     budget = RunLlmBudget(
         run_id=run_id,
         user_id=user_id,
@@ -277,6 +326,8 @@ async def llm_run_budget(
         yield budget
     finally:
         _current_budget.reset(token)
+        if reserved:
+            await _settle_run_budget(run_id)
         logger.info(
             "llm_run_budget run=%s calls=%s in_tok=%s out_tok=%s cost_usd=%.6f models=%s",
             budget.run_id,
