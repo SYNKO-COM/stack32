@@ -47,11 +47,19 @@ export function ToolConfigForm({
   toolId,
   appId,
   onSaved,
+  refreshKey = 0,
 }: {
   agentId: string;
   toolId: string;
   appId?: string;
   onSaved?: () => void;
+  /**
+   * Bump when an account was just connected: the schema, the account list and
+   * the remote options reload in place. The plain-text calendar field becomes
+   * the real picker the moment Pipedream knows the account — no page refresh,
+   * and the open panel stays open.
+   */
+  refreshKey?: number;
 }) {
   const { t } = useTranslation("structure");
   const [pending, startTransition] = useTransition();
@@ -233,7 +241,17 @@ export function ToolConfigForm({
         if (dyn != null && String(dyn)) {
           next._dynamicPropsId = String(dyn);
         }
-        setValues(next);
+        // A reload after connecting must not eat what the person already
+        // typed: their unsaved entries win over an empty stored value.
+        setValues((prev) => {
+          const merged = { ...next };
+          for (const [key, value] of Object.entries(prev)) {
+            if (value !== "" && (merged[key] === "" || merged[key] === undefined)) {
+              merged[key] = value;
+            }
+          }
+          return merged;
+        });
         const triggersRaw =
           schema && typeof schema === "object"
             ? (schema as { reload_props_triggers?: unknown }).reload_props_triggers
@@ -289,7 +307,7 @@ export function ToolConfigForm({
     return () => {
       cancelled = true;
     };
-  }, [agentId, toolId, appId, t]);
+  }, [agentId, toolId, appId, refreshKey, t]);
 
   const orderedProps = useMemo(() => {
     const keys = Object.keys(fields);

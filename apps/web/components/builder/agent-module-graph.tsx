@@ -308,6 +308,13 @@ export function AgentModuleGraph({
   const { t } = useTranslation(["structure", "builder"]);
   const router = useRouter();
   const [selected, setSelected] = useState<AgentModule | null>(null);
+  // Bumped when an account is linked so the tool config below reloads its
+  // remote options in place — no page refresh, panel stays open.
+  const [configRefresh, setConfigRefresh] = useState(0);
+  const handleConnectionsChanged = () => {
+    setConfigRefresh((v) => v + 1);
+    onConnectionsChanged?.();
+  };
 
   const label = (module: AgentModule): string =>
     module.kind === "tool"
@@ -634,8 +641,8 @@ export function AgentModuleGraph({
                           }
                           accountEmail={selectedConnection?.connection?.account_email}
                           connectionId={selectedConnection?.connection?.id}
-                          onConnected={onConnectionsChanged}
-                          onChanged={onConnectionsChanged}
+                          onConnected={handleConnectionsChanged}
+                          onChanged={handleConnectionsChanged}
                         />
                         {selected.toolId ? (
                           <div className="rounded-2xl border border-border/50 p-3">
@@ -649,6 +656,7 @@ export function AgentModuleGraph({
                               toolId={selected.toolId}
                               appId={selected.appId}
                               onSaved={onConnectionsChanged}
+                              refreshKey={configRefresh}
                             />
                           </div>
                         ) : null}

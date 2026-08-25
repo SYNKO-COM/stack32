@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { ToolConfigForm } from "@/components/builder/tool-config-form";
@@ -208,6 +208,13 @@ export function IntegrationDrawer({
 
   // Computed before the early return so the hook order never changes.
   const configToolId = useMemo(() => representativeToolId(toolIds), [toolIds]);
+  // Bumped when an account is linked so the config form below reloads its
+  // remote options in place instead of waiting for a page refresh.
+  const [configRefresh, setConfigRefresh] = useState(0);
+  const handleConnectionsChanged = () => {
+    setConfigRefresh((v) => v + 1);
+    onConnectionsChanged?.();
+  };
 
   if (!node?.integration) return null;
 
@@ -266,8 +273,8 @@ export function IntegrationDrawer({
           }
           accountEmail={connection?.account_email}
           connectionId={connection?.id}
-          onConnected={onConnectionsChanged}
-          onChanged={onConnectionsChanged}
+          onConnected={handleConnectionsChanged}
+          onChanged={handleConnectionsChanged}
         />
       ) : (
         <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-emerald-900 dark:text-emerald-200">
@@ -282,6 +289,7 @@ export function IntegrationDrawer({
             toolId={configToolId}
             appId={node.integration.appKey}
             onSaved={onConnectionsChanged}
+            refreshKey={configRefresh}
           />
         </div>
       ) : null}

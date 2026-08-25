@@ -263,6 +263,9 @@ export function ToolTriggerConfigForm({
     Record<string, Array<{ value: string; label: string }>>
   >({});
   const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
+  // Bumped when the account below gets linked: the event pickers reload with
+  // that account's real choices instantly, instead of after a page refresh.
+  const [connectionRefresh, setConnectionRefresh] = useState(0);
 
   const component = useQuery({
     queryKey: ["pd-trigger-component", componentId],
@@ -309,7 +312,7 @@ export function ToolTriggerConfigForm({
     return () => {
       cancelled = true;
     };
-  }, [component.data?.props, componentId, agentId, appId]);
+  }, [component.data?.props, componentId, agentId, appId, connectionRefresh]);
 
   const connection = useMemo(() => {
     return connections.find((c) => {
@@ -417,6 +420,8 @@ export function ToolTriggerConfigForm({
           agentId={agentId}
           status={connected ? "connected" : "needs_setup"}
           connectionId={connection?.id}
+          onConnected={() => setConnectionRefresh((v) => v + 1)}
+          onChanged={() => setConnectionRefresh((v) => v + 1)}
         />
       ) : null}
 
