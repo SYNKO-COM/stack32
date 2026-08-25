@@ -16,7 +16,9 @@ import { requireSupabaseServerClient } from "@/lib/supabase/server";
  * Runs entirely in the caller's RLS context: only owned agents are reachable
  * and the copy is always owned by the caller.
  */
-export async function duplicateAgentAction(agentId: string): Promise<{ agentId: string }> {
+export async function duplicateAgentAction(
+  agentId: string,
+): Promise<{ agentId: string } | { ok: false; code: "PLAN_AGENT_LIMIT" }> {
   const supabase = await requireSupabaseServerClient();
   const {
     data: { user },
@@ -51,7 +53,10 @@ export async function duplicateAgentAction(agentId: string): Promise<{ agentId: 
     }
     const { count } = await countQuery;
     if ((count ?? 0) >= plan.maxAgents) {
-      throw new Error("PLAN_AGENT_LIMIT");
+      // Never throw for an expected gate — Next redacts server action error
+      // messages in production, so the client would see only a digest and
+      // could not open the upgrade dialog.
+      return { ok: false, code: "PLAN_AGENT_LIMIT" };
     }
   }
 

@@ -87,7 +87,12 @@ export class SupabaseAgentRepository implements AgentRepository {
 
   async duplicateAgent(agentId: string): Promise<Agent> {
     try {
-      const { agentId: copyId } = await duplicateAgentAction(agentId);
+      const result = await duplicateAgentAction(agentId);
+      if ("ok" in result && !result.ok) {
+        const { PlanLimitError } = await import("@/lib/billing/plan-limit");
+        throw new PlanLimitError(result.code);
+      }
+      const { agentId: copyId } = result as { agentId: string };
       const agent = await this.getAgent(copyId);
       if (!agent) throw new Error("duplicate_failed");
       return agent;
