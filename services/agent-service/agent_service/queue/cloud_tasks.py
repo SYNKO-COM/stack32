@@ -92,10 +92,14 @@ def enqueue_via_cloud_tasks(*, run_id: str, user_id: str | None = None) -> str:
 
     oidc_sa = (settings.CLOUD_TASKS_OIDC_SERVICE_ACCOUNT or "").strip()
     if oidc_sa:
-        audience = (settings.CLOUD_TASKS_OIDC_AUDIENCE or "").strip() or target_url
+        # The audience of an outgoing token is the address it is sent to —
+        # Cloud Run checks the two against each other and answers 401 when they
+        # disagree. CLOUD_TASKS_OIDC_AUDIENCE used to override this, which meant
+        # naming an audience for the scheduler's inbound tick (see auth.py) also
+        # silently mis-signed every outbound run task.
         http_request["oidc_token"] = {
             "service_account_email": oidc_sa,
-            "audience": audience,
+            "audience": target_url,
         }
 
     # Cloud Tasks caps an HTTP dispatch deadline at 30 minutes and defaults to

@@ -205,7 +205,11 @@ class Settings(BaseSettings):
     # Service account email used by Cloud Tasks for OIDC to Cloud Run (optional if
     # INTERNAL_SERVICE_TOKEN is sent as X-Internal-Token on the HTTP task).
     CLOUD_TASKS_OIDC_SERVICE_ACCOUNT: str = ""
-    # Audience for the OIDC token; defaults to CLOUD_TASKS_TARGET_URL when empty.
+    # An extra OIDC audience this service will ACCEPT (see auth.py). Inbound
+    # only: outgoing tasks are always signed for the address they are sent to,
+    # because Cloud Run rejects a token whose audience names somewhere else.
+    # Set it to the scheduler's tick URL, which no longer shares an origin with
+    # CLOUD_TASKS_TARGET_URL now that run tasks go to their own worker service.
     CLOUD_TASKS_OIDC_AUDIENCE: str = ""
     GCP_PROJECT_ID: str = ""
     GCP_LOCATION: str = "europe-west1"
