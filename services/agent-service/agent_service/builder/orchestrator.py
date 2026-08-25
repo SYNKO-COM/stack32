@@ -439,6 +439,63 @@ class BuilderOrchestrator:
                         "answer": reply,
                     }
 
+            # A reported problem is diagnosed before the coding agent is let
+            # near the source: a missing LLM key or an unconnected app cannot
+            # be fixed by rewriting files, and trying burns a build.
+            if current_spec is not None and intent in (
+                BuilderIntent.MODIFY,
+                BuilderIntent.REPAIR,
+            ):
+                try:
+                    from agent_service.builder.problem_triage import (
+                        compose_triage_reply,
+                        triage_reported_problem,
+                    )
+
+                    triage = await triage_reported_problem(
+                        db=self.db,
+                        gateway=self.gateway,
+                        user_id=user_id,
+                        agent_id=agent_id,
+                        content=content,
+                        spec=current_spec,
+                        locale=locale,
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception("problem_triage_failed run=%s", run_id)
+                    triage = None
+                if triage is not None and triage.has_cause:
+                    reply = compose_triage_reply(triage, locale)
+                    await self.db.clear_thinking_messages(thread_id=thread_id)
+                    await self.db.insert_assistant_message(
+                        thread_id=thread_id,
+                        agent_id=agent_id,
+                        user_id=user_id,
+                        content=reply,
+                        metadata={
+                            "tone": "normal",
+                            "card": "config_diagnosis",
+                            "causes": triage.causes,
+                            "run_id": run_id,
+                        },
+                    )
+                    await self.db.emit_event(
+                        run_id,
+                        "run.completed",
+                        {
+                            "mapping_key": "builder.progress.completed",
+                            "mode": "diagnosis",
+                            "causes": triage.causes,
+                        },
+                    )
+                    await self.db.complete_run(run_id)
+                    return {
+                        "status": "completed",
+                        "run_id": run_id,
+                        "mode": "diagnosis",
+                        "answer": reply,
+                    }
+
             needs_identity = self._needs_identity_setup(agent, current_spec)
             run_row_early = await self.db.get_owned_run(run_id, user_id)
             payload_early = (run_row_early or {}).get("input") or {}
