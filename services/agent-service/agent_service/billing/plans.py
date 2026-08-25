@@ -19,7 +19,7 @@ class PlanDefinition:
     base_credits: int
     base_budget_usd: float
     #: False when the grant is one-time for the life of the account. Free gets
-    #: 25 credits once — not 25 a month — until the person subscribes; the
+    #: 10 credits once — not 10 a month — until the person subscribes; the
     #: entitlements RPC enforces this by opening a period that never closes.
     credits_renew: bool
     max_workspaces: int | None
@@ -44,8 +44,8 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         # rate ($0.055) covers one full build with room for a couple of live
         # turns, and makes a balance carried over from a lapsed subscription
         # convert one-for-one instead of drifting 6%.
-        base_credits=25,
-        base_budget_usd=1.375,
+        base_credits=10,
+        base_budget_usd=0.55,
         credits_renew=False,
         max_workspaces=1,
         max_agents=1,

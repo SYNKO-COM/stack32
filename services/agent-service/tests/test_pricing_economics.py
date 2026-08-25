@@ -35,13 +35,11 @@ def test_starter_monthly_budget():
     assert abs(budget - 6.0) < 0.01
 
 
-def test_free_budget_covers_one_first_build():
-    # $0.20 stopped every free user a fifth of the way into their first build
-    # (~$1 measured). The free budget now covers one full build with room for
-    # a couple of live turns.
-    budget = effective_ai_budget_usd("free", billing_interval="monthly", credits_monthly=25)
-    assert abs(budget - 1.375) < 0.01
-    assert budget >= 1.0  # the measured first-build cost
+def test_free_budget_matches_its_ten_credit_grant():
+    # The free grant is 10 credits priced at the Pro rate, so the budget is
+    # exactly what those credits are worth — no more, no less.
+    budget = effective_ai_budget_usd("free", billing_interval="monthly", credits_monthly=10)
+    assert abs(budget - 0.55) < 0.01
 
 
 def test_usd_per_credit_starter():
@@ -56,4 +54,4 @@ def test_a_free_credit_costs_exactly_what_a_pro_credit_costs():
     $0.055, ten Pro credits spent came back as 10.6 free ones on the gauge.
     Matching the rate makes the conversion one-for-one.
     """
-    assert abs(usd_per_credit("free", 25) - usd_per_credit("pro", 200)) < 1e-9
+    assert abs(usd_per_credit("free", 10) - usd_per_credit("pro", 200)) < 1e-9

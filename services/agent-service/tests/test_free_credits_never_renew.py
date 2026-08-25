@@ -1,8 +1,8 @@
 """Free credits are a one-time grant, not a monthly allowance.
 
 The entitlements RPC opened the free period at date_trunc('month', now()),
-so every 1st of the month a free account silently received 25 fresh credits —
-an unlimited free tier by the calendar. Free is meant to be "25 credits to
+so every 1st of the month a free account silently received fresh credits —
+an unlimited free tier by the calendar. Free is meant to be "10 credits to
 build and try one agent, ever, until you subscribe".
 """
 
@@ -17,9 +17,9 @@ class TestThePlanCatalogueSaysIt:
         for key in ("starter", "pro", "scale"):
             assert PLANS[key].credits_renew is True, key
 
-    def test_the_free_grant_is_twenty_five(self):
-        assert PLANS["free"].base_credits == 25
-        assert abs(PLANS["free"].base_budget_usd - 1.375) < 0.001
+    def test_the_free_grant_is_ten(self):
+        assert PLANS["free"].base_credits == 10
+        assert abs(PLANS["free"].base_budget_usd - 0.55) < 0.001
 
 
 class TestTheMigrationCarriesTheRule:
@@ -27,7 +27,8 @@ class TestTheMigrationCarriesTheRule:
         import pathlib
 
         root = pathlib.Path(__file__).resolve().parents[3]
-        path = root / "supabase/migrations/20260903000001_free_credits_are_lifetime.sql"
+        # The newest migration is the live definition; guard that one.
+        path = root / "supabase/migrations/20260907000001_free_grant_is_ten_credits.sql"
         return path.read_text()
 
     def test_the_free_window_opens_at_account_creation(self):

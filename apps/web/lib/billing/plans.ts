@@ -45,11 +45,11 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     key: "free",
     monthlyPriceUsd: 0,
     annualMonthlyPriceUsd: 0,
-    // 25 credits at exactly the Pro rate ($0.055) — covers one full first
-    // build (~$1 measured) plus a few live turns, and a balance carried over
-    // from a lapsed subscription converts one-for-one.
-    baseCredits: 25,
-    baseBudgetUsd: 1.375,
+    // 10 credits at exactly the Pro rate ($0.055). A balance carried over
+    // from a lapsed subscription converts one-for-one, and the gauge clamps
+    // the display to this ceiling.
+    baseCredits: 10,
+    baseBudgetUsd: 0.55,
     maxWorkspaces: 1,
     maxAgents: 1,
     maxLiveMessages: 10,
