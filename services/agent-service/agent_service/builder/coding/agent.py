@@ -111,7 +111,12 @@ class CodingAgent:
         self.registry = registry or build_registry()
         self.gateway = gateway or ModelGateway()
         self.emit = emit or _noop_emit
-        self.max_turns = max_turns if max_turns is not None else get_settings().CODING_MAX_TURNS
+        # One settings handle for the whole run. The expert-call cap below read
+        # self.settings that no one ever set: the very code meant to stop the
+        # spend crashed the run with AttributeError instead of ending it with
+        # REPAIR_BUDGET_EXHAUSTED.
+        self.settings = get_settings()
+        self.max_turns = max_turns if max_turns is not None else self.settings.CODING_MAX_TURNS
         self.max_verification_repairs = max_verification_repairs
         self.tool_ids = tool_ids or self.registry.ids()
 
