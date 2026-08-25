@@ -45,8 +45,7 @@ async def _agent_bound_coverage(
 ) -> tuple[set[str], set[str], dict[str, set[str]]]:
     """Return (providers, app_ids, tool_id -> providers) from installation/agent bindings.
 
-    Also includes active user-level connection apps (Google / Pipedream) so Setup
-    needed clears once the account exists — runtime will auto-bind on first use.
+    Only bound connections count — the exact set the runtime will resolve.
     """
     providers: set[str] = set()
     app_ids: set[str] = set()
@@ -95,10 +94,11 @@ async def _agent_bound_coverage(
             for tid in binding.get("tool_ids") or []:
                 tool_coverage.setdefault(str(tid), set()).add(provider)
 
-        # Owner convenience: active accounts on the user also satisfy readiness.
-        for conn in connections or []:
-            if isinstance(conn, dict):
-                _ingest_conn(conn)
+        # Deliberately nothing more. The runtime only ever uses connections
+        # bound to this agent (accounts.resolve_pipedream_auth_for_tool), so
+        # counting the user's other accounts here painted "ready" on agents
+        # whose tools would answer CONNECTION_REQUIRED at the first real call.
+        # Readiness must be the runtime's shadow, not its optimistic cousin.
     except Exception:  # noqa: BLE001
         logger.exception("readiness_bindings_lookup_failed")
     return providers, app_ids, tool_coverage
@@ -725,11 +725,14 @@ async def evaluate_agent_readiness(
             )
         )
     else:
+        # Unknown is not success: this check carries no verification weight.
+        # The hard proof for publication lives in the publish gate, which
+        # requires a passing test_status for the exact version (fail-closed).
         checks.append(
             ReadinessCheck(
                 key="build_ok",
                 ok=True,
-                message="Build status not provided; skipped.",
+                message="Build status unknown — not treated as verification.",
                 severity="info",
             )
         )
