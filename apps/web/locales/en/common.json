@@ -276,5 +276,18 @@
     "deleteConfirmAction": "Yes, delete my account",
     "deleting": "Deleting…",
     "deleteError": "Could not delete the account. Try again or contact support."
+  },
+  "supportChat": {
+    "title": "Stack32 Support",
+    "subtitle": "We usually reply within a few hours.",
+    "placeholder": "Write your message…",
+    "send": "Send",
+    "open": "Chat with support",
+    "close": "Close",
+    "empty": "A question, an issue? Write to us — the team replies right here.",
+    "you": "You",
+    "team": "Stack32 Team",
+    "loginRequired": "Sign in to chat with support.",
+    "error": "Message not sent. Please try again."
   }
 }

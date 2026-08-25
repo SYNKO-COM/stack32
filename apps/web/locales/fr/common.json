@@ -276,5 +276,18 @@
     "deleteConfirmAction": "Oui, supprimer mon compte",
     "deleting": "Suppression…",
     "deleteError": "Impossible de supprimer le compte. Réessayez ou contactez le support."
+  },
+  "supportChat": {
+    "title": "Support Stack32",
+    "subtitle": "Nous répondons en général en quelques heures.",
+    "placeholder": "Écrivez votre message…",
+    "send": "Envoyer",
+    "open": "Discuter avec le support",
+    "close": "Fermer",
+    "empty": "Une question, un souci ? Écrivez-nous — l'équipe répond directement ici.",
+    "you": "Vous",
+    "team": "Équipe Stack32",
+    "loginRequired": "Connectez-vous pour discuter avec le support.",
+    "error": "Message non envoyé. Réessayez."
   }
 }
