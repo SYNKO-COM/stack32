@@ -161,14 +161,32 @@ async def _process_run_by_id_inner(
         )
 
     if run_type == "live":
-        from agent_service.runtime.live import LiveRuntime
+        from agent_service.runtime.live import (
+            LiveRuntime,
+            load_published_spec_for_external_run,
+        )
 
         runtime = LiveRuntime(db)
-        spec = await db.load_draft_spec(agent_id, user_id)
+        payload = run.get("input") or {}
+        # A run born from the outside world — a Pipedream event or a schedule
+        # tick — executes the published immutable version. The draft belongs
+        # to the owner's workbench: it may be mid-rewrite, unverified, or
+        # broken, and an external event must never run it.
+        external = bool(payload.get("trigger_id") or payload.get("schedule_id"))
+        if external:
+            spec = await load_published_spec_for_external_run(
+                db,
+                agent_id=agent_id,
+                installation_id=(
+                    str(run.get("installation_id") or payload.get("installation_id") or "")
+                    or None
+                ),
+            )
+        else:
+            spec = await db.load_draft_spec(agent_id, user_id)
         if not spec:
             await db.fail_run(run_id, "AGENT_SPEC_INVALID")
             return {"error": "AGENT_SPEC_INVALID"}
-        payload = run.get("input") or {}
         content = payload.get("prompt") or ""
         result = await runtime.execute_live_run(
             run_id=run_id,

@@ -123,6 +123,54 @@ def llm_configuration_required_metadata(
     }
 
 
+async def load_published_spec_for_external_run(
+    db: Any,
+    *,
+    agent_id: str,
+    installation_id: str | None = None,
+) -> AgentSpec | None:
+    """The immutable spec an outside event must run — never the draft.
+
+    A Slack event or a schedule tick reaches an agent its owner may be
+    rewriting at that very moment. The published contract is the pinned
+    installation version, else the agent's published version; when neither
+    exists the caller must fail the run rather than reach for the draft.
+    """
+    from agent_service.models.agent_spec import migrate_v1_to_v2
+
+    version_id: str | None = None
+    if installation_id:
+        rows = await db._select(
+            "agent_installations",
+            {"id": f"eq.{installation_id}", "select": "pinned_version_id", "limit": "1"},
+        )
+        if rows:
+            version_id = rows[0].get("pinned_version_id")
+    if not version_id:
+        rows = await db._select(
+            "agents",
+            {"id": f"eq.{agent_id}", "select": "published_version_id", "limit": "1"},
+        )
+        if rows:
+            version_id = rows[0].get("published_version_id")
+    if not version_id:
+        return None
+    rows = await db._select(
+        "agent_versions",
+        {"id": f"eq.{version_id}", "select": "id,spec,graph_spec", "limit": "1"},
+    )
+    if not rows:
+        return None
+    raw = rows[0].get("spec") or {}
+    if rows[0].get("graph_spec") and "graph" not in raw:
+        raw = {**raw, "graph": rows[0]["graph_spec"]}
+    try:
+        return migrate_v1_to_v2(raw)
+    except Exception:  # noqa: BLE001
+        logger.warning("published_spec_invalid version=%s", version_id, exc_info=True)
+        return None
+
+
 class LiveRuntime:
     def __init__(self, persistence: Persistence | None = None) -> None:
         self.db = persistence or Persistence()
