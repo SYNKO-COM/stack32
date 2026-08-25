@@ -307,7 +307,6 @@
     "toolConfigSearch": "Rechercher…",
     "toolTriggerListenMissing": "Ouvrez le déclencheur et choisissez {{fields}}, puis relancez l’éveil.",
     "toolTriggerListenConnect": "Connectez votre compte {{app}} avant de lancer l’éveil.",
-    "toolTriggerListenThisApp": "l’app du déclencheur",
-    "toolConfigNeedsAccount": "Connectez votre compte ci-dessus : les réglages apparaîtront ici, déjà remplis avec les choix de ce compte."
+    "toolTriggerListenThisApp": "l’app du déclencheur"
   }
 }

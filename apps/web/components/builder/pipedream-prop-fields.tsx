@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 
 import { DaSelect, type DaSelectOption } from "@/components/ui/da-select";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,10 @@ export type PipedreamPropDef = {
   options?: DaSelectOption[];
   /** Remote options still loading. */
   optionsLoading?: boolean;
+  /** The choices live in the connected account (x-remote-options). Such a
+   * field is never a plain text box: an id typed by hand is exactly what the
+   * agent cannot resolve. Empty choices show a reload state instead. */
+  remoteOptions?: boolean;
   hintLabel?: string;
   hintWhy?: string;
 };
@@ -32,6 +36,7 @@ export function PipedreamPropFields({
   className,
   selectPlaceholder,
   searchPlaceholder,
+  onRetryOptions,
 }: {
   props: PipedreamPropDef[];
   values: Record<string, string>;
@@ -40,6 +45,8 @@ export function PipedreamPropFields({
   className?: string;
   selectPlaceholder?: string;
   searchPlaceholder?: string;
+  /** Reload the remote choices of one field (empty answer, flaky network…). */
+  onRetryOptions?: (name: string) => void;
 }) {
   if (props.length === 0) return null;
 
@@ -104,6 +111,16 @@ export function PipedreamPropFields({
                     <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                     Chargement des choix…
                   </p>
+                ) : prop.remoteOptions && selectOptions.length === 0 ? (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onRetryOptions?.(prop.name)}
+                    className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background/80 px-3 text-left text-sm text-muted-foreground transition hover:border-ring disabled:opacity-50"
+                  >
+                    <span>Charger les choix du compte</span>
+                    <RefreshCw className="size-3.5 shrink-0" aria-hidden="true" />
+                  </button>
                 ) : selectOptions.length > 0 ? (
                   <DaSelect
                     id={`pd-prop-${prop.name}`}

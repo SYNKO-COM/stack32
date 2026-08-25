@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
   PipedreamPropFields,
@@ -84,6 +84,11 @@ export function ToolConfigForm({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [reloadTriggers, setReloadTriggers] = useState<Set<string>>(new Set());
   const [reloadingProps, setReloadingProps] = useState(false);
+  // Empty remote choices retry themselves: right after a connect, Pipedream
+  // can answer [] once or twice before the account is queryable. Three spaced
+  // attempts cover that window without hammering anyone.
+  const retryCountsRef = useRef<Record<string, number>>({});
+  const retryTimersRef = useRef<number[]>([]);
 
   const loadRemoteOptionsForKeys = (
     keys: string[],
@@ -104,13 +109,27 @@ export function ToolConfigForm({
       void getToolDynamicOptions({ toolId, prop: key, agentId, draft })
         .then((res) => {
           if (cancelled()) return;
-          setRemoteOptions((prev) => ({
-            ...prev,
-            [key]: (res.options ?? []).map((o) => ({
-              value: String(o.value),
-              label: String(o.label ?? o.value),
-            })),
+          const opts = (res.options ?? []).map((o) => ({
+            value: String(o.value),
+            label: String(o.label ?? o.value),
           }));
+          setRemoteOptions((prev) => ({ ...prev, [key]: opts }));
+          if (opts.length > 0) {
+            retryCountsRef.current[key] = 0;
+            return;
+          }
+          // Empty answer on a remote-options field: try again shortly — the
+          // account may simply not be queryable yet.
+          if (!map[key]?.["x-remote-options"]) return;
+          const attempt = (retryCountsRef.current[key] ?? 0) + 1;
+          if (attempt > 3) return;
+          retryCountsRef.current[key] = attempt;
+          const delay = [2000, 5000, 10000][attempt - 1] ?? 10000;
+          const timer = window.setTimeout(() => {
+            if (cancelled()) return;
+            loadRemoteOptionsForKeys([key], cancelled, map, draft);
+          }, delay);
+          retryTimersRef.current.push(timer);
         })
         .finally(() => {
           if (cancelled()) return;
@@ -118,6 +137,14 @@ export function ToolConfigForm({
         });
     }
   };
+
+  // Pending retries die with the panel.
+  useEffect(() => {
+    const timers = retryTimersRef.current;
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  }, []);
 
   const applyStaticSchema = (
     staticSchema: Record<string, unknown> | undefined,
@@ -359,6 +386,7 @@ export function ToolConfigForm({
           enum: meta.enum,
           options: remoteOptions[key],
           optionsLoading: Boolean(loadingOptions[key]),
+          remoteOptions: Boolean(meta["x-remote-options"]),
           hintLabel: hintMeta[key]?.label,
           hintWhy: hintMeta[key]?.why,
         };
@@ -383,21 +411,6 @@ export function ToolConfigForm({
 
   const hasFields = propDefs.length > 0;
   const hasAccounts = accounts.length > 0;
-
-  // Settings for a connected app are meaningless before the account exists:
-  // Pipedream cannot list someone's calendars without one, so every picker
-  // would render as a bare text box asking for an id. Keep them out of sight
-  // until the account is linked — the connect card above is the only thing to
-  // do at that point. Native tools (no app) and a failed load are never
-  // hidden: a lookup that errored must not swallow the whole panel.
-  const needsAccount = Boolean(appId);
-  if (needsAccount && !hasAccounts && !error) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {t("panel.toolConfigNeedsAccount")}
-      </p>
-    );
-  }
 
   if (!hasFields && !hasAccounts) {
     return (
@@ -450,6 +463,10 @@ export function ToolConfigForm({
           selectPlaceholder={t("panel.toolConfigSelect")}
           searchPlaceholder={t("panel.toolConfigSearch")}
           onChange={handlePropChange}
+          onRetryOptions={(name) => {
+            retryCountsRef.current[name] = 0;
+            loadRemoteOptionsForKeys([name], () => false);
+          }}
         />
       ) : null}
 
@@ -483,6 +500,10 @@ export function ToolConfigForm({
                 selectPlaceholder={t("panel.toolConfigSelect")}
                 searchPlaceholder={t("panel.toolConfigSearch")}
                 onChange={handlePropChange}
+                onRetryOptions={(name) => {
+                  retryCountsRef.current[name] = 0;
+                  loadRemoteOptionsForKeys([name], () => false);
+                }}
               />
             </div>
           ) : null}

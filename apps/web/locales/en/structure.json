@@ -307,7 +307,6 @@
     "toolConfigSearch": "Search…",
     "toolTriggerListenMissing": "Open the trigger and choose {{fields}}, then start listening again.",
     "toolTriggerListenConnect": "Link your {{app}} account before you start listening.",
-    "toolTriggerListenThisApp": "the trigger's app",
-    "toolConfigNeedsAccount": "Connect your account above — the settings appear here, already filled with that account's choices."
+    "toolTriggerListenThisApp": "the trigger's app"
   }
 }

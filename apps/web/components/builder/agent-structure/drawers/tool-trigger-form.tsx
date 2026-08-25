@@ -60,6 +60,7 @@ function TriggerPropFields({
   remoteOptions,
   loadingOptions,
   disabled,
+  onRetryOptions,
 }: {
   props: Array<{
     name: string;
@@ -74,6 +75,7 @@ function TriggerPropFields({
   remoteOptions: Record<string, Array<{ value: string; label: string }>>;
   loadingOptions: Record<string, boolean>;
   disabled?: boolean;
+  onRetryOptions?: (name: string) => void;
 }) {
   const { t } = useTranslation("structure");
   const defs = props.map((prop) => ({
@@ -84,6 +86,7 @@ function TriggerPropFields({
     description: prop.description,
     options: remoteOptions[prop.name],
     optionsLoading: Boolean(loadingOptions[prop.name]),
+    remoteOptions: prop.remote_options === true,
   }));
   return (
     <PipedreamPropFields
@@ -95,6 +98,7 @@ function TriggerPropFields({
       onChange={(name, value) =>
         setExtraProps((prev) => ({ ...prev, [name]: value }))
       }
+      onRetryOptions={onRetryOptions}
     />
   );
 }
@@ -433,6 +437,7 @@ export function ToolTriggerConfigForm({
           remoteOptions={remoteOptions}
           loadingOptions={loadingOptions}
           disabled={saving}
+          onRetryOptions={() => setConnectionRefresh((v) => v + 1)}
         />
       ) : null}
 
@@ -462,6 +467,7 @@ export function ToolTriggerConfigForm({
                 remoteOptions={remoteOptions}
                 loadingOptions={loadingOptions}
                 disabled={saving}
+                onRetryOptions={() => setConnectionRefresh((v) => v + 1)}
               />
             </div>
           ) : null}
