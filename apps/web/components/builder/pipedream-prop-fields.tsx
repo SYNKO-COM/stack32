@@ -118,7 +118,7 @@ export function PipedreamPropFields({
                     onClick={() => onRetryOptions?.(prop.name)}
                     className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background/80 px-3 text-left text-sm text-muted-foreground transition hover:border-ring disabled:opacity-50"
                   >
-                    <span>Charger les choix du compte</span>
+                    <span>Aucun choix reçu du compte — recharger</span>
                     <RefreshCw className="size-3.5 shrink-0" aria-hidden="true" />
                   </button>
                 ) : selectOptions.length > 0 ? (
