@@ -299,7 +299,28 @@ export function ToolConfigForm({
         setHintMeta(meta);
         setLoaded(true);
 
-        loadRemoteOptionsForKeys(Object.keys(props), () => cancelled, props);
+        // Pipedream lists a person's calendars only for a connection bound to
+        // this agent, so the pickers stay empty until one is. When exactly one
+        // account exists and nothing is bound yet — the case right after a
+        // fresh connect — bind it first, then load: the settings appear
+        // already filled instead of as empty text boxes. With several accounts
+        // the choice is theirs, so the picker above waits for it.
+        const onlyAccount =
+          !storedConn && acctRows.length === 1 ? acctRows[0]?.connectionId : null;
+        if (onlyAccount) {
+          void bindIntegrationConnection({
+            agentId,
+            connectionId: onlyAccount,
+            toolIds: [toolId],
+          })
+            .catch(() => undefined)
+            .finally(() => {
+              if (cancelled) return;
+              loadRemoteOptionsForKeys(Object.keys(props), () => cancelled, props);
+            });
+        } else {
+          loadRemoteOptionsForKeys(Object.keys(props), () => cancelled, props);
+        }
       } catch {
         if (!cancelled) setError(t("panel.toolConfigLoadError"));
       }
@@ -362,6 +383,21 @@ export function ToolConfigForm({
 
   const hasFields = propDefs.length > 0;
   const hasAccounts = accounts.length > 0;
+
+  // Settings for a connected app are meaningless before the account exists:
+  // Pipedream cannot list someone's calendars without one, so every picker
+  // would render as a bare text box asking for an id. Keep them out of sight
+  // until the account is linked — the connect card above is the only thing to
+  // do at that point. Native tools (no app) and a failed load are never
+  // hidden: a lookup that errored must not swallow the whole panel.
+  const needsAccount = Boolean(appId);
+  if (needsAccount && !hasAccounts && !error) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t("panel.toolConfigNeedsAccount")}
+      </p>
+    );
+  }
 
   if (!hasFields && !hasAccounts) {
     return (
