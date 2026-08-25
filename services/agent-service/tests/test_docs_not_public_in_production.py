@@ -17,6 +17,14 @@ def _client(monkeypatch, environment: str) -> TestClient:
 
     settings = get_settings()
     monkeypatch.setattr(settings, "ENVIRONMENT", environment, raising=False)
+    # The subject here is docs exposure, not the startup checks. In CI there is
+    # no .env, so the bare defaults (mock AI, legacy runtime, local sandbox,
+    # empty keys) would trip _check_production_runtime before the app exists.
+    monkeypatch.setattr(settings, "AI_EXECUTION_MODE", "live", raising=False)
+    monkeypatch.setattr(settings, "AGENT_RUNTIME_VERSION", "langgraph", raising=False)
+    monkeypatch.setattr(settings, "SANDBOX_PROVIDER", "e2b", raising=False)
+    monkeypatch.setattr(settings, "SECRETS_ENCRYPTION_KEY", "unit-test-key", raising=False)
+    monkeypatch.setattr(settings, "DATABASE_URL", "postgresql://unit/test", raising=False)
     return TestClient(create_app())
 
 
