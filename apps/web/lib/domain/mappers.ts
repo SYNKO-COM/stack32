@@ -81,8 +81,25 @@ export function mapSupabaseUser(u: {
   id: string;
   email?: string | null;
   user_metadata?: Record<string, unknown>;
+  app_metadata?: Record<string, unknown>;
+  identities?: { provider?: string }[] | null;
 }): User {
   const meta = u.user_metadata ?? {};
+  // Supabase reports the sign-in methods twice: one row per identity, and a
+  // flat list in app_metadata. Either naming the email provider means the
+  // account has a password of its own.
+  const appMeta = u.app_metadata ?? {};
+  const listed = Array.isArray(appMeta.providers)
+    ? appMeta.providers.filter((p): p is string => typeof p === "string")
+    : [];
+  const fromIdentities = (u.identities ?? [])
+    .map((identity) => identity?.provider)
+    .filter((provider): provider is string => typeof provider === "string");
+  const providers = [
+    ...listed,
+    ...fromIdentities,
+    ...(typeof appMeta.provider === "string" ? [appMeta.provider] : []),
+  ];
   return {
     id: u.id,
     email: u.email ?? "",
@@ -91,6 +108,7 @@ export function mapSupabaseUser(u: {
       (typeof meta.name === "string" && meta.name) ||
       undefined,
     avatarUrl: typeof meta.avatar_url === "string" ? meta.avatar_url : undefined,
+    hasPasswordLogin: providers.includes("email"),
   };
 }
 

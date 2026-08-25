@@ -209,14 +209,18 @@ export function SettingsDialog() {
               <span className="text-muted-foreground">{t("common:theme.appearance")}</span>
               <ThemeToggle />
             </div>
-            <Separator />
-            <Link
-              href="/settings/password"
-              className="block text-brand hover:underline"
-              onClick={() => closeDialog()}
-            >
-              {t("auth:changePassword.title")}
-            </Link>
+            {user?.hasPasswordLogin ? (
+              <>
+                <Separator />
+                <Link
+                  href="/settings/password"
+                  className="block text-brand hover:underline"
+                  onClick={() => closeDialog()}
+                >
+                  {t("auth:changePassword.title")}
+                </Link>
+              </>
+            ) : null}
             <Separator />
             <div className="space-y-2">
               <p className="font-medium text-destructive">{t("common:account.dangerZone")}</p>

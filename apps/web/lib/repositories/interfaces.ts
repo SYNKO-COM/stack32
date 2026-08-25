@@ -56,7 +56,9 @@ export interface AuthRepository {
   /** Resend the signup confirmation email / OTP. */
   resendSignupOtp(email: string, options?: AuthCaptchaOptions): Promise<void>;
   sendPasswordReset(email: string, options?: AuthCaptchaOptions): Promise<void>;
-  updatePassword(newPassword: string): Promise<void>;
+  updatePassword(currentPassword: string, newPassword: string): Promise<void>;
+  /** Recovery flow: the session comes from the email link, so there is no old password to give. */
+  setPasswordFromRecovery(newPassword: string): Promise<void>;
   signOut(): Promise<void>;
   getProfile(): Promise<Profile | null>;
   completeOnboarding(answers: OnboardingAnswers): Promise<Profile>;

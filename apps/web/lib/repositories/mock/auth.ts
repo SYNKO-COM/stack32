@@ -26,6 +26,7 @@ function makeUser(email: string): User {
     id: "user_mock",
     email,
     name: email.split("@")[0],
+    hasPasswordLogin: true,
   };
 }
 
@@ -114,7 +115,11 @@ export class MockAuthRepository implements AuthRepository {
     await delay(500);
   }
 
-  async updatePassword(_newPassword: string): Promise<void> {
+  async updatePassword(_currentPassword: string, _newPassword: string): Promise<void> {
+    await delay(500);
+  }
+
+  async setPasswordFromRecovery(_newPassword: string): Promise<void> {
     await delay(500);
   }
 

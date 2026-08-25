@@ -156,7 +156,28 @@ export class SupabaseAuthRepository implements AuthRepository {
     if (error) throw error;
   }
 
-  async updatePassword(newPassword: string): Promise<void> {
+  async updatePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const supabase = requireSupabaseBrowserClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const email = user?.email;
+    if (!email) throw new Error("not_authenticated");
+
+    // Supabase lets a live session set a new password without proving the old
+    // one, so a borrowed tab could lock the owner out. Sign in again with the
+    // current password first: wrong password fails here and nothing changes.
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (reauthError) throw reauthError;
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+  }
+
+  async setPasswordFromRecovery(newPassword: string): Promise<void> {
     const supabase = requireSupabaseBrowserClient();
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;

@@ -9,6 +9,60 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_email: string
+          created_at: string
+          details: Json
+          id: string
+          target_id: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          admin_email: string
+          created_at?: string
+          details?: Json
+          id?: string
+          target_id?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          admin_email?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          target_id?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      admin_totp: {
+        Row: {
+          email: string
+          enrolled_at: string
+          last_used_step: number | null
+          secret: string
+          updated_at: string
+        }
+        Insert: {
+          email: string
+          enrolled_at?: string
+          last_used_step?: number | null
+          secret: string
+          updated_at?: string
+        }
+        Update: {
+          email?: string
+          enrolled_at?: string
+          last_used_step?: number | null
+          secret?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       agent_access_requests: {
         Row: {
           agent_id: string
@@ -2910,6 +2964,98 @@ export type Database = {
         }
         Relationships: []
       }
+      support_conversations: {
+        Row: {
+          admin_unread_count: number
+          created_at: string
+          id: string
+          last_message_at: string
+          last_message_preview: string | null
+          last_message_sender: string | null
+          status: string
+          subject: string | null
+          updated_at: string
+          user_id: string
+          user_unread_count: number
+        }
+        Insert: {
+          admin_unread_count?: number
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          last_message_preview?: string | null
+          last_message_sender?: string | null
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          user_id: string
+          user_unread_count?: number
+        }
+        Update: {
+          admin_unread_count?: number
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          last_message_preview?: string | null
+          last_message_sender?: string | null
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          user_id?: string
+          user_unread_count?: number
+        }
+        Relationships: []
+      }
+      support_messages: {
+        Row: {
+          admin_label: string | null
+          attachment_mime: string | null
+          attachment_name: string | null
+          attachment_path: string | null
+          attachment_size: number | null
+          author_id: string | null
+          body: string | null
+          conversation_id: string
+          created_at: string
+          id: string
+          sender: string
+        }
+        Insert: {
+          admin_label?: string | null
+          attachment_mime?: string | null
+          attachment_name?: string | null
+          attachment_path?: string | null
+          attachment_size?: number | null
+          author_id?: string | null
+          body?: string | null
+          conversation_id: string
+          created_at?: string
+          id?: string
+          sender: string
+        }
+        Update: {
+          admin_label?: string | null
+          attachment_mime?: string | null
+          attachment_name?: string | null
+          attachment_path?: string | null
+          attachment_size?: number | null
+          author_id?: string | null
+          body?: string | null
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          sender?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "support_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tool_catalog: {
         Row: {
           approval_mode: string
@@ -3643,6 +3789,10 @@ export type Database = {
         }
       }
       soft_delete_agent: { Args: { p_agent_id: string }; Returns: undefined }
+      support_mark_read: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
       suspend_agents_for_billing: {
         Args: { p_user_id: string }
         Returns: number

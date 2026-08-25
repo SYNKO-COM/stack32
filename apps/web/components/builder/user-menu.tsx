@@ -101,9 +101,11 @@ export function UserMenu() {
           <DropdownMenuItem onSelect={() => openDialog("settings")}>
             {t("common:actions.settings")}
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href="/settings/password">{t("builder:profile.changePassword")}</Link>
-          </DropdownMenuItem>
+          {user?.hasPasswordLogin ? (
+            <DropdownMenuItem asChild>
+              <Link href="/settings/password">{t("builder:profile.changePassword")}</Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {

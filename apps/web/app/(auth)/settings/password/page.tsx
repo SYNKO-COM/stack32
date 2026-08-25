@@ -24,6 +24,7 @@ export default function ChangePasswordPage() {
   const { data: user, isLoading } = useCurrentUser();
   const update = useUpdatePassword();
 
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,24 @@ export default function ChangePasswordPage() {
   if (!isLoading && !user) {
     router.replace("/login?next=/settings/password");
     return null;
+  }
+
+  // Google / GitHub accounts have no password of their own — there is nothing
+  // here for them to change, so say so instead of showing a form that cannot work.
+  if (user && !user.hasPasswordLogin) {
+    return (
+      <AuthCompactCard>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {t("auth:changePassword.title")}
+        </h1>
+        <p className="mt-1.5 mb-6 text-sm text-muted-foreground">
+          {t("auth:changePassword.socialOnly")}
+        </p>
+        <Button asChild className="w-full rounded-xl">
+          <Link href="/agents">{t("auth:changePassword.backToApp")}</Link>
+        </Button>
+      </AuthCompactCard>
+    );
   }
 
   return (
@@ -68,14 +87,34 @@ export default function ChangePasswordPage() {
               setError(t("auth:reset.mismatch"));
               return;
             }
+            if (!currentPassword) {
+              setError(t("auth:changePassword.currentRequired"));
+              return;
+            }
+            if (currentPassword === password) {
+              setError(t("auth:changePassword.sameAsCurrent"));
+              return;
+            }
             try {
-              await update.mutateAsync(password);
+              await update.mutateAsync({ currentPassword, newPassword: password });
               setDone(true);
             } catch (err) {
               setError(t(authErrorKey(err)));
             }
           }}
         >
+          <div className="space-y-1.5">
+            <Label htmlFor="change-current">{t("auth:changePassword.current")}</Label>
+            <Input
+              id="change-current"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder={t("auth:changePassword.currentPlaceholder")}
+            />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="change-password">{t("auth:changePassword.password")}</Label>
             <Input

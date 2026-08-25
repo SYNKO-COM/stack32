@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useUpdatePassword } from "@/hooks/use-auth";
+import { useSetPasswordFromRecovery } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import { authErrorKey } from "@/lib/auth/errors";
 import {
@@ -23,7 +23,7 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const update = useUpdatePassword();
+  const update = useSetPasswordFromRecovery();
 
   return (
     <AuthCompactCard>

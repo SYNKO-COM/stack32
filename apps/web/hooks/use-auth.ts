@@ -126,7 +126,15 @@ export function useResendSignupOtp() {
 
 export function useUpdatePassword() {
   return useMutation({
-    mutationFn: (newPassword: string) => getAuthRepository().updatePassword(newPassword),
+    mutationFn: (vars: { currentPassword: string; newPassword: string }) =>
+      getAuthRepository().updatePassword(vars.currentPassword, vars.newPassword),
+  });
+}
+
+export function useSetPasswordFromRecovery() {
+  return useMutation({
+    mutationFn: (newPassword: string) =>
+      getAuthRepository().setPasswordFromRecovery(newPassword),
   });
 }
 

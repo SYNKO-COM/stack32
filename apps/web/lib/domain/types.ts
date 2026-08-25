@@ -48,6 +48,12 @@ export interface User {
   email: string;
   name?: string;
   avatarUrl?: string;
+  /**
+   * True when the account has an email/password identity. Google- and
+   * GitHub-only accounts have no password, so changing one is meaningless
+   * for them and the option stays hidden.
+   */
+  hasPasswordLogin: boolean;
 }
 
 export interface Profile {
