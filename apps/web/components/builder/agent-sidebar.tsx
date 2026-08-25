@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { AgentIcon } from "@/components/builder/agent-icon";
 import { CreatingAgentOverlay } from "@/components/shared/brand-loader";
 import { Logo, LogoMark } from "@/components/shared/logo";
+import { SupportChatTrigger } from "@/components/support/support-chat-bubble";
 import { SegmentedTabs } from "@/components/shared/segmented-tabs";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -288,8 +289,9 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-col items-center space-y-3 px-3 pt-5 pb-3">
-        <div className="w-full">
+        <div className="flex w-full items-center justify-between gap-2">
           <Logo href="/agents" />
+          <SupportChatTrigger />
         </div>
         <SegmentedTabs
           ariaLabel={t("builder:workspaceNav.label")}

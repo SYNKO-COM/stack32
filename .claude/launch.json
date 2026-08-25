@@ -4,8 +4,20 @@
     {
       "name": "stack32-preprod-local",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": [
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "stack32-admin-local",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "/Users/3van/Documents/Admin-Stack32",
+        "dev"
+      ],
+      "port": 3032
     }
   ]
 }

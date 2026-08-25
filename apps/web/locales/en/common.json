@@ -288,6 +288,13 @@
     "you": "You",
     "team": "Stack32 Team",
     "loginRequired": "Sign in to chat with support.",
-    "error": "Message not sent. Please try again."
+    "error": "Message not sent. Please try again.",
+    "attach": "Attach a photo or file",
+    "record": "Record a voice message",
+    "recording": "Recording…",
+    "cancel": "Cancel",
+    "sendAudio": "Send the voice message",
+    "photo": "Photo",
+    "file": "File"
   }
 }

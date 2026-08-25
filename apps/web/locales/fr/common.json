@@ -288,6 +288,13 @@
     "you": "Vous",
     "team": "Équipe Stack32",
     "loginRequired": "Connectez-vous pour discuter avec le support.",
-    "error": "Message non envoyé. Réessayez."
+    "error": "Message non envoyé. Réessayez.",
+    "attach": "Joindre une photo ou un fichier",
+    "record": "Enregistrer un message audio",
+    "recording": "Enregistrement…",
+    "cancel": "Annuler",
+    "sendAudio": "Envoyer le message audio",
+    "photo": "Photo",
+    "file": "Fichier"
   }
 }
