@@ -88,9 +88,14 @@ steps:
           --region=europe-west1 --project=stack32 \
           --member=serviceAccount:stack32-task-invoker@stack32.iam.gserviceaccount.com \
           --role=roles/run.invoker --quiet
+        # Run tasks go to the worker, but Cloud Scheduler still ticks the api,
+        # and the api derives which OIDC audiences it accepts from these two
+        # variables. Pointing the target at the worker alone left the api
+        # refusing tokens minted for its own URL: every tick 403'd and no
+        # schedule fired. Name the tick audience explicitly so both pass.
         gcloud run services update stack32-agent-api \
           --region=europe-west1 --project=stack32 --quiet \
-          --update-env-vars=CLOUD_TASKS_TARGET_URL=https://stack32-agent-worker-732339494633.europe-west1.run.app/v1/internal/tasks/run
+          --update-env-vars=^\|^CLOUD_TASKS_TARGET_URL=https://stack32-agent-worker-732339494633.europe-west1.run.app/v1/internal/tasks/run\|CLOUD_TASKS_OIDC_AUDIENCE=https://stack32-agent-api-732339494633.europe-west1.run.app/v1/internal/tasks/schedules/tick
 
 images:
   - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:$COMMIT_SHA

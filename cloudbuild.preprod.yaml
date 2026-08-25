@@ -80,9 +80,12 @@ steps:
           --region=europe-west1 --project=stack32 \
           --member=serviceAccount:stack32-task-invoker@stack32.iam.gserviceaccount.com \
           --role=roles/run.invoker --quiet
+        # Same pairing as production: the worker takes run tasks, the api still
+        # takes the scheduler tick, and the api only accepts audiences named by
+        # these two variables. See cloudbuild.yaml for what breaks without it.
         gcloud run services update stack32-agent-api-preprod \
           --region=europe-west1 --project=stack32 --quiet \
-          --update-env-vars=CLOUD_TASKS_TARGET_URL=https://stack32-agent-worker-preprod-732339494633.europe-west1.run.app/v1/internal/tasks/run
+          --update-env-vars=^\|^CLOUD_TASKS_TARGET_URL=https://stack32-agent-worker-preprod-732339494633.europe-west1.run.app/v1/internal/tasks/run\|CLOUD_TASKS_OIDC_AUDIENCE=https://stack32-agent-api-preprod-732339494633.europe-west1.run.app/v1/internal/tasks/schedules/tick
 
 images:
   - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$BUILD_ID
