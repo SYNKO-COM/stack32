@@ -489,7 +489,9 @@
     "serviceUnavailable": "Le service de construction est momentanément indisponible. Réessayez dans un instant.",
     "validationFailed": "La configuration de l'agent n'est pas valide. Reformulez ou demandez une correction.",
     "canceled": "Arrêté.",
-    "canceledDetail": "Arrêté. Dis-moi la prochaine modification quand tu veux."
+    "canceledDetail": "Arrêté. Dis-moi la prochaine modification quand tu veux.",
+    "neverStarted": "La construction n'a jamais démarré.",
+    "neverStartedDetail": "Votre demande a bien été enregistrée mais notre file d'exécution ne l'a pas prise en charge. Aucun crédit n'a été consommé — relancez votre message, et prévenez le support si cela se reproduit."
   },
   "progress": {
     "started": "Démarrage…",

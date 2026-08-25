@@ -489,7 +489,9 @@
     "serviceUnavailable": "The build service is temporarily unavailable. Please try again in a moment.",
     "validationFailed": "The agent configuration is invalid. Rephrase or ask for a fix.",
     "canceled": "Stopped.",
-    "canceledDetail": "Stopped. Tell me what to change next whenever you're ready."
+    "canceledDetail": "Stopped. Tell me what to change next whenever you're ready.",
+    "neverStarted": "The build never started.",
+    "neverStartedDetail": "Your request was recorded but our execution queue never picked it up. No credits were used — send your message again, and tell support if it happens twice."
   },
   "progress": {
     "started": "Starting…",
