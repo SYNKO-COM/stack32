@@ -62,6 +62,36 @@ steps:
       - --timeout=3600
       - --quiet
 
+  # Builds are hour-long requests; sharing the API's instances lets a handful
+  # of builds starve every interactive call. The worker is the same image with
+  # the same config, cloned from the live API service so secrets stay out of
+  # the repo, with lower concurrency (5) because its requests are heavy. The
+  # API then sends Cloud Tasks there instead of to itself.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    id: Deploy-worker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        # The build SA cannot resolve the project via Resource Manager; name it.
+        gcloud config set project stack32 --quiet
+        gcloud run services describe stack32-agent-api \
+          --region=europe-west1 --format=export > /tmp/worker.yaml
+        sed -i \
+          -e 's/name: stack32-agent-api/name: stack32-agent-worker/' \
+          -e 's/containerConcurrency: [0-9]*/containerConcurrency: 5/' \
+          -e 's#https://stack32-agent-api-732339494633.europe-west1.run.app/v1/internal/tasks/run#https://stack32-agent-worker-732339494633.europe-west1.run.app/v1/internal/tasks/run#' \
+          /tmp/worker.yaml
+        gcloud run services replace /tmp/worker.yaml --region=europe-west1 --project=stack32 --quiet
+        gcloud run services add-iam-policy-binding stack32-agent-worker \
+          --region=europe-west1 --project=stack32 \
+          --member=serviceAccount:stack32-task-invoker@stack32.iam.gserviceaccount.com \
+          --role=roles/run.invoker --quiet
+        gcloud run services update stack32-agent-api \
+          --region=europe-west1 --project=stack32 --quiet \
+          --update-env-vars=CLOUD_TASKS_TARGET_URL=https://stack32-agent-worker-732339494633.europe-west1.run.app/v1/internal/tasks/run
+
 images:
   - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:$COMMIT_SHA
   - europe-west1-docker.pkg.dev/stack32/stack32/agent-service:production
