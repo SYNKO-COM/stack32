@@ -20,7 +20,9 @@
     "testFailed": "Le dernier test n'a pas réussi. Corrigez les problèmes dans Build avant de publier.",
     "usernameRequired": "Choisissez un nom d'utilisateur dans Paramètres avant de publier un agent public.",
     "planRequired": "La publication nécessite un plan payant. Passez à un plan supérieur pour partager votre agent.",
-    "failed": "La publication a échoué. Veuillez réessayer."
+    "failed": "La publication a échoué. Veuillez réessayer.",
+    "testNotRun": "La version actuelle n'a pas encore de test réussi. Lancez un test dans Build, puis publiez.",
+    "verificationUnavailable": "La vérification de publication est momentanément indisponible. Rien n'a été publié — réessayez dans quelques minutes."
   },
   "notFound": {
     "title": "Page introuvable",

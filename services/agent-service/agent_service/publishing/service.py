@@ -245,18 +245,17 @@ class PublishService:
         )
         test_status = rows[0].get("test_status") if rows else "not_run"
         if test_status not in ("passed", "passed_with_warnings"):
-            if agent_status == "built" and readiness.status == "ready":
-                logger.info(
-                    "publish_skip_test_gate agent_id=%s test_status=%s",
-                    agent_id,
-                    test_status,
-                )
-                # DeployPipeline still gates on snapshot.test_status — treat
-                # definition-ready built agents as publishable without a formal
-                # draft smoke (matches product: Build "ready" ⇒ can publish).
-                test_status = "passed_with_warnings"
-            else:
-                return {"error": "DEPLOYMENT_VALIDATION_FAILED", "code": "TEST_FAILED"}
+            # Fail-closed: publication needs positive proof for the exact
+            # version being published. "built + readiness ready" used to be
+            # promoted to passed_with_warnings here — but readiness has its
+            # own blind spots, and a gate that invents its proof is no gate.
+            code = "TEST_NOT_RUN" if test_status in (None, "", "not_run") else "TEST_FAILED"
+            logger.info(
+                "publish_test_gate_blocked agent_id=%s test_status=%s",
+                agent_id,
+                test_status,
+            )
+            return {"error": "DEPLOYMENT_VALIDATION_FAILED", "code": code}
 
         snapshot: dict[str, Any] = {
             "id": str(version_id),
@@ -309,19 +308,14 @@ class PublishService:
                 smoke_runner = make_sandbox_smoke_runner(build_provider(settings))
             except Exception:  # noqa: BLE001
                 logger.exception("publish: sandbox smoke runner unavailable")
-                # Built + definition-ready agents already ran through Builder —
-                # do not hard-block publish if the optional sandbox is down.
-                if agent_status == "built" and readiness.status == "ready":
-                    logger.warning(
-                        "publish_smoke_fallback_noop agent_id=%s", agent_id
-                    )
-
-                    async def _fallback_smoke(_files: list[dict[str, Any]]) -> dict[str, Any]:
-                        return {"ok": True, "mode": "sandbox_unavailable_noop"}
-
-                    smoke_runner = _fallback_smoke
-                else:
-                    return {"error": "DEPLOYMENT_FAILED", "code": "SMOKE_RUNNER_UNAVAILABLE"}
+                # Fail-closed: an unavailable verifier is not a passed
+                # verification. Publication is blocked until the sandbox is
+                # back — a recoverable state the person can simply retry.
+                logger.warning("publish_smoke_runner_unavailable agent_id=%s", agent_id)
+                return {
+                    "error": "DEPLOYMENT_FAILED",
+                    "code": "PUBLISH_VERIFICATION_UNAVAILABLE",
+                }
         else:
             async def _dev_smoke(_files: list[dict[str, Any]]) -> dict[str, Any]:
                 return {"ok": True, "mode": "dev_noop"}

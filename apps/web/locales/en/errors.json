@@ -20,7 +20,9 @@
     "testFailed": "The latest test didn't pass. Fix issues in Build before publishing.",
     "usernameRequired": "Choose a username in Settings before publishing a public agent.",
     "planRequired": "Publishing requires a paid plan. Upgrade to share your agent publicly.",
-    "failed": "Publishing failed. Please try again."
+    "failed": "Publishing failed. Please try again.",
+    "testNotRun": "The current version has no passing test yet. Run a test in Build, then publish.",
+    "verificationUnavailable": "Publish verification is temporarily unavailable. Nothing was published — try again in a few minutes."
   },
   "notFound": {
     "title": "Page not found",

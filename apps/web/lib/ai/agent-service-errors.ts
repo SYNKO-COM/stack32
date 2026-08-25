@@ -37,6 +37,8 @@ export function agentServiceErrorKey(error: unknown): string {
       RATE_LIMIT_EXCEEDED: "errors:rateLimit",
       BUDGET_EXCEEDED: "errors:budgetExceeded",
       TEST_FAILED: "errors:publish.testFailed",
+      TEST_NOT_RUN: "errors:publish.testNotRun",
+      PUBLISH_VERIFICATION_UNAVAILABLE: "errors:publish.verificationUnavailable",
       PUBLISH_FAILED: "errors:publish.validationFailed",
       INVALID_LLM_KEY: "errors:secrets.invalidKey",
       INVALID_PROVIDER: "errors:secrets.invalidProvider",
