@@ -18,6 +18,38 @@ from agent_service.supabase_client import Persistence
 logger = logging.getLogger(__name__)
 
 
+#: Exception names and phrases that mean our infrastructure failed, not the
+#: agent. Matched by name so this stays honest without importing psycopg here.
+_INFRA_EXC_NAMES = frozenset(
+    {
+        "OperationalError",
+        "InterfaceError",
+        "AdminShutdown",
+        "ConnectionDoesNotExist",
+        "ConnectionFailure",
+        "PoolTimeout",
+        "PoolClosed",
+    }
+)
+_INFRA_PHRASES = (
+    "the connection is closed",
+    "connection is closed",
+    "connection already closed",
+    "server closed the connection",
+    "consuming input failed",
+    "ssl connection has been closed",
+    "terminating connection",
+)
+
+
+def _is_infrastructure_error(exc: BaseException, err_text: str) -> bool:
+    """True when a run died of a database or pool fault rather than its own work."""
+    if type(exc).__name__ in _INFRA_EXC_NAMES:
+        return True
+    lowered = err_text.lower()
+    return any(phrase in lowered for phrase in _INFRA_PHRASES)
+
+
 def _status_key_from_mapping(mapping_key: str | None) -> str | None:
     if not mapping_key or not isinstance(mapping_key, str):
         return None
@@ -982,6 +1014,11 @@ class LiveRuntime:
             elif "MODEL_" in err_text or "AuthenticationError" in err_text:
                 code = "MODEL_PROVIDER_UNAVAILABLE"
                 content_key = "live:errors.providerUnavailable"
+            elif _is_infrastructure_error(exc, err_text):
+                # Our own plumbing broke. Calling that TOOL_FAILED sends everyone
+                # hunting through an agent's tools for a fault that was never there.
+                code = "RUNTIME_UNAVAILABLE"
+                content_key = "live:errors.runtimeUnavailable"
             else:
                 code = "TOOL_FAILED"
                 content_key = "live:errors.runFailed"

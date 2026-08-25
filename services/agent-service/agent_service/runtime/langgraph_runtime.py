@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Process-local checkpointer — AsyncPostgresSaver when DATABASE_URL is set; MemorySaver in dev/tests.
 _checkpointers: dict[str, Any] = {}
-_pg_acm: Any | None = None
+_pg_pool: Any | None = None
 
 # Dedicated schema for LangGraph checkpoint tables so `public` stays reproducible
 # from migrations only (checkpoint* tables are created at runtime by setup()).
@@ -102,6 +102,42 @@ async def _warn_if_checkpoints_escaped_the_runtime_schema(saver: Any) -> None:
         )
 
 
+async def _open_checkpoint_pool(scoped_url: str):
+    """Open the pool the checkpointer draws its connections from.
+
+    A single long-lived connection does not survive this service's shape: runs
+    arrive hours apart, Cloud Run freezes the instance in between, and Postgres
+    drops the idle socket. The next run then met a corpse — `OperationalError:
+    the connection is closed` — and the whole run failed before it had done
+    anything. A pool that verifies a connection before lending it out reopens
+    instead, so an idle gap costs one extra round-trip rather than the run.
+
+    The connection kwargs mirror `AsyncPostgresSaver.from_conn_string`, which
+    the saver's queries depend on.
+    """
+    from psycopg.rows import dict_row
+    from psycopg_pool import AsyncConnectionPool
+
+    pool = AsyncConnectionPool(
+        conninfo=scoped_url,
+        min_size=0,
+        max_size=4,
+        open=False,
+        kwargs={
+            "autocommit": True,
+            "prepare_threshold": 0,
+            "row_factory": dict_row,
+        },
+        # Checked at hand-out, so it holds even while background workers are
+        # frozen along with the rest of the instance.
+        check=AsyncConnectionPool.check_connection,
+        max_idle=120,
+        max_lifetime=1800,
+    )
+    await pool.open()
+    return pool
+
+
 async def _get_checkpointer():
     """Return a LangGraph checkpointer suitable for async runs.
 
@@ -120,13 +156,13 @@ async def _get_checkpointer():
         scoped_url = _with_checkpoint_search_path(db_url)
         key = f"postgres:{hash(db_url)}"
         if key not in _checkpointers:
-            global _pg_acm
+            global _pg_pool
             try:
                 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-                acm = AsyncPostgresSaver.from_conn_string(scoped_url)
-                saver = await acm.__aenter__()
-                _pg_acm = acm
+                pool = await _open_checkpoint_pool(scoped_url)
+                saver = AsyncPostgresSaver(conn=pool)
+                _pg_pool = pool
                 if hasattr(saver, "setup"):
                     await saver.setup()
                 await _warn_if_checkpoints_escaped_the_runtime_schema(saver)

@@ -57,7 +57,8 @@
     "serviceUnavailable": "The agent service is temporarily unavailable. Please try again in a moment.",
     "budgetExceeded": "This run used too many model calls. Try a shorter request.",
     "providerUnavailable": "The language model could not be reached. Check your API key or try again in a moment.",
-    "toolCallFormat": "The agent hit a temporary tool error. Please try again."
+    "toolCallFormat": "The agent hit a temporary tool error. Please try again.",
+    "runtimeUnavailable": "A technical problem on our side interrupted the run. This is not your agent — try again in a moment."
   },
   "agentLabel": "Agent",
   "a11y": {
