@@ -241,6 +241,12 @@ export function ToolChangeReviewForm({
     };
   }, [appKeys]);
 
+  // Every proposed add/removal needs an explicit answer: the button stays
+  // closed until then, rather than failing after the click.
+  const undecidedCount = [...proposedAdds, ...proposedRemovals].filter(
+    (tool) => tool.decision === "pending",
+  ).length;
+
   const setDecision = (key: string, decision: "accept" | "reject") => {
     setTools((prev) =>
       prev.map((tool) => (tool.key === key ? { ...tool, decision } : tool)),
@@ -385,8 +391,18 @@ export function ToolChangeReviewForm({
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-        <div className="flex justify-end pt-1">
-          <Button type="button" onClick={submit} disabled={pending} className="min-w-[9rem] gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+          {undecidedCount > 0 ? (
+            <p className="mr-auto text-xs text-muted-foreground">
+              {t("toolChangeReview.decisionsRemaining", { count: undecidedCount })}
+            </p>
+          ) : null}
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={pending || undecidedCount > 0}
+            className="min-w-[9rem] gap-1.5"
+          >
             {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : null}
             {pending ? t("toolChangeReview.submitting") : t("toolChangeReview.continue")}
           </Button>
