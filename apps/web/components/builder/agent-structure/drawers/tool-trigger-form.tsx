@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ToolTriggerPicker } from "@/components/builder/agent-structure/drawers/tool-trigger-picker";
 import {
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RoundCheck } from "@/components/ui/round-check";
 import { useTranslation } from "@/hooks/use-translation";
+import { SAVED_CLOSE_DELAY_MS } from "@/components/builder/tool-config-form";
 import { updateAgentTriggers } from "@/lib/actions/builder";
 import {
   getIntegrationTriggerComponent,
@@ -234,12 +235,15 @@ export function ToolTriggerConfigForm({
   published,
   connections,
   onSaved,
+  onClose,
 }: {
   agentId: string;
   spec?: AgentSpec | null;
   published?: boolean;
   connections: Array<{ id: string; provider: string; status: string; app_id?: string | null }>;
   onSaved?: () => void;
+  /** Closes the panel a beat after a successful save — see ToolConfigForm. */
+  onClose?: () => void;
 }) {
   const { t } = useTranslation("structure");
   const queryClient = useQueryClient();
@@ -262,6 +266,13 @@ export function ToolTriggerConfigForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    },
+    [],
+  );
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [remoteOptions, setRemoteOptions] = useState<
     Record<string, Array<{ value: string; label: string }>>
@@ -382,6 +393,12 @@ export function ToolTriggerConfigForm({
       await invalidateAgent(queryClient, agentId);
       onSaved?.();
       setSaved(true);
+      if (onClose) {
+        closeTimer.current = window.setTimeout(() => {
+          closeTimer.current = null;
+          onClose();
+        }, SAVED_CLOSE_DELAY_MS);
+      }
     } catch {
       setError(t("panel.triggersSaveError"));
     } finally {

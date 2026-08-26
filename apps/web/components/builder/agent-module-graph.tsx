@@ -656,6 +656,7 @@ export function AgentModuleGraph({
                               toolId={selected.toolId}
                               appId={selected.appId}
                               onSaved={onConnectionsChanged}
+                              onClose={() => setSelected(null)}
                               refreshKey={configRefresh}
                             />
                           </div>

@@ -26,6 +26,9 @@ import {
 } from "@/lib/integrations/prop-labels";
 import { cn } from "@/lib/utils";
 
+/** Long enough to read "Enregistré", short enough not to feel stuck. */
+export const SAVED_CLOSE_DELAY_MS = 900;
+
 type FieldSchema = {
   type?: string;
   description?: string;
@@ -47,12 +50,20 @@ export function ToolConfigForm({
   toolId,
   appId,
   onSaved,
+  onClose,
   refreshKey = 0,
 }: {
   agentId: string;
   toolId: string;
   appId?: string;
   onSaved?: () => void;
+  /**
+   * Called a beat after a successful save, so the panel can close itself.
+   * The delay is deliberate: it lets the green "Enregistré" register before
+   * the panel disappears, instead of leaving people wondering whether the
+   * click did anything.
+   */
+  onClose?: () => void;
   /**
    * Bump when an account was just connected: the schema, the account list and
    * the remote options reload in place. The plain-text calendar field becomes
@@ -81,6 +92,13 @@ export function ToolConfigForm({
   );
   const [hintKeys, setHintKeys] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    },
+    [],
+  );
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [reloadTriggers, setReloadTriggers] = useState<Set<string>>(new Set());
   const [reloadingProps, setReloadingProps] = useState(false);
@@ -561,6 +579,12 @@ export function ToolConfigForm({
               await saveToolConfig(agentId, toolId, payload, connectionId || undefined);
               setSaved(true);
               onSaved?.();
+              if (onClose) {
+                closeTimer.current = window.setTimeout(() => {
+                  closeTimer.current = null;
+                  onClose();
+                }, SAVED_CLOSE_DELAY_MS);
+              }
             } catch {
               setError(t("panel.toolConfigSaveError"));
             }

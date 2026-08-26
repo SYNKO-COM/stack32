@@ -289,6 +289,7 @@ export function IntegrationDrawer({
             toolId={configToolId}
             appId={node.integration.appKey}
             onSaved={onConnectionsChanged}
+            onClose={() => onOpenChange(false)}
             refreshKey={configRefresh}
           />
         </div>
@@ -454,6 +455,7 @@ export function TriggerDrawer({
             published={published}
             connections={connections}
             onSaved={onSaved}
+            onClose={() => onOpenChange(false)}
           />
         ) : null
       ) : isSchedule ? (
