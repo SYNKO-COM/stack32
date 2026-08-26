@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import operator
@@ -121,7 +122,13 @@ async def _open_checkpoint_pool(scoped_url: str):
     pool = AsyncConnectionPool(
         conninfo=scoped_url,
         min_size=0,
-        max_size=4,
+        # The worker serves up to 5 runs at once (containerConcurrency); a
+        # pool smaller than that guaranteed starvation the moment runs
+        # overlapped, and the checkout then sat 30s before dying. Size past
+        # the concurrency and fail fast — a run that cannot check out in 10s
+        # is better reported (and the pool healed) than hung.
+        max_size=10,
+        timeout=10,
         open=False,
         kwargs={
             "autocommit": True,
@@ -136,6 +143,25 @@ async def _open_checkpoint_pool(scoped_url: str):
     )
     await pool.open()
     return pool
+
+
+async def reset_checkpointer() -> None:
+    """Drop the cached checkpointer and close its pool; the next run reopens.
+
+    A warm instance now lives for hours (min-instances=1), so a poisoned pool
+    — connections stuck behind a NAT-dropped socket, or leaked by a cancelled
+    checkout — used to fail every subsequent run on the instance forever.
+    Scale-to-zero quietly hid this by recycling the process; this is the
+    explicit version of that recovery.
+    """
+    global _pg_pool
+    _checkpointers.clear()
+    pool, _pg_pool = _pg_pool, None
+    if pool is not None:
+        try:
+            await asyncio.wait_for(pool.close(), timeout=5)
+        except Exception:  # noqa: BLE001 - closing a broken pool must not raise
+            logger.warning("checkpoint_pool_close_failed", exc_info=True)
 
 
 async def _get_checkpointer():

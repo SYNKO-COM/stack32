@@ -1086,6 +1086,14 @@ class LiveRuntime:
                 # hunting through an agent's tools for a fault that was never there.
                 code = "RUNTIME_UNAVAILABLE"
                 content_key = "live:errors.runtimeUnavailable"
+                # Heal, don't just report: on a warm instance a poisoned
+                # checkpoint pool otherwise fails every later run for hours.
+                try:
+                    from agent_service.runtime.langgraph_runtime import reset_checkpointer
+
+                    await reset_checkpointer()
+                except Exception:  # noqa: BLE001 - recovery must not mask the report
+                    logger.warning("checkpointer_reset_failed", exc_info=True)
             else:
                 code = "TOOL_FAILED"
                 content_key = "live:errors.runFailed"
