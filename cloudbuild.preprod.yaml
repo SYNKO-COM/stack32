@@ -52,6 +52,12 @@ steps:
       - --image=europe-west1-docker.pkg.dev/stack32/stack32/agent-service:preprod-$BUILD_ID
       - --region=europe-west1
       - --timeout=3600
+      # A cold start added ~5s before a Pipedream event reached the webhook
+      # and ~5s more before the worker picked the run up; a warm instance on
+      # each (the worker clones this setting) is what "the agent reacts the
+      # moment the message lands" costs. The worker inherits it via the
+      # describe/replace clone below.
+      - --min-instances=1
       - --quiet
 
   # Builds are hour-long requests; sharing the API's instances let a handful

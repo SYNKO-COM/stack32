@@ -143,14 +143,14 @@ export function AgentIaView({
       const msgs = liveThread?.messages ?? [];
       const last = msgs[msgs.length - 1];
       if (last?.role === "user" || last?.pending) return 2200;
-      if (consumer || agentPublished || draftAwakeRef.current) return 3000;
+      if (consumer || agentPublished || draftAwakeRef.current) return 1500;
       return false;
     },
     queryFn: async () => {
       const supabase = requireSupabaseBrowserClient();
       const { data, error } = await supabase
         .from("runs")
-        .select("id,status,created_at")
+        .select("id,status,created_at,trigger_kind:input->>trigger_kind")
         .eq("agent_id", agentId)
         .eq("run_type", "live")
         .in("status", ["queued", "running", "waiting_for_input"])
@@ -384,11 +384,46 @@ export function AgentIaView({
     };
   }, [draftAwake, executionVisual, productGraph.edges, productGraph.nodes, visualRunId]);
 
+  // A freshly discovered external run has no events yet (the worker may still
+  // be picking it up); paint its trigger immediately so the structure reacts
+  // the moment the run exists instead of waiting for the first event.
+  const pendingExternalVisual = useMemo((): ExecutionVisualState | undefined => {
+    const active = activeRunQuery.data as
+      | { id?: string; status?: string; trigger_kind?: string | null }
+      | null
+      | undefined;
+    if (!active?.id || active.id !== visualRunId) return undefined;
+    if (executionVisual && Object.keys(executionVisual.nodes ?? {}).length > 0) {
+      return undefined;
+    }
+    const kind =
+      active.trigger_kind === "tool" || active.trigger_kind === "schedule"
+        ? active.trigger_kind
+        : null;
+    if (!kind) return undefined;
+    const triggerId = `trigger:${kind}`;
+    const nodes: ExecutionVisualState["nodes"] = {
+      [triggerId]: { executionStatus: "running" },
+    };
+    const edges: ExecutionVisualState["edges"] = {};
+    const edge = productGraph.edges.find(
+      (row) => row.source === triggerId && row.target === "agent",
+    );
+    if (edge) edges[edge.id] = { executionStatus: "running" };
+    return {
+      runStatus: "running",
+      nodes,
+      edges,
+      legacy: { input: "running" },
+      error: null,
+    };
+  }, [activeRunQuery.data, executionVisual, productGraph.edges, visualRunId]);
+
   const structureExecutionVisual = useMemo(() => {
-    const base = wakeExecutionVisual ?? executionVisual;
+    const base = pendingExternalVisual ?? wakeExecutionVisual ?? executionVisual;
     if (!liveTurnInFlight) return base;
     return mergeOptimisticLiveChatTurn(base, productGraph);
-  }, [wakeExecutionVisual, executionVisual, liveTurnInFlight, productGraph]);
+  }, [pendingExternalVisual, wakeExecutionVisual, executionVisual, liveTurnInFlight, productGraph]);
 
   const startDraftWake = () => {
     if (consumer || agentPublished || structureLocked) return;

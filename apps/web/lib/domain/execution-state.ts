@@ -127,8 +127,19 @@ export function reduceExecutionEvents(
 
     if (t.includes("run.started") || t.includes("runtime.run.started")) {
       runStatus = "running";
-      setNode("agent", "running");
-      legacy.brain = "running";
+      // The event names what woke the run; light that trigger first and let
+      // runtime.input.received hand off to the agent. Lighting the agent here
+      // made it animate before its own trigger for Discord-born runs.
+      const startKind = (event.rawPayload ?? {}).trigger_kind;
+      if (startKind === "tool" || startKind === "schedule" || startKind === "chat") {
+        setNode(`trigger:${startKind}`, "running");
+        legacy.input = "running";
+        const e = edgeBetween(graph, `trigger:${startKind}`, "agent");
+        if (e) setEdge(e, "running");
+      } else {
+        setNode("agent", "running");
+        legacy.brain = "running";
+      }
     }
     if (t.includes("run.completed") || t.includes("runtime.run.completed")) {
       runEnded = true;

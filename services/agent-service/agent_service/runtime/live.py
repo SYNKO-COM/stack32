@@ -465,6 +465,24 @@ class LiveRuntime:
         images: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         await self.db.update_run_status(run_id, "running")
+        # The run's input already says what woke it (the trigger service
+        # stamps trigger_kind/trigger_id, schedules stamp schedule_id).
+        # run.started carries it so the live structure can light the right
+        # trigger node first instead of jumping straight to the agent.
+        trigger_kind = "chat"
+        try:
+            run_rows = await self.db._select(
+                "runs", {"id": f"eq.{run_id}", "select": "input", "limit": "1"}
+            )
+            run_input = (run_rows[0].get("input") or {}) if run_rows else {}
+            if isinstance(run_input, dict) and run_input.get("schedule_id"):
+                trigger_kind = "schedule"
+            elif isinstance(run_input, dict) and (
+                run_input.get("trigger_kind") == "tool" or run_input.get("trigger_id")
+            ):
+                trigger_kind = "tool"
+        except Exception:  # noqa: BLE001
+            trigger_kind = "chat"
         progress_id = await self.db.insert_assistant_message(
             thread_id=thread_id,
             agent_id=agent_id,
@@ -485,6 +503,7 @@ class LiveRuntime:
                 "mapping_key": "live.status.started",
                 "installation_id": installation_id,
                 "agent_definition_id": agent_id,
+                "trigger_kind": trigger_kind,
             },
             progress_id=progress_id,
         )

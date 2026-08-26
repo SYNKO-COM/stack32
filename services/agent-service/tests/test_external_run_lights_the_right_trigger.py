@@ -38,3 +38,23 @@ class TestTheTriggerServiceStampsTheOrigin:
             / "agent_service/triggers/service.py"
         ).read_text()
         assert '"trigger_kind": "tool"' in service
+
+
+class TestRunStartedNamesItsTrigger:
+    """run.started carries trigger_kind so the trigger lights before the agent."""
+
+    def test_live_runtime_stamps_the_kind_on_run_started(self):
+        live = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "agent_service/runtime/live.py"
+        ).read_text()
+        started = live.split('"run.started"')[1].split(")")[0]
+        assert '"trigger_kind": trigger_kind' in started
+
+    def test_the_kind_is_read_from_the_run_input(self):
+        live = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "agent_service/runtime/live.py"
+        ).read_text()
+        assert 'run_input.get("trigger_kind") == "tool"' in live
+        assert 'run_input.get("schedule_id")' in live
