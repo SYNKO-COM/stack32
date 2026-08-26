@@ -133,7 +133,9 @@ async def _open_checkpoint_pool(scoped_url: str):
         open=False,
         kwargs={
             "autocommit": True,
-            "prepare_threshold": 0,
+            # See _run_checkpointer: named prepared statements collide through
+            # Supavisor's transaction pooler.
+            "prepare_threshold": None,
             "row_factory": dict_row,
         },
         # Checked at hand-out, so it holds even while background workers are
@@ -191,7 +193,12 @@ async def _run_checkpointer():
             async with await psycopg.AsyncConnection.connect(
                 scoped_url,
                 autocommit=True,
-                prepare_threshold=0,
+                # DATABASE_URL points at Supavisor's transaction pooler (:6543):
+                # statements from one client land on backends polluted by other
+                # clients' named prepared statements ("_pg3_0 already exists").
+                # None disables named preparation entirely — the only mode that
+                # is safe through a transaction pooler.
+                prepare_threshold=None,
                 row_factory=dict_row,
                 connect_timeout=10,
             ) as conn:

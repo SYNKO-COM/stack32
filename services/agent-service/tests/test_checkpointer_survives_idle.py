@@ -31,7 +31,9 @@ def test_pool_verifies_a_connection_before_lending_it() -> None:
 def test_pool_keeps_the_kwargs_the_saver_depends_on() -> None:
     """AsyncPostgresSaver's queries assume how from_conn_string opens a connection."""
     source = inspect.getsource(_open_checkpoint_pool)
-    for required in ('"autocommit": True', '"prepare_threshold": 0', '"row_factory": dict_row'):
+    # prepare_threshold must stay None: named prepared statements collide
+    # through Supavisor's transaction pooler ("_pg3_0 already exists").
+    for required in ('"autocommit": True', '"prepare_threshold": None', '"row_factory": dict_row'):
         assert required in source
 
 

@@ -75,3 +75,16 @@ class TestEachRunOpensItsOwnConnection:
 
     def test_setup_runs_once_per_process(self):
         assert "_pg_setup_done" in RUNTIME
+
+
+class TestNoNamedPreparedStatementsThroughThePooler:
+    """Supavisor transaction mode shares backends; named statements collide."""
+
+    def test_the_run_connection_never_prepares(self):
+        runtime = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "agent_service/runtime/langgraph_runtime.py"
+        ).read_text()
+        assert "prepare_threshold=None" in runtime
+        assert "prepare_threshold=0" not in runtime
+        assert '"prepare_threshold": 0' not in runtime
