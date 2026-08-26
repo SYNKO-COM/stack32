@@ -71,15 +71,30 @@ export async function agentServiceFetch<T>(
     try {
       const data = (await res.json()) as {
         detail?: { code?: string; message?: string; fields?: unknown } | string;
+        error?: {
+          code?: string;
+          message?: string;
+          details?: { fields?: unknown };
+        };
       };
-      if (typeof data.detail === "object" && data.detail !== null) {
-        if (typeof data.detail.code === "string") code = data.detail.code;
-        if (typeof data.detail.message === "string") message = data.detail.message;
+      // The service wraps every HTTPException in an {"error": …} envelope;
+      // raw {"detail": …} only survives on responses the envelope handler
+      // never saw. Reading only "detail" is what turned every typed refusal
+      // (plan limits included) into a generic AGENT_SERVICE_ERROR.
+      const body =
+        typeof data.error === "object" && data.error !== null
+          ? { ...data.error, fields: data.error.details?.fields }
+          : typeof data.detail === "object" && data.detail !== null
+            ? data.detail
+            : null;
+      if (body) {
+        if (typeof body.code === "string") code = body.code;
+        if (typeof body.message === "string") message = body.message;
         // The service names the settings it is still missing. Dropping them
         // here is what left the UI saying "check the connection and the event"
         // when the real answer was "no Trello board has been chosen".
-        if (Array.isArray(data.detail.fields)) {
-          fields = data.detail.fields.filter(
+        if (Array.isArray(body.fields)) {
+          fields = body.fields.filter(
             (f): f is string => typeof f === "string" && f.trim() !== "",
           );
         }

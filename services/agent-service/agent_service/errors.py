@@ -78,13 +78,20 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request, exc: StarletteHTTPException
     ) -> JSONResponse:
         # A dict detail may override the code/message (used e.g. by auth).
+        details = None
         if isinstance(exc.detail, dict):
             code = exc.detail.get("code", _STATUS_CODES.get(exc.status_code, "http_error"))
             message = exc.detail.get("message", "An error occurred.")
+            # Routes name the settings they are missing under "fields"; the
+            # envelope must carry them or the UI falls back to a generic
+            # "check the connection" line with no idea what to fix.
+            fields = exc.detail.get("fields")
+            if isinstance(fields, list) and fields:
+                details = {"fields": fields}
         else:
             code = _STATUS_CODES.get(exc.status_code, "http_error")
             message = str(exc.detail)
-        return error_response(request, exc.status_code, code, message)
+        return error_response(request, exc.status_code, code, message, details=details)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
