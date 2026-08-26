@@ -368,6 +368,12 @@ async def run_langgraph_agent(
         if isinstance(run_input, dict) and run_input.get("schedule_id"):
             trigger_kind = "schedule"
             schedule_id = str(run_input.get("schedule_id"))
+        elif isinstance(run_input, dict) and (
+            run_input.get("trigger_kind") == "tool" or run_input.get("trigger_id")
+        ):
+            # A run born from a Pipedream event says so in its input; ignoring
+            # that lit the Chat branch in the live structure for Discord runs.
+            trigger_kind = "tool"
     except Exception:  # noqa: BLE001
         trigger_kind = "chat"
 
