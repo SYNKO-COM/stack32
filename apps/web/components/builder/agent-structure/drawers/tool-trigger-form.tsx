@@ -46,6 +46,7 @@ async function invalidateAgent(queryClient: ReturnType<typeof useQueryClient>, a
   await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "spec"] });
   await queryClient.invalidateQueries({ queryKey: ["agents", agentId, "graph"] });
   await queryClient.invalidateQueries({ queryKey: ["agent-readiness", agentId] });
+  await queryClient.invalidateQueries({ queryKey: ["agent-connections", agentId] });
   await queryClient.invalidateQueries({ queryKey: ["agent-trigger-runtime", agentId] });
 }
 
@@ -236,6 +237,7 @@ export function ToolTriggerConfigForm({
   connections,
   onSaved,
   onClose,
+  onConnectionsChanged,
 }: {
   agentId: string;
   spec?: AgentSpec | null;
@@ -244,6 +246,8 @@ export function ToolTriggerConfigForm({
   onSaved?: () => void;
   /** Closes the panel a beat after a successful save — see ToolConfigForm. */
   onClose?: () => void;
+  /** Tells the graph a connection changed, so it refetches and drops badges. */
+  onConnectionsChanged?: () => void;
 }) {
   const { t } = useTranslation("structure");
   const queryClient = useQueryClient();
@@ -336,9 +340,15 @@ export function ToolTriggerConfigForm({
     });
   }, [appId, connections]);
 
-  const connected = ["active", "connected", "ok"].includes(
-    (connection?.status || "").toLowerCase(),
-  );
+  // The prop comes from the graph's query; right after a fresh connect it is
+  // one refetch behind, which used to paint "Connectez l'application avant
+  // d'enregistrer" under a card that said Connecté. The card has already
+  // verified the account server-side when onConnected fires, so its word is
+  // enough to lift the guard while the query catches up.
+  const [locallyConnected, setLocallyConnected] = useState(false);
+  const connected =
+    locallyConnected ||
+    ["active", "connected", "ok"].includes((connection?.status || "").toLowerCase());
 
   const allProps = component.data?.props ?? [];
   const requiredProps = allProps.filter((prop) => isStructureRequiredProp(prop));
@@ -441,8 +451,15 @@ export function ToolTriggerConfigForm({
           agentId={agentId}
           status={connected ? "connected" : "needs_setup"}
           connectionId={connection?.id}
-          onConnected={() => setConnectionRefresh((v) => v + 1)}
-          onChanged={() => setConnectionRefresh((v) => v + 1)}
+          onConnected={() => {
+            setLocallyConnected(true);
+            setConnectionRefresh((v) => v + 1);
+            onConnectionsChanged?.();
+          }}
+          onChanged={() => {
+            setConnectionRefresh((v) => v + 1);
+            onConnectionsChanged?.();
+          }}
         />
       ) : null}
 

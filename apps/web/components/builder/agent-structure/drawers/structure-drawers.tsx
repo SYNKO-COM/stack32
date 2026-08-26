@@ -418,6 +418,7 @@ export function TriggerDrawer({
   connections = [],
   published,
   onSaved,
+  onConnectionsChanged,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -427,6 +428,7 @@ export function TriggerDrawer({
   connections?: AgentConnectionInfo[];
   published?: boolean;
   onSaved?: () => void;
+  onConnectionsChanged?: () => void;
 }) {
   const { t } = useTranslation("structure");
   if (!node) return null;
@@ -456,6 +458,7 @@ export function TriggerDrawer({
             connections={connections}
             onSaved={onSaved}
             onClose={() => onOpenChange(false)}
+            onConnectionsChanged={onConnectionsChanged}
           />
         ) : null
       ) : isSchedule ? (

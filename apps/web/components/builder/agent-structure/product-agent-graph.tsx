@@ -441,6 +441,7 @@ function ProductAgentGraphCanvas({
         connections={connections}
         published={agentPublished}
         onSaved={onConfigChanged}
+        onConnectionsChanged={onConnectionsChanged}
       />
       <GenericDrawer
         open={
