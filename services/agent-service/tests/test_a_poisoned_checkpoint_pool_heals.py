@@ -61,3 +61,17 @@ class TestAnInfraFailureResetsThePool:
         langgraph_runtime._pg_pool = BrokenPool()
         asyncio.run(langgraph_runtime.reset_checkpointer())
         assert langgraph_runtime._pg_pool is None
+
+
+class TestEachRunOpensItsOwnConnection:
+    """The primary checkpoint path holds no socket between requests."""
+
+    def test_the_run_scoped_checkpointer_exists(self):
+        assert "async def _run_checkpointer" in RUNTIME
+        assert "psycopg.AsyncConnection.connect" in RUNTIME
+
+    def test_the_invoke_site_uses_it(self):
+        assert "async with _run_checkpointer() as checkpointer:" in RUNTIME
+
+    def test_setup_runs_once_per_process(self):
+        assert "_pg_setup_done" in RUNTIME

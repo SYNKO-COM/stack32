@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import operator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any, TypedDict
 
 from agent_service.config import get_settings
@@ -162,6 +163,49 @@ async def reset_checkpointer() -> None:
             await asyncio.wait_for(pool.close(), timeout=5)
         except Exception:  # noqa: BLE001 - closing a broken pool must not raise
             logger.warning("checkpoint_pool_close_failed", exc_info=True)
+
+
+_pg_setup_done = False
+
+
+@asynccontextmanager
+async def _run_checkpointer():
+    """One checkpointer per run: a fresh connection, closed with the run.
+
+    Cloud Run freezes the CPU between requests, so any socket kept across
+    requests dies silently — the pooler reaps the idle client, the frozen
+    process can't even send keepalives — and the next run's checkout then
+    hung on a corpse until PoolTimeout. A per-run connection costs one
+    ~0.3s open and leaves nothing to rot between runs.
+    """
+    global _pg_setup_done
+    settings = get_settings()
+    db_url = (settings.DATABASE_URL or "").strip()
+    if db_url:
+        try:
+            import psycopg
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+            from psycopg.rows import dict_row
+
+            scoped_url = _with_checkpoint_search_path(db_url)
+            async with await psycopg.AsyncConnection.connect(
+                scoped_url,
+                autocommit=True,
+                prepare_threshold=0,
+                row_factory=dict_row,
+                connect_timeout=10,
+            ) as conn:
+                saver = AsyncPostgresSaver(conn=conn)
+                if not _pg_setup_done:
+                    await saver.setup()
+                    await _warn_if_checkpoints_escaped_the_runtime_schema(saver)
+                    _pg_setup_done = True
+                yield saver
+                return
+        except ImportError:
+            # Fall through to the legacy resolver's sync/Memory fallbacks.
+            pass
+    yield await _get_checkpointer()
 
 
 async def _get_checkpointer():
@@ -988,19 +1032,19 @@ async def run_langgraph_agent(
     graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
     graph.add_conditional_edges("tools", after_tools, {"agent": "agent", "end": END})
 
-    checkpointer = await _get_checkpointer()
-    compiled = graph.compile(checkpointer=checkpointer)
-    config = {"configurable": {"thread_id": stable_live_thread_id(thread_id, run_id)}}
-    final = await compiled.ainvoke(
-        {
-            "messages": seed_messages,
-            "tool_results": [],
-            "answer": "",
-            "steps": 0,
-            "interrupt": None,
-        },
-        config=config,
-    )
+    async with _run_checkpointer() as checkpointer:
+        compiled = graph.compile(checkpointer=checkpointer)
+        config = {"configurable": {"thread_id": stable_live_thread_id(thread_id, run_id)}}
+        final = await compiled.ainvoke(
+            {
+                "messages": seed_messages,
+                "tool_results": [],
+                "answer": "",
+                "steps": 0,
+                "interrupt": None,
+            },
+            config=config,
+        )
 
     answer = str(final.get("answer") or "")
     if not answer:
