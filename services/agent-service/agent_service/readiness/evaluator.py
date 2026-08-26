@@ -492,12 +492,17 @@ async def evaluate_agent_readiness(
             trigger_row = await configured_tool_trigger(user_id=user_id, agent_id=agent_id)
             component_id = str((trigger_row or {}).get("component_id") or "").strip()
             if component_id:
+                # configured_tool_trigger returns extra_props at the top level;
+                # this used to read config.extra_props — a key that row never
+                # has — so a fully configured trigger was judged empty and
+                # "choisissez channels" never left the banner, save or not.
                 cfg = trigger_row.get("config") if isinstance(trigger_row.get("config"), dict) else {}
+                extra = trigger_row.get("extra_props") or cfg.get("extra_props")
                 from agent_service.integrations.pipedream.client import PipedreamClient
 
                 trigger_missing = await _missing_required_static(
                     component_id=component_id,
-                    extra_props=cfg.get("extra_props"),
+                    extra_props=extra if isinstance(extra, dict) else None,
                     client=PipedreamClient(),
                 )
                 if trigger_missing:
