@@ -1629,7 +1629,12 @@ class BuilderOrchestrator:
             locale=locale,
             gateway=self.gateway,
         )
-        mode = "initial" if current_spec is None else "modify"
+        # The first build already has a spec — the identity step wrote a
+        # skeleton — so "spec exists" wrongly showed the change-review form on
+        # a brand-new agent. What makes a review a CHANGE is having current
+        # tools to preserve; with none, this is the initial pick.
+        has_current_tools = bool(current_spec and (current_spec.tools or []))
+        mode = "modify" if has_current_tools else "initial"
         form_type = "tool_change_review_form" if mode == "modify" else "tool_review_form"
         return await self._interrupt_tool_review_form(
             run_id=run_id,

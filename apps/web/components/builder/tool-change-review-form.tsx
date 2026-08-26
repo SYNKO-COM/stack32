@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, Loader2, Trash2, X } from "lucide-react";
+import { Check, Loader2, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { AppSearchField } from "@/components/builder/app-search-field";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/hooks/use-translation";
@@ -25,6 +26,8 @@ type DraftTool = BuilderToolReviewEntry & {
   key: string;
   /** User decision for proposed adds/removes. */
   decision?: "pending" | "accept" | "reject";
+  /** Added by hand here: the person writes the utility, no approve/refuse. */
+  manual?: boolean;
 };
 
 function seedFromComponent(ui: BuilderUiComponent): DraftTool[] {
@@ -150,8 +153,7 @@ function ToolCard({
               </Button>
             ) : null}
           </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">{tool.utility}</p>
-          {onUtilityChange ? (
+          {tool.manual && onUtilityChange ? (
             <Textarea
               value={tool.utility}
               onChange={(e) => onUtilityChange(e.target.value)}
@@ -160,7 +162,9 @@ function ToolCard({
               placeholder={t("toolReview.utilityPlaceholder")}
               className="min-h-[58px] resize-none text-sm"
             />
-          ) : null}
+          ) : (
+            <p className="text-xs leading-relaxed text-muted-foreground">{tool.utility}</p>
+          )}
           {showDecision && onDecision ? (
             <div className="flex flex-wrap gap-2 pt-1">
               <Button
@@ -263,6 +267,56 @@ export function ToolChangeReviewForm({
     );
   };
 
+  const [adding, setAdding] = useState(false);
+  const [addAppId, setAddAppId] = useState("");
+  const [addAppName, setAddAppName] = useState("");
+  const [addUtility, setAddUtility] = useState("");
+
+  const removeManual = (key: string) => {
+    setTools((prev) => prev.filter((tool) => tool.key !== key));
+  };
+
+  const addFromSearch = () => {
+    const appId = addAppId.trim();
+    if (!appId) {
+      setError(t("toolReview.addRequired"));
+      return;
+    }
+    if (!addUtility.trim()) {
+      setError(t("toolReview.utilityRequired"));
+      return;
+    }
+    if (tools.some((tool) => tool.appId === appId || tool.toolId === `app:${appId}`)) {
+      setError(t("toolReview.alreadyAdded"));
+      return;
+    }
+    setAdding(false);
+    setError(null);
+    const name =
+      addAppName.trim() ||
+      resolveAppDisplayName(appId) ||
+      appId.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    setTools((prev) => [
+      ...prev,
+      {
+        key: `app:${appId}-${Date.now()}`,
+        toolId: `app:${appId}`,
+        name,
+        provider: "pipedream",
+        appId,
+        utility: addUtility.trim(),
+        change: "add",
+        // Their own pick needs no approval step — deleting the card is the veto.
+        decision: "accept",
+        manual: true,
+        toolIds: [`app:${appId}`],
+      },
+    ]);
+    setAddAppId("");
+    setAddAppName("");
+    setAddUtility("");
+  };
+
   const submit = () => {
     setError(null);
     const pendingProposals = [...proposedAdds, ...proposedRemovals].filter(
@@ -352,9 +406,10 @@ export function ToolChangeReviewForm({
                   tool={tool}
                   iconsVersion={iconsVersion}
                   pending={pending}
-                  showDecision
+                  showDecision={!tool.manual}
                   onDecision={(decision) => setDecision(tool.key, decision)}
                   onUtilityChange={(utility) => updateUtility(tool.key, utility)}
+                  onRemove={tool.manual ? () => removeManual(tool.key) : undefined}
                   decisionLabels={{
                     accept: t("toolChangeReview.authorizeAdd"),
                     reject: t("toolChangeReview.refuseAdd"),
@@ -388,6 +443,61 @@ export function ToolChangeReviewForm({
             </ul>
           </section>
         ) : null}
+
+        {adding ? (
+          <div className="space-y-2.5 rounded-xl border border-border/70 bg-foreground/[0.02] p-3">
+            <AppSearchField
+              value={addAppName || addAppId}
+              onChange={() => {
+                setAddAppId("");
+                setAddAppName("");
+              }}
+              onSelect={(app) => {
+                setAddAppId(app.appId);
+                setAddAppName(app.name);
+                if (app.imgSrc) cacheIntegrationIcon(app.appId, app.imgSrc);
+              }}
+              placeholder={t("toolReview.searchPlaceholder")}
+            />
+            <Textarea
+              value={addUtility}
+              onChange={(e) => setAddUtility(e.target.value)}
+              rows={2}
+              placeholder={t("toolReview.utilityPlaceholder")}
+              className="min-h-[58px] resize-none text-sm"
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAdding(false);
+                  setAddAppId("");
+                  setAddAppName("");
+                  setAddUtility("");
+                }}
+              >
+                {t("toolReview.cancelAdd")}
+              </Button>
+              <Button type="button" size="sm" onClick={addFromSearch}>
+                {t("toolReview.confirmAdd")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setAdding(true)}
+            disabled={pending}
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {t("toolReview.addTool")}
+          </Button>
+        )}
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
