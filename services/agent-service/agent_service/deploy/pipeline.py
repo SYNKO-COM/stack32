@@ -80,11 +80,13 @@ class DeployPipeline:
         activator: Activator | None = None,
         require_smoke: bool = True,
         require_persistence: bool = True,
+        require_tests: bool = True,
     ) -> None:
         self._smoke_runner = smoke_runner
         self._activator = activator or _default_activator
         self._require_smoke = require_smoke
         self._require_persistence = require_persistence
+        self._require_tests = require_tests
 
     async def deploy_snapshot(
         self,
@@ -111,12 +113,19 @@ class DeployPipeline:
             return report
         report.stages.append(StageResult("build", "passed", {"files": len(files)}))
 
-        # 3. Tests must have passed at snapshot time.
+        # 3. Tests, when the caller requires them to have passed.
         test_status = snapshot.get("test_status", "not_run")
         if test_status not in ("passed", "passed_with_warnings"):
-            report.stages.append(StageResult("tests", "failed", {"test_status": test_status}))
-            return report
-        report.stages.append(StageResult("tests", "passed", {"test_status": test_status}))
+            if self._require_tests:
+                report.stages.append(StageResult("tests", "failed", {"test_status": test_status}))
+                return report
+            # Publishing lets the author ship an untested version on purpose.
+            # The stage is recorded as skipped carrying the real status —
+            # never promoted to "passed", so the report stays honest about
+            # what was and was not verified.
+            report.stages.append(StageResult("tests", "skipped", {"test_status": test_status}))
+        else:
+            report.stages.append(StageResult("tests", "passed", {"test_status": test_status}))
 
         # 4. Security scan (blocking on high severity).
         scan = scan_project_files(files)

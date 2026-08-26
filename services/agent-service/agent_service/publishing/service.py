@@ -245,17 +245,17 @@ class PublishService:
         )
         test_status = rows[0].get("test_status") if rows else "not_run"
         if test_status not in ("passed", "passed_with_warnings"):
-            # Fail-closed: publication needs positive proof for the exact
-            # version being published. "built + readiness ready" used to be
-            # promoted to passed_with_warnings here — but readiness has its
-            # own blind spots, and a gate that invents its proof is no gate.
-            code = "TEST_NOT_RUN" if test_status in (None, "", "not_run") else "TEST_FAILED"
+            # Publishing is the author's call, not the test runner's: a
+            # one-line tweak had to go through a full Build test before it
+            # could reach the public link, which is friction with no payoff.
+            # What stays from the old gate is its honest half — the status is
+            # never rewritten to "passed", so the version records what was
+            # actually verified.
             logger.info(
-                "publish_test_gate_blocked agent_id=%s test_status=%s",
+                "publish_without_passing_test agent_id=%s test_status=%s",
                 agent_id,
                 test_status,
             )
-            return {"error": "DEPLOYMENT_VALIDATION_FAILED", "code": code}
 
         snapshot: dict[str, Any] = {
             "id": str(version_id),
@@ -326,6 +326,9 @@ class PublishService:
             smoke_runner=smoke_runner,
             require_smoke=True,
             require_persistence=True,
+            # The author decides whether a version is ready to ship; the
+            # security scan and the staging smoke still gate the deploy.
+            require_tests=False,
         )
         report = await pipeline.deploy_snapshot(
             user_id=user_id,

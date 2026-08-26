@@ -1,20 +1,23 @@
-"""Publication needs positive proof — it never invents its own.
+"""Publication never invents proof — but it no longer withholds the button.
 
 Two shortcuts used to exist. A version whose tests never ran was promoted to
 ``passed_with_warnings`` because the agent looked built and ready; and when
 the sandbox smoke runner could not be created, a stand-in returned
 ``{"ok": True}`` — converting "unable to verify" into "verified". Both are
-gone: the gate now answers with a recoverable error and publishes nothing.
+still gone.
+
+What changed since: shipping an untested version is the author's call, so the
+test result no longer blocks publication. The honest half of the old gate
+stays — an unrun test is recorded as unrun, never as a pass.
 """
 
 from __future__ import annotations
 
 import pathlib
 
-SERVICE = (
-    pathlib.Path(__file__).resolve().parents[1]
-    / "agent_service/publishing/service.py"
-).read_text()
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+SERVICE = (ROOT / "agent_service/publishing/service.py").read_text()
+PIPELINE = (ROOT / "agent_service/deploy/pipeline.py").read_text()
 
 
 class TestTheShortcutsAreGone:
@@ -27,11 +30,27 @@ class TestTheShortcutsAreGone:
     def test_an_unavailable_verifier_blocks_with_a_recoverable_code(self):
         assert "PUBLISH_VERIFICATION_UNAVAILABLE" in SERVICE
 
-    def test_a_version_without_tests_gets_its_own_code(self):
-        # TEST_NOT_RUN tells the person what to do; TEST_FAILED would lie.
-        assert "TEST_NOT_RUN" in SERVICE
+
+class TestAnUntestedVersionCanStillShip:
+    def test_publishing_does_not_require_a_passing_test(self):
+        assert "require_tests=False" in SERVICE
+
+    def test_the_old_block_is_gone(self):
+        assert "DEPLOYMENT_VALIDATION_FAILED" not in SERVICE.split("test_status = rows[0]")[1]
+
+    def test_shipping_untested_is_recorded(self):
+        assert "publish_without_passing_test" in SERVICE
 
 
-class TestTheGateStillLetsProofThrough:
-    def test_passed_versions_are_still_accepted(self):
-        assert '("passed", "passed_with_warnings")' in SERVICE
+class TestTheReportStaysHonest:
+    def test_an_unrun_test_is_skipped_not_passed(self):
+        branch = PIPELINE.split("# 3. Tests")[1].split("# 4.")[0]
+        assert 'StageResult("tests", "skipped"' in branch
+        assert 'StageResult("tests", "passed", {"test_status": test_status})' in PIPELINE
+
+    def test_callers_that_want_the_gate_keep_it(self):
+        # Default stays strict; only publishing opts out.
+        assert "require_tests: bool = True" in PIPELINE
+
+    def test_the_security_scan_still_blocks(self):
+        assert 'StageResult("security_scan", "failed"' in PIPELINE
