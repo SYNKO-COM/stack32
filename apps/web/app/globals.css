@@ -313,6 +313,22 @@
     border: 1px solid var(--glass-border);
   }
 
+  /* A picked card must look picked. .glass sets `border` as a shorthand in
+     this same layer, so a border-brand utility on the element loses and the
+     onboarding choices showed no selection at all. Keying off the ARIA state
+     the buttons already carry wins on specificity, covers every glass option
+     grid at once, and un-paints itself the moment the choice changes. */
+  .glass[aria-checked="true"],
+  .glass[aria-selected="true"] {
+    border-color: var(--brand);
+    /* Reads as a 2px edge without growing the box — a real border-width
+       change would nudge every card by a pixel on pick and unpick. The
+       second shadow keeps the existing glow. */
+    box-shadow:
+      0 0 0 1px var(--brand),
+      var(--shadow-glow-sm);
+  }
+
   .glass-strong {
     background: var(--glass-strong-bg);
     backdrop-filter: blur(28px) saturate(160%);
