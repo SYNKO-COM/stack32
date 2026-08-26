@@ -53,3 +53,36 @@ class TestTheEnvelopeCarriesWhatTheRouteSaid:
         body = response.json()["error"]
         assert body["code"] == "CONFIG_REQUIRED"
         assert body["details"]["fields"] == ["board", "idList"]
+
+
+class TestAnEmptyProviderBalanceIsNamed:
+    """"No credits remaining" is a billing fact, not a key problem."""
+
+    def _live(self) -> str:
+        import pathlib as _p
+
+        return (
+            _p.Path(__file__).resolve().parents[1]
+            / "agent_service/runtime/live.py"
+        ).read_text()
+
+    def test_the_balance_error_gets_its_own_code(self):
+        live = self._live()
+        assert '"MODEL_PROVIDER_OUT_OF_CREDITS"' in live
+        assert "live:errors.providerOutOfCredits" in live
+
+    def test_it_is_classified_before_the_generic_provider_error(self):
+        live = self._live()
+        assert live.index("no credits remaining") < live.index(
+            '"MODEL_PROVIDER_UNAVAILABLE"'
+        )
+
+    def test_both_locales_explain_where_to_top_up(self):
+        import json
+        import pathlib as _p
+
+        web = _p.Path(__file__).resolve().parents[3] / "apps/web/locales"
+        for lang in ("fr", "en"):
+            data = json.loads((web / lang / "live.json").read_text())
+            msg = data["errors"]["providerOutOfCredits"]
+            assert "platform.openai.com" in msg

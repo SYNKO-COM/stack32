@@ -57,6 +57,7 @@
     "serviceUnavailable": "Le service agent est momentanément indisponible. Réessayez dans un instant.",
     "budgetExceeded": "Cette conversation a utilisé trop d’appels au modèle. Essayez une demande plus courte.",
     "providerUnavailable": "Le modèle de langage est indisponible. Vérifiez votre clé API ou réessayez dans un instant.",
+    "providerOutOfCredits": "Le compte OpenAI connecté à cet agent n’a plus de crédits API. Rechargez-le sur platform.openai.com (Billing) ou connectez un autre compte dans les réglages du modèle — un abonnement ChatGPT ne couvre pas l’API.",
     "toolCallFormat": "L’agent a rencontré une erreur temporaire d’outil. Réessayez.",
     "runtimeUnavailable": "Un incident technique de notre côté a interrompu l'exécution. Ce n'est pas votre agent : réessayez dans un instant."
   },

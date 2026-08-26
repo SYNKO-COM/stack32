@@ -57,6 +57,7 @@
     "serviceUnavailable": "The agent service is temporarily unavailable. Please try again in a moment.",
     "budgetExceeded": "This run used too many model calls. Try a shorter request.",
     "providerUnavailable": "The language model could not be reached. Check your API key or try again in a moment.",
+    "providerOutOfCredits": "The OpenAI account connected to this agent has no API credits left. Top it up at platform.openai.com (Billing) or connect a different account in the model settings — a ChatGPT subscription does not cover the API.",
     "toolCallFormat": "The agent hit a temporary tool error. Please try again.",
     "runtimeUnavailable": "A technical problem on our side interrupted the run. This is not your agent — try again in a moment."
   },

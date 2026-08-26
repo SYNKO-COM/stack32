@@ -1078,6 +1078,16 @@ class LiveRuntime:
             elif "tool_calls" in err_text or "tool_call_id" in err_text:
                 code = "TOOL_CALL_FORMAT"
                 content_key = "live:errors.toolCallFormat"
+            elif (
+                "no credits remaining" in err_text.lower()
+                or "insufficient_quota" in err_text.lower()
+                or "exceeded your current quota" in err_text.lower()
+            ):
+                # The provider named the real problem — an empty API balance on
+                # the account the user connected. "Check your API key" sent
+                # people hunting for a key problem that was never there.
+                code = "MODEL_PROVIDER_OUT_OF_CREDITS"
+                content_key = "live:errors.providerOutOfCredits"
             elif "MODEL_" in err_text or "AuthenticationError" in err_text:
                 code = "MODEL_PROVIDER_UNAVAILABLE"
                 content_key = "live:errors.providerUnavailable"
