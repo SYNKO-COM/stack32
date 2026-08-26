@@ -8,6 +8,7 @@ export const PLAN_LIMIT_CODES = [
   "WORKSPACE_LIMIT_REACHED",
   "PLAN_PUBLISH_REQUIRED",
   "PLAN_LIVE_MESSAGE_LIMIT",
+  "PLAN_WAKE_LIMIT",
 ] as const;
 
 export type PlanLimitCode = (typeof PLAN_LIMIT_CODES)[number];
@@ -62,6 +63,7 @@ export function planLimitCodeFromUnknown(error: unknown): PlanLimitCode | null {
   if (/WORKSPACE_LIMIT_REACHED/i.test(blob)) return "WORKSPACE_LIMIT_REACHED";
   if (/PLAN_PUBLISH_REQUIRED/i.test(blob)) return "PLAN_PUBLISH_REQUIRED";
   if (/PLAN_LIVE_MESSAGE_LIMIT|live message limit/i.test(blob)) return "PLAN_LIVE_MESSAGE_LIMIT";
+  if (/PLAN_WAKE_LIMIT/i.test(blob)) return "PLAN_WAKE_LIMIT";
   return null;
 }
 

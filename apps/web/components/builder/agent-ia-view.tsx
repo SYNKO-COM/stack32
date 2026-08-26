@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { appDisplayName } from "@/lib/integrations/app-name";
 import { appKeyFromToolId, formatList } from "@/lib/integrations/app-name";
 import { resolvePropCopy } from "@/lib/integrations/prop-labels";
+import { useUiStore } from "@/store/ui-store";
 
 const DRAFT_WAKE_MS = 10 * 60 * 1000;
 
@@ -73,6 +74,7 @@ export function AgentIaView({
 }) {
   const { t, i18n } = useTranslation(["structure", "builder"]);
   const queryClient = useQueryClient();
+  const openDialog = useUiStore((s) => s.openDialog);
   const { data: agent } = useAgent(agentId);
   const { data: graphResponse } = useAgentGraph(agentId);
   const { data: spec } = useAgentSpec(agentId);
@@ -116,6 +118,12 @@ export function AgentIaView({
     return null;
   }, [liveThread?.messages]);
 
+  // External runs (wake events, schedules, published triggers) are born on the
+  // server, so no chat message announces them; while the agent can receive one
+  // we keep polling for a live run so the structure animates. draftAwake is
+  // computed further down — the ref carries it into refetchInterval.
+  const draftAwakeRef = useRef(false);
+
   const activeRunQuery = useQuery({
     queryKey: ["active-live-run", agentId],
     enabled: Boolean(agentId),
@@ -135,6 +143,7 @@ export function AgentIaView({
       const msgs = liveThread?.messages ?? [];
       const last = msgs[msgs.length - 1];
       if (last?.role === "user" || last?.pending) return 2200;
+      if (consumer || agentPublished || draftAwakeRef.current) return 3000;
       return false;
     },
     queryFn: async () => {
@@ -335,6 +344,15 @@ export function AgentIaView({
     ((wakeUntilMs != null && nowMs < wakeUntilMs) ||
       triggerRuntime.data?.status === "listening");
 
+  useEffect(() => {
+    draftAwakeRef.current = draftAwake;
+    // Kick one fetch when the agent wakes: the fetch's completion re-evaluates
+    // refetchInterval, which now sees the ref and keeps polling.
+    if (draftAwake) {
+      void queryClient.invalidateQueries({ queryKey: ["active-live-run", agentId] });
+    }
+  }, [draftAwake, agentId, queryClient]);
+
   const wakeExecutionVisual = useMemo((): ExecutionVisualState | undefined => {
     if (visualRunId || !draftAwake) return executionVisual;
     const nodes: ExecutionVisualState["nodes"] = {};
@@ -383,6 +401,10 @@ export function AgentIaView({
       const result = await startAgentTriggerListen(agentId);
       if (!result.ok) {
         setWakeUntilMs(null);
+        if (result.code === "PLAN_WAKE_LIMIT") {
+          openDialog("upgrade");
+          return;
+        }
         // Name what is actually missing. The per-code sentences used to be
         // written for Google Sheets ("Connectez Google Sheets", "fichier,
         // feuille…"), so a Trello trigger missing its board was told to check

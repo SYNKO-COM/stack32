@@ -25,6 +25,7 @@ export function agentServiceErrorKey(error: unknown): string {
       PLAN_PUBLISH_REQUIRED: "errors:publish.planRequired",
       PLAN_AGENT_LIMIT: "errors:plan.agentLimit",
       PLAN_LIVE_MESSAGE_LIMIT: "errors:plan.liveMessageLimit",
+      PLAN_WAKE_LIMIT: "errors:plan.wakeLimit",
       WORKSPACE_LIMIT_REACHED: "errors:plan.workspaceLimit",
       AGENT_SPEC_INVALID: "errors:publish.specInvalid",
       DEPLOYMENT_VALIDATION_FAILED: "errors:publish.validationFailed",

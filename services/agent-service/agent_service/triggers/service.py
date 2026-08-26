@@ -226,11 +226,18 @@ async def configured_tool_trigger(*, user_id: str, agent_id: str) -> dict[str, A
     for row in rows:
         if not row.get("enabled", True) or not row.get("component_id"):
             continue
+        # The table stores the trigger's settings under config.extra_props
+        # (see the Structure save path). Reading a top-level extra_props that
+        # the row never carries returned {} for a fully configured trigger —
+        # readiness kept demanding "channels", and a spec rebuilt from this
+        # row silently dropped the settings the person had saved.
+        cfg = row.get("config") if isinstance(row.get("config"), dict) else {}
+        extra = row.get("extra_props") or cfg.get("extra_props") or {}
         return {
             "app_id": row.get("app_id"),
             "component_id": row.get("component_id"),
             "label": row.get("label"),
-            "extra_props": row.get("extra_props") or {},
+            "extra_props": extra if isinstance(extra, dict) else {},
         }
     return None
 

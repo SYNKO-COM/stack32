@@ -7,7 +7,8 @@
   "plan": {
     "agentLimit": "Your free plan allows one agent for life — deleting it does not unlock another. Upgrade to create more.",
     "workspaceLimit": "Your plan allows one workspace. Upgrade to add more.",
-    "liveMessageLimit": "Free plan allows 10 Agent IA messages. Upgrade to keep chatting."
+    "liveMessageLimit": "Free plan allows 10 Agent IA messages. Upgrade to keep chatting.",
+    "wakeLimit": "Free plan allows 3 wake-ups. Upgrade to keep your agent listening."
   },
   "builder": {
     "inputRejected": "That message couldn't be processed. Try rephrasing your request.",

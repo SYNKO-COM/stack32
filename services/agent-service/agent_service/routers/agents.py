@@ -528,14 +528,64 @@ async def start_trigger_listen(agent_id: UUID, user: CurrentUser) -> dict[str, A
     if not agent:
         raise _not_found()
     published = str(agent.get("status") or "") == "published"
+
+    # Free plan: three wakes, ever. Each wake deploys a real Pipedream source
+    # on the platform's account; past three, listening is a paid feature.
+    # Counted as usage_events so the ledger doubles as the counter and the
+    # analytics see wakes like any other consumption. Fail-open on lookup
+    # errors: a broken counter must not lock every free user out of the demo.
+    try:
+        from agent_service.security.llm_budget import resolve_budget_context
+
+        _, plan_key, _ = await resolve_budget_context(user.user_id)
+        if plan_key == "free":
+            async with get_supabase_admin_client() as counter:
+                response = await counter.get(
+                    "/usage_events",
+                    params={
+                        "user_id": f"eq.{user.user_id}",
+                        "event_name": "eq.trigger.wake",
+                        "select": "id",
+                        "limit": "3",
+                    },
+                )
+                used = len(response.json() or []) if response.status_code < 400 else 0
+            if used >= 3:
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "code": "PLAN_WAKE_LIMIT",
+                        "message": "Free plan allows three wakes; subscribe to keep listening.",
+                    },
+                )
+    except HTTPException:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.warning("wake_limit_check_failed user=%s", user.user_id, exc_info=True)
+
     try:
         async with get_supabase_admin_client() as client:
-            return await listen_tool_trigger(
+            result = await listen_tool_trigger(
                 user_id=user.user_id,
                 agent_id=str(agent_id),
                 published=published,
                 client=client,
             )
+        # Record the wake only once it actually started.
+        try:
+            await get_persistence().record_usage_event(
+                user_id=user.user_id,
+                agent_id=str(agent_id),
+                run_id=None,
+                event_name="trigger.wake",
+                quantity=1,
+                unit="wake",
+                estimated_cost=0,
+                metadata={"published": published},
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("wake_usage_write_failed agent=%s", agent_id, exc_info=True)
+        return result
     except TriggerServiceError as exc:
         raise HTTPException(
             status_code=400,
