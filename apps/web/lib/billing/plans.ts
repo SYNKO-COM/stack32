@@ -45,11 +45,11 @@ export const PLANS: Record<PlanKey, PlanDefinition> = {
     key: "free",
     monthlyPriceUsd: 0,
     annualMonthlyPriceUsd: 0,
-    // 10 credits at exactly the Pro rate ($0.055). A balance carried over
+    // 6 credits at exactly the Pro rate ($0.055). A balance carried over
     // from a lapsed subscription converts one-for-one, and the gauge clamps
     // the display to this ceiling.
-    baseCredits: 10,
-    baseBudgetUsd: 0.55,
+    baseCredits: 6,
+    baseBudgetUsd: 0.33,
     maxWorkspaces: 1,
     maxAgents: 1,
     maxLiveMessages: 10,

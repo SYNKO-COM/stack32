@@ -38,14 +38,11 @@ PLANS: dict[PlanKey, PlanDefinition] = {
         key="free",
         monthly_price_usd=0,
         annual_monthly_price_usd=0,
-        # A first real build costs ~$1 on the codex ladder; $0.20 stopped every
-        # free user at a fifth of their first agent, upgrade popup in hand,
-        # without ever seeing it work. Twenty-five credits at exactly the Pro
-        # rate ($0.055) covers one full build with room for a couple of live
-        # turns, and makes a balance carried over from a lapsed subscription
-        # convert one-for-one instead of drifting 6%.
-        base_credits=10,
-        base_budget_usd=0.55,
+        # Six credits at exactly the Pro rate ($0.055/credit) — a deliberate
+        # taste of the product, not a full first build. A balance carried over
+        # from a lapsed subscription still converts one-for-one.
+        base_credits=6,
+        base_budget_usd=0.33,
         credits_renew=False,
         max_workspaces=1,
         max_agents=1,

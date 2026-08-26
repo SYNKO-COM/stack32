@@ -17,9 +17,9 @@ class TestThePlanCatalogueSaysIt:
         for key in ("starter", "pro", "scale"):
             assert PLANS[key].credits_renew is True, key
 
-    def test_the_free_grant_is_ten(self):
-        assert PLANS["free"].base_credits == 10
-        assert abs(PLANS["free"].base_budget_usd - 0.55) < 0.001
+    def test_the_free_grant_is_six(self):
+        assert PLANS["free"].base_credits == 6
+        assert abs(PLANS["free"].base_budget_usd - 0.33) < 0.001
 
 
 class TestTheMigrationCarriesTheRule:
@@ -28,7 +28,7 @@ class TestTheMigrationCarriesTheRule:
 
         root = pathlib.Path(__file__).resolve().parents[3]
         # The newest migration is the live definition; guard that one.
-        path = root / "supabase/migrations/20260907000001_free_grant_is_ten_credits.sql"
+        path = root / "supabase/migrations/20260909000001_free_grant_is_six_credits.sql"
         return path.read_text()
 
     def test_the_free_window_opens_at_account_creation(self):

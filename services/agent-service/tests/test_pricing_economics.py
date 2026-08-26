@@ -35,11 +35,11 @@ def test_starter_monthly_budget():
     assert abs(budget - 6.0) < 0.01
 
 
-def test_free_budget_matches_its_ten_credit_grant():
-    # The free grant is 10 credits priced at the Pro rate, so the budget is
+def test_free_budget_matches_its_six_credit_grant():
+    # The free grant is 6 credits priced at the Pro rate, so the budget is
     # exactly what those credits are worth — no more, no less.
-    budget = effective_ai_budget_usd("free", billing_interval="monthly", credits_monthly=10)
-    assert abs(budget - 0.55) < 0.01
+    budget = effective_ai_budget_usd("free", billing_interval="monthly", credits_monthly=6)
+    assert abs(budget - 0.33) < 0.01
 
 
 def test_usd_per_credit_starter():

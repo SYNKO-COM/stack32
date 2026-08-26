@@ -56,7 +56,7 @@ describe("billing plans", () => {
   it("clamps credits to plan ladder", () => {
     expect(clampCreditsForPlan("pro", 100)).toBe(200);
     expect(clampCreditsForPlan("starter", 10_000)).toBe(10_000);
-    // Free is a fixed one-time grant: any request collapses to its 10 credits.
-    expect(clampCreditsForPlan("free", 500)).toBe(10);
+    // Free is a fixed one-time grant: any request collapses to its 6 credits.
+    expect(clampCreditsForPlan("free", 500)).toBe(6);
   });
 });
