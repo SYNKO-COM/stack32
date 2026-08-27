@@ -60,6 +60,11 @@ steps:
       # Cloud Run kills it, Cloud Tasks retries the same run up to 5 times and
       # the whole LLM build is paid for again.
       - --timeout=3600
+      # A cold start added ~5s before a Pipedream event reached the webhook
+      # and ~5s more before the worker picked the run up. One warm instance
+      # on each (the worker inherits via the describe/replace clone below) is
+      # what "the agent reacts the moment the message lands" costs.
+      - --min-instances=1
       - --quiet
 
   # Builds are hour-long requests; sharing the API's instances lets a handful
