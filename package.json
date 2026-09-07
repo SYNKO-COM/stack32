@@ -40,6 +40,6 @@
     "supabase:test": "supabase test db"
   },
   "devDependencies": {
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.13"
   }
 }
