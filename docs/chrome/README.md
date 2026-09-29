@@ -1,5 +1,8 @@
 # Stack32 Chrome BETA 0.1.0 — pré-production
 
+> Mise à jour du 29 septembre : le propriétaire autorise explicitement les clés fournisseurs live en préproduction. Le contrôle autorise uniquement les neuf références connues ; base, JWT, chiffrement, token interne et cibles de déploiement restent préprod. Les blocages historiques ci-dessous sont conservés comme état antérieur ; le déploiement est en cours. Le dashboard Chrome Web Store est ouvert selon le propriétaire, mais l’outil refuse son automatisation (« The extensions gallery cannot be scripted »).
+
+
 État au 29 septembre 2026 : implémentation et package locaux ; **aucun déploiement, aucune migration distante, aucune fusion et aucune soumission Google effectués**. L’essai complet connecté à Stack32 reste bloqué par l’isolation des secrets de pré-production. Voir [validation](VALIDATION.md), [déploiement](DEPLOYMENT.md) et [dossier Chrome Web Store](STORE.md).
 
 ## Cibles identifiées avant les modifications

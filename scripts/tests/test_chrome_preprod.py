@@ -20,9 +20,14 @@ class GuardTests(unittest.TestCase):
     def test_isolated_metadata_passes(self):
         self.assertEqual(guard.inspect(self.config())[1], [])
 
-    def test_production_ref_is_refused(self):
+    def test_explicitly_authorized_provider_ref_is_allowed(self):
         config = self.config()
         config['spec']['template']['spec']['containers'][0]['env'].append({'name':'OPENAI_API_KEY','valueFrom':{'secretKeyRef':{'name':'stack32-production-openai-api-key'}}})
+        self.assertEqual(guard.inspect(config)[1], [])
+
+    def test_shared_database_ref_is_always_refused(self):
+        config = self.config()
+        config['spec']['template']['spec']['containers'][0]['env'].append({'name':'DATABASE_URL','valueFrom':{'secretKeyRef':{'name':'stack32-production-supabase-database-url'}}})
         self.assertIn('not dedicated', guard.inspect(config)[1][0])
 
     def test_unknown_target_is_refused(self):

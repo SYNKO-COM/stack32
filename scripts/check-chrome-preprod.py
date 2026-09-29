@@ -9,6 +9,19 @@ from pathlib import Path
 ORIGIN = 'https://pre-prod-659874458xx.stack32.com'
 DATABASE = 'https://fbqjuqnkemlofklrjeuo.supabase.co'
 EXPECTED = {'stack32-agent-api-preprod', 'stack32-agent-worker-preprod'}
+# Shared provider keys explicitly authorized by the project owner on 2026-09-29.
+# This exception never covers database, user auth, encryption or internal tokens.
+SHARED_PROVIDER_REFS = {
+    'OPENAI_API_KEY': 'stack32-production-openai-api-key',
+    'XAI_API_KEY': 'stack32-production-xai-api-key',
+    'ANTHROPIC_API_KEY': 'stack32-production-anthropic-api-key',
+    'E2B_API_KEY': 'stack32-production-e2b-api-key',
+    'WEB_SEARCH_API_KEY': 'stack32-production-web-search-api-key',
+    'PIPEDREAM_CLIENT_ID': 'stack32-production-pipedream-client-id',
+    'PIPEDREAM_CLIENT_SECRET': 'stack32-production-pipedream-client-secret',
+    'PIPEDREAM_PROJECT_ID': 'stack32-production-pipedream-project-id',
+    'SENTRY_DSN': 'stack32-production-sentry-dsn',
+}
 
 def inspect(config):
     name = config.get('metadata', {}).get('name')
@@ -21,7 +34,7 @@ def inspect(config):
             errors.append(f'{key}: missing or unexpected preproduction configuration')
     for key, entry in env.items():
         ref = entry.get('valueFrom', {}).get('secretKeyRef', {}).get('name')
-        if ref and not ref.startswith('stack32-preprod-'):
+        if ref and not ref.startswith('stack32-preprod-') and SHARED_PROVIDER_REFS.get(key) != ref:
             errors.append(f'{key}: secret {ref} is not dedicated to preproduction')
         if not ref and any(part in key for part in ('API_KEY','CLIENT_SECRET','SERVICE_ROLE_KEY','DATABASE_URL','ENCRYPTION_KEY','INTERNAL_SERVICE_TOKEN')):
             errors.append(f'{key}: use an identifiable preproduction Secret Manager reference')

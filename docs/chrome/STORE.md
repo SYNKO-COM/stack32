@@ -1,5 +1,8 @@
 # Dossier Chrome Web Store — distribution privée seulement
 
+> Mise à jour du 29 septembre : le propriétaire autorise explicitement les clés fournisseurs live en préproduction. Le contrôle autorise uniquement les neuf références connues ; base, JWT, chiffrement, token interne et cibles de déploiement restent préprod. Les blocages historiques ci-dessous sont conservés comme état antérieur ; le déploiement est en cours. Le dashboard Chrome Web Store est ouvert selon le propriétaire, mais l’outil refuse son automatisation (« The extensions gallery cannot be scripted »).
+
+
 ## État
 
 Version : **0.1.0**. Nom : **Stack32 Chrome BETA**. Package : `apps/web/public/downloads/stack32-chrome-preprod-0.1.0.zip`. Génération reproductible : `python3 scripts/package-chrome.py`. Le ZIP ne contient ni tests, ni source map, ni secrets, ni code téléchargé à l’exécution.

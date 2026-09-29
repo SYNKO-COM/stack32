@@ -4,7 +4,7 @@
 # Same gates as production: nothing deploys unless the service's own tests pass.
 # Build context MUST be services/ (Dockerfile copies stack32-agent-runtime + agent-service).
 steps:
-  # Chrome must not start on the historical shared production provider secrets.
+  # Enforce preprod data/auth targets; only explicitly approved provider refs may be shared.
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     id: Verify-preprod-isolation
     entrypoint: bash
