@@ -181,7 +181,21 @@ async def _process_run_by_id_inner(
         if not published:
             # A consumer's queued chat must use its pinned published version,
             # not try to load the creator's private draft with the consumer ID.
-            published = not bool(await db.get_owned_agent(agent_id, user_id))
+            if not await db.get_owned_agent(agent_id, user_id):
+                public = await db._select(
+                    "agents",
+                    {
+                        "id": f"eq.{agent_id}",
+                        "status": "eq.published",
+                        "deleted_at": "is.null",
+                        "select": "id",
+                        "limit": "1",
+                    },
+                )
+                if not public:
+                    await db.fail_run(run_id, "AGENT_UNAVAILABLE")
+                    return {"error": "AGENT_UNAVAILABLE"}
+                published = True
         if published:
             spec = await load_published_spec_for_external_run(
                 db,

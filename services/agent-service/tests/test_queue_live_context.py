@@ -21,6 +21,7 @@ async def test_queued_live_keeps_installation_and_definition(
     published = object()
     db = SimpleNamespace(
         get_owned_agent=AsyncMock(return_value={"id": "agent"} if owner else None),
+        _select=AsyncMock(return_value=[{"id": "agent"}]),
         load_draft_spec=AsyncMock(return_value=draft),
         fail_run=AsyncMock(),
     )
@@ -76,3 +77,26 @@ async def test_queued_live_without_installation_stays_unbound(monkeypatch):
     )
 
     assert execute.await_args.kwargs["installation_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_consumer_queue_stops_if_agent_is_no_longer_published(monkeypatch):
+    db = SimpleNamespace(
+        get_owned_agent=AsyncMock(return_value=None),
+        _select=AsyncMock(return_value=[]),
+        fail_run=AsyncMock(),
+    )
+    execute = AsyncMock()
+    monkeypatch.setattr(live, "LiveRuntime", lambda _: SimpleNamespace(execute_live_run=execute))
+
+    result = await worker._process_run_by_id_inner(
+        db=db,
+        run={"status": "queued", "run_type": "live", "thread_id": "thread", "input": {"prompt": "Read"}},
+        run_id="run",
+        user_id="subscriber",
+        agent_id="agent",
+    )
+
+    assert result == {"error": "AGENT_UNAVAILABLE"}
+    db.fail_run.assert_awaited_once_with("run", "AGENT_UNAVAILABLE")
+    execute.assert_not_awaited()
