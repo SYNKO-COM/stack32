@@ -657,6 +657,21 @@ def _native_capability_words() -> set[str]:
         words.add(compact.replace("_", " "))
         words.add(compact.replace("_", ""))
         words.update(part for part in compact.split("_") if len(part) > 2)
+    # Chrome is a first-party, user-authorized runtime capability. It is
+    # exposed dynamically after pairing, rather than in the static native
+    # tool catalog, so it must still be excluded from Pipedream app search.
+    browser_names = {
+        "chrome",
+        "google chrome",
+        "chrome browser",
+        "browser",
+        "navigateur",
+        "navigateur chrome",
+        "chrome extension",
+        "extension chrome",
+    }
+    words.update(browser_names)
+    words.update(name.replace(" ", "_") for name in browser_names)
     return words
 
 

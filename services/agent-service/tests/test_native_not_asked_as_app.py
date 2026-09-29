@@ -48,6 +48,36 @@ def test_the_timestamp_request_that_broke_the_build():
     assert not any("datetime" in q or q == "current" for q in out)
 
 
+@pytest.mark.parametrize(
+    "hint",
+    ["chrome", "google chrome", "chrome browser", "navigateur Chrome", "chrome access"],
+)
+def test_chrome_browser_capability_is_not_a_pipedream_app(hint):
+    prompt = "Rédige en français et demande Chrome seulement pour la page connectée"
+    assert extract_external_app_queries(prompt, llm_hints=[hint]) == []
+
+
+@pytest.mark.asyncio
+async def test_chrome_never_reaches_app_clarification():
+    from agent_service.builder.capabilities import resolve_pipedream_app
+
+    ambiguous: list = []
+
+    async def never_called(*a, **k):  # pragma: no cover - must not run
+        raise AssertionError("the app catalog should not be searched for Chrome")
+
+    result = await resolve_pipedream_app(
+        app_query="chrome",
+        prompt="Utilise Chrome pour mon onglet connecté",
+        registry=object(),
+        search=never_called,
+        add_binding=lambda b: None,
+        ambiguous=ambiguous,
+    )
+    assert result is None
+    assert ambiguous == []
+
+
 @pytest.mark.asyncio
 async def test_the_clarification_form_refuses_a_native_capability():
     """Belt and braces: the guard sits at the form itself, not only upstream."""
