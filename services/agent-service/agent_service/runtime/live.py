@@ -429,6 +429,9 @@ class LiveRuntime:
             input_payload={
                 "prompt": content,
                 "image_count": len(image_payloads),
+                # The worker must choose the same immutable/draft definition
+                # that was authorized when this turn was accepted.
+                "use_published": bool(published_only or use_published),
             },
             installation_id=installation_id,
         )

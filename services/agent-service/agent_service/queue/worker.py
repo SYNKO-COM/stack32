@@ -168,19 +168,25 @@ async def _process_run_by_id_inner(
 
         runtime = LiveRuntime(db)
         payload = run.get("input") or {}
+        installation_id = (
+            str(run.get("installation_id") or payload.get("installation_id") or "")
+            or None
+        )
         # A run born from the outside world — a Pipedream event or a schedule
         # tick — executes the published immutable version. The draft belongs
         # to the owner's workbench: it may be mid-rewrite, unverified, or
         # broken, and an external event must never run it.
         external = bool(payload.get("trigger_id") or payload.get("schedule_id"))
-        if external:
+        published = external or payload.get("use_published") is True
+        if not published:
+            # A consumer's queued chat must use its pinned published version,
+            # not try to load the creator's private draft with the consumer ID.
+            published = not bool(await db.get_owned_agent(agent_id, user_id))
+        if published:
             spec = await load_published_spec_for_external_run(
                 db,
                 agent_id=agent_id,
-                installation_id=(
-                    str(run.get("installation_id") or payload.get("installation_id") or "")
-                    or None
-                ),
+                installation_id=installation_id,
             )
         else:
             spec = await db.load_draft_spec(agent_id, user_id)
@@ -195,6 +201,7 @@ async def _process_run_by_id_inner(
             thread_id=thread_id,
             content=content,
             spec=spec,
+            installation_id=installation_id,
         )
         # Scheduled runs may request a terminal email. Delivery is best-effort:
         # a failure is recorded but must never change the run outcome.
