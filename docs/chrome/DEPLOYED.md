@@ -1,5 +1,16 @@
 # Déploiement réel du 29 septembre 2026
 
+## Actualisation après essais dans Chrome (29 septembre, 18 h 40 Paris)
+
+- Correctif de reconnaissance de Chrome comme capacité native : [PR #16](https://github.com/SYNKO-COM/stack32/pull/16), intégré à `preprod`. Le builder ne demande plus de choisir une application SaaS pour « Chrome ».
+- Correctif des exécutions en file : [PR #17](https://github.com/SYNKO-COM/stack32/pull/17), commit intégré `d0e12f3a2d5bbb87822c238bd4d6c989093b61c6`. L'ID d'installation est transmis au runtime ; une conversation d'abonné utilise sa version publiée épinglée ; une dépublication entre mise en file et exécution arrête la tâche.
+- CI des deux PR : tous les contrôles réussis. Après le second correctif, Cloud Build `1bdce11f-eee1-4d04-bb33-171568bfe9a5` est **SUCCESS** ; API `stack32-agent-api-preprod-00098-6pz` et worker `stack32-agent-worker-preprod-00027-5d4` sont Ready, `CHROME_ENABLED=true` sur les deux.
+- Dans le vrai Chrome de l'utilisateur, le formulaire Outils montre Chrome coché par défaut et explique que la capacité ne donne aucun accès. Un agent de rédaction créé sur préprod a rédigé sans demander Chrome. Le builder a ensuite accepté les instructions de navigation sans confondre Chrome avec une intégration.
+- Agent de test **Rédacteur préprod temporaire** publié uniquement sur [le domaine préprod](https://pre-prod-659874458xx.stack32.com/@klorv/redacteur-preprod-temporaire) ; sa page publique s'ouvre. Une tâche de lecture de `#task-region` a renvoyé le lien d'appairage et « No browser action has run ». Le journal du worker de cette exécution contient `tools=6`, ce qui confirme que les outils sont désormais présents dans la composition du modèle.
+- L'utilisateur a chargé et activé localement l'extension non empaquetée **Stack32 Chrome BETA 0.1.0**, d'après sa capture. L'onglet fictif `/browser/test` a été rouvert ; il affiche toujours « No action performed ».
+
+**Toujours non validé dans le vrai navigateur :** saisie du code dans la fenêtre de l'extension, geste `activeTab`, autorisation de la lecture, retour du résultat à l'agent, puis révocation. Le clic sur l'icône et la confirmation du contenu appartiennent à l'utilisateur ; ne pas assimiler le chargement de l'extension à une session autorisée. La soumission Chrome Web Store reste à faire.
+
 ## Résultat
 
 Fonctionnalité déployée et activée **uniquement en préproduction**. L’extension 0.1.0 est disponible en ZIP à charger localement. Aucune publication Chrome Web Store, aucune fusion dans `main`, aucune migration ou configuration de production.
