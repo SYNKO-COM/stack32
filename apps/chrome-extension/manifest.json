@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Stack32 Chrome BETA",
+  "version": "0.1.0",
+  "description": "THIS EXTENSION IS FOR BETA TESTING. Give your Stack32 agent temporary access to a tab you choose.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://stack32-agent-api-preprod-spxecrm6bq-ew.a.run.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Stack32 \u2014 Authorize this tab / Autoriser cet onglet"
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src https://stack32-agent-api-preprod-spxecrm6bq-ew.a.run.app"
+  },
+  "minimum_chrome_version": "106"
+}

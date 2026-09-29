@@ -334,7 +334,11 @@
     "utilityRequired": "Indiquez une utilité pour chaque outil.",
     "addRequired": "Choisissez une app à ajouter.",
     "alreadyAdded": "Cet outil est déjà dans la liste.",
-    "error": "Impossible d’enregistrer les outils. Réessayez."
+    "error": "Impossible d’enregistrer les outils. Réessayez.",
+    "chromeName": "Navigateur Chrome",
+    "chromeDescription": "Permet aux personnes utilisant cet agent de lui donner accès à leur navigateur lorsqu’une tâche le nécessite. Chacun devra installer l’extension et autoriser son propre onglet. Aucun accès n’est accordé ici.",
+    "chromePublication": "La désactivation bloque les nouvelles actions de tous les utilisateurs. Une activation nécessite de republier l’agent et ne donne aucun accès à un navigateur.",
+    "chromeSaveError": "Le réglage n’a pas été enregistré. Réessayez."
   },
   "toolChangeReview": {
     "title": "Valider les changements d’outils",

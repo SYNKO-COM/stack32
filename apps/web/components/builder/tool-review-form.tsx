@@ -116,6 +116,8 @@ export function ToolReviewForm({
   const [adding, setAdding] = useState(false);
   const [iconsVersion, setIconsVersion] = useState(0);
 
+  const [chromeEnabled, setChromeEnabled] = useState(uiComponent.chromeEnabled ?? true);
+
   const mode = uiComponent.mode === "modify" ? "modify" : "initial";
   const visible = useMemo(
     () => tools.filter((tool) => tool.change !== "remove"),
@@ -215,6 +217,7 @@ export function ToolReviewForm({
       try {
         await submitBuilderToolReview({
           runId,
+          chromeEnabled,
           tools: finalTools.map((tool) => ({
             toolId: tool.toolId,
             provider: tool.provider,
@@ -245,6 +248,11 @@ export function ToolReviewForm({
       </div>
 
       <div className="space-y-3 p-4">
+        <label className="flex items-start gap-3 rounded-xl border border-border/70 p-3">
+          <input type="checkbox" checked={chromeEnabled} onChange={(e) => setChromeEnabled(e.target.checked)} disabled={pending} className="mt-1" />
+          <span><span className="block text-sm font-medium">{t("toolReview.chromeName")}</span>
+            <span className="block text-xs text-muted-foreground">{t("toolReview.chromeDescription")}</span></span>
+        </label>
         {visible.length === 0 && proposedRemovals.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border/70 px-3 py-6 text-center text-sm text-muted-foreground">
             {t("toolReview.empty")}

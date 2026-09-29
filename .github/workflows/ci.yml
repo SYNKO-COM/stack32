@@ -28,6 +28,23 @@ jobs:
         env:
           NEXT_PUBLIC_DATA_MODE: mock
 
+  chrome:
+    name: Chrome (MV3 package and isolated Chromium tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @stack32/web exec playwright install --with-deps chromium
+      - run: pnpm test:chrome
+      - run: python3 -m unittest discover -s scripts/tests
+      - run: python3 scripts/package-chrome.py
+      - run: git diff --exit-code -- apps/web/public/downloads/
+
   db:
     name: Database (lint, pgTAP, generated types)
     runs-on: ubuntu-latest

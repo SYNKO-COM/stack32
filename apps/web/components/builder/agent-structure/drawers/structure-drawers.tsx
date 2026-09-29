@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
+import { ChromeCapabilityToggle } from "@/components/builder/chrome-capability-toggle";
 import { ToolConfigForm } from "@/components/builder/tool-config-form";
 import { representativeToolId } from "@/lib/integrations/representative-tool";
 import {
@@ -364,6 +365,8 @@ export function AgentDrawer({
           </div>
         ) : null}
       </dl>
+
+      <ChromeCapabilityToggle key={`${agentId}:chrome:${spec?.chromeEnabled}`} agentId={agentId} enabled={spec?.chromeEnabled === true} onSaved={onSaved} />
 
       <DetailBlock title={t("panel.triggersTitle")}>
         <AgentScheduleToggle

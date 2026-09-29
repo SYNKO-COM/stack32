@@ -74,5 +74,24 @@
     "denied": "Refusé — l’agent n’exécutera pas cette action.",
     "missing": "Les détails d’approbation manquent. Renvoyez votre demande.",
     "error": "Impossible d’enregistrer votre décision. Réessayez."
+  },
+  "browser": {
+    "title": "Navigateur Chrome",
+    "explanation": "Cet agent peut demander Chrome, mais il n’a encore aucun accès. Autorisez uniquement votre propre onglet pour cette tâche.",
+    "install": "Installez l’extension de pré-production si elle est absente.",
+    "download": "Télécharger l’extension BETA (ZIP)",
+    "unpack": "Décompressez le ZIP, ouvrez chrome://extensions, activez le mode développeur, puis « Charger l’extension non empaquetée » et choisissez le dossier décompressé.",
+    "pair": "Reliez l’extension à votre compte Stack32 pour ce site.",
+    "connect": "Créer mon code d’appairage",
+    "authorize": "Ouvrez le site concerné, cliquez sur l’icône Stack32 de Chrome, puis collez le code et autorisez cet onglet.",
+    "idle": "Aucune session active.",
+    "pairing": "Code valable 2 minutes. Ne le partagez pas.",
+    "active": "Chrome est connecté. Revenez à la conversation et demandez à l’agent de continuer.",
+    "stopped": "Accès arrêté. Aucune nouvelle action navigateur autorisée.",
+    "error": "Connexion impossible : connectez-vous à votre compte de pré-production et vérifiez que Chrome est activé pour cet agent. Le service peut aussi être désactivé.",
+    "keepOpen": "Gardez cette page et la fenêtre de contrôle de l’extension ouvertes. La session expire après 15 minutes.",
+    "stop": "Arrêter et retirer l’accès",
+    "limits": "Chaque interaction demande votre confirmation dans l’extension. Les formulaires dont le contenu exact ne peut pas être vérifié nécessitent une action manuelle. Aucune action n’est considérée réussie avant vérification.",
+    "privacy": "Confidentialité de l’extension"
   }
 }

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Stack32 Chrome BETA</title>
+    <link rel="stylesheet" href="control.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/48.png" alt="" width="32" height="32" />
+      <h1>Stack32 Chrome BETA</h1>
+      <button id="language">FR / EN</button>
+    </header>
+    <p id="intro"></p>
+    <strong id="site"></strong>
+    <p id="agent"></p>
+    <section id="pair">
+      <label id="codeLabel" for="code"></label
+      ><input
+        id="code"
+        type="password"
+        autocomplete="off"
+        maxlength="64"
+      /><button id="connect"></button>
+    </section>
+    <p id="status" role="status" aria-live="polite"></p>
+    <p id="expires"></p>
+    <section id="command" hidden>
+      <h2 id="reviewTitle"></h2>
+      <p id="purpose"></p>
+      <pre id="preview"></pre>
+      <p id="reviewWarning"></p>
+      <button id="approve"></button><button id="deny"></button>
+    </section>
+    <footer><button id="stop"></button><button id="revoke"></button></footer>
+    <a
+      href="https://pre-prod-659874458xx.stack32.com/browser/privacy"
+      target="_blank"
+      rel="noreferrer"
+      >Privacy / Confidentialité</a
+    >
+    <script type="module" src="control.js"></script>
+  </body>
+</html>

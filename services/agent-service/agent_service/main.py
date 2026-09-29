@@ -12,6 +12,7 @@ from agent_service.logging_config import setup_logging
 from agent_service.middleware import RequestIDMiddleware
 from agent_service.routers import (
     agents,
+    browser,
     builder,
     connections,
     health,
@@ -133,6 +134,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
 
     v1 = APIRouter(prefix="/v1")
+    v1.include_router(browser.router)
     v1.include_router(agents.router)
     v1.include_router(builder.router)
     v1.include_router(secrets.router)

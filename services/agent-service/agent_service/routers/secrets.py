@@ -64,6 +64,7 @@ class BuilderToolReviewItem(BaseModel):
 
 
 class BuilderToolReviewResumeRequest(BaseModel):
+    chrome_enabled: bool | None = None
     tools: list[BuilderToolReviewItem] = Field(default_factory=list, max_length=20)
 
 
@@ -367,6 +368,7 @@ async def submit_builder_tool_review(
         run_id=str(run_id),
         user_id=user.user_id,
         tools=[item.model_dump() for item in body.tools],
+        chrome_enabled=body.chrome_enabled,
     )
     if result.get("error") == "BUILDER_INTERRUPTED":
         raise HTTPException(

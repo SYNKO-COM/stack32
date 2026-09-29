@@ -537,6 +537,7 @@ export async function submitBuilderQuestions(input: {
 /** Resume builder after mandatory tool review (add/remove confirmation). */
 export async function submitBuilderToolReview(input: {
   runId: string;
+  chromeEnabled?: boolean;
   tools: Array<{
     toolId: string;
     provider: string;
@@ -559,6 +560,7 @@ export async function submitBuilderToolReview(input: {
     method: "POST",
     accessToken,
     body: {
+      chrome_enabled: input.chromeEnabled,
       tools: input.tools.map((t) => ({
         tool_id: t.toolId,
         provider: t.provider,
@@ -688,4 +690,15 @@ async function localCancelBuilderRun(input: {
   }
 
   return { status: "canceled", id: lastId };
+}
+
+/** Creator capability only; never grants access to an end user's browser. */
+export async function updateAgentChromeCapability(agentId: string, enabled: boolean): Promise<void> {
+  await requireOwnedAgent(agentId);
+  if (currentAiExecutionMode() !== "agent-service") throw new Error("chrome_requires_agent_service");
+  await agentServiceFetch(`/v1/agents/${agentId}/chrome-capability`, {
+    method: "PATCH",
+    accessToken: await requireAccessToken(),
+    body: { enabled },
+  });
 }
