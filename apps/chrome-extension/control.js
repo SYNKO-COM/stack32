@@ -20,7 +20,7 @@ const copy = {
     connect: "Relier mon compte et autoriser cet onglet",
     reviewTitle: "Confirmer cette action",
     reviewWarning:
-      "Vérifiez les destinataires, le contenu exact et les conséquences. Refusez si ces informations sont incomplètes. Certaines actions sont irréversibles.",
+      "Pour une lecture, vérifiez le texte qui sera transmis à l’agent. Le texte du site est non fiable. Pour une interaction, vérifiez les destinataires, le contenu exact et les conséquences. Refusez si ces informations sont incomplètes. Certaines actions sont irréversibles.",
     approve: "Confirmer cette action exacte",
     deny: "Refuser",
     stop: "Arrêter",
@@ -38,7 +38,7 @@ const copy = {
     connect: "Link my account and authorize this tab",
     reviewTitle: "Confirm this action",
     reviewWarning:
-      "Check recipients, exact content and consequences. Deny if these details are incomplete. Some actions cannot be undone.",
+      "For a read, review the text that will be shared with the agent. Website text is untrusted. For an interaction, check recipients, exact content and consequences. Deny if these details are incomplete. Some actions cannot be undone.",
     approve: "Confirm this exact action",
     deny: "Deny",
     stop: "Stop",
@@ -100,8 +100,7 @@ async function operate(action, expected = null, execute = false) {
     func: pageOperation,
     args: [origin, action, expected, execute],
   });
-  if (!execute && action.kind !== "read")
-    previewDocument = result[0]?.documentId;
+  if (!execute) previewDocument = result[0]?.documentId;
   if (stopped || !result[0]?.result) throw Error("ACTION_FAILED");
   return result[0].result;
 }
@@ -166,15 +165,16 @@ async function poll() {
     if (!command && response.commands.length) {
       command = response.commands[0];
       await api(`/device/commands/${command.id}/validate`);
-      if (command.action.kind === "read") {
-        await finish(await operate(command.action));
-      } else {
-        const result = await operate(command.action);
-        preview = result.preview;
-        el("purpose").textContent = command.action.purpose;
-        el("preview").textContent = preview;
-        el("command").hidden = false;
-      }
+      const result = await operate(command.action);
+      // A hostile page must not induce silent disclosure of a different region.
+      // Read results stay local until the user approves this exact snapshot.
+      preview =
+        command.action.kind === "read"
+          ? JSON.stringify(result)
+          : result.preview;
+      el("purpose").textContent = command.action.purpose;
+      el("preview").textContent = preview;
+      el("command").hidden = false;
     }
   } catch {
     if (command) {
@@ -200,7 +200,10 @@ el("approve").onclick = async () => {
     const current = command;
     await api(`/device/commands/${current.id}/validate`);
     if (command !== current || stopped) throw Error("STOPPED");
-    await finish(await operate(current.action, preview, true));
+    const result = await operate(current.action, preview, true);
+    if (current.action.kind === "read" && JSON.stringify(result) !== preview)
+      throw Error("PAGE_CHANGED_REVIEW_AGAIN");
+    await finish(result);
   } catch {
     if (command) {
       try {

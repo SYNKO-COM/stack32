@@ -91,7 +91,7 @@
     "error": "Connexion impossible : connectez-vous à votre compte de pré-production et vérifiez que Chrome est activé pour cet agent. Le service peut aussi être désactivé.",
     "keepOpen": "Gardez cette page et la fenêtre de contrôle de l’extension ouvertes. La session expire après 15 minutes.",
     "stop": "Arrêter et retirer l’accès",
-    "limits": "Chaque interaction demande votre confirmation dans l’extension. Les formulaires dont le contenu exact ne peut pas être vérifié nécessitent une action manuelle. Aucune action n’est considérée réussie avant vérification.",
+    "limits": "Chaque lecture et interaction demande votre confirmation dans l’extension. Le texte lu reste local avant accord. Les formulaires dont le contenu exact ne peut pas être vérifié nécessitent une action manuelle. Aucune action n’est considérée réussie avant vérification.",
     "privacy": "Confidentialité de l’extension"
   }
 }

@@ -13,7 +13,7 @@ Contrôles locaux du 29 septembre 2026 dans une copie isolée de `preprod`. Aucu
 | TypeScript | `tsc --noEmit` réussi. Nouveaux types DB ajoutés manuellement ; régénération Supabase restante. |
 | ESLint | 0 erreur, 42 avertissements existants. |
 | Build optimisé Next.js | Réussi avec `NEXT_PUBLIC_DATA_MODE=mock`, environnement vide et sans identifiants réels. Téléchargement des polices existantes autorisé. Les trois routes `/browser` sont compilées. |
-| Chromium isolé | **14 tests réussis** : véritable chargement MV3 et refus sans geste utilisateur ; opérations sur DOM réel avec réseau de fixture intercepté. Aucun profil Chrome utilisateur. |
+| Chromium isolé | **17 tests réussis** : véritable chargement MV3 et refus sans geste utilisateur ; opérations sur DOM réel avec réseau de fixture intercepté. Aucun profil Chrome utilisateur. |
 | Garde-fou déploiement | **4 tests réussis** sur métadonnées fictives ; contrôle réel API + worker préprod refusé comme attendu sur les références `stack32-production-*`. Aucun secret lu. |
 | Migration SQL, PostgreSQL 17 local | Réussie sur schéma minimal de fixtures avec vraies FK : tables/RLS/droits, enqueue, commande concurrente refusée, plafond 30 étapes, heartbeat expiré, cascade de révocation. Aucun Supabase distant. |
 | Package | ZIP déterministe, MV3 0.1.0, 9 fichiers, aucun secret ou test empaqueté. |
@@ -53,7 +53,7 @@ Dans `services/agent-service`, venv avec `stack32-agent-runtime` et `agent-servi
 
 `scripts/tests/browser-postgres.sql` crée des rôles et un schéma minimal : exécuter avec `psql -f` uniquement dans un cluster PostgreSQL local jetable vierge (socket local, aucune écoute TCP). Jamais sur une base distante. Ce script ne remplace pas `supabase test db`.
 
-`manifest.test.mjs` charge l’extension dans un profil temporaire et intercepte/annule les destinations HTTPS ; `page.test.mjs` utilise la fonction empaquetée sur un DOM Chromium avec HTML intercepté. L’`eval` du harnais de test est absent du ZIP. Ces essais ne prouvent pas un appairage Stack32 connecté.
+`manifest.test.mjs` charge l’extension dans un profil temporaire et intercepte/annule les destinations HTTPS ; `page.test.mjs` utilise la fonction empaquetée sur un DOM Chromium avec HTML intercepté. L’`eval` du harnais de test est absent du ZIP. Le test `control.test.mjs` vérifie la vraie interface de confirmation dans Chromium avec API Chrome et backend simulés : accord, refus et modification du texte entre aperçu et accord. Ces essais ne prouvent pas un appairage Stack32 connecté.
 
 ## Protocole manuel préprod — non exécuté
 
@@ -62,7 +62,7 @@ Prérequis : secrets de test isolés, migration/déploiement de `DEPLOYMENT.md`,
 1. **Création/rédaction.** Sans extension, créer un agent de rédaction. Chrome apparaît en premier et activé dans Outils ; construire/publier sans installation. Demander un texte : aucun appel Chrome. Sur un autre agent, désactiver le réglage puis modifier/réparer : le refus persiste.
 2. **Demande.** A installe l’agent dans son compte et demande de lire `#task-region` sur `https://pre-prod-659874458xx.stack32.com/browser/test`. Attendre suspension et lien de connexion, sans résultat inventé.
 3. **Appairage.** Charger le ZIP, créer un code depuis la session A, ouvrir la page de test, cliquer l’icône Stack32, coller le code et autoriser. Vérifier agent/site/expiration. Code consommé inutilisable, code >2 minutes refusé, code utilisé sur un autre site refusé. Garder les deux fenêtres ouvertes, reprendre la conversation.
-4. **Lecture/saisie.** Lire `#task-region` : commande fictive 42, carnet bleu, 12 euros. Saisir « Bonjour test » dans `#message` : aucune modification avant confirmation ; après confirmation, lire explicitement ce champ pour vérifier la valeur.
+4. **Lecture/saisie.** Confirmer localement le texte à partager lors de la lecture de `#task-region` : commande fictive 42, carnet bleu, 12 euros. Saisir « Bonjour test » dans `#message` : aucune modification avant confirmation ; après confirmation, lire explicitement ce champ pour vérifier la valeur.
 5. **Message fictif.** Demander le clic de `#send-test`. L’aperçu contient `test@example.invalid`, le texte exact, la destination et le bouton. Refuser : `#result` inchangé. Reconnecter, refaire, modifier le texte après aperçu : consentement invalidé. Refaire sans modification et confirmer : `#result` affiche `SIMULATED ONLY`. Aucun message réel n’est envoyé ; ne pas présenter cela comme un essai sur une plateforme réelle.
 6. **Isolation A/B/C.** B utilise le même agent dans un profil séparé avec son installation et un autre texte fictif. A ne reçoit aucune donnée/commande de B. Essayer les identifiants installation/thread de B depuis A : refus. C n’a pas de contrôle des sessions d’abonnés ; ses tests utilisent sa propre installation.
 7. **Arrêt.** Sur des sessions séparées : Arrêter, Retirer l’accès, fermer l’onglet, fermer le contrôle, fermer Chrome, fermer la page Web, se déconnecter. Attendre au plus les délais de présence 15/30 secondes : aucune nouvelle commande. Un effet déjà envoyé peut rester non confirmé et ne doit pas être rejoué automatiquement.

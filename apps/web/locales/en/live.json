@@ -91,7 +91,7 @@
     "error": "Unable to connect: sign in to your preproduction account and check that Chrome is enabled for this agent. The service may also be disabled.",
     "keepOpen": "Keep this page and the extension control window open. The session expires after 15 minutes.",
     "stop": "Stop and revoke access",
-    "limits": "Every interaction requires confirmation in the extension. Forms whose exact content cannot be inspected require manual action. Success must be verified after an interaction.",
+    "limits": "Every read and interaction requires confirmation in the extension. Read text stays local until approved. Forms whose exact content cannot be inspected require manual action. Success must be verified after an interaction.",
     "privacy": "Extension privacy"
   }
 }

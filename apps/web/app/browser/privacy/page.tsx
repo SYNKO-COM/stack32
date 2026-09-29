@@ -28,10 +28,12 @@ export default function ChromePrivacy() {
       <p>
         Les données ne sont ni vendues ni utilisées pour la publicité. Les
         destinataires et le contenu des formulaires sont affichés localement
-        avant confirmation. N’autorisez aucune action si vous ne pouvez pas en
-        vérifier les conséquences. Pour supprimer les données de conversation,
-        utilisez les contrôles de suppression de votre compte Stack32. La
-        publication est réservée aux comptes de test.
+        avant confirmation. Chaque extrait lu reste dans la fenêtre de
+        l’extension jusqu’à votre accord pour le transmettre. N’autorisez aucune
+        action si vous ne pouvez pas en vérifier les conséquences. Pour
+        supprimer les données de conversation, utilisez les contrôles de
+        suppression de votre compte Stack32. La publication est réservée aux
+        comptes de test.
       </p>
       <p>
         This test extension connects only your selected tab to your own Stack32
@@ -49,8 +51,9 @@ export default function ChromePrivacy() {
         seconds. Temporary commands are deleted after a result or revocation;
         expired sessions are purged when the next session is opened.
         Conversation results follow normal account retention and deletion
-        controls. Inspect exact form values before confirming; otherwise decline
-        and act manually.
+        controls. Read snapshots remain local until you approve sharing them.
+        Inspect exact form values before confirming; otherwise decline and act
+        manually.
       </p>
       <p>
         <a className="underline" href="/legal/privacy">

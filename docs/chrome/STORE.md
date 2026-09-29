@@ -8,9 +8,9 @@ Aucun article Store créé, soumis ou publié. L’outil d’accès à Chrome a 
 
 ## Textes prêts à utiliser
 
-**Description courte FR** : Autorisez temporairement un onglet choisi pour votre agent Stack32. Chaque interaction demande confirmation.
+**Description courte FR** : Autorisez temporairement un onglet choisi pour votre agent Stack32. Chaque lecture et interaction demande confirmation.
 
-**Short description EN** : Give your Stack32 agent temporary access to a tab you choose. Every interaction requires confirmation.
+**Short description EN** : Give your Stack32 agent temporary access to a tab you choose. Every read and interaction requires confirmation.
 
 **Description FR** :
 
@@ -20,7 +20,7 @@ Stack32 Chrome BETA permet à un agent Stack32 de vous aider dans un onglet que 
 
 Installez l’extension seulement si une tâche nécessite votre navigateur. Depuis Stack32, créez un code temporaire pour le site demandé, cliquez sur l’icône de l’extension dans l’onglet concerné et autorisez la session. L’extension affiche le nom de l’agent, le site et l’expiration. Vous pouvez arrêter la session ou retirer l’accès à tout moment.
 
-Les lectures portent sur les éléments utiles à votre tâche. Toute saisie, navigation ou interaction proposée demande une confirmation locale. Les formulaires compatibles affichent les valeurs exactes, dont le destinataire et le contenu, avant envoi. Les interfaces dont les conséquences ne peuvent pas être inspectées nécessitent une action manuelle. Une action déjà exécutée n’est pas annulée par le retrait d’accès.
+Les lectures portent sur les éléments utiles à votre tâche et affichent le texte localement avant votre accord pour le transmettre. Toute saisie, navigation ou interaction proposée demande une confirmation locale. Les formulaires compatibles affichent les valeurs exactes, dont le destinataire et le contenu, avant envoi. Les interfaces dont les conséquences ne peuvent pas être inspectées nécessitent une action manuelle. Une action déjà exécutée n’est pas annulée par le retrait d’accès.
 
 Pas d’accès permanent à tous les sites, pas de collecte d’historique, de cookies ou de mots de passe. Pas de contournement de CAPTCHA, de double authentification ou des limites des sites. La session dure au maximum 15 minutes et nécessite de garder ouvertes la page de connexion Stack32 et la fenêtre de contrôle.
 
@@ -34,7 +34,7 @@ Stack32 Chrome BETA lets your Stack32 agent assist with a tab you choose. This p
 
 Install it only when a task needs your browser. Create a temporary pairing code in Stack32 for the requested site, click the extension icon in that tab and authorize the session. The control window displays the agent, site and expiry, with Stop and Revoke access controls.
 
-Reads cover relevant page regions. Every proposed fill, navigation or interaction requires local confirmation. Supported forms show exact values, including recipients and message content, before submission. Interfaces whose consequences cannot be inspected require manual action. Revocation cannot undo an already dispatched action.
+Reads cover relevant page regions and require your approval of the locally displayed text before sharing it. Every proposed fill, navigation or interaction requires local confirmation. Supported forms show exact values, including recipients and message content, before submission. Interfaces whose consequences cannot be inspected require manual action. Revocation cannot undo an already dispatched action.
 
 No permanent access to all sites, browsing-history collection, cookies or passwords. No CAPTCHA, two-factor authentication or site-limit bypass. Sessions last at most 15 minutes and require both the Stack32 connection page and the extension control window to stay open.
 
