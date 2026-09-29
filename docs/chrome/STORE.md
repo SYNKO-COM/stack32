@@ -1,13 +1,13 @@
 # Dossier Chrome Web Store — distribution privée seulement
 
-> Mise à jour du 29 septembre : le propriétaire autorise explicitement les clés fournisseurs live en préproduction. Le contrôle autorise uniquement les neuf références connues ; base, JWT, chiffrement, token interne et cibles de déploiement restent préprod. Les blocages historiques ci-dessous sont conservés comme état antérieur ; le déploiement est en cours. Le dashboard Chrome Web Store est ouvert selon le propriétaire, mais l’outil refuse son automatisation (« The extensions gallery cannot be scripted »).
+> État actuel : intégré et déployé en préproduction le 29 septembre 2026 ; clés fournisseurs live explicitement autorisées par le propriétaire. Voir [le compte rendu de déploiement](DEPLOYED.md) pour les preuves et les vérifications encore manuelles.
 
 
 ## État
 
 Version : **0.1.0**. Nom : **Stack32 Chrome BETA**. Package : `apps/web/public/downloads/stack32-chrome-preprod-0.1.0.zip`. Génération reproductible : `python3 scripts/package-chrome.py`. Le ZIP ne contient ni tests, ni source map, ni secrets, ni code téléchargé à l’exécution.
 
-Aucun article Store créé, soumis ou publié. L’outil d’accès à Chrome a répondu « Not allowed » ; l’accès au compte développeur, son inscription/vérification et la liste des testeurs ne sont pas vérifiés. Aucun identifiant Google ni validation Google n’est présumé. Les essais connectés préprod doivent précéder la soumission.
+Aucun article Store créé, soumis ou publié. Le propriétaire a créé son compte développeur et fourni une capture du dashboard connecté. L’outil Chrome refuse cependant ce dashboard avec « The extensions gallery cannot be scripted » ; le téléversement et le choix Private doivent être effectués manuellement. La liste des testeurs et les éventuels contrôles supplémentaires de Google ne sont pas vérifiés. Aucun identifiant Google ni validation Google n’est présumé. Les essais API/DB préprod sont réussis ; le parcours agent + extension dans un onglet réel doit encore être vérifié avant soumission.
 
 ## Textes prêts à utiliser
 
@@ -64,7 +64,7 @@ Aucune permission `cookies`, `history`, `tabs`, `debugger`, `webRequest`, `stora
 - L’utilisateur peut refuser une interaction, arrêter/révoquer la session, fermer les fenêtres ou désinstaller l’extension. Aucun nouvel effet autorisé après détection ; les effets déjà envoyés ne sont pas annulables par ces contrôles.
 - Code distant : **non**. Le serveur envoie des objets d’actions prédéfinis et des chaînes de texte, jamais du JavaScript à exécuter.
 
-Politique préparée : `apps/web/app/browser/privacy/page.tsx`. URL destinée à la fiche **après déploiement et vérification d’accès public** : `https://pre-prod-659874458xx.stack32.com/browser/privacy`. Le responsable de traitement/contact est renvoyé vers la politique existante `/legal/privacy` ; vérifier ce contact avant de certifier la fiche. Ne pas remplacer ce lien par un domaine de production pour les essais.
+Politique préparée : `apps/web/app/browser/privacy/page.tsx`. URL de la politique déployée en préproduction : `https://pre-prod-659874458xx.stack32.com/browser/privacy`. Le responsable de traitement/contact est renvoyé vers la politique existante `/legal/privacy` ; vérifier ce contact avant de certifier la fiche. Ne pas remplacer ce lien par un domaine de production pour les essais.
 
 ## Images
 

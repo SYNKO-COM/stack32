@@ -1,6 +1,6 @@
 # Intégration et déploiement préprod uniquement
 
-> Mise à jour du 29 septembre : le propriétaire autorise explicitement les clés fournisseurs live en préproduction. Le contrôle autorise uniquement les neuf références connues ; base, JWT, chiffrement, token interne et cibles de déploiement restent préprod. Les blocages historiques ci-dessous sont conservés comme état antérieur ; le déploiement est en cours. Le dashboard Chrome Web Store est ouvert selon le propriétaire, mais l’outil refuse son automatisation (« The extensions gallery cannot be scripted »).
+> État actuel : intégré et déployé en préproduction le 29 septembre 2026 ; clés fournisseurs live explicitement autorisées par le propriétaire. Voir [le compte rendu de déploiement](DEPLOYED.md) pour les preuves et les vérifications encore manuelles.
 
 
 ## Blocage constaté, pas une demande de dérogation

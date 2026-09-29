@@ -1,9 +1,9 @@
 # Stack32 Chrome BETA 0.1.0 — pré-production
 
-> Mise à jour du 29 septembre : le propriétaire autorise explicitement les clés fournisseurs live en préproduction. Le contrôle autorise uniquement les neuf références connues ; base, JWT, chiffrement, token interne et cibles de déploiement restent préprod. Les blocages historiques ci-dessous sont conservés comme état antérieur ; le déploiement est en cours. Le dashboard Chrome Web Store est ouvert selon le propriétaire, mais l’outil refuse son automatisation (« The extensions gallery cannot be scripted »).
+> État actuel : intégré et déployé en préproduction le 29 septembre 2026 ; clés fournisseurs live explicitement autorisées par le propriétaire. Voir [le compte rendu de déploiement](DEPLOYED.md) pour les preuves et les vérifications encore manuelles.
 
 
-État au 29 septembre 2026 : implémentation et package locaux ; **aucun déploiement, aucune migration distante, aucune fusion et aucune soumission Google effectués**. L’essai complet connecté à Stack32 reste bloqué par l’isolation des secrets de pré-production. Voir [validation](VALIDATION.md), [déploiement](DEPLOYMENT.md) et [dossier Chrome Web Store](STORE.md).
+État au 29 septembre 2026 : code intégré dans `preprod`, migration appliquée, Web/API/worker déployés et capacité Chrome activée. Le pont API/DB a passé ses essais avec comptes jetables. Le parcours agent + extension dans un vrai onglet et la soumission Google restent à finaliser. Voir [validation](VALIDATION.md), [déploiement](DEPLOYMENT.md) et [dossier Chrome Web Store](STORE.md).
 
 ## Cibles identifiées avant les modifications
 
@@ -18,7 +18,7 @@
 | Queue | `stack32-runs-preprod` |
 | Vercel | `stack32-preprod`, `prj_Q1gLhC7rGTQwFWTDwj3lYjry68Xs`, équipe `team_C7cEqam67wmnaZG8xaO876rz` |
 
-Le checkout d’origine était sur `main`. Il n’a pas été réutilisé pour coder. Son lien Supabase local pointe vers la production : ne jamais utiliser `supabase db push --linked` depuis ce checkout. Les secrets dédiés à Supabase préprod sont distingués par leurs références, sans utilisation de leurs valeurs pour ces tests.
+Le checkout d’origine était sur `main`. Il n’a pas été réutilisé pour coder. Son lien Supabase pointait initialement vers la production ; le propriétaire l’a ensuite lié à la préproduction. Vérifier systématiquement le project-ref avant toute commande distante. La migration Chrome a été appliquée depuis la copie isolée, explicitement liée à `fbqjuqnkemlofklrjeuo`. Les secrets dédiés à Supabase préprod sont distingués par leurs références, sans utilisation de leurs valeurs pour ces tests.
 
 ## Produit et architecture
 

@@ -1,6 +1,6 @@
 # Validation — résultats et limites
 
-> Mise à jour du 29 septembre : le propriétaire autorise explicitement les clés fournisseurs live en préproduction. Le contrôle autorise uniquement les neuf références connues ; base, JWT, chiffrement, token interne et cibles de déploiement restent préprod. Les blocages historiques ci-dessous sont conservés comme état antérieur ; le déploiement est en cours. Le dashboard Chrome Web Store est ouvert selon le propriétaire, mais l’outil refuse son automatisation (« The extensions gallery cannot be scripted »).
+> État actuel : intégré et déployé en préproduction le 29 septembre 2026 ; clés fournisseurs live explicitement autorisées par le propriétaire. Voir [le compte rendu de déploiement](DEPLOYED.md) pour les preuves et les vérifications encore manuelles.
 
 
 Contrôles locaux du 29 septembre 2026 dans une copie isolée de `preprod`. Aucun compte client, clé de modèle hébergé ou service de production utilisé. Les services préprod distants ont seulement fait l’objet d’une lecture de métadonnées.
@@ -13,15 +13,15 @@ Contrôles locaux du 29 septembre 2026 dans une copie isolée de `preprod`. Aucu
 | Ruff | Réussi. |
 | Bandit `-ll` | Aucun problème moyen/élevé ; 43 observations faibles dans l’ensemble du service. |
 | Vitest Web | **267 tests, 44 fichiers réussis**. |
-| TypeScript | `tsc --noEmit` réussi. Nouveaux types DB ajoutés manuellement ; régénération Supabase restante. |
+| TypeScript | `tsc --noEmit` réussi. Nouveaux types DB initialement ajoutés manuellement ; régénération automatique conforme confirmée en CI. |
 | ESLint | 0 erreur, 42 avertissements existants. |
 | Build optimisé Next.js | Réussi avec `NEXT_PUBLIC_DATA_MODE=mock`, environnement vide et sans identifiants réels. Téléchargement des polices existantes autorisé. Les trois routes `/browser` sont compilées. |
 | Chromium isolé | **17 tests réussis** : véritable chargement MV3 et refus sans geste utilisateur ; opérations sur DOM réel avec réseau de fixture intercepté. Aucun profil Chrome utilisateur. |
-| Garde-fou déploiement | **4 tests réussis** sur métadonnées fictives ; contrôle réel API + worker préprod refusé comme attendu sur les références `stack32-production-*`. Aucun secret lu. |
+| Garde-fou déploiement | **5 tests réussis** sur métadonnées fictives ; contrôle réel API + worker préprod refusé comme attendu sur les références `stack32-production-*`. Aucun secret lu. |
 | Migration SQL, PostgreSQL 17 local | Réussie sur schéma minimal de fixtures avec vraies FK : tables/RLS/droits, enqueue, commande concurrente refusée, plafond 30 étapes, heartbeat expiré, cascade de révocation. Aucun Supabase distant. |
 | Package | ZIP déterministe, MV3 0.1.0, 9 fichiers, aucun secret ou test empaqueté. |
 
-La CI utilise Python 3.12, différent du Python local. Son pipeline a été complété mais n’a pas été lancé à distance. Docker/Colima n’était pas démarré : migrations complètes Supabase, pgTAP, génération effective des types et E2E Web contre toute la pile Supabase **non validés ici**.
+La CI utilise Python 3.12, différent du Python local. La CI distante est désormais réussie : migrations complètes, pgTAP et types générés conformes ; E2E Web avec 3 tests réussis et 1 test existant ignoré. Voir DEPLOYED.md. Docker/Colima local n’a pas été utilisé.
 
 ## Matrice demandée
 
