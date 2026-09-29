@@ -1604,7 +1604,13 @@ class BuilderOrchestrator:
         locale = str(((run_row or {}).get("input") or {}).get("locale") or "en")
         goal = str(spec.goal or prompt or "")[:400]
         agent_row = await self.db.get_owned_agent(agent_id, user_id)
-        is_first_build = not bool((agent_row or {}).get("first_ready_celebrated"))
+        is_first_build = not bool((agent_row or {}).get("first_ready_celebrated")) and not bool(
+            (agent_row or {}).get("published_version_id")
+        )
+        # Missing on legacy/skeleton specs differs from an explicit creator refusal.
+        # A repair before first-ready must never silently re-enable a declined capability.
+        prior_chrome = current_spec.chrome_enabled if current_spec else None
+        spec.chrome_enabled = True if is_first_build and prior_chrome is None else prior_chrome
         if not should_interrupt_tool_review(
             capabilities=capabilities,
             proposed=list(spec.tools or []),
@@ -1621,7 +1627,7 @@ class BuilderOrchestrator:
             locale=locale,
         )
         # Hard gate: never block the user on a keep-only form (repair / no-op).
-        if not any(str(e.get("change") or "") in {"add", "remove"} for e in entries):
+        if not is_first_build and not any(str(e.get("change") or "") in {"add", "remove"} for e in entries):
             return None
         entries = await enrich_utilities_with_llm(
             entries,
@@ -1681,6 +1687,7 @@ class BuilderOrchestrator:
                     "fields": [],
                     "mode": mode,
                     "tools": tools,
+                    "chrome_enabled": pending_spec.chrome_enabled,
                 },
             },
         )
@@ -1712,6 +1719,7 @@ class BuilderOrchestrator:
         run_id: str,
         user_id: str,
         tools: list[dict[str, Any]],
+        chrome_enabled: bool | None = None,
     ) -> dict[str, Any]:
         from agent_service.builder.capabilities import build_connection_requirements
         from agent_service.builder.tool_review import apply_reviewed_tools
@@ -1818,6 +1826,8 @@ class BuilderOrchestrator:
 
         connection_requirements = await build_connection_requirements(new_tools)
         data = pending_spec.model_dump()
+        if chrome_enabled is not None:
+            data["chrome_enabled"] = chrome_enabled
         data["tools"] = [t.model_dump() for t in new_tools]
         data["connection_requirements"] = [r.model_dump() for r in connection_requirements]
         data["graph"] = self._build_graph(
@@ -2517,6 +2527,8 @@ class BuilderOrchestrator:
             if tool_review:
                 return tool_review
 
+        # A model/quality repair cannot change this creator-controlled choice.
+        reviewed_chrome_enabled = spec.chrome_enabled
         if intent in (BuilderIntent.REPAIR, BuilderIntent.MODIFY) and current_spec is not None:
             from agent_service.builder.repair_engine import make_repair_contract_for_turn
             from agent_service.builder.spec_diff_guard import (
@@ -2716,6 +2728,7 @@ class BuilderOrchestrator:
             tick=tick,
         )
 
+        spec.chrome_enabled = reviewed_chrome_enabled
         version = await self.db.persist_version(
             agent_id=agent_id,
             user_id=user_id,
@@ -4621,6 +4634,7 @@ class BuilderOrchestrator:
         test_report = await self._run_smoke_test(spec, user_id=user_id, agent_id=agent_id)
         previous_failure = dict(test_report)
         repaired = await self._repair(spec, test_report)
+        repaired.chrome_enabled = spec.chrome_enabled
         test_report = await self._run_smoke_test(repaired, user_id=user_id, agent_id=agent_id)
         if str(test_report.get("status") or "").startswith("passed") and str(
             previous_failure.get("status") or ""

@@ -12,6 +12,8 @@ importers:
         specifier: ^4.23.12
         version: 4.23.12
 
+  apps/chrome-extension: {}
+
   apps/web:
     dependencies:
       '@dagrejs/dagre':

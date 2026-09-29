@@ -809,6 +809,30 @@ async def _sync_external_memory_tools(
             data["connection_requirements"] = reqs
     return data
 
+class ChromeCapabilityPatch(BaseModel):
+    enabled: bool = Field(strict=True)
+
+
+@router.patch("/{agent_id}/chrome-capability")
+async def patch_chrome_capability(
+    agent_id: UUID, user: CurrentUser, body: ChromeCapabilityPatch
+) -> dict[str, Any]:
+    db: Persistence = get_persistence()
+    if not await db.get_owned_agent(str(agent_id), user.user_id):
+        raise _not_found()
+    spec = await db.load_draft_spec(str(agent_id), user.user_id)
+    if not spec:
+        raise HTTPException(status_code=400, detail={"code": "AGENT_SPEC_INVALID", "message": "No draft spec."})
+    spec.chrome_enabled = body.enabled
+    version = await db.persist_version(
+        agent_id=str(agent_id), user_id=user.user_id, spec=spec,
+        test_status="not_run", change_summary="Chrome capability updated",
+    )
+    # authorize() checks the current draft at every execution, so disabling takes
+    # effect for existing installations too. Enabling still requires publication.
+    return {"version_id": version.get("id"), "chrome_enabled": spec.chrome_enabled}
+
+
 class ModelPatchRequest(BaseModel):
     provider: str = Field(min_length=2, max_length=32)
     model_id: str = Field(min_length=1, max_length=200)

@@ -334,7 +334,11 @@
     "utilityRequired": "Add a short utility note for every tool.",
     "addRequired": "Pick an app to add.",
     "alreadyAdded": "That tool is already in the list.",
-    "error": "Could not save tool choices. Please try again."
+    "error": "Could not save tool choices. Please try again.",
+    "chromeName": "Chrome browser",
+    "chromeDescription": "Lets people using this agent grant access to their browser when a task needs it. Each person must install the extension and authorize their own tab. This setting grants no browser access.",
+    "chromePublication": "Disabling stops new actions for all users. Enabling requires republishing the agent and does not grant access to a browser.",
+    "chromeSaveError": "The setting was not saved. Try again."
   },
   "toolChangeReview": {
     "title": "Review tool changes",

@@ -187,7 +187,11 @@ def should_interrupt_tool_review(
     ):
         return False
 
-    # Sole gate after confirmation (and for first proposal): real add/remove.
+    # Every new agent reviews the optional Chrome capability, even without apps.
+    if is_first_build and not reviewable_app_keys(current):
+        return True
+
+    # Sole gate after confirmation: real add/remove.
     if not has_tool_add_or_remove(proposed=proposed, current=current):
         return False
 

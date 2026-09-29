@@ -287,6 +287,12 @@ async def execute_tool(
 ) -> dict[str, Any]:
     """Resolve via ProviderRegistry when possible; fall back to native execution."""
     context = dict(context or {})
+    if tool_id.startswith("chrome_"):
+        from agent_service.browser.service import TOOLS, execute
+
+        if tool_id not in TOOLS:
+            raise ToolError("TOOL_NOT_ALLOWED", "Unknown browser action")
+        return await execute(tool_id, args, context)
     try:
         from agent_service.integrations.registry import get_provider_registry
 

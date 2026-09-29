@@ -1425,6 +1425,120 @@ export type Database = {
           },
         ]
       }
+      browser_commands: {
+        Row: {
+          action: Json
+          created_at: string
+          expires_at: string
+          id: string
+          result: Json | null
+          session_id: string
+          state: string
+        }
+        Insert: {
+          action: Json
+          created_at?: string
+          expires_at?: string
+          id?: string
+          result?: Json | null
+          session_id: string
+          state?: string
+        }
+        Update: {
+          action?: Json
+          created_at?: string
+          expires_at?: string
+          id?: string
+          result?: Json | null
+          session_id?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "browser_commands_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "browser_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      browser_sessions: {
+        Row: {
+          agent_id: string
+          agent_name: string
+          created_at: string
+          device_seen_at: string | null
+          expires_at: string
+          id: string
+          installation_id: string
+          origin: string
+          pairing_hash: string | null
+          state: string
+          steps: number
+          thread_id: string
+          token_hash: string | null
+          user_id: string
+          web_seen_at: string
+        }
+        Insert: {
+          agent_id: string
+          agent_name: string
+          created_at?: string
+          device_seen_at?: string | null
+          expires_at: string
+          id?: string
+          installation_id: string
+          origin: string
+          pairing_hash?: string | null
+          state?: string
+          steps?: number
+          thread_id: string
+          token_hash?: string | null
+          user_id: string
+          web_seen_at?: string
+        }
+        Update: {
+          agent_id?: string
+          agent_name?: string
+          created_at?: string
+          device_seen_at?: string | null
+          expires_at?: string
+          id?: string
+          installation_id?: string
+          origin?: string
+          pairing_hash?: string | null
+          state?: string
+          steps?: number
+          thread_id?: string
+          token_hash?: string | null
+          user_id?: string
+          web_seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "browser_sessions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "browser_sessions_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_installations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "browser_sessions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "live_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_reservations: {
         Row: {
           amount_usd: number
@@ -3586,6 +3700,24 @@ export type Database = {
       assert_period_budget_available: {
         Args: { p_user_id: string }
         Returns: boolean
+      }
+      browser_enqueue: {
+        Args: { p_action: Json; p_session: string }
+        Returns: {
+          action: Json
+          created_at: string
+          expires_at: string
+          id: string
+          result: Json | null
+          session_id: string
+          state: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "browser_commands"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       check_username_availability: {
         Args: { p_username: string }

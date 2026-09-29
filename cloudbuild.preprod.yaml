@@ -4,6 +4,19 @@
 # Same gates as production: nothing deploys unless the service's own tests pass.
 # Build context MUST be services/ (Dockerfile copies stack32-agent-runtime + agent-service).
 steps:
+  # Enforce preprod data/auth targets; only explicitly approved provider refs may be shared.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    id: Verify-preprod-isolation
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        umask 077
+        gcloud run services describe stack32-agent-api-preprod --project=stack32 --region=europe-west1 --format=json > /tmp/chrome-api.json
+        gcloud run services describe stack32-agent-worker-preprod --project=stack32 --region=europe-west1 --format=json > /tmp/chrome-worker.json
+        python3 scripts/check-chrome-preprod.py /tmp/chrome-api.json /tmp/chrome-worker.json
+
   - name: python:3.12-slim
     id: Verify
     entrypoint: bash

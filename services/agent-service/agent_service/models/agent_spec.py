@@ -263,6 +263,8 @@ class AgentSpec(BaseModel):
     # V5+ additive: exact generated-agent model (BYOK). None until the user selects one.
     model: ModelConfig | None = None
     input_config: InputConfig = Field(default_factory=InputConfig)
+    # Missing on published legacy specs: preserve their capabilities. New builders opt in.
+    chrome_enabled: bool | None = None
     tools: list[ToolBinding] = Field(default_factory=list, max_length=MAX_AGENT_TOOLS)
     knowledge: KnowledgeConfig = Field(default_factory=KnowledgeConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)

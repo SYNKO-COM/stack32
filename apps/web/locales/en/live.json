@@ -74,5 +74,24 @@
     "denied": "Denied — the agent will not run this action.",
     "missing": "Approval details are missing. Try sending your request again.",
     "error": "Could not save your decision. Try again."
+  },
+  "browser": {
+    "title": "Chrome browser",
+    "explanation": "This agent may request Chrome, but has no access yet. Authorize only your own tab for this task.",
+    "install": "Install the preproduction extension if it is missing.",
+    "download": "Download the BETA extension (ZIP)",
+    "unpack": "Unzip, open chrome://extensions, enable Developer mode, then Load unpacked and choose the extracted folder.",
+    "pair": "Link the extension to your Stack32 account for this site.",
+    "connect": "Create my pairing code",
+    "authorize": "Open the target site, click the Stack32 Chrome icon, then paste the code and authorize this tab.",
+    "idle": "No active session.",
+    "pairing": "Code expires in 2 minutes. Do not share it.",
+    "active": "Chrome is connected. Return to the conversation and ask the agent to continue.",
+    "stopped": "Access stopped. No new browser actions are authorized.",
+    "error": "Unable to connect: sign in to your preproduction account and check that Chrome is enabled for this agent. The service may also be disabled.",
+    "keepOpen": "Keep this page and the extension control window open. The session expires after 15 minutes.",
+    "stop": "Stop and revoke access",
+    "limits": "Every read and interaction requires confirmation in the extension. Read text stays local until approved. Forms whose exact content cannot be inspected require manual action. Success must be verified after an interaction.",
+    "privacy": "Extension privacy"
   }
 }

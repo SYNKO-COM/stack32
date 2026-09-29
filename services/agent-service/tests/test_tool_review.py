@@ -171,8 +171,8 @@ def test_prompt_implies_tool_change_french():
     assert prompt_implies_tool_change("Change le ton en amical") is False
 
 
-def test_should_interrupt_first_build_natives_only_skips():
-    """No product apps → no tool form, even on first build."""
+def test_should_interrupt_first_build_natives_only_reviews_chrome():
+    """Every first build reviews Chrome, without requiring an extension."""
     caps: dict = {}
     proposed = [ToolBinding(tool_id="web_search", provider="native")]
     assert (
@@ -183,7 +183,7 @@ def test_should_interrupt_first_build_natives_only_skips():
             prompt="Agent comptabilité",
             is_first_build=True,
         )
-        is False
+        is True
     )
 
 
