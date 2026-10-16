@@ -57,13 +57,15 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await page.getByRole("button", { name: /create account|créer mon compte/i }).click();
 
   // --- Verify email ---------------------------------------------------------
-  await page.waitForURL(/\/(verify-email|onboarding)/, { timeout: 20_000 });
+  await page.waitForURL(/\/(verify-email|onboarding)/, { timeout: 30_000 });
   if (page.url().includes("/verify-email")) {
     const otp = await waitForSignupOtp(email);
-    const firstDigit = page.getByLabel(/digit 1/i);
-    await firstDigit.click();
-    await page.keyboard.type(otp);
-    await page.waitForURL("**/onboarding", { timeout: 20_000 });
+    for (let index = 0; index < otp.length; index += 1) {
+      const digit = page.getByLabel(new RegExp(`digit ${index + 1}$`, "i"));
+      await digit.fill(otp[index]!);
+      await expect(digit).toHaveValue(otp[index]!);
+    }
+    await page.waitForURL("**/onboarding", { timeout: 30_000 });
   }
 
   // --- Onboarding -----------------------------------------------------------

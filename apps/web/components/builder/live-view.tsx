@@ -396,7 +396,7 @@ export function LiveView({
       </div>
 
       <div
-        className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4"
+        className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-3 sm:px-4"
         role="log"
         aria-label={t("live:a11y.conversation")}
         aria-live="polite"
@@ -453,7 +453,7 @@ export function LiveView({
         </div>
       </div>
 
-      <div className="shrink-0 px-3 pb-4 sm:px-4 sm:pb-5">
+      <div className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4 sm:pb-5">
         <PromptComposer
           className="mx-auto max-w-3xl"
           placeholder={t("live:composer.placeholder")}

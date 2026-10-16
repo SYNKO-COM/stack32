@@ -13,11 +13,11 @@ export function WorkspaceChrome({ title, subtitle }: { title: string; subtitle?:
   const setMobileSidebarOpen = useUiStore((s) => s.setMobileSidebarOpen);
 
   return (
-    <header className="flex items-center justify-between gap-3 px-4 py-3 md:px-6">
+    <header className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2 sm:gap-3 sm:border-b-0 sm:px-4 sm:py-3 md:px-6">
       <div className="flex min-w-0 items-center gap-2">
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon-lg"
           className="lg:hidden"
           aria-label={t("a11y.toggleSidebar")}
           onClick={() => setMobileSidebarOpen(true)}
@@ -25,14 +25,14 @@ export function WorkspaceChrome({ title, subtitle }: { title: string; subtitle?:
           <Menu aria-hidden="true" />
         </Button>
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
+          <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">{title}</h1>
           {subtitle ? (
             <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
           ) : null}
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <ThemeToggle />
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <ThemeToggle className="hidden sm:inline-flex" />
         <UserMenu />
       </div>
     </header>

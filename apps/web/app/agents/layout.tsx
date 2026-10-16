@@ -18,7 +18,7 @@ export default function AgentsLayout({ children }: { children: React.ReactNode }
 
   return (
     <RequireAuth>
-      <div className="relative flex h-svh overflow-hidden">
+      <div className="relative flex h-dvh min-h-0 overflow-hidden">
         <AnimatedBackground variant="editor" />
 
         {/* Desktop sidebar — slightly under default 300px */}
@@ -28,7 +28,7 @@ export default function AgentsLayout({ children }: { children: React.ReactNode }
 
         {/* Mobile drawer */}
         <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-          <SheetContent side="left" className="glass-strong w-[288px] border-border p-0">
+          <SheetContent side="left" className="glass-strong w-[min(19rem,calc(100vw-1rem))] border-border p-0">
             <SheetTitle className="sr-only">{t("sidebar.agentsTitle")}</SheetTitle>
             <AgentSidebar onNavigate={() => setMobileSidebarOpen(false)} />
           </SheetContent>

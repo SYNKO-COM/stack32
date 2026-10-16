@@ -35,7 +35,7 @@ export function UserMenu() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon-lg"
           className="rounded-full"
           aria-label={t("common:a11y.userMenu")}
         >

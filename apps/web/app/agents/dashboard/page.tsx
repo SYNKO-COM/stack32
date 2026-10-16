@@ -82,7 +82,7 @@ export default function DashboardPage() {
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "rounded-full px-4",
+                  "min-h-11 rounded-full px-4 sm:min-h-8",
                   tab === "general" && "bg-background text-foreground shadow-sm",
                 )}
                 onClick={() => setTab("general")}
@@ -96,7 +96,7 @@ export default function DashboardPage() {
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "rounded-full px-4",
+                  "min-h-11 rounded-full px-4 sm:min-h-8",
                   tab === "agents" && "bg-background text-foreground shadow-sm",
                 )}
                 onClick={() => setTab("agents")}

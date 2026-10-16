@@ -51,6 +51,7 @@ function ViewTabs({ agentId }: { agentId: string }) {
       ariaLabel={t("a11y.viewTabs")}
       layoutId="active-view-tab"
       active={active}
+      mobileExpanded
       items={[
         { id: "build", href: `/agents/${agentId}/build`, label: t("tabs.build"), icon: Hammer },
         { id: "agent", href: `/agents/${agentId}/agent`, label: t("tabs.agent"), icon: Sparkles },
@@ -162,21 +163,26 @@ export function Topbar({ agentId }: { agentId: string }) {
   const displayUrl = publicUrl ?? resolvedPublicUrl;
 
   return (
-    <header className="flex items-center justify-between gap-3 px-4 py-3 md:px-6">
-      <div className="flex items-center gap-2">
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-3 py-2 sm:justify-between sm:border-b-0 sm:px-4 sm:py-3 md:px-6">
+      <div className="contents sm:flex sm:items-center sm:gap-2">
         <Button
           variant="ghost"
-          size="icon-sm"
-          className="lg:hidden"
+          size="icon-lg"
+          className="order-1 lg:hidden"
           aria-label={t("common:a11y.toggleSidebar")}
           onClick={() => setMobileSidebarOpen(true)}
         >
           <Menu aria-hidden="true" />
         </Button>
-        <ViewTabs agentId={agentId} />
+        <span className="order-1 min-w-0 flex-1 truncate text-sm font-semibold sm:hidden">
+          {agent?.name ?? t("builder:sidebar.untitledAgent")}
+        </span>
+        <div className="order-3 w-full sm:order-none sm:w-auto">
+          <ViewTabs agentId={agentId} />
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="order-2 ml-auto flex shrink-0 items-center gap-1 sm:order-none sm:gap-2">
         <span
           className="hidden items-center gap-1.5 font-mono text-xs text-muted-foreground/70 sm:flex"
           role="status"
@@ -185,12 +191,12 @@ export function Topbar({ agentId }: { agentId: string }) {
           {t("common:autosave.saved")}
         </span>
 
-        <ThemeToggle />
+        <ThemeToggle className="hidden sm:inline-flex" />
 
         {hasUnpublishedDraft ? (
           <Button
             size="sm"
-            className="gap-1.5 rounded-full px-2.5 sm:px-3"
+            className="h-10 gap-1.5 rounded-full px-3 sm:h-8"
             onClick={() => setPublishOpen(true)}
             disabled={publishAgent.isPending || agent?.status === "building"}
             aria-label={
@@ -209,7 +215,7 @@ export function Topbar({ agentId }: { agentId: string }) {
         ) : isPublished ? (
           <Button
             size="sm"
-            className="gap-1.5 rounded-full px-2.5 sm:px-3"
+            className="h-10 gap-1.5 rounded-full px-3 sm:h-8"
             onClick={openShare}
             aria-label={t("builder:topbar.share")}
           >
@@ -219,7 +225,7 @@ export function Topbar({ agentId }: { agentId: string }) {
         ) : (
           <Button
             size="sm"
-            className="gap-1.5 rounded-full px-2.5 sm:px-3"
+            className="h-10 gap-1.5 rounded-full px-3 sm:h-8"
             onClick={() => setPublishOpen(true)}
             disabled={publishAgent.isPending || agent?.status === "building"}
             aria-label={
