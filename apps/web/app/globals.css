@@ -278,6 +278,15 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  /* iOS zooms form controls below 16 px. Keep editing stable on phones. */
+  @media (max-width: 639px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+
   ::selection {
     background: color-mix(in srgb, var(--brand-from) 35%, transparent);
     color: var(--foreground);
@@ -497,4 +506,3 @@ html.dark .structure-agent-flow .react-flow__controls-button svg path {
   outline: 2px solid color-mix(in srgb, var(--brand) 55%, transparent);
   outline-offset: 4px;
 }
-

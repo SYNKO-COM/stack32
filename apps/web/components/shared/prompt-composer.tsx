@@ -533,7 +533,7 @@ export function PromptComposer({
             "w-full resize-none bg-transparent text-foreground placeholder:text-muted-foreground/70 focus:outline-none",
             size === "hero"
               ? "min-h-16 px-2 pt-1 text-base leading-relaxed sm:min-h-20 sm:px-2.5 sm:pt-1.5 sm:text-lg"
-              : "min-h-10 px-2 pt-1 text-sm",
+              : "min-h-10 px-2 pt-1 text-base sm:text-sm",
           )}
         />
 
@@ -552,7 +552,7 @@ export function PromptComposer({
               <Button
                 type="button"
                 variant="ghost"
-                size={size === "hero" ? "icon" : "icon-sm"}
+                size={size === "hero" ? "icon" : "icon-lg"}
                 className="rounded-full text-muted-foreground"
                 aria-label={t("composer.attach")}
                 title={t("composer.attach")}
@@ -577,7 +577,7 @@ export function PromptComposer({
               <Button
                 type="button"
                 variant="ghost"
-                size={size === "hero" ? "icon" : "icon-sm"}
+                size={size === "hero" ? "icon" : "icon-lg"}
                 className="rounded-full text-brand"
                 aria-label={t("composer.stopRecording")}
                 title={t("composer.stopRecording")}
@@ -590,7 +590,7 @@ export function PromptComposer({
               <Button
                 type="button"
                 variant="ghost"
-                size={size === "hero" ? "icon" : "icon-sm"}
+                size={size === "hero" ? "icon" : "icon-lg"}
                 className="rounded-full text-muted-foreground"
                 aria-label={t("composer.voice")}
                 title={t("composer.voice")}
@@ -605,7 +605,7 @@ export function PromptComposer({
             {paused && !recording && !transcribing ? (
               <Button
                 type="button"
-                size={size === "hero" ? "icon" : "icon-sm"}
+                size={size === "hero" ? "icon" : "icon-lg"}
                 variant="secondary"
                 onClick={onStop}
                 disabled={!onStop}
@@ -657,7 +657,7 @@ export function PromptComposer({
                         size={size === "hero" ? "default" : "sm"}
                         disabled={busy || disabled}
                         className={cn(
-                          "h-8 gap-1 rounded-full border-border/70 bg-background/60 px-2.5 text-xs font-medium text-foreground/80 shadow-none hover:bg-foreground/[0.04]",
+                          "h-10 gap-1 rounded-full border-border/70 bg-background/60 px-3 text-sm font-medium text-foreground/80 shadow-none hover:bg-foreground/[0.04] sm:h-8 sm:px-2.5 sm:text-xs",
                           size === "hero" && "h-10 px-3 text-sm",
                         )}
                         aria-label={t("composer.mode.label")}
@@ -698,7 +698,7 @@ export function PromptComposer({
                 ) : null}
                 <Button
                   type="button"
-                  size={size === "hero" ? "icon-lg" : "icon-sm"}
+                  size="icon-lg"
                   onClick={submit}
                   disabled={!canSend}
                   className="rounded-full"

@@ -23,12 +23,14 @@ export function SegmentedTabs<T extends string>({
   layoutId,
   ariaLabel,
   className,
+  mobileExpanded = false,
 }: {
   items: readonly SegmentedTabItem<T>[];
   active: T;
   layoutId: string;
   ariaLabel: string;
   className?: string;
+  mobileExpanded?: boolean;
 }) {
   const reducedMotion = useReducedMotion();
 
@@ -37,6 +39,7 @@ export function SegmentedTabs<T extends string>({
       aria-label={ariaLabel}
       className={cn(
         "glass inline-flex w-fit max-w-full shrink-0 items-center gap-0.5 rounded-full p-1",
+        mobileExpanded && "w-full sm:w-fit",
         className,
       )}
     >
@@ -50,9 +53,12 @@ export function SegmentedTabs<T extends string>({
             title={label}
             className={cn(
               "relative flex shrink-0 items-center justify-center gap-1.5 rounded-full py-1.5 text-sm transition-colors",
+              mobileExpanded && "min-w-0 flex-1 py-2.5 text-xs sm:flex-none sm:py-1.5 sm:text-sm",
               isActive
                 ? "px-3 text-foreground"
-                : "size-9 px-0 text-muted-foreground hover:text-foreground/80",
+                : mobileExpanded
+                  ? "px-2 text-muted-foreground hover:text-foreground/80 sm:size-9 sm:px-0"
+                  : "size-9 px-0 text-muted-foreground hover:text-foreground/80",
             )}
           >
             {isActive ? (
@@ -71,7 +77,9 @@ export function SegmentedTabs<T extends string>({
             {isActive ? (
               <span className="relative z-10 whitespace-nowrap">{label}</span>
             ) : (
-              <span className="sr-only">{label}</span>
+              <span className={mobileExpanded ? "relative z-10 truncate sm:sr-only" : "sr-only"}>
+                {label}
+              </span>
             )}
           </Link>
         );

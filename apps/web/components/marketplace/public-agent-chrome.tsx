@@ -40,13 +40,13 @@ export function PublicAgentChrome({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-4 py-3 md:px-6">
-        <div className="flex min-w-20 items-center justify-start sm:min-w-28">
+      <header className="relative z-20 flex shrink-0 items-center justify-between gap-2 border-b border-border/70 px-3 py-2 sm:px-4 sm:py-3 md:px-6">
+        <div className="flex min-w-0 items-center justify-start gap-1 sm:min-w-28">
           {onBack ? (
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon-lg"
               className="rounded-full"
               onClick={onBack}
               aria-label={t("publicAgent.backToListing")}
@@ -55,13 +55,14 @@ export function PublicAgentChrome({
               <ArrowLeft className="size-4" aria-hidden="true" />
             </Button>
           ) : null}
+          <div className="sm:hidden"><Logo href="/" withWordmark={!onBack} /></div>
         </div>
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+        <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block">
           <Logo href="/" size="default" />
         </div>
-        <div className="flex min-w-20 items-center justify-end gap-0.5 sm:min-w-36 sm:gap-1">
-          <ThemeToggle />
-          <LanguageSwitcher />
+        <div className="flex shrink-0 items-center justify-end gap-0.5 sm:min-w-36 sm:gap-1">
+          <ThemeToggle size="lg" className="sm:!size-8" />
+          <LanguageSwitcher size="lg" className="sm:!size-8" />
           {isLoading ? null : user ? (
             accountMode === "menu" ? (
               <UserMenu />
@@ -69,7 +70,7 @@ export function PublicAgentChrome({
               <Button
                 asChild
                 variant="ghost"
-                size="icon-sm"
+                size="icon-lg"
                 className="rounded-full"
                 aria-label={t("publicAgent.createOwnAgent")}
                 title={t("publicAgent.createOwnAgent")}
@@ -84,7 +85,7 @@ export function PublicAgentChrome({
               </Button>
             )
           ) : (
-            <Button asChild size="sm" variant="outline" className="rounded-full">
+            <Button asChild size="sm" variant="outline" className="h-10 rounded-full px-3 sm:h-8">
               <Link href={`/login?next=${encodeURIComponent(loginNext)}`}>
                 {t("actions.signIn")}
               </Link>

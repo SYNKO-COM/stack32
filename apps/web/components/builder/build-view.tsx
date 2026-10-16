@@ -1480,14 +1480,14 @@ export function BuildView({ agentId }: { agentId: string }) {
     <div className="flex h-full min-h-0 flex-col">
       <div
         ref={scrollRef}
-        className="scrollbar-thin relative min-h-0 flex-1 overflow-y-auto px-4"
+        className="scrollbar-thin relative min-h-0 flex-1 overflow-y-auto px-3 sm:px-4"
         role="log"
         aria-label={t("builder:a11y.conversation")}
         aria-live="polite"
       >
         <div
           data-builder-scroll-content
-          className="relative mx-auto max-w-3xl space-y-6 pt-8 pb-16"
+          className="relative mx-auto max-w-3xl space-y-5 pt-4 pb-10 sm:space-y-6 sm:pt-8 sm:pb-16"
         >
           {messages.length === 0 && !showLocalWorking ? (
             <div className="flex min-h-[45vh] flex-col items-center justify-center text-center">
@@ -1601,7 +1601,7 @@ export function BuildView({ agentId }: { agentId: string }) {
         </div>
       </div>
 
-      <div className="shrink-0 px-4 pb-5">
+      <div className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4 sm:pb-5">
         <PromptComposer
           className="mx-auto max-w-3xl"
           placeholder={

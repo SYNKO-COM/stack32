@@ -32,7 +32,7 @@ export function Footer() {
 
   return (
     <footer className="relative border-t border-border py-14">
-      <div className="mx-auto grid max-w-6xl gap-10 px-6 md:grid-cols-4">
+      <div className="mx-auto grid max-w-6xl gap-10 px-6 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-3">
           <Logo href="/" />
           <p className="max-w-xs text-sm text-muted-foreground">{t("brand.tagline")}</p>
@@ -77,7 +77,7 @@ export function Footer() {
             </Link>
           ))}
           <CookiePreferencesButton className="block h-auto p-0 text-sm" />
-          <DoNotSellButton className="block" />
+          <DoNotSellButton className="block max-w-full whitespace-normal text-left" />
         </nav>
       </div>
 

@@ -93,7 +93,7 @@ function AgentRow({
       <Link
         href={`/agents/${agent.id}/build`}
         onClick={onNavigate}
-        className="flex min-w-0 flex-1 items-center gap-2.5"
+        className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5"
         aria-current={isActive ? "page" : undefined}
       >
         <AgentIcon icon={agent.icon} />
@@ -109,8 +109,8 @@ function AgentRow({
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            size="icon-xs"
-            className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+            size="icon-lg"
+            className="opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100 data-[state=open]:opacity-100"
             aria-label={t("common:a11y.agentMenu")}
           >
             <MoreHorizontal aria-hidden="true" />

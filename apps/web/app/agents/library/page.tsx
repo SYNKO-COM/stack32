@@ -47,7 +47,7 @@ function AgentCard({
       </div>
       <div className="flex flex-wrap gap-2">
         {card.isOwner ? (
-          <Button asChild size="sm" variant="outline" className="gap-1.5 rounded-full">
+          <Button asChild size="sm" variant="outline" className="min-h-11 gap-1.5 rounded-full sm:min-h-8">
             <Link href={`/agents/${card.agentId}/build`}>
               <Hammer className="size-3.5" aria-hidden="true" />
               {t("common:myAgents.openBuilder")}
@@ -55,14 +55,14 @@ function AgentCard({
           </Button>
         ) : null}
         {card.publicPath ? (
-          <Button asChild size="sm" className="gap-1.5 rounded-full">
+          <Button asChild size="sm" className="min-h-11 gap-1.5 rounded-full sm:min-h-8">
             <Link href={card.publicPath}>
               <ExternalLink className="size-3.5" aria-hidden="true" />
               {t("common:actions.openAgent")}
             </Link>
           </Button>
         ) : card.isOwner ? (
-          <Button asChild size="sm" className="gap-1.5 rounded-full">
+          <Button asChild size="sm" className="min-h-11 gap-1.5 rounded-full sm:min-h-8">
             <Link href={`/agents/${card.agentId}/agent`}>
               <ExternalLink className="size-3.5" aria-hidden="true" />
               {t("common:actions.openAgent")}
@@ -120,14 +120,14 @@ export default function LibraryPage() {
     <div className="flex min-h-0 flex-1 flex-col">
       <WorkspaceChrome title={t("myAgents.title")} subtitle={t("myAgents.subtitle")} />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
-        <div className="glass mb-4 inline-flex w-fit max-w-full flex-wrap gap-1 rounded-full p-1">
+        <div className="glass mb-4 grid w-full grid-cols-2 gap-1 rounded-2xl p-1 sm:inline-flex sm:w-fit sm:max-w-full sm:flex-wrap sm:rounded-full">
           {tabs.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setTab(item.id)}
               className={cn(
-                "rounded-full px-3 py-1.5 text-sm transition-colors",
+                "min-h-11 rounded-xl px-3 py-2 text-sm transition-colors sm:min-h-0 sm:rounded-full sm:py-1.5",
                 tab === item.id
                   ? "bg-foreground/[0.08] text-foreground"
                   : "text-muted-foreground hover:text-foreground",

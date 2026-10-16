@@ -634,7 +634,7 @@ export function PublicAgentClient({
 
   if (!agent) {
     return (
-      <div className="relative flex h-svh overflow-hidden">
+      <div className="relative flex h-dvh overflow-hidden">
         <AnimatedBackground variant="editor" />
         <PublicAgentChrome loginNext={prettyPath}>
           <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
@@ -657,7 +657,7 @@ export function PublicAgentClient({
   void initialAuthenticated;
 
   return (
-    <div className="relative flex h-svh overflow-hidden">
+    <div className="relative flex h-dvh overflow-hidden">
       <AnimatedBackground variant="editor" />
       <PublicAgentChrome
         loginNext={prettyPath}
