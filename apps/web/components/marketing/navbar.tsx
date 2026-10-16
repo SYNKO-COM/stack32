@@ -91,7 +91,8 @@ export function Navbar() {
               </div>
             </SheetContent>
           </Sheet>
-          <Logo href="/" />
+          <span className="min-[340px]:hidden"><Logo href="/" withWordmark={false} /></span>
+          <span className="hidden min-[340px]:inline-flex"><Logo href="/" /></span>
         </div>
 
         <div className="glass hidden items-center gap-1 rounded-full px-2 py-1 lg:flex">

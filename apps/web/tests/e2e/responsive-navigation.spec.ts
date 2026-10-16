@@ -30,6 +30,20 @@ test("phone navigation exposes every public section and remains touchable", asyn
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+test("phone header controls do not overlap", async ({ page }) => {
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto("/");
+    const controls = await page.evaluate(() => {
+      const links = [...document.querySelectorAll('header a[aria-label="Stack32"]')];
+      const logo = links.find((link) => getComputedStyle(link).display !== "none" && link.getBoundingClientRect().width > 0 && link.getBoundingClientRect().height > 0);
+      const cta = [...document.querySelectorAll("header button")].find((button) => /commencer|get started/i.test(button.textContent ?? "") && button.getBoundingClientRect().width > 0);
+      return { logoRight: logo?.getBoundingClientRect().right ?? 0, ctaLeft: cta?.getBoundingClientRect().left ?? 0 };
+    });
+    expect(controls.logoRight, `${width}px: logo should end before the CTA`).toBeLessThan(controls.ctaLeft);
+  }
+});
+
 test("tablet navigation stays in its drawer; desktop links stay visible", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 900 });
   await page.goto("/");
