@@ -297,6 +297,7 @@ export function AgentSidebar({ onNavigate = () => {} }: { onNavigate?: () => voi
           ariaLabel={t("builder:workspaceNav.label")}
           layoutId="workspace-nav-tab"
           className="mx-auto w-fit max-w-full"
+          onNavigate={onNavigate}
           active={workspaceTab}
           items={[
             {

@@ -98,6 +98,18 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
     timeout: 45_000,
   });
 
+  // The phone drawer must disappear after navigating to another workspace page.
+  const builderUrl = page.url();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.getByRole("button", { name: /toggle agent list|afficher.*agents/i }).click();
+  const mobileDrawer = page.getByRole("dialog", { name: /ai agents|agents ia/i });
+  await expect(mobileDrawer).toBeVisible();
+  await mobileDrawer.getByRole("link", { name: /my agents|mes agents/i }).click();
+  await expect(page).toHaveURL(/\/agents\/library/);
+  await expect(mobileDrawer).toBeHidden();
+  await page.goto(builderUrl);
+  await page.setViewportSize({ width: 1280, height: 720 });
+
   // --- Logout ---------------------------------------------------------------
   await page.getByRole("button", { name: /user menu|menu utilisateur/i }).click();
   await page.getByRole("menuitem", { name: /log ?out|se déconnecter/i }).click();

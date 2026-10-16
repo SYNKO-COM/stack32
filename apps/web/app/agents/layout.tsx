@@ -1,5 +1,8 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+
 import { RequireAuth } from "@/components/auth/require-auth";
 import { BillingDialog } from "@/components/billing/billing-dialog";
 import { BuyCreditsDialog } from "@/components/billing/buy-credits-dialog";
@@ -15,6 +18,11 @@ export default function AgentsLayout({ children }: { children: React.ReactNode }
   const { t } = useTranslation("builder");
   const mobileSidebarOpen = useUiStore((s) => s.mobileSidebarOpen);
   const setMobileSidebarOpen = useUiStore((s) => s.setMobileSidebarOpen);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname, setMobileSidebarOpen]);
 
   return (
     <RequireAuth>
