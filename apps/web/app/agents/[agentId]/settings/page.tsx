@@ -235,7 +235,7 @@ export default function AgentSettingsPage() {
 
           <div className="grid items-start gap-5 lg:grid-cols-2 lg:gap-6 xl:gap-8">
             {/* Left: identity & brief */}
-            <section className="space-y-4 rounded-2xl border border-border/70 bg-background/50 p-4 md:p-5">
+            <section className="min-w-0 space-y-4 rounded-2xl border border-border/70 bg-background/50 p-4 md:p-5">
               <div>
                 <h2 className="text-sm font-semibold tracking-tight">
                   {t("agentSettings.profileTitle")}
@@ -365,7 +365,7 @@ export default function AgentSettingsPage() {
             </section>
 
             {/* Right: live access, marketplace, link */}
-            <div className="space-y-5 rounded-2xl border border-border/70 bg-background/50 p-4 md:p-5">
+            <div className="min-w-0 space-y-5 rounded-2xl border border-border/70 bg-background/50 p-4 md:p-5">
               <div className="space-y-1.5">
                 <Label htmlFor="visibility">{t("agentSettings.visibility")}</Label>
                 <DaSelect

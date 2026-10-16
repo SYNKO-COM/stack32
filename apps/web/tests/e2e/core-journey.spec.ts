@@ -107,6 +107,12 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await mobileDrawer.getByRole("link", { name: /my agents|mes agents/i }).click();
   await expect(page).toHaveURL(/\/agents\/library/);
   await expect(mobileDrawer).toBeHidden();
+  await page.goto(builderUrl.replace(/\/build$/, "/settings"));
+  const iconButton = page.getByRole("button", { name: "pen-line" });
+  await expect(iconButton).toBeVisible();
+  const iconBox = await iconButton.boundingBox();
+  expect(iconBox).not.toBeNull();
+  expect(iconBox!.x + iconBox!.width).toBeLessThanOrEqual(320);
   await page.goto(builderUrl);
   await page.setViewportSize({ width: 1280, height: 720 });
 
