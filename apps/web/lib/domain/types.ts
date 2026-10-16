@@ -145,7 +145,6 @@ export interface ToolBinding {
 export type ModelProfileId = "fast" | "standard" | "heavy";
 
 export interface AgentSpec {
-  chromeEnabled?: boolean;
   schemaVersion: string;
   name: string;
   slug: string;
@@ -339,7 +338,6 @@ export interface BuilderUiComponent {
   requestId: string;
   context?: "builder" | "live";
   fields: BuilderUiComponentField[];
-  chromeEnabled?: boolean;
   /** tool_review_form */
   mode?: "initial" | "modify";
   tools?: BuilderToolReviewEntry[];
