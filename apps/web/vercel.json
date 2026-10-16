@@ -13,6 +13,7 @@
       "codex/chrome-extension-parked-2026-10-16": false,
       "codex/park-chrome-preprod": false,
       "codex/mobile-responsive-preprod": false,
+      "codex/mobile-nav-drawer-close": false,
       "preprod": false
     }
   }

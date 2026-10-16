@@ -24,6 +24,7 @@ export function SegmentedTabs<T extends string>({
   ariaLabel,
   className,
   mobileExpanded = false,
+  onNavigate,
 }: {
   items: readonly SegmentedTabItem<T>[];
   active: T;
@@ -31,6 +32,7 @@ export function SegmentedTabs<T extends string>({
   ariaLabel: string;
   className?: string;
   mobileExpanded?: boolean;
+  onNavigate?: () => void;
 }) {
   const reducedMotion = useReducedMotion();
 
@@ -49,6 +51,7 @@ export function SegmentedTabs<T extends string>({
           <Link
             key={id}
             href={href}
+            onClick={onNavigate}
             aria-current={isActive ? "page" : undefined}
             title={label}
             className={cn(
