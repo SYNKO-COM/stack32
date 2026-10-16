@@ -214,7 +214,7 @@
     "title": "Tarifs",
     "subtitle": "Choisissez l’offre qui correspond à votre projet.",
     "perMonth": "/mois",
-    "intro": "Quatre niveaux clairs : tester sans carte, publier vos premiers agents, accélérer en Pro, ou scaler une flotte. En annuel (−20 %) : Starter 20 $, Pro 40 $, Scale 80 $/mois.",
+    "intro": "Trois offres pour publier vos premiers agents, développer votre activité ou gérer une flotte. Économisez 20 % avec la facturation annuelle.",
     "billingToggleLabel": "Période de facturation",
     "monthly": "Mensuel",
     "annual": "Annuel",
@@ -326,7 +326,7 @@
         },
         {
           "question": "Puis-je annuler à tout moment ?",
-          "answer": "Oui. Vous conservez l’accès jusqu’à la fin de la période déjà payée, puis vous repassez sur le plan Gratuit. L’annulation ne rembourse pas la période entamée."
+          "answer": "Oui. Vous conservez l’accès jusqu’à la fin de la période déjà payée, puis les avantages de votre abonnement payant prennent fin. L’annulation ne rembourse pas la période entamée."
         },
         {
           "question": "Puis-je être remboursé ?",
@@ -400,7 +400,7 @@
           },
           {
             "question": "Comment fonctionne la facturation ?",
-            "answer": "Un abonnement mensuel simple pour Pro, géré de façon sécurisée par Whop. Free permet d'explorer avec des limites. Annulable à tout moment."
+            "answer": "Choisissez Starter, Pro ou Scale, avec un paiement sécurisé par Whop. Le renouvellement peut être annulé à tout moment."
           },
           {
             "question": "Qui est derrière Stack32 ?",
@@ -427,7 +427,7 @@
         },
         {
           "title": "Offres & facturation",
-          "description": "Free vs Pro, upgrades, annulations et le rôle de Whop dans le paiement."
+          "description": "Starter, Pro et Scale, changements d’offre, annulations et paiement avec Whop."
         },
         {
           "title": "Retours & idées",

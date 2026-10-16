@@ -113,7 +113,7 @@ function OnboardingPageInner() {
     searchParams,
   ]);
 
-  const readyForFlow = profileReadyForFlow || retryReady;
+  const readyForFlow = profileReadyForFlow || retryReady || startedIncomplete;
 
   if (!mounted) return <OnboardingShell><BrandLoader label={t("loading")} size="lg" /></OnboardingShell>;
 
