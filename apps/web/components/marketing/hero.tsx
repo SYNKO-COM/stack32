@@ -45,7 +45,7 @@ export function Hero() {
           <PromptComposer
             size="hero"
             animatedPlaceholders={examples}
-            onSubmit={(value) => void startFromPrompt(value)}
+            onSubmit={(value) => startFromPrompt(value)}
             className="mx-auto w-full max-w-2xl text-left sm:max-w-3xl"
           />
         </motion.div>

@@ -7,19 +7,18 @@ import { Check } from "lucide-react";
 import { CreditSelect } from "@/components/billing/credit-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useActivatePlan } from "@/hooks/use-billing";
-import { useCurrentUser } from "@/hooks/use-auth";
+import { useCurrentUser, useProfile } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   creditOptionsForPlan,
-  PLAN_KEYS,
+  OFFERED_PLAN_KEYS,
   PLANS,
   pricePlanSelection,
   type BillingInterval,
   type PlanKey,
 } from "@/lib/billing/plans";
 import { cn } from "@/lib/utils";
-import { useUiStore } from "@/store/ui-store";
+import { onboardingPathForNext } from "@/lib/auth/post-auth";
 
 function formatUsd(amount: number, locale: string): string {
   const rounded = Math.round(amount * 100) / 100;
@@ -37,10 +36,9 @@ function formatCredits(n: number, locale: string): string {
 
 export default function PricingPage() {
   const { t, i18n } = useTranslation("marketing");
-  const openDialog = useUiStore((s) => s.openDialog);
   const router = useRouter();
   const { data: user } = useCurrentUser();
-  const activate = useActivatePlan();
+  const { data: profile } = useProfile();
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [creditByPlan, setCreditByPlan] = useState<Record<PlanKey, number>>({
     free: PLANS.free.baseCredits,
@@ -52,7 +50,7 @@ export default function PricingPage() {
 
   const plans = useMemo(
     () =>
-      PLAN_KEYS.map((id) => {
+      OFFERED_PLAN_KEYS.map((id) => {
         const credits = creditByPlan[id];
         const priced = pricePlanSelection(id, interval, credits);
         const showAnnual = interval === "annual" && PLANS[id].monthlyPriceUsd > 0;
@@ -97,19 +95,6 @@ export default function PricingPage() {
   }[];
 
   const handleCta = async (planKey: PlanKey) => {
-    if (planKey === "free") {
-      if (!user) {
-        openDialog("auth", { authMode: "signup" });
-        return;
-      }
-      await activate.mutateAsync({
-        planKey: "free",
-        interval: "monthly",
-        creditsMonthly: PLANS.free.baseCredits,
-      });
-      router.push("/agents");
-      return;
-    }
 
     const credits = creditByPlan[planKey];
     const qs = new URLSearchParams({
@@ -119,8 +104,8 @@ export default function PricingPage() {
     });
     const checkoutPath = `/billing/checkout?${qs.toString()}`;
 
-    if (!user) {
-      openDialog("auth", { authMode: "signup", preferredNext: checkoutPath });
+    if (!user || !profile?.onboardingCompleted) {
+      router.push(onboardingPathForNext(checkoutPath));
       return;
     }
 
@@ -175,7 +160,7 @@ export default function PricingPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {plans.map((plan) => (
           <div
             key={plan.id}
@@ -200,9 +185,7 @@ export default function PricingPage() {
               ) : null}
               <p>
                 <span className="text-4xl font-semibold tracking-tight">{plan.displayPrice}</span>
-                {plan.id !== "free" ? (
-                  <span className="text-sm text-muted-foreground">{t("pricing.perMonth")}</span>
-                ) : null}
+                <span className="text-sm text-muted-foreground">{t("pricing.perMonth")}</span>
               </p>
               {/* The annual-billing note keeps its line even when empty, so the
                   monthly cards do not jump when the toggle flips. That reserved
@@ -220,12 +203,10 @@ export default function PricingPage() {
             <Button
               className="mt-1 w-full rounded-full"
               variant={plan.popular ? "default" : "outline"}
-              disabled={activate.isPending}
               onClick={() => void handleCta(plan.id)}
             >
               {plan.cta}
             </Button>
-            {plan.id !== "free" ? (
               <div className="mt-5 space-y-1.5">
                 <p className="text-xs font-medium text-muted-foreground">
                   {t("pricing.creditsLabel")}
@@ -240,29 +221,11 @@ export default function PricingPage() {
                     t("pricing.creditOption", { count: formatCredits(n, locale) })
                   }
                   needMoreLabel={t("pricing.needMoreCredits")}
-                  onNeedMore={() => openDialog("auth", { authMode: "signup" })}
+                  onNeedMore={() => router.push("/onboarding")}
                 />
                 <p className="text-[11px] text-muted-foreground/80">{plan.creditsLabel}</p>
               </div>
-            ) : (
-              // Free has no credit picker. Its allowance sits on the same line
-              // as the paid plans' label, and the rest of the picker's height
-              // is reserved so the four feature lists start together.
-              <div className="mt-5 space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {plan.creditsLabel}
-                </p>
-                <p className="h-9 text-transparent select-none" aria-hidden="true">
-                  —
-                </p>
-                <p
-                  className="text-[11px] text-transparent select-none"
-                  aria-hidden="true"
-                >
-                  —
-                </p>
-              </div>
-            )}
+
 
             <ul className="mt-7 flex-1 space-y-2.5 border-t border-border/60 pt-6">
               {plan.features.map((feature) => (

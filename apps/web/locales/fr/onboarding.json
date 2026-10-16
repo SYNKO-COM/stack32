@@ -36,7 +36,7 @@
   },
   "step3": {
     "title": "Parlez-nous un peu de vous",
-    "subtitle": "Votre prénom, un nom d'utilisateur public, et éventuellement comment vous comptez utiliser Stack32.",
+    "subtitle": "Votre prénom et votre nom public, pour personnaliser votre espace.",
     "firstName": "Prénom",
     "firstNamePlaceholder": "Ada",
     "username": "Nom d'utilisateur",
@@ -107,12 +107,50 @@
     "summaryTitle": "Votre premier projet prend forme",
     "summarySubtitle": "Voici le point de départ que nous transmettrons au builder. Vous gardez la main sur chaque étape.",
     "nextSteps": [
-      "Choisir la formule adaptée à votre projet.",
-      "Construire et tester l’agent sur un exemple concret.",
-      "L’améliorer, puis décider de le garder privé ou de le publier."
+      "Visualisez un premier schéma personnalisé de votre agent.",
+      "Choisissez son nom et l’abonnement qui correspond à votre projet.",
+      "Lancez ensuite sa construction, testez-le et validez-le avant publication."
     ],
     "disclaimer": "Un abonnement donne accès aux fonctionnalités de la formule choisie. Les résultats et d’éventuels revenus dépendent de votre agent, de ses tests et de son adoption ; ils ne sont pas garantis.",
     "finish": "Préparer mon agent",
-    "error": "La préparation n’a pas abouti. Vos réponses sont conservées ; réessayez."
+    "error": "La préparation n’a pas abouti. Vos réponses sont conservées ; réessayez.",
+    "authCheckpoint": "Votre projet prend forme",
+    "authTitle": "Gardez votre idée, créez votre espace",
+    "authSubtitle": "Vos premières réponses sont enregistrées sur cet appareil. Créez un compte pour préparer la suite de votre projet."
+  },
+  "preview": {
+    "badge": "Aperçu personnalisé",
+    "title": "Votre idée prend forme",
+    "subtitle": "Nous organisons votre brief en un premier schéma d’agent.",
+    "readyTitle": "Votre aperçu est prêt",
+    "readySubtitle": "Voici le point de départ de votre agent. Nommez-le, puis choisissez votre abonnement pour lancer sa construction et ses tests.",
+    "diagramLabel": "Schéma proposé : brief, consignes, outils, résultat et vérification",
+    "nodes": {
+      "brief": "Votre brief",
+      "instructions": "Consignes",
+      "output": "Résultat",
+      "review": "Vérification"
+    },
+    "tools": {
+      "research": "Recherche suggérée",
+      "documents": "Documents suggérés",
+      "writing": "Rédaction suggérée",
+      "analysis": "Analyse suggérée"
+    },
+    "stages": [
+      "Mise en forme de votre objectif",
+      "Organisation de vos informations",
+      "Suggestion des capacités",
+      "Assemblage du schéma",
+      "Préparation du récapitulatif"
+    ],
+    "localNotice": "Animation de votre aperçu, préparé sur cet appareil. Aucun agent ni modèle IA n’est exécuté à cette étape.",
+    "skip": "Afficher l’aperçu maintenant",
+    "nameLabel": "Nom de votre agent",
+    "defaultName": "Mon premier agent",
+    "use": "Continuer pour l’utiliser",
+    "monetize": "Préparer sa monétisation",
+    "paymentNotice": "Un abonnement payant est nécessaire pour continuer. La monétisation est disponible avec Pro ou Scale. Les outils seront validés et autorisés pendant la construction.",
+    "edit": "Modifier mes réponses"
   }
 }

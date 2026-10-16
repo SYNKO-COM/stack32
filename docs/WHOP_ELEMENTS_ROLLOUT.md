@@ -12,8 +12,18 @@ domain `https://pre-prod-659874458xx.stack32.com`, Supabase project
   boundaries provide immediate navigation feedback. Hero text is visible before hydration.
 - Nine onboarding steps: objective, role, idea, audience, first result, profile,
   discovery (optional), workspace and recap. Existing landing prompts are reused;
-  answers survive reload per account. Suggestions are editable examples, not a
-  promise of specialized agent templates or earnings.
+  answers survive reload per account. The first five questions are public; the
+  authentication checkpoint then adopts the anonymous draft once. Suggestions are
+  editable examples, not a promise of specialized agent templates or earnings.
+- A local 50-second animated blueprint follows the questions, with an immediate
+  preview option and reduced-motion support. It explicitly describes a preview,
+  never a completed live agent. Name selection precedes the paid plan picker.
+  No agent creation/build is triggered here. The saved brief is handed to the
+  existing builder only after an active paid subscription is observed.
+- Free is removed from public offers and the plan picker, including SEO offers.
+  Historical free entitlement definitions and existing accounts are preserved.
+  This is not a retroactive change to their subscriptions. Draft continuity is
+  device-local; closing the tab keeps the account draft in local storage.
 - Official Elements 1.9.0 replace `@whop/checkout`. Email, billing address and
   payment methods use Whop elements. Card details never enter Stack32 fields.
 - Payment fields appear immediately; our final subscription button requires two

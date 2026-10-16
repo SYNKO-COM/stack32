@@ -36,7 +36,7 @@
   },
   "step3": {
     "title": "Tell us a bit about you",
-    "subtitle": "Your first name, a public username, and optionally how you plan to use Stack32.",
+    "subtitle": "Your first name and public username, to personalize your workspace.",
     "firstName": "First name",
     "firstNamePlaceholder": "Ada",
     "username": "Username",
@@ -107,12 +107,50 @@
     "summaryTitle": "Your first project is taking shape",
     "summarySubtitle": "Here is the starting point we will pass to the builder. You stay in control at every step.",
     "nextSteps": [
-      "Choose the plan that fits your project.",
-      "Build and test your agent on a concrete example.",
-      "Improve it, then decide whether to keep it private or publish it."
+      "Preview a personalized blueprint for your agent.",
+      "Choose its name and the subscription that fits your project.",
+      "Then build, test and approve it before publishing."
     ],
     "disclaimer": "A subscription provides the features of your selected plan. Results and potential earnings depend on your agent, testing and adoption; they are not guaranteed.",
     "finish": "Prepare my agent",
-    "error": "We could not finish preparing your workspace. Your answers are saved; please try again."
+    "error": "We could not finish preparing your workspace. Your answers are saved; please try again.",
+    "authCheckpoint": "Your project is taking shape",
+    "authTitle": "Keep your idea. Create your space.",
+    "authSubtitle": "Your first answers are saved on this device. Create an account to prepare the next steps."
+  },
+  "preview": {
+    "badge": "Personalized preview",
+    "title": "Your idea is taking shape",
+    "subtitle": "We are arranging your brief into an initial agent blueprint.",
+    "readyTitle": "Your preview is ready",
+    "readySubtitle": "Here is your agent’s starting point. Name it, then choose a subscription to start building and testing it.",
+    "diagramLabel": "Proposed blueprint: brief, instructions, tools, output and review",
+    "nodes": {
+      "brief": "Your brief",
+      "instructions": "Instructions",
+      "output": "Output",
+      "review": "Review"
+    },
+    "tools": {
+      "research": "Suggested research",
+      "documents": "Suggested documents",
+      "writing": "Suggested writing",
+      "analysis": "Suggested analysis"
+    },
+    "stages": [
+      "Shaping your objective",
+      "Organizing your information",
+      "Suggesting capabilities",
+      "Assembling the blueprint",
+      "Preparing your project summary"
+    ],
+    "localNotice": "Animated preview prepared on this device. No agent or AI model runs at this stage.",
+    "skip": "Show the preview now",
+    "nameLabel": "Your agent’s name",
+    "defaultName": "My first agent",
+    "use": "Continue to use it",
+    "monetize": "Prepare to monetize it",
+    "paymentNotice": "A paid subscription is required to continue. Monetization is available with Pro or Scale. Tools will be validated and authorized during the build.",
+    "edit": "Edit my answers"
   }
 }

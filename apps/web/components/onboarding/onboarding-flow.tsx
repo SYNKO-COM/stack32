@@ -33,19 +33,21 @@ import { BrandLoader } from "@/components/shared/brand-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCreateAgent } from "@/hooks/use-agents";
+import { AuthForm } from "@/components/auth/auth-form";
+import { AgentPreview } from "@/components/onboarding/agent-preview";
 import { useCompleteOnboarding, useCurrentUser } from "@/hooks/use-auth";
 import { useCreateWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
-import { isCheckoutNext, postOnboardingPath } from "@/lib/auth/post-auth";
+import { postOnboardingPath } from "@/lib/auth/post-auth";
 import {
-  clearOnboardingDraft,
+  GUEST_ONBOARDING_ID,
+  adoptGuestOnboardingDraft,
   readOnboardingDraft,
   writeOnboardingDraft,
 } from "@/lib/onboarding-draft";
 import { getAuthRepository } from "@/lib/repositories/factory";
 import { writeActiveWorkspaceId } from "@/lib/workspace-preference";
-import { getPendingPrompt, setPendingPrompt } from "@/lib/pending-prompt";
+import { getPendingPrompt, consumePendingPrompt } from "@/lib/pending-prompt";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -142,11 +144,13 @@ export function OnboardingFlow() {
   const searchParams = useSearchParams();
   const reducedMotion = useReducedMotion();
   const { data: user } = useCurrentUser();
-  const userId = user?.id ?? "";
+  const userId = user?.id ?? GUEST_ONBOARDING_ID;
   const completeOnboarding = useCompleteOnboarding();
   const createWorkspace = useCreateWorkspace();
-  const createAgent = useCreateAgent();
 
+  const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
+  const [previewStartedAt, setPreviewStartedAt] = useState<number | null>(null);
+  const [agentName, setAgentName] = useState("");
   const [ready, setReady] = useState(false);
   const [hydratedFor, setHydratedFor] = useState<string | null>(null);
   const [showIntro, setShowIntro] = useState(true);
@@ -186,9 +190,11 @@ export function OnboardingFlow() {
       : "checking");
 
   if (userId && hydratedFor !== userId) {
-    const draft = readOnboardingDraft(userId);
+    const draft = user ? adoptGuestOnboardingDraft(userId) : readOnboardingDraft(userId);
     setHydratedFor(userId);
     setStep(draft.step);
+    setPreviewStartedAt(draft.previewStartedAt);
+    setAgentName(draft.agentName);
     setShowIntro(draft.showIntro);
     setDiscoverySource(draft.discoverySource);
     setRole(draft.role);
@@ -212,6 +218,9 @@ export function OnboardingFlow() {
     if (!ready || !userId) return;
     writeOnboardingDraft(userId, {
       version: 2,
+      previewStartedAt,
+      agentName,
+      awaitingPayment: false,
       step,
       goal,
       audience,
@@ -228,6 +237,8 @@ export function OnboardingFlow() {
     });
   }, [
     ready,
+    previewStartedAt,
+    agentName,
     userId,
     step,
     showIntro,
@@ -289,7 +300,7 @@ export function OnboardingFlow() {
     (step === 9 && useCase.trim().length >= 10 && workspaceName.trim().length > 0 && usernameOk);
 
   const handleFinish = async () => {
-    if (finishing || !canContinue) return;
+    if (finishing || !canContinue || !user || !agentName.trim()) return;
     setFinishing(true);
     setFinishError(false);
     try {
@@ -303,19 +314,15 @@ export function OnboardingFlow() {
       });
       const workspaceId = createdWorkspaceId ?? (await createWorkspace.mutateAsync(workspaceName.trim())).id;
       setCreatedWorkspaceId(workspaceId);
-      setPendingPrompt([useCase.trim(), t("journey.audienceLabel") + ": " + audience.trim(), t("journey.outcomeLabel") + ": " + outcome.trim()].join("\n"));
+      // Keep the brief as an inert draft until an active paid subscription exists.
+      // Merely visiting /agents before payment must not auto-submit a build.
+      consumePendingPrompt();
+      writeOnboardingDraft(userId, { ...readOnboardingDraft(userId), agentName: agentName.trim(), awaitingPayment: true });
       if (userId) {
         writeActiveWorkspaceId(userId, workspaceId);
 
       }
       const dest = postOnboardingPath(searchParams.get("next"));
-      if (isCheckoutNext(dest)) {
-        clearOnboardingDraft(userId);
-        router.push(dest);
-        return;
-      }
-      await createAgent.mutateAsync({ workspaceId: workspaceId });
-      clearOnboardingDraft(userId);
       router.push(dest);
     } catch {
       setFinishError(true);
@@ -329,6 +336,23 @@ export function OnboardingFlow() {
         <BrandLoader label={t("common:loading")} />
       </div>
     );
+  }
+
+  if (!user && step >= 6) {
+    return <div className="mx-auto w-full max-w-md space-y-6">
+      <p className="text-sm font-medium text-brand">{t("journey.authCheckpoint")}</p>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("journey.authTitle")}</h1>
+      <p className="text-muted-foreground">{t("journey.authSubtitle")}</p>
+      <AuthForm mode={authMode} onModeChange={setAuthMode} preferredNext={searchParams.get("next")} />
+      <Button variant="ghost" onClick={() => setStep(5)}>{t("common:actions.back")}</Button>
+    </div>;
+  }
+
+  if (previewStartedAt !== null) {
+    return <AgentPreview idea={useCase} audience={audience} outcome={outcome}
+      startedAt={previewStartedAt} name={agentName} onNameChange={setAgentName}
+      busy={finishing} error={finishError} onContinue={() => void handleFinish()}
+      onBack={() => setPreviewStartedAt(null)} />;
   }
 
   if (showIntro) {
@@ -588,7 +612,7 @@ export function OnboardingFlow() {
           <Button
             className="rounded-full px-6"
             disabled={!canContinue || finishing}
-            onClick={() => void handleFinish()}
+            onClick={() => { setAgentName((name) => name || t("preview.defaultName")); setPreviewStartedAt(Date.now()); }}
           >
             {finishing ? t("completing") : t("journey.finish")}
           </Button>

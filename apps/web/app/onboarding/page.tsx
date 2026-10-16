@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { AnimatedBackground } from "@/components/shared/animated-background";
@@ -31,7 +31,10 @@ function OnboardingShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+const subscribeMounted = () => () => {};
+
 function OnboardingPageInner() {
+  const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false);
   const { t } = useTranslation("common");
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -66,10 +69,7 @@ function OnboardingPageInner() {
   useEffect(() => {
     if (userLoading) return;
 
-    if (userError || !user) {
-      router.replace("/signup");
-      return;
-    }
+    if (userError || !user) return;
 
     if (profile && !profile.onboardingCompleted) {
       startedIncompleteRef.current = true;
@@ -114,6 +114,12 @@ function OnboardingPageInner() {
   ]);
 
   const readyForFlow = profileReadyForFlow || retryReady;
+
+  if (!mounted) return <OnboardingShell><BrandLoader label={t("loading")} size="lg" /></OnboardingShell>;
+
+  if (!userLoading && !user && !userError) {
+    return <OnboardingShell><OnboardingFlow /></OnboardingShell>;
+  }
 
   if (settling || !readyForFlow || (profile?.onboardingCompleted && !startedIncomplete)) {
     return (

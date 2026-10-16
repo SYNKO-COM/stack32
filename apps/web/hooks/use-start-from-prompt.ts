@@ -3,21 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 
+import { readOnboardingDraft, writeOnboardingDraft, GUEST_ONBOARDING_ID } from "@/lib/onboarding-draft";
 import { setPendingPrompt } from "@/lib/pending-prompt";
 import { resolvePostAuthPath } from "@/lib/auth/post-auth";
 import { getAuthRepository } from "@/lib/repositories/factory";
-import { useUiStore } from "@/store/ui-store";
 
 /**
- * Landing funnel: store the visitor's prompt, then either open the auth
- * modal (guest), send to onboarding (new user) or straight to the app
+ * Landing funnel: store the visitor's prompt, then start the public questions
+ * (guest), send to onboarding (new user) or straight to the app
  * (returning user). After signup the flow is the same as navbar signup:
  * onboarding → plan offers. The pending prompt survives via sessionStorage
  * and initializes the first agent once they enter the builder.
  */
 export function useStartFromPrompt() {
   const router = useRouter();
-  const openDialog = useUiStore((s) => s.openDialog);
 
   return useCallback(
     async (prompt: string) => {
@@ -25,11 +24,12 @@ export function useStartFromPrompt() {
       const auth = getAuthRepository();
       const user = await auth.getCurrentUser();
       if (!user) {
-        openDialog("auth", { authMode: "signup" });
+        if (prompt.trim()) writeOnboardingDraft(GUEST_ONBOARDING_ID, { ...readOnboardingDraft(GUEST_ONBOARDING_ID), step: 1, useCase: prompt.trim(), previewStartedAt: null });
+        router.push("/onboarding");
         return;
       }
       router.push(await resolvePostAuthPath());
     },
-    [openDialog, router],
+    [router],
   );
 }

@@ -92,7 +92,7 @@
   },
   "pricingPreview": {
     "title": "Simple pricing",
-    "subtitle": "Start free, then Starter, Pro or Scale as you grow — 20% off on annual billing.",
+    "subtitle": "Starter, Pro or Scale as you grow — 20% off annual billing.",
     "learnMore": "Learn more"
   },
   "finalCta": {
@@ -212,7 +212,7 @@
   },
   "pricing": {
     "title": "Pricing",
-    "subtitle": "Start free. Move to Starter, Pro or Scale when agents become part of how you work.",
+    "subtitle": "Choose the plan that fits your project.",
     "perMonth": "/month",
     "intro": "Four clear tiers: try without a card, publish your first agents, accelerate on Pro, or scale a full fleet. Annual (20% off): Starter $20, Pro $40, Scale $80 / month.",
     "billingToggleLabel": "Billing period",

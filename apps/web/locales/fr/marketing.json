@@ -92,7 +92,7 @@
   },
   "pricingPreview": {
     "title": "Une tarification simple",
-    "subtitle": "Commencez gratuitement, puis Starter, Pro ou Scale selon votre rythme — −20 % en annuel.",
+    "subtitle": "Starter, Pro ou Scale selon votre rythme — −20 % en annuel.",
     "learnMore": "En savoir plus"
   },
   "finalCta": {
@@ -212,7 +212,7 @@
   },
   "pricing": {
     "title": "Tarifs",
-    "subtitle": "Commencez gratuitement. Passez à Starter, Pro ou Scale quand vos agents font partie de votre quotidien.",
+    "subtitle": "Choisissez l’offre qui correspond à votre projet.",
     "perMonth": "/mois",
     "intro": "Quatre niveaux clairs : tester sans carte, publier vos premiers agents, accélérer en Pro, ou scaler une flotte. En annuel (−20 %) : Starter 20 $, Pro 40 $, Scale 80 $/mois.",
     "billingToggleLabel": "Période de facturation",

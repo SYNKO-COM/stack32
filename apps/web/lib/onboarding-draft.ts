@@ -3,10 +3,15 @@
  * restores the current step and selections.
  */
 
+export const GUEST_ONBOARDING_ID = "guest";
+
 const KEY_PREFIX = "stack32.onboardingDraft.";
 
 export interface OnboardingDraft {
   version?: 2;
+  previewStartedAt: number | null;
+  agentName: string;
+  awaitingPayment: boolean;
   step: number;
   goal: string;
   audience: string;
@@ -24,6 +29,9 @@ export interface OnboardingDraft {
 
 const DEFAULT_DRAFT: OnboardingDraft = {
   version: 2,
+  previewStartedAt: null,
+  agentName: "",
+  awaitingPayment: false,
   step: 1,
   goal: "",
   audience: "",
@@ -62,6 +70,9 @@ export function readOnboardingDraft(userId: string): OnboardingDraft {
       Boolean(parsed.workspaceName);
     return {
       version: 2,
+      previewStartedAt: typeof parsed.previewStartedAt === "number" && Number.isFinite(parsed.previewStartedAt) ? parsed.previewStartedAt : null,
+      agentName: typeof parsed.agentName === "string" ? parsed.agentName.slice(0, 80) : "",
+      awaitingPayment: parsed.awaitingPayment === true,
       step: parsed.version === 2 && isValidStep(parsed.step) ? parsed.step : 1,
       goal: typeof parsed.goal === "string" ? parsed.goal : "",
       audience: typeof parsed.audience === "string" ? parsed.audience : "",
@@ -97,4 +108,16 @@ export function clearOnboardingDraft(userId: string): void {
   } catch {
     // ignore
   }
+}
+
+/** The anonymous questionnaire has no account identifiers. Adopt it once after
+ * authentication, without replacing an existing account's in-progress answers. */
+export function adoptGuestOnboardingDraft(userId: string): OnboardingDraft {
+  const own = readOnboardingDraft(userId);
+  const guest = readOnboardingDraft(GUEST_ONBOARDING_ID);
+  if (userId === GUEST_ONBOARDING_ID || own.step > 1 || own.useCase || !guest.useCase) return own;
+  const adopted = { ...guest, step: Math.min(guest.step, 6), previewStartedAt: null, awaitingPayment: false };
+  writeOnboardingDraft(userId, adopted);
+  clearOnboardingDraft(GUEST_ONBOARDING_ID);
+  return adopted;
 }

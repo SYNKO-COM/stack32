@@ -40,7 +40,7 @@ async function reachBuilderComposer(page: Page): Promise<void> {
 
   // Layout can show BrandLoader while agent/workspace queries settle.
   await expect(composer).toBeVisible({ timeout: 60_000 });
-  await expect(composer).toBeEnabled({ timeout: 15_000 });
+  // An automatic initial build may still be running; its result is checked below.
 }
 
 test("signup, verify email, onboarding, build, logout and login again", async ({
@@ -48,27 +48,15 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
 }) => {
   test.setTimeout(180_000);
   const email = `e2e-${Date.now()}@stack32.test`;
+  const earlyBuilds: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && /create_agent_workspace|\/build-jobs|\/builder\//.test(request.url())) earlyBuilds.push(request.url());
+  });
   const username = `e2e_${Date.now().toString().slice(-8)}`;
 
-  // --- Signup ---------------------------------------------------------------
-  await page.goto("/signup");
-  await page.getByLabel(/email/i).fill(email);
-  await page.locator("#auth-password").fill(password);
-  await page.getByRole("button", { name: /create account|créer mon compte/i }).click();
-
-  // --- Verify email ---------------------------------------------------------
-  await page.waitForURL(/\/(verify-email|onboarding)/, { timeout: 30_000 });
-  if (page.url().includes("/verify-email")) {
-    const otp = await waitForSignupOtp(email);
-    for (let index = 0; index < otp.length; index += 1) {
-      const digit = page.getByLabel(new RegExp(`digit ${index + 1}$`, "i"));
-      await digit.fill(otp[index]!);
-      await expect(digit).toHaveValue(otp[index]!);
-    }
-    await page.waitForURL("**/onboarding", { timeout: 30_000 });
-  }
-
-  // --- Onboarding -----------------------------------------------------------
+  // Anonymous questions come before authentication.
+  await page.goto("/onboarding");
+  await expect(page.getByLabel(/email/i)).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("radio", { name: /save time|gagner du temps/i }).click({ timeout: 20_000 });
   await page.getByRole("button", { name: /continue|continuer/i }).click();
@@ -83,6 +71,23 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await expect(page.getByRole("heading", { name: /successful first|premier résultat/i })).toBeVisible();
   await page.locator("#onboarding-answer").fill("A summary with verified sources");
   await page.getByRole("button", { name: /continue|continuer/i }).click();
+  // --- Signup ---------------------------------------------------------------
+  await page.getByLabel(/email/i).fill(email);
+  await page.locator("#auth-password").fill(password);
+  await page.getByRole("button", { name: /create account|créer mon compte/i }).click();
+
+  // --- Verify email ---------------------------------------------------------
+  await page.waitForURL("**/verify-email**", { timeout: 30_000 });
+  if (page.url().includes("/verify-email")) {
+    const otp = await waitForSignupOtp(email);
+    for (let index = 0; index < otp.length; index += 1) {
+      const digit = page.getByLabel(new RegExp(`digit ${index + 1}$`, "i"));
+      await digit.fill(otp[index]!);
+      await expect(digit).toHaveValue(otp[index]!);
+    }
+    await page.waitForURL("**/onboarding", { timeout: 30_000 });
+  }
+
   await page.locator("#onboarding-firstname").fill("E2E");
   await page.locator("#onboarding-username").fill(username);
   await expect(page.getByText(/available|disponible/i)).toBeVisible({ timeout: 10_000 });
@@ -95,9 +100,22 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole("button", { name: /prepare my agent|préparer mon agent/i }).click();
 
+  await expect(page.getByTestId("agent-preview")).toBeVisible();
+  await expect(page.getByRole("progressbar")).toBeVisible();
+  await page.getByRole("button", { name: /show the preview now|afficher l’aperçu maintenant/i }).click();
+  await page.locator("#preview-agent-name").fill("Research preview");
+  await page.getByRole("button", { name: /continue to use|continuer pour l’utiliser/i }).click();
+
   // --- Plan picker (same as homepage signup / first prompt) -----------------
   await page.waitForURL("**/billing/plans**", { timeout: 30_000 });
-  await page.getByRole("button", { name: /start for free|commencer gratuitement/i }).click();
+  await expect(page.getByRole("button", { name: /start for free|commencer gratuitement/i })).toHaveCount(0);
+  expect(earlyBuilds).toEqual([]);
+  await page.goto("/agents");
+  await expect(page).toHaveURL(/\/billing\/plans/);
+  expect(earlyBuilds).toEqual([]);
+  // Local-only entitlement fixture: exercises the handoff, not a Whop payment.
+  await page.goto("/api/billing/mock-activate?plan=starter&interval=monthly&credits=100");
+  await page.goto("/agents");
 
   // --- Builder --------------------------------------------------------------
   await reachBuilderComposer(page);
@@ -148,7 +166,7 @@ test("unauthenticated users are redirected away from protected routes", async ({
   await page.goto("/agents");
   await page.waitForURL("**/login**", { timeout: 15_000 });
   await page.goto("/onboarding");
-  await page.waitForURL("**/login**", { timeout: 15_000 });
+  await expect(page.getByRole("radio", { name: /save time|gagner du temps/i })).toBeVisible({ timeout: 20_000 });
   await page.goto("/my-agents");
   await page.waitForURL("**/login**", { timeout: 15_000 });
 });
