@@ -16,6 +16,9 @@ export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
   fullyParallel: false,
+  // Next dev compiles routes on demand; parallel browser workers can race its
+  // first render and make the signup journey flaky in CI.
+  workers: process.env.CI ? 1 : undefined,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
