@@ -10,6 +10,8 @@
   "git": {
     "deploymentEnabled": {
       "codex/chrome-preprod": false,
+      "codex/chrome-extension-parked-2026-10-16": false,
+      "codex/park-chrome-preprod": false,
       "preprod": false
     }
   }

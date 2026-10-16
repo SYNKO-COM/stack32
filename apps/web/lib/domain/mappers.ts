@@ -483,7 +483,6 @@ function mapUiComponent(raw: unknown): BuilderUiComponent | undefined {
     requestId,
     context,
     fields,
-    ...(typeof rec.chrome_enabled === "boolean" ? { chromeEnabled: rec.chrome_enabled } : {}),
     ...(mode ? { mode } : {}),
     ...(tools ? { tools } : {}),
     ...(connectionRequirements && connectionRequirements.length > 0
@@ -585,7 +584,6 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
 
     return {
       schemaVersion: schemaVersionRaw,
-      chromeEnabled: raw.chrome_enabled === true,
       name,
       slug:
         name
@@ -746,7 +744,6 @@ export function specFromDb(json: Json, fallbackName = "Untitled agent"): AgentSp
 export function specToDb(spec: AgentSpec): Json {
   return {
     schema_version: spec.schemaVersion,
-    chrome_enabled: spec.chromeEnabled === true,
     name: spec.name,
     goal: spec.goal,
     instructions: {
