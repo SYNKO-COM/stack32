@@ -1,7 +1,7 @@
 {
   "intro": {
     "welcome": "Bienvenue sur Stack32",
-    "subtitle": "Configurons tout en moins d'une minute."
+    "subtitle": "Donnons forme à votre premier agent, étape par étape."
   },
   "progress": "Étape {{current}} sur {{total}}",
   "step1": {
@@ -73,5 +73,46 @@
   "completing": "Préparation de votre espace de travail…",
   "a11y": {
     "stepper": "Étapes d'inscription"
+  },
+  "journey": {
+    "goalTitle": "Que voulez-vous accomplir avec votre agent ?",
+    "goalSubtitle": "Partons de votre objectif. Quelques réponses suffisent pour préparer un premier projet concret.",
+    "goals": {
+      "time": "Gagner du temps au quotidien",
+      "clients": "Aider mes clients ou mon équipe",
+      "sell": "Créer un agent à proposer à des abonnés",
+      "explore": "Explorer une première idée"
+    },
+    "goalLabel": "Votre objectif",
+    "ideaTitle": "Avez-vous déjà une idée d’agent ?",
+    "ideaSubtitle": "Votre idée est le point de départ. Si vous l’avez déjà saisie, elle vous attend ici.",
+    "ideaLabel": "Votre idée",
+    "ideaPlaceholder": "Un agent qui transforme mes notes en brouillons d’articles…",
+    "suggest": "Proposez-moi une idée",
+    "ideaHint": "Vous pouvez modifier la proposition avant de continuer. Elle sera testée avec vous dans le builder.",
+    "ideas": [
+      "Un agent qui transforme mes notes en brouillons d’articles, avec une validation avant publication.",
+      "Un agent qui compare des informations publiques sur un sujet et prépare une synthèse avec ses sources.",
+      "Un agent qui rédige des fiches produit à partir des caractéristiques que je lui fournis.",
+      "Un agent qui résume mes comptes rendus de réunion et prépare une liste d’actions à vérifier."
+    ],
+    "audienceTitle": "À qui cet agent rendra-t-il service ?",
+    "audienceSubtitle": "Un public précis vous aide à concevoir quelque chose de vraiment utile.",
+    "audienceLabel": "Pour qui",
+    "audiencePlaceholder": "Pour moi, mon équipe marketing, les petites boutiques en ligne…",
+    "outcomeTitle": "À quoi ressemblerait un premier résultat réussi ?",
+    "outcomeSubtitle": "Choisissez un résultat concret à tester, avant de chercher à tout automatiser.",
+    "outcomeLabel": "Premier résultat attendu",
+    "outcomePlaceholder": "Un brouillon d’article prêt à relire, avec trois sources vérifiables…",
+    "summaryTitle": "Votre premier projet prend forme",
+    "summarySubtitle": "Voici le point de départ que nous transmettrons au builder. Vous gardez la main sur chaque étape.",
+    "nextSteps": [
+      "Choisir la formule adaptée à votre projet.",
+      "Construire et tester l’agent sur un exemple concret.",
+      "L’améliorer, puis décider de le garder privé ou de le publier."
+    ],
+    "disclaimer": "Un abonnement donne accès aux fonctionnalités de la formule choisie. Les résultats et d’éventuels revenus dépendent de votre agent, de ses tests et de son adoption ; ils ne sont pas garantis.",
+    "finish": "Préparer mon agent",
+    "error": "La préparation n’a pas abouti. Vos réponses sont conservées ; réessayez."
   }
 }

@@ -1,6 +1,10 @@
+> Migration October 2026: use the [Elements rollout checklist](WHOP_ELEMENTS_ROLLOUT.md).
+> The legacy `@whop/checkout` embed has been replaced. Production is not updated
+> by a deployment to the isolated `stack32-preprod` project.
+
 # Whop billing — production setup
 
-Stack32 uses **3 Whop products** (Starter / Pro / Scale), each with monthly + annual base plans. Extra credit tiers are priced at checkout via an inline renewal plan attached to the same product ([Accept payments](https://docs.whop.com/developer/guides/accept-payments), [Checkout embed](https://docs.whop.com/payments/checkout-embed)).
+Stack32 uses **3 Whop products** (Starter / Pro / Scale), each with monthly + annual base plans. Extra credit tiers are priced at checkout via an inline renewal plan attached to the same product ([Accept payments](https://docs.whop.com/developer/guides/accept-payments), [Payment Elements](https://docs.whop.com/developer/guides/payment-elements)).
 
 > **Important:** Whop’s `initial_price` is a one-time setup fee charged **on top of** the first `renewal_price`. For normal Stack32 subscriptions, always set `initial_price: 0` and put the subscription amount only on `renewal_price` (otherwise day-one total is doubled).
 
@@ -113,6 +117,6 @@ When the subscriber already has a Whop **member** + saved payment method (from s
 - [Accept payments](https://docs.whop.com/developer/guides/accept-payments)
 - [Save payment methods](https://docs.whop.com/developer/guides/save-payment-methods)
 - [Webhooks](https://docs.whop.com/developer/guides/webhooks)
-- [Checkout embed](https://docs.whop.com/payments/checkout-embed)
+- [Payment Elements](https://docs.whop.com/developer/guides/payment-elements)
 - [API overview](https://docs.whop.com/api-reference/beta/overview)
 - [Refunds & disputes](https://docs.whop.com/developer/guides/refunds-and-disputes)

@@ -3,19 +3,17 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Check, Lock } from "lucide-react";
 import { Trans } from "react-i18next";
 
-import { useTheme } from "@/components/providers/theme-provider";
 import { Button } from "@/components/ui/button";
-import { createWhopCheckoutSession } from "@/lib/actions/billing";
+import { createWhopCheckoutSession, type WhopCheckoutSessionResult } from "@/lib/actions/billing";
 import { PLANS, pricePlanSelection, type BillingInterval, type PlanKey } from "@/lib/billing/plans";
 import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
 
-const WhopCheckoutEmbed = dynamic(
-  () => import("@whop/checkout/react").then((mod) => mod.WhopCheckoutEmbed),
+const WhopPaymentForm = dynamic(
+  () => import("./whop-payment-form").then((mod) => mod.WhopPaymentForm),
   { ssr: false },
 );
 
@@ -44,11 +42,11 @@ function ConsentCheckbox({
         checked={checked}
         onChange={(e) => onCheckedChange(e.target.checked)}
         className={cn(
-          "mt-0.5 size-4 shrink-0 cursor-pointer appearance-none rounded-full border bg-background",
+          "mt-0.5 size-5 shrink-0 cursor-pointer appearance-none rounded-full border bg-background",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
           checked
             ? "border-brand bg-brand shadow-[inset_0_0_0_3px_hsl(var(--background))]"
-            : "border-brand/60 [animation:consent-nudge_2.2s_ease-in-out_infinite]",
+            : "border-brand/60 motion-safe:[animation:consent-nudge_2.2s_ease-in-out_infinite]",
         )}
       />
       <span className="text-muted-foreground [&_a]:font-medium [&_a]:text-brand [&_a]:underline [&_a]:underline-offset-2">
@@ -64,13 +62,11 @@ export function WhopCheckoutClient({
   creditsMonthly,
 }: Props) {
   const { t, i18n } = useTranslation(["billing", "marketing"]);
-  const { theme } = useTheme();
-  const router = useRouter();
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedImmediate, setAcceptedImmediate] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [session, setSession] = useState<WhopCheckoutSessionResult | null>(null);
+  const sessionId = session?.sessionId;
   const [error, setError] = useState<string | null>(null);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const canProceed = acceptedTerms && acceptedImmediate;
@@ -90,12 +86,7 @@ export function WhopCheckoutClient({
     t(`marketing:pricing.${planKey}.${PLANS[planKey].integrationsLabelKey}`),
   ];
 
-  // Whop embed: follow Stack32 theme toggle (not only OS preference).
-  const whopTheme = theme === "dark" ? "dark" : "light";
-  const whopBackground = theme === "dark" ? "#080808" : "#ffffff";
-
   useEffect(() => {
-    if (!canProceed) return;
     if (sessionId) return;
     let cancelled = false;
     (async () => {
@@ -107,10 +98,10 @@ export function WhopCheckoutClient({
           interval,
           creditsMonthly,
         });
-        if (!cancelled) setSessionId(session.sessionId);
-      } catch (err) {
+        if (!cancelled) setSession(session);
+      } catch {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "CHECKOUT_FAILED");
+          setError("CHECKOUT_FAILED");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -119,7 +110,7 @@ export function WhopCheckoutClient({
     return () => {
       cancelled = true;
     };
-  }, [canProceed, planKey, interval, creditsMonthly, sessionId]);
+  }, [planKey, interval, creditsMonthly, sessionId]);
 
   useEffect(() => {
     if (!canProceed) return;
@@ -130,9 +121,9 @@ export function WhopCheckoutClient({
   }, [canProceed]);
 
   const site =
-    typeof window !== "undefined" ? window.location.origin : "https://stack32.com";
+    typeof window !== "undefined" ? window.location.origin : "";
 
-  const paymentReady = canProceed && Boolean(sessionId) && !error;
+  const paymentReady = Boolean(sessionId) && !error;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-3 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8">
@@ -151,7 +142,7 @@ export function WhopCheckoutClient({
           <div className="relative min-h-0 flex-1 bg-background">
             {!canProceed ? (
               <div
-                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background px-6 text-center"
+                className="flex items-start gap-3 border-b border-brand/20 bg-brand/5 px-4 py-4"
                 role="status"
               >
                 <span className="flex size-11 items-center justify-center rounded-full border border-border bg-background">
@@ -166,7 +157,7 @@ export function WhopCheckoutClient({
               </div>
             ) : null}
 
-            {canProceed && loading ? (
+            {loading ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/90">
                 <p className="text-sm text-muted-foreground">{t("billing:checkout.loading")}</p>
               </div>
@@ -176,7 +167,7 @@ export function WhopCheckoutClient({
               <div className="flex h-full items-center p-4 sm:p-6">
                 <div className="w-full rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
                   <p className="font-medium">{t("billing:checkout.errorTitle")}</p>
-                  <p className="mt-1 text-muted-foreground">{error}</p>
+                  <p className="mt-1 text-muted-foreground">{t("billing:checkout.paymentNotConfirmed")}</p>
                   <Button asChild className="mt-4 rounded-full" variant="outline">
                     <Link href="/billing/plans">{t("billing:checkout.backToPricing")}</Link>
                   </Button>
@@ -184,31 +175,18 @@ export function WhopCheckoutClient({
               </div>
             ) : null}
 
-            {paymentReady && sessionId ? (
-              <div className="h-full min-h-[360px] overflow-y-auto bg-background">
-                <WhopCheckoutEmbed
-                  key={`${sessionId}-${whopTheme}`}
-                  sessionId={sessionId}
-                  theme={whopTheme}
-                  themeOptions={{ backgroundColor: whopBackground }}
+            {paymentReady && session ? (
+              <div
+                data-testid="checkout-fields"
+                className="min-h-[360px] bg-background p-3 sm:p-5"
+              >
+                <WhopPaymentForm
+                  key={sessionId}
+                  session={session}
+                  acceptedTerms={acceptedTerms}
+                  acceptedImmediate={acceptedImmediate}
                   returnUrl={`${site}/billing/success`}
-                  setupFutureUsage="off_session"
-                  onPaymentError={(err) => {
-                    setPaymentError(err.message);
-                  }}
-                  onAddressValidationError={(addressError) => {
-                    setPaymentError(addressError.error_message);
-                  }}
-                  onComplete={() => {
-                    setPaymentError(null);
-                    router.push("/billing/success");
-                  }}
                 />
-                {paymentError ? (
-                  <div className="border-t border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                    {paymentError}
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </div>
@@ -248,7 +226,7 @@ export function WhopCheckoutClient({
               <ul className="mt-4 space-y-2 border-t border-border/60 pt-4">
                 {features.slice(0, 6).map((feature) => (
                   <li key={feature} className="flex items-start gap-2 text-sm">
-                    <Check className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+                    <Check className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
                     <span>{feature}</span>
                   </li>
                 ))}

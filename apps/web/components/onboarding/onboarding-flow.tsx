@@ -11,6 +11,10 @@ import {
   IdCard,
   Megaphone,
   Rocket,
+  Sparkles,
+  Target,
+  Users,
+  Clock,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ComponentType } from "react";
@@ -41,9 +45,17 @@ import {
 } from "@/lib/onboarding-draft";
 import { getAuthRepository } from "@/lib/repositories/factory";
 import { writeActiveWorkspaceId } from "@/lib/workspace-preference";
+import { getPendingPrompt, setPendingPrompt } from "@/lib/pending-prompt";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 9;
+const GOAL_OPTIONS = [
+  { id: "time", icon: Clock },
+  { id: "clients", icon: Users },
+  { id: "sell", icon: Rocket },
+  { id: "explore", icon: Sparkles },
+];
 
 type OptionIcon = ComponentType<{ className?: string }>;
 
@@ -153,6 +165,11 @@ export function OnboardingFlow() {
   const [phone, setPhone] = useState("");
   const [useCase, setUseCase] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
+  const [goal, setGoal] = useState("");
+  const [audience, setAudience] = useState("");
+  const [outcome, setOutcome] = useState("");
+  const [finishError, setFinishError] = useState(false);
+  const [createdWorkspaceId, setCreatedWorkspaceId] = useState<string | null>(null);
 
   const normalizedUsername = username.trim().toLowerCase();
   const usernameLocalStatus: "idle" | "invalid" | "reserved" | null = !normalizedUsername
@@ -183,7 +200,10 @@ export function OnboardingFlow() {
         : COUNTRY_CODES[0],
     );
     setPhone(draft.phone);
-    setUseCase(draft.useCase);
+    setUseCase(draft.useCase || getPendingPrompt() || "");
+    setGoal(draft.goal);
+    setAudience(draft.audience);
+    setOutcome(draft.outcome);
     setWorkspaceName(draft.workspaceName);
     setReady(true);
   }
@@ -191,7 +211,11 @@ export function OnboardingFlow() {
   useEffect(() => {
     if (!ready || !userId) return;
     writeOnboardingDraft(userId, {
-      step: step as 1 | 2 | 3 | 4,
+      version: 2,
+      step,
+      goal,
+      audience,
+      outcome,
       showIntro,
       discoverySource,
       role,
@@ -215,6 +239,9 @@ export function OnboardingFlow() {
     phone,
     useCase,
     workspaceName,
+    goal,
+    audience,
+    outcome,
   ]);
 
   useEffect(() => {
@@ -251,35 +278,47 @@ export function OnboardingFlow() {
 
   const usernameOk = usernameStatus === "available";
   const canContinue =
-    (step === 1 && discoverySource !== null) ||
+    (step === 1 && goal !== "") ||
     (step === 2 && role !== null) ||
-    (step === 3 && firstName.trim().length > 0 && usernameOk) ||
-    (step === 4 && workspaceName.trim().length > 0);
+    (step === 3 && useCase.trim().length >= 10) ||
+    (step === 4 && audience.trim().length > 0) ||
+    (step === 5 && outcome.trim().length > 0) ||
+    (step === 6 && firstName.trim().length > 0 && usernameOk) ||
+    step === 7 ||
+    (step === 8 && workspaceName.trim().length > 0) ||
+    (step === 9 && useCase.trim().length >= 10 && workspaceName.trim().length > 0 && usernameOk);
 
   const handleFinish = async () => {
+    if (finishing || !canContinue) return;
     setFinishing(true);
+    setFinishError(false);
     try {
       await completeOnboarding.mutateAsync({
         discoverySource: discoverySource ?? undefined,
         role: role ?? undefined,
         firstName: firstName.trim(),
         phone: phone.trim() ? `${countryCode} ${phone.trim()}` : undefined,
-        primaryUseCase: useCase.trim() || undefined,
+        primaryUseCase: [useCase.trim(), t("journey.audienceLabel") + ": " + audience.trim(), t("journey.outcomeLabel") + ": " + outcome.trim(), t("journey.goalLabel") + ": " + t(`journey.goals.${goal}`)].join("\n"),
         username: username.trim().toLowerCase(),
       });
-      const workspace = await createWorkspace.mutateAsync(workspaceName.trim());
+      const workspaceId = createdWorkspaceId ?? (await createWorkspace.mutateAsync(workspaceName.trim())).id;
+      setCreatedWorkspaceId(workspaceId);
+      setPendingPrompt([useCase.trim(), t("journey.audienceLabel") + ": " + audience.trim(), t("journey.outcomeLabel") + ": " + outcome.trim()].join("\n"));
       if (userId) {
-        writeActiveWorkspaceId(userId, workspace.id);
-        clearOnboardingDraft(userId);
+        writeActiveWorkspaceId(userId, workspaceId);
+
       }
       const dest = postOnboardingPath(searchParams.get("next"));
       if (isCheckoutNext(dest)) {
+        clearOnboardingDraft(userId);
         router.push(dest);
         return;
       }
-      await createAgent.mutateAsync({ workspaceId: workspace.id });
+      await createAgent.mutateAsync({ workspaceId: workspaceId });
+      clearOnboardingDraft(userId);
       router.push(dest);
     } catch {
+      setFinishError(true);
       setFinishing(false);
     }
   };
@@ -312,21 +351,70 @@ export function OnboardingFlow() {
         >
           {t("intro.subtitle")}
         </motion.p>
+        <Button className="mt-8 rounded-full" onClick={() => setShowIntro(false)}>{t("common:actions.continue")}</Button>
       </div>
     );
   }
 
   return (
     <div className="mx-auto w-full max-w-xl" aria-label={t("a11y.stepper")}>
+      <div className="mb-7">
+        <p className="mb-2 text-sm text-muted-foreground" aria-live="polite">{t("progress", { current: step, total: TOTAL_STEPS })}</p>
+        <div role="progressbar" aria-label={t("a11y.stepper")} aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step} className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+          <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${step / TOTAL_STEPS * 100}%` }} />
+        </div>
+      </div>
       <AnimatePresence mode="wait">
         <motion.div
           key={step}
           initial={reducedMotion ? undefined : { opacity: 0, x: 32 }}
           animate={{ opacity: 1, x: 0 }}
           exit={reducedMotion ? undefined : { opacity: 0, x: -32 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
         >
           {step === 1 ? (
+            <>
+              <Target className="mb-5 size-9 text-brand" aria-hidden="true" />
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.goalTitle")}</h1>
+              <p className="mt-2 mb-6 text-muted-foreground">{t("journey.goalSubtitle")}</p>
+              <OptionGrid options={GOAL_OPTIONS} selected={goal} onSelect={setGoal} translate={(id) => t(`journey.goals.${id}`)} />
+            </>
+          ) : null}
+          {step === 3 ? (
+            <>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.ideaTitle")}</h1>
+              <p className="mt-2 mb-6 text-muted-foreground">{t("journey.ideaSubtitle")}</p>
+              <Label htmlFor="onboarding-idea">{t("journey.ideaLabel")}</Label>
+              <Textarea id="onboarding-idea" value={useCase} onChange={(e) => setUseCase(e.target.value)} maxLength={4000} className="mt-2 min-h-40" placeholder={t("journey.ideaPlaceholder")} />
+              <Button variant="outline" className="mt-4 min-h-11 rounded-full" onClick={() => {
+                const ideas = t("journey.ideas", { returnObjects: true }) as string[];
+                const alternatives = ideas.filter((idea) => idea !== useCase);
+                setUseCase(alternatives[Math.floor(Math.random() * alternatives.length)] ?? ideas[0]);
+              }}><Sparkles className="mr-2 size-4" />{t("journey.suggest")}</Button>
+              <p className="mt-3 text-sm text-muted-foreground">{t("journey.ideaHint")}</p>
+            </>
+          ) : null}
+          {step === 4 || step === 5 ? (
+            <>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t(step === 4 ? "journey.audienceTitle" : "journey.outcomeTitle")}</h1>
+              <p className="mt-2 mb-6 text-muted-foreground">{t(step === 4 ? "journey.audienceSubtitle" : "journey.outcomeSubtitle")}</p>
+              <Label htmlFor="onboarding-answer">{t(step === 4 ? "journey.audienceLabel" : "journey.outcomeLabel")}</Label>
+              <Textarea id="onboarding-answer" className="mt-2 min-h-32" maxLength={1000} value={step === 4 ? audience : outcome} onChange={(e) => step === 4 ? setAudience(e.target.value) : setOutcome(e.target.value)} placeholder={t(step === 4 ? "journey.audiencePlaceholder" : "journey.outcomePlaceholder")} />
+            </>
+          ) : null}
+          {step === 9 ? (
+            <>
+              <Rocket className="mb-5 size-9 text-brand" aria-hidden="true" />
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.summaryTitle")}</h1>
+              <p className="mt-2 mb-6 text-muted-foreground">{t("journey.summarySubtitle")}</p>
+              <dl className="glass space-y-4 rounded-2xl p-5">
+                {[["ideaLabel", useCase], ["audienceLabel", audience], ["outcomeLabel", outcome]].map(([key, answer]) => <div key={key}><dt className="text-sm font-medium text-brand">{t(`journey.${key}`)}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{answer}</dd></div>)}
+              </dl>
+              <ol className="mt-6 space-y-3 text-sm leading-relaxed">{(t("journey.nextSteps", { returnObjects: true }) as string[]).map((item, index) => <li key={item} className="flex gap-3"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/15 text-brand">{index + 1}</span>{item}</li>)}</ol>
+              <p className="mt-5 text-xs leading-relaxed text-muted-foreground">{t("journey.disclaimer")}</p>
+            </>
+          ) : null}
+          {step === 7 ? (
             <>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 {t("step1.title")}
@@ -356,7 +444,7 @@ export function OnboardingFlow() {
             </>
           ) : null}
 
-          {step === 3 ? (
+          {step === 6 ? (
             <>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 {t("step3.title")}
@@ -436,20 +524,12 @@ export function OnboardingFlow() {
                   </div>
                   <p className="text-xs text-muted-foreground/70">{t("step3.phoneHint")}</p>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="onboarding-usecase">{t("step3.useCase")}</Label>
-                  <Input
-                    id="onboarding-usecase"
-                    value={useCase}
-                    onChange={(e) => setUseCase(e.target.value)}
-                    placeholder={t("step3.useCasePlaceholder")}
-                  />
-                </div>
+
               </div>
             </>
           ) : null}
 
-          {step === 4 ? (
+          {step === 8 ? (
             <>
               <div className="mb-6 flex size-12 items-center justify-center rounded-2xl bg-brand/15 text-brand">
                 <FolderKanban className="size-6" aria-hidden="true" />
@@ -487,7 +567,8 @@ export function OnboardingFlow() {
         </motion.div>
       </AnimatePresence>
 
-      <div className="mt-10 flex items-center justify-between">
+      {finishError ? <p role="alert" className="mt-5 text-sm text-destructive">{t("journey.error")}</p> : null}
+      <div className="sticky bottom-0 mt-8 flex items-center justify-between gap-3 bg-background/95 py-4 backdrop-blur-sm">
         {step > 1 ? (
           <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={finishing}>
             {t("common:actions.back")}
@@ -509,7 +590,7 @@ export function OnboardingFlow() {
             disabled={!canContinue || finishing}
             onClick={() => void handleFinish()}
           >
-            {finishing ? t("completing") : t("step4.finish")}
+            {finishing ? t("completing") : t("journey.finish")}
           </Button>
         )}
       </div>

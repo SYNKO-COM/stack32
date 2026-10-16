@@ -55,8 +55,8 @@
     "creditsLabel": "Crédits Builder",
     "dueToday": "À régler aujourd’hui",
     "changePlan": "Changer de plan",
-    "unlockHint": "Cochez les deux cases obligatoires à droite pour débloquer le paiement.",
-    "unlockTitle": "Cases obligatoires",
+    "unlockHint": "Cochez les deux accords pour activer le paiement. Vous pouvez déjà compléter vos informations.",
+    "unlockTitle": "Votre paiement sécurisé",
     "perMonth": "/ mois",
     "perYear": "facturé annuellement",
     "loading": "Préparation du paiement sécurisé…",
@@ -66,7 +66,17 @@
       "terms": "J’ai lu et j’accepte les <terms>conditions générales d’utilisation</terms>, les <sales>conditions d’abonnement et de vente</sales> et la <refunds>politique de remboursement</refunds>.",
       "immediate": "J’accepte l’exécution immédiate du service et renonce expressément à mon droit de rétractation.",
       "legalNote": "Le paiement active immédiatement votre abonnement, les serveurs et les crédits Builder. Les périodes entamées ne sont pas remboursables (Code de la consommation, art. L221-28)."
-    }
+    },
+    "promo": "Code promotionnel (facultatif)",
+    "calculating": "Calcul du total, taxes comprises…",
+    "total": "À payer aujourd’hui : {{amount}}",
+    "addressRequired": "Complétez votre adresse pour afficher le montant total.",
+    "processing": "Vérification du paiement…",
+    "subscribe": "S’abonner · {{amount}}",
+    "secureFields": "Les informations de carte sont traitées par Whop dans ses champs sécurisés.",
+    "paymentNotConfirmed": "Le paiement n’est pas confirmé. Si une vérification bancaire a été interrompue, réessayez pour reprendre le même paiement.",
+    "hostedFallback": "Utiliser le checkout complet Whop (autres moyens de paiement)",
+    "retryQuote": "Recalculer le total"
   },
   "upgrade": {
     "title": "Passer à Pro",
@@ -90,7 +100,12 @@
     "subtitle": "Votre abonnement est actif. Il est temps de créer votre prochain agent.",
     "topupTitle": "Crédits ajoutés",
     "topupSubtitle": "Vos crédits supplémentaires sont disponibles pour cette période. Votre abonnement n’a pas changé.",
-    "cta": "Ouvrir l'application"
+    "cta": "Ouvrir l'application",
+    "failedTitle": "Le paiement n’a pas abouti",
+    "failedBody": "Le paiement a été annulé ou refusé. Vous pouvez revenir au choix de votre formule.",
+    "pendingTitle": "Vérification de votre paiement",
+    "pendingBody": "Votre paiement n’est pas encore confirmé. Votre accès sera mis à jour après confirmation par Whop.",
+    "verified": "Whop a confirmé votre paiement. La mise à jour de votre accès ou de vos crédits peut prendre quelques instants."
   },
   "canceled": {
     "title": "Paiement annulé",

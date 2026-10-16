@@ -69,16 +69,31 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   }
 
   // --- Onboarding -----------------------------------------------------------
-  await page.getByRole("radio", { name: /google/i }).click({ timeout: 20_000 });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("radio", { name: /save time|gagner du temps/i }).click({ timeout: 20_000 });
   await page.getByRole("button", { name: /continue|continuer/i }).click();
-  await page.getByRole("radio", { name: /founder|fondateur/i }).click({ timeout: 15_000 });
+  await page.getByRole("radio", { name: /founder|fondateur/i }).click();
+  await page.getByRole("button", { name: /continue|continuer/i }).click();
+  await page.locator("#onboarding-idea").fill("Build me a research agent");
+  await page.reload();
+  await expect(page.locator("#onboarding-idea")).toHaveValue("Build me a research agent");
+  await page.getByRole("button", { name: /continue|continuer/i }).click();
+  await page.locator("#onboarding-answer").fill("My research team");
+  await page.getByRole("button", { name: /continue|continuer/i }).click();
+  await expect(page.getByRole("heading", { name: /successful first|premier résultat/i })).toBeVisible();
+  await page.locator("#onboarding-answer").fill("A summary with verified sources");
   await page.getByRole("button", { name: /continue|continuer/i }).click();
   await page.locator("#onboarding-firstname").fill("E2E");
   await page.locator("#onboarding-username").fill(username);
   await expect(page.getByText(/available|disponible/i)).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: /continue|continuer/i }).click();
+  await page.getByRole("radio", { name: /google/i }).click();
+  await page.getByRole("button", { name: /continue|continuer/i }).click();
   await page.locator("#onboarding-workspace").fill("E2E Workspace");
-  await page.getByRole("button", { name: /finish|start|terminer|commencer|créer/i }).click();
+  await page.getByRole("button", { name: /continue|continuer/i }).click();
+  await expect(page.getByText("Build me a research agent", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.getByRole("button", { name: /prepare my agent|préparer mon agent/i }).click();
 
   // --- Plan picker (same as homepage signup / first prompt) -----------------
   await page.waitForURL("**/billing/plans**", { timeout: 30_000 });
@@ -87,10 +102,7 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   // --- Builder --------------------------------------------------------------
   await reachBuilderComposer(page);
 
-  const composer = page.getByTestId("builder-composer");
-  await composer.fill("Build me a research agent");
-  await composer.press("Enter");
-  await expect(page.getByText("Build me a research agent")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Build me a research agent/).first()).toBeVisible({ timeout: 30_000 });
 
   // Mock build simulation completes server-side and the polling UI
   // eventually shows the ready assistant response.

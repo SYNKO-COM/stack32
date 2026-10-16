@@ -41,12 +41,18 @@ importers:
       '@vercel/functions':
         specifier: ^3.9.3
         version: 3.9.3
-      '@whop/checkout':
-        specifier: ^0.6.0
-        version: 0.6.0(react@19.2.4)
+      '@whop/elements':
+        specifier: 1.9.0
+        version: 1.9.0
+      '@whop/elements-react':
+        specifier: 1.9.0
+        version: 1.9.0(@whop/elements@1.9.0)(react@19.2.4)
       '@whop/sdk':
         specifier: ^0.0.42
         version: 0.0.42
+      '@whop/sdk-elements':
+        specifier: npm:@whop/sdk@2.5.0
+        version: '@whop/sdk@2.5.0'
       '@xyflow/react':
         specifier: ^12.11.2
         version: 12.11.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1957,16 +1963,21 @@ packages:
   '@vitest/utils@4.1.10':
     resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
 
-  '@whop/checkout@0.6.0':
-    resolution: {integrity: sha512-cKmeKM55ZZnUVAYB4eJG2kr749dvvWZ3WPaMZw9aLurTuuxE4NnMKcSnBBdZZOFHjemj4YAcMufJFAGfrqyH6g==}
+  '@whop/elements-react@1.9.0':
+    resolution: {integrity: sha512-O3HMYMh8xp+8Dp71TusvpOU2FCN+76f6dCYKDB1brOZFUmfLHIQ3ap8Y4+ZsfpqPCAwXaC1ckmRX8H5EeSjmDQ==}
     peerDependencies:
-      react: ^18.0.0 || ^19.0.0
-    peerDependenciesMeta:
-      react:
-        optional: true
+      '@whop/elements': ^1.9.0
+      react: ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  '@whop/elements@1.9.0':
+    resolution: {integrity: sha512-sUx/LixyyfHk+EdLFK47AYVWlP5rJdapVTN8UhRf18Q+oElY9ol7HqX+o+Z0clftrRIMDYLSh9S0hCBJ6qxalQ==}
 
   '@whop/sdk@0.0.42':
     resolution: {integrity: sha512-ZBtdGGIziRQa5WP9xk2qASPPhyBVKzS74IrHJ9hB8xKPwAKqY4Ca2XsA9QKjgXT7gNnGjKJADdBvcMGtnNG+JA==}
+
+  '@whop/sdk@2.5.0':
+    resolution: {integrity: sha512-+QLApewXJUl69qgcIsgjIbu7bgjH8bUWdPDC6l7G3hI/62qU2j9T6dcYJtplnXpWIrW4WtT7iOKBv98+2Am2uQ==}
+    engines: {node: '>=18.0.0'}
 
   '@xyflow/react@12.11.2':
     resolution: {integrity: sha512-eLAlDWJfWnQEhJwGMjlWdAXO9eYllKpliUmPQlAmOLxz6mExXuzMVDUKLMquixgkrtmMFFtug3jGKmYYld12cA==}
@@ -5779,13 +5790,21 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.1
 
-  '@whop/checkout@0.6.0(react@19.2.4)':
-    optionalDependencies:
+  '@whop/elements-react@1.9.0(@whop/elements@1.9.0)(react@19.2.4)':
+    dependencies:
+      '@whop/elements': 1.9.0
       react: 19.2.4
+      use-sync-external-store: 1.6.0(react@19.2.4)
+
+  '@whop/elements@1.9.0': {}
 
   '@whop/sdk@0.0.42':
     dependencies:
       jose: 6.2.9
+      standardwebhooks: 1.0.0
+
+  '@whop/sdk@2.5.0':
+    dependencies:
       standardwebhooks: 1.0.0
 
   '@xyflow/react@12.11.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
