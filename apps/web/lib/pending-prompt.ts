@@ -17,7 +17,7 @@ export function setPendingPrompt(prompt: string): void {
 
 export function getPendingPrompt(): string | null {
   if (typeof window === "undefined") return null;
-  return window.sessionStorage.getItem(KEY);
+  try { return window.sessionStorage.getItem(KEY); } catch { return null; }
 }
 
 export function consumePendingPrompt(): string | null {

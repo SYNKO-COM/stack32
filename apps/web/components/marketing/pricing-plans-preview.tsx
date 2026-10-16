@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import {
-  PLAN_KEYS,
+  OFFERED_PLAN_KEYS,
   PLANS,
   pricePlanSelection,
   type BillingInterval,
@@ -38,7 +38,7 @@ export function PricingPlansPreview() {
 
   const plans = useMemo(
     () =>
-      PLAN_KEYS.map((id) => {
+      OFFERED_PLAN_KEYS.map((id) => {
         const priced = pricePlanSelection(id, interval, PLANS[id].baseCredits);
         const showAnnual = interval === "annual" && PLANS[id].monthlyPriceUsd > 0;
         const allFeatures = [
@@ -117,7 +117,7 @@ export function PricingPlansPreview() {
         </div>
       </div>
 
-      <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {plans.map((plan) => (
           <div
             key={plan.id}
@@ -142,11 +142,11 @@ export function PricingPlansPreview() {
               ) : null}
               <p>
                 <span className="text-4xl font-semibold tracking-tight">{plan.displayPrice}</span>
-                {plan.id !== "free" ? (
+                {(
                   <span className="text-sm text-muted-foreground">
                     {t("marketing:pricing.perMonth")}
                   </span>
-                ) : null}
+                )}
               </p>
               {plan.billedAnnuallyHint ? (
                 <p className="mt-1.5 text-xs text-muted-foreground">{plan.billedAnnuallyHint}</p>

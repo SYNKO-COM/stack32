@@ -92,7 +92,7 @@
   },
   "pricingPreview": {
     "title": "Simple pricing",
-    "subtitle": "Start free, then Starter, Pro or Scale as you grow — 20% off on annual billing.",
+    "subtitle": "Starter, Pro or Scale as you grow — 20% off annual billing.",
     "learnMore": "Learn more"
   },
   "finalCta": {
@@ -212,9 +212,9 @@
   },
   "pricing": {
     "title": "Pricing",
-    "subtitle": "Start free. Move to Starter, Pro or Scale when agents become part of how you work.",
+    "subtitle": "Choose the plan that fits your project.",
     "perMonth": "/month",
-    "intro": "Four clear tiers: try without a card, publish your first agents, accelerate on Pro, or scale a full fleet. Annual (20% off): Starter $20, Pro $40, Scale $80 / month.",
+    "intro": "Three plans to publish your first agents, grow your business or manage a fleet. Save 20% with annual billing.",
     "billingToggleLabel": "Billing period",
     "monthly": "Monthly",
     "annual": "Annual",
@@ -326,7 +326,7 @@
         },
         {
           "question": "Can I cancel anytime?",
-          "answer": "Yes. You keep access until the end of the period already paid, then you return to Free. Cancellation does not refund the started period."
+          "answer": "Yes. You keep access until the end of the period already paid, then your paid subscription benefits end. Cancellation does not refund the started period."
         },
         {
           "question": "Can I get a refund?",
@@ -400,7 +400,7 @@
           },
           {
             "question": "How does billing work?",
-            "answer": "A simple monthly subscription for Pro, handled securely by Whop. Free lets you explore with limits. Cancel anytime."
+            "answer": "Choose Starter, Pro or Scale, with payment securely handled by Whop. Cancel renewal at any time."
           },
           {
             "question": "Who is behind Stack32?",
@@ -427,7 +427,7 @@
         },
         {
           "title": "Plans & billing",
-          "description": "Free vs Pro, upgrades, cancellations and how Whop handles payment."
+          "description": "Starter, Pro and Scale, plan changes, cancellations and how Whop handles payment."
         },
         {
           "title": "Feedback & ideas",

@@ -6,7 +6,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { CreditCard, Sparkles, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useTheme } from "@/components/providers/theme-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,8 +26,8 @@ import { useTranslation } from "@/hooks/use-translation";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
 
-const WhopCheckoutEmbed = dynamic(
-  () => import("@whop/checkout/react").then((mod) => mod.WhopCheckoutEmbed),
+const WhopElementsCheckout = dynamic(
+  () => import("./whop-elements-checkout").then((mod) => mod.WhopElementsCheckout),
   { ssr: false },
 );
 
@@ -44,7 +43,6 @@ function formatUsd(value: number, locale: string) {
 
 export function BuyCreditsDialog() {
   const { t, i18n } = useTranslation(["billing", "builder", "common"]);
-  const { theme } = useTheme();
   const reduceMotion = useReducedMotion();
   const queryClient = useQueryClient();
   const activeDialog = useUiStore((s) => s.activeDialog);
@@ -82,10 +80,8 @@ export function BuyCreditsDialog() {
     }
   }, [open]);
 
-  const whopTheme = theme === "dark" ? "dark" : "light";
-  const whopBackground = theme === "dark" ? "#080808" : "#ffffff";
   const site =
-    typeof window !== "undefined" ? window.location.origin : "https://stack32.com";
+    typeof window !== "undefined" ? window.location.origin : "";
 
   async function startCheckout() {
     setLoading(true);
@@ -290,13 +286,10 @@ export function BuyCreditsDialog() {
                   </DialogDescription>
                 </div>
                 <div className="min-h-[420px] flex-1 overflow-y-auto bg-background px-1 sm:px-2">
-                  <WhopCheckoutEmbed
-                    key={`${sessionId}-${whopTheme}`}
-                    sessionId={sessionId}
-                    theme={whopTheme}
-                    themeOptions={{ backgroundColor: whopBackground }}
+                  <WhopElementsCheckout
+                    key={sessionId}
+                    configurationId={sessionId}
                     returnUrl={`${site}/billing/success?topup=1`}
-                    setupFutureUsage="off_session"
                     onComplete={() => {
                       setStep("done");
                       void queryClient.invalidateQueries({ queryKey: ["billing"] });

@@ -1,4 +1,3 @@
-import { waitUntil } from "@vercel/functions";
 import { NextResponse, type NextRequest } from "next/server";
 
 import {
@@ -17,46 +16,24 @@ import {
   isWhopRefundCreated,
 } from "@/lib/billing/whop-event-types";
 import { isCreditTopUpMetadata, parseCheckoutMetadata } from "@/lib/billing/whop-catalog";
+import { resolveWhopMembership } from "@/lib/billing/whop-membership-payload";
 import { getWhopSdk } from "@/lib/billing/whop-sdk";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type WhopEvent = { id?: string; type?: string; data?: unknown };
 
 type AdminClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
 
 async function resolveMembershipPayload(data: unknown): Promise<unknown> {
-  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
-  const nested =
-    record.membership && typeof record.membership === "object"
-      ? (record.membership as Record<string, unknown>)
-      : null;
-  const candidate = nested ?? record;
-  const meta = candidate.metadata;
-  const hasMeta =
-    meta &&
-    typeof meta === "object" &&
-    Boolean((meta as { stack32_user_id?: string }).stack32_user_id);
-
-  if (hasMeta) return candidate;
-
-  const membershipId =
-    typeof candidate.id === "string"
-      ? candidate.id
-      : typeof record.membership_id === "string"
-        ? record.membership_id
-        : null;
-  if (!membershipId?.startsWith("mem_")) return candidate;
-
-  const whop = getWhopSdk();
-  if (!whop) return candidate;
-  try {
-    return await whop.memberships.retrieve(membershipId);
-  } catch {
-    return candidate;
-  }
+  return resolveWhopMembership(data, async (id) => {
+    const whop = getWhopSdk();
+    if (!whop) throw new Error("whop_not_configured");
+    return whop.memberships.retrieve(id);
+  });
 }
 
 async function fulfillWhopEvent(
@@ -64,7 +41,7 @@ async function fulfillWhopEvent(
   event: WhopEvent,
   providerEventId: string,
   eventTypeRaw: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const activate = isWhopActivateEvent(eventTypeRaw);
     const deactivate = isWhopDeactivateEvent(eventTypeRaw);
@@ -88,11 +65,7 @@ async function fulfillWhopEvent(
       if (isCreditTopUpMetadata(metaCandidate) || parseCheckoutMetadata(metaCandidate).kind === "credit_topup") {
         await fulfillCreditTopUpFromWhop(data);
       } else {
-        const membership = activate
-          ? await resolveMembershipPayload(data)
-          : await resolveMembershipPayload(
-              (data as { membership?: unknown } | null)?.membership ?? data,
-            );
+        const membership = await resolveMembershipPayload(data);
         if (membership) {
           const memMeta = parseCheckoutMetadata(
             (membership as { metadata?: unknown }).metadata,
@@ -169,6 +142,7 @@ async function fulfillWhopEvent(
       })
       .eq("provider", "whop")
       .eq("provider_event_id", providerEventId);
+    return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : "fulfillment_failed";
     console.error("[whop webhook] fulfillment failed", {
@@ -181,6 +155,7 @@ async function fulfillWhopEvent(
       .update({ status: "failed", last_error: message })
       .eq("provider", "whop")
       .eq("provider_event_id", providerEventId);
+    return false;
   }
 }
 
@@ -268,8 +243,8 @@ export async function POST(request: NextRequest) {
         .eq("provider", "whop")
         .eq("provider_event_id", providerEventId);
 
-      waitUntil(fulfillWhopEvent(admin, event, providerEventId, eventType));
-      return new Response("OK", { status: 200 });
+      const fulfilled = await fulfillWhopEvent(admin, event, providerEventId, eventType);
+      return new Response(fulfilled ? "OK" : "Retry later", { status: fulfilled ? 200 : 503 });
     }
     console.error("[whop webhook] persist failed", persistError.message);
     return NextResponse.json(
@@ -278,7 +253,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  waitUntil(fulfillWhopEvent(admin, event, providerEventId, eventType));
-
-  return new Response("OK", { status: 200 });
+  const fulfilled = await fulfillWhopEvent(admin, event, providerEventId, eventType);
+  return new Response(fulfilled ? "OK" : "Retry later", { status: fulfilled ? 200 : 503 });
 }

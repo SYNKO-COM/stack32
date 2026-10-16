@@ -4,6 +4,7 @@
  */
 
 export const PLAN_KEYS = ["free", "starter", "pro", "scale"] as const;
+export const OFFERED_PLAN_KEYS = ["starter", "pro", "scale"] as const;
 export type PlanKey = (typeof PLAN_KEYS)[number];
 export type BillingInterval = "monthly" | "annual";
 

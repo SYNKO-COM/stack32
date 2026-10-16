@@ -17,9 +17,9 @@ export function Hero() {
     reducedMotion
       ? {}
       : {
-          initial: { opacity: 0, y: 24 },
+          initial: { opacity: 1, y: 12 },
           animate: { opacity: 1, y: 0 },
-          transition: { duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] as const },
+          transition: { duration: 0.3, delay, ease: [0.22, 1, 0.36, 1] as const },
         };
 
   return (
@@ -27,7 +27,7 @@ export function Hero() {
       <div className="mx-auto w-full max-w-4xl text-center">
         <motion.h1
           {...fadeUp(0.05)}
-          className="text-[2rem] leading-[1.12] font-semibold tracking-tight text-balance sm:text-5xl sm:leading-[1.08] md:text-6xl md:leading-[1.1] lg:text-[4.75rem]"
+          className="text-[clamp(2.25rem,9.5vw,3rem)] leading-[1.12] font-semibold tracking-tight text-balance sm:text-5xl sm:leading-[1.08] md:text-6xl md:leading-[1.1] lg:text-[4.75rem]"
         >
           {t("hero.titleLine1")}
           <br />
@@ -45,7 +45,7 @@ export function Hero() {
           <PromptComposer
             size="hero"
             animatedPlaceholders={examples}
-            onSubmit={(value) => void startFromPrompt(value)}
+            onSubmit={(value) => startFromPrompt(value)}
             className="mx-auto w-full max-w-2xl text-left sm:max-w-3xl"
           />
         </motion.div>

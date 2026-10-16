@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Check, ChevronDown, FileText, ImageIcon, Mic, Pause, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Loader2, Check, ChevronDown, FileText, ImageIcon, Mic, Pause, Paperclip, Square, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -216,6 +216,8 @@ export function PromptComposer({
   const streamRef = useRef<MediaStream | null>(null);
   const dragDepthRef = useRef(0);
   const inputId = useId();
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const animated = useTypewriter(animatedPlaceholders, value.length === 0 && !recording);
 
   const setMode = (next: BuilderInteractionMode) => {
@@ -331,10 +333,13 @@ export function PromptComposer({
     !disabled &&
     !busy &&
     !recording &&
-    !transcribing;
+    !transcribing &&
+    !submitting;
 
   const submit = () => {
-    if (!canSend) return;
+    if (!canSend || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     const payload = formatPromptWithAttachments(value, attachments);
     // Keep File + previewUrl on the snapshot for optimistic UI / upload.
     // Do not revoke object URLs here — the handoff owns them briefly.
@@ -358,6 +363,9 @@ export function PromptComposer({
         if (result === false) restoreDraft();
       } catch {
         restoreDraft();
+      } finally {
+        submittingRef.current = false;
+        setSubmitting(false);
       }
     })();
   };
@@ -701,11 +709,12 @@ export function PromptComposer({
                   size="icon-lg"
                   onClick={submit}
                   disabled={!canSend}
+                  aria-busy={submitting}
                   className="rounded-full"
                   aria-label={t("composer.send")}
                   title={t("composer.send")}
                 >
-                  <ArrowUp className={size === "hero" ? "size-5" : "size-4"} aria-hidden="true" />
+                  {submitting ? <Loader2 className="size-5 animate-spin" aria-hidden="true" /> : <ArrowUp className={size === "hero" ? "size-5" : "size-4"} aria-hidden="true" />}
                 </Button>
               </>
             )}

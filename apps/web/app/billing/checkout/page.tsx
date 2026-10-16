@@ -64,7 +64,7 @@ export default async function BillingCheckoutPage({
     redirect("/pricing?billing_error=WHOP_NOT_CONFIGURED");
   }
 
-  // Session is created client-side only after mandatory legal consents.
+  // Fields load immediately; the final payment requires both explicit consents.
   return (
     <WhopCheckoutClient
       key={`${planKey}-${interval}-${creditsMonthly}`}
