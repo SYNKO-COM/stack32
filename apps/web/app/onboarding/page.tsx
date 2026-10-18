@@ -15,16 +15,16 @@ import { fetchProfileWithRetry, safeNextPath } from "@/lib/auth/post-auth";
 
 function OnboardingShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-dvh">
       <AnimatedBackground variant="soft" />
-      <header className="flex items-center justify-between px-6 py-5">
+      <header className="sticky top-0 z-40 flex h-20 items-center justify-between bg-background/95 px-6 py-5 backdrop-blur-sm">
         <Logo href="/" size="lg" className="max-sm:gap-2.5 max-sm:[&_img]:size-8 max-sm:[&_.font-brand]:text-[1.35rem]" />
         <div className="flex items-center gap-1.5">
           <ThemeToggle size="lg" className="max-sm:[&_svg:not([class*='size-'])]:size-4" />
           <LanguageSwitcher size="lg" className="max-sm:[&_svg]:h-[15px] max-sm:[&_svg]:w-[22px]" />
         </div>
       </header>
-      <main className="flex min-h-[calc(100vh-80px)] items-center justify-center px-6 pb-16">
+      <main className="px-6 pb-4">
         {children}
       </main>
     </div>

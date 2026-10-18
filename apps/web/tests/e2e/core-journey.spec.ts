@@ -59,9 +59,7 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await expect(page.getByLabel(/email/i)).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("radio", { name: /save time|gagner du temps/i }).click({ timeout: 20_000 });
-  await page.getByRole("button", { name: /continue|continuer/i }).click();
   await page.getByRole("radio", { name: /founder|fondateur/i }).click();
-  await page.getByRole("button", { name: /continue|continuer/i }).click();
   await page.locator("#onboarding-idea").fill("Build me a research agent");
   await page.reload();
   await expect(page.locator("#onboarding-idea")).toHaveValue("Build me a research agent");
@@ -93,7 +91,6 @@ test("signup, verify email, onboarding, build, logout and login again", async ({
   await expect(page.getByText(/available|disponible/i)).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: /continue|continuer/i }).click();
   await page.getByRole("radio", { name: /google/i }).click();
-  await page.getByRole("button", { name: /continue|continuer/i }).click();
   await page.locator("#onboarding-workspace").fill("E2E Workspace");
   await page.getByRole("button", { name: /continue|continuer/i }).click();
   await expect(page.getByText("Build me a research agent", { exact: true })).toBeVisible();

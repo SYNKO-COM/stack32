@@ -16,6 +16,7 @@
       "codex/mobile-nav-drawer-close": false,
       "codex/checkout-onboarding-preprod": false,
       "codex/onboarding-mobile-header": false,
+      "codex/onboarding-navigation-layout": false,
       "preprod": false
     }
   }
