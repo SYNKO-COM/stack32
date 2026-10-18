@@ -2,22 +2,21 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
+  ArrowLeft,
   Briefcase,
   Code2,
   Ellipsis,
-  FolderKanban,
   GraduationCap,
   Handshake,
   IdCard,
   Megaphone,
   Rocket,
   Sparkles,
-  Target,
   Users,
   Clock,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 
 import {
   ChatgptLogo,
@@ -151,6 +150,7 @@ export function OnboardingFlow() {
   const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
   const [previewStartedAt, setPreviewStartedAt] = useState<number | null>(null);
   const [agentName, setAgentName] = useState("");
+  const questionRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [hydratedFor, setHydratedFor] = useState<string | null>(null);
   const [showIntro, setShowIntro] = useState(true);
@@ -287,6 +287,15 @@ export function OnboardingFlow() {
     return () => window.clearTimeout(handle);
   }, [normalizedUsername, usernameLocalStatus]);
 
+  useEffect(() => {
+    if (!ready || showIntro || previewStartedAt !== null) return;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    const timer = window.setTimeout(() => {
+      questionRef.current?.querySelector<HTMLHeadingElement>("h1")?.focus({ preventScroll: true });
+    }, reducedMotion ? 0 : 180);
+    return () => window.clearTimeout(timer);
+  }, [step, ready, showIntro, previewStartedAt, reducedMotion]);
+
   const usernameOk = usernameStatus === "available";
   const canContinue =
     (step === 1 && goal !== "") ||
@@ -330,6 +339,18 @@ export function OnboardingFlow() {
     }
   };
 
+  const singleChoiceStep = step === 1 || step === 2 || step === 7;
+  const progressNavigation = (
+    <div className="sticky top-20 z-30 mb-4 bg-background/95 pt-3 pb-3 backdrop-blur-sm" data-testid="onboarding-navigation">
+      <div role="progressbar" aria-label={t("a11y.stepper")} aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step} aria-valuetext={t("progress", { current: step, total: TOTAL_STEPS })} className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+        <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${step / TOTAL_STEPS * 100}%` }} />
+      </div>
+      {step > 1 && <Button type="button" variant="ghost" size="sm" className="mt-1 -ml-2 min-h-10 gap-1 px-2 text-xs" onClick={() => setStep(step - 1)} disabled={finishing}>
+        <ArrowLeft className="size-3.5" aria-hidden="true" />{t("common:actions.back")}
+      </Button>}
+    </div>
+  );
+
   if (!ready) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -339,12 +360,14 @@ export function OnboardingFlow() {
   }
 
   if (!user && step >= 6) {
-    return <div className="mx-auto w-full max-w-md space-y-6">
+    return <div ref={questionRef} className="mx-auto w-full max-w-xl [&_h1]:outline-none">
+      {progressNavigation}
+      <div className="mx-auto w-full max-w-md space-y-6">
       <p className="text-sm font-medium text-brand">{t("journey.authCheckpoint")}</p>
-      <h1 className="text-2xl font-semibold tracking-tight">{t("journey.authTitle")}</h1>
+      <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight">{t("journey.authTitle")}</h1>
       <p className="text-muted-foreground">{t("journey.authSubtitle")}</p>
       <AuthForm mode={authMode} onModeChange={setAuthMode} preferredNext={searchParams.get("next")} />
-      <Button variant="ghost" onClick={() => setStep(5)}>{t("common:actions.back")}</Button>
+      </div>
     </div>;
   }
 
@@ -375,19 +398,14 @@ export function OnboardingFlow() {
         >
           {t("intro.subtitle")}
         </motion.p>
-        <Button className="mt-8 rounded-full" onClick={() => setShowIntro(false)}>{t("common:actions.continue")}</Button>
+        <Button className="mt-8 h-12 w-full max-w-xs rounded-full text-base" onClick={() => setShowIntro(false)}>{t("common:actions.continue")}</Button>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl" aria-label={t("a11y.stepper")}>
-      <div className="mb-7">
-        <p className="mb-2 text-sm text-muted-foreground" aria-live="polite">{t("progress", { current: step, total: TOTAL_STEPS })}</p>
-        <div role="progressbar" aria-label={t("a11y.stepper")} aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step} className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
-          <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${step / TOTAL_STEPS * 100}%` }} />
-        </div>
-      </div>
+    <div ref={questionRef} className="mx-auto w-full max-w-xl [&_h1]:outline-none" aria-label={t("a11y.stepper")}>
+      {progressNavigation}
       <AnimatePresence mode="wait">
         <motion.div
           key={step}
@@ -398,15 +416,14 @@ export function OnboardingFlow() {
         >
           {step === 1 ? (
             <>
-              <Target className="mb-5 size-9 text-brand" aria-hidden="true" />
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.goalTitle")}</h1>
+              <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.goalTitle")}</h1>
               <p className="mt-2 mb-6 text-muted-foreground">{t("journey.goalSubtitle")}</p>
-              <OptionGrid options={GOAL_OPTIONS} selected={goal} onSelect={setGoal} translate={(id) => t(`journey.goals.${id}`)} />
+              <OptionGrid options={GOAL_OPTIONS} selected={goal} onSelect={(id) => { setGoal(id); setStep(2); }} translate={(id) => t(`journey.goals.${id}`)} />
             </>
           ) : null}
           {step === 3 ? (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.ideaTitle")}</h1>
+              <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.ideaTitle")}</h1>
               <p className="mt-2 mb-6 text-muted-foreground">{t("journey.ideaSubtitle")}</p>
               <Label htmlFor="onboarding-idea">{t("journey.ideaLabel")}</Label>
               <Textarea id="onboarding-idea" value={useCase} onChange={(e) => setUseCase(e.target.value)} maxLength={4000} className="mt-2 min-h-40" placeholder={t("journey.ideaPlaceholder")} />
@@ -420,7 +437,7 @@ export function OnboardingFlow() {
           ) : null}
           {step === 4 || step === 5 ? (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t(step === 4 ? "journey.audienceTitle" : "journey.outcomeTitle")}</h1>
+              <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight sm:text-3xl">{t(step === 4 ? "journey.audienceTitle" : "journey.outcomeTitle")}</h1>
               <p className="mt-2 mb-6 text-muted-foreground">{t(step === 4 ? "journey.audienceSubtitle" : "journey.outcomeSubtitle")}</p>
               <Label htmlFor="onboarding-answer">{t(step === 4 ? "journey.audienceLabel" : "journey.outcomeLabel")}</Label>
               <Textarea id="onboarding-answer" className="mt-2 min-h-32" maxLength={1000} value={step === 4 ? audience : outcome} onChange={(e) => step === 4 ? setAudience(e.target.value) : setOutcome(e.target.value)} placeholder={t(step === 4 ? "journey.audiencePlaceholder" : "journey.outcomePlaceholder")} />
@@ -428,8 +445,7 @@ export function OnboardingFlow() {
           ) : null}
           {step === 9 ? (
             <>
-              <Rocket className="mb-5 size-9 text-brand" aria-hidden="true" />
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.summaryTitle")}</h1>
+              <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("journey.summaryTitle")}</h1>
               <p className="mt-2 mb-6 text-muted-foreground">{t("journey.summarySubtitle")}</p>
               <dl className="glass space-y-4 rounded-2xl p-5">
                 {[["ideaLabel", useCase], ["audienceLabel", audience], ["outcomeLabel", outcome]].map(([key, answer]) => <div key={key}><dt className="text-sm font-medium text-brand">{t(`journey.${key}`)}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{answer}</dd></div>)}
@@ -440,14 +456,14 @@ export function OnboardingFlow() {
           ) : null}
           {step === 7 ? (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 {t("step1.title")}
               </h1>
               <p className="mt-2 mb-8 text-sm text-muted-foreground">{t("step1.subtitle")}</p>
               <OptionGrid
                 options={DISCOVERY_OPTIONS}
                 selected={discoverySource}
-                onSelect={setDiscoverySource}
+                onSelect={(id) => { setDiscoverySource(id); setStep(8); }}
                 translate={(id) => t(`step1.options.${id}`)}
               />
             </>
@@ -455,14 +471,14 @@ export function OnboardingFlow() {
 
           {step === 2 ? (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 {t("step2.title")}
               </h1>
               <p className="mt-2 mb-8 text-sm text-muted-foreground">{t("step2.subtitle")}</p>
               <OptionGrid
                 options={ROLE_OPTIONS}
                 selected={role}
-                onSelect={setRole}
+                onSelect={(id) => { setRole(id); setStep(3); }}
                 translate={(id) => t(`step2.options.${id}`)}
               />
             </>
@@ -470,7 +486,7 @@ export function OnboardingFlow() {
 
           {step === 6 ? (
             <>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 {t("step3.title")}
               </h1>
               <p className="mt-2 mb-8 text-sm text-muted-foreground">{t("step3.subtitle")}</p>
@@ -555,10 +571,7 @@ export function OnboardingFlow() {
 
           {step === 8 ? (
             <>
-              <div className="mb-6 flex size-12 items-center justify-center rounded-2xl bg-brand/15 text-brand">
-                <FolderKanban className="size-6" aria-hidden="true" />
-              </div>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1 tabIndex={-1} className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 {t("step4.title")}
               </h1>
               <p className="mt-2 mb-4 text-sm text-muted-foreground">{t("step4.subtitle")}</p>
@@ -592,32 +605,26 @@ export function OnboardingFlow() {
       </AnimatePresence>
 
       {finishError ? <p role="alert" className="mt-5 text-sm text-destructive">{t("journey.error")}</p> : null}
-      <div className="sticky bottom-0 mt-8 flex items-center justify-between gap-3 bg-background/95 py-4 backdrop-blur-sm">
-        {step > 1 ? (
-          <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={finishing}>
-            {t("common:actions.back")}
-          </Button>
-        ) : (
-          <span />
-        )}
+      {step === 7 ? <div className="mt-5 flex justify-center"><Button type="button" variant="link" className="min-h-11 text-muted-foreground" onClick={() => setStep(8)}>{t("common:actions.skip")}</Button></div> : null}
+      {!singleChoiceStep && <div className="mt-6 flex justify-center" data-testid="onboarding-actions">
         {step < TOTAL_STEPS ? (
           <Button
-            className="rounded-full px-6"
+            className="h-12 w-full max-w-xs rounded-full px-8 text-base"
             disabled={!canContinue}
-            onClick={() => setStep((s) => s + 1)}
+            onClick={() => setStep(step + 1)}
           >
             {t("common:actions.continue")}
           </Button>
         ) : (
           <Button
-            className="rounded-full px-6"
+            className="h-12 w-full max-w-xs rounded-full px-8 text-base"
             disabled={!canContinue || finishing}
             onClick={() => { setAgentName((name) => name || t("preview.defaultName")); setPreviewStartedAt(Date.now()); }}
           >
             {finishing ? t("completing") : t("journey.finish")}
           </Button>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
