@@ -137,7 +137,7 @@ export function Navbar() {
               <Button
                 size="sm"
                 className="h-10 rounded-full px-3 sm:h-8"
-                onClick={() => openDialog("auth", { authMode: "signup" })}
+                onClick={() => router.push("/onboarding")}
               >
                 {t("actions.getStarted")}
               </Button>

@@ -25,10 +25,11 @@ describe("Permissions-Policy", () => {
     expect(value).not.toContain("microphone=()");
   });
 
-  it("still denies camera, geolocation and payment", async () => {
+  it("denies camera and geolocation, and allows payment only for our origin and Whop", async () => {
     const value = await permissionsPolicy();
     expect(value).toContain("camera=()");
     expect(value).toContain("geolocation=()");
-    expect(value).toContain("payment=()");
+    expect(value).toContain('payment=(self "https://whop.com" "https://*.whop.com")');
+    expect(value).not.toContain("payment=*");
   });
 });

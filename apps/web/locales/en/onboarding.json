@@ -1,7 +1,7 @@
 {
   "intro": {
     "welcome": "Welcome to Stack32",
-    "subtitle": "Let's set things up in under a minute."
+    "subtitle": "Shape your first agent, one step at a time."
   },
   "progress": "Step {{current}} of {{total}}",
   "step1": {
@@ -36,7 +36,7 @@
   },
   "step3": {
     "title": "Tell us a bit about you",
-    "subtitle": "Your first name, a public username, and optionally how you plan to use Stack32.",
+    "subtitle": "Your first name and public username, to personalize your workspace.",
     "firstName": "First name",
     "firstNamePlaceholder": "Ada",
     "username": "Username",
@@ -73,5 +73,84 @@
   "completing": "Preparing your workspace…",
   "a11y": {
     "stepper": "Onboarding steps"
+  },
+  "journey": {
+    "goalTitle": "What would you like your agent to help you achieve?",
+    "goalSubtitle": "Start with your goal. A few answers will turn it into a concrete first project.",
+    "goals": {
+      "time": "Save time in my daily work",
+      "clients": "Help my clients or my team",
+      "sell": "Create an agent to offer to subscribers",
+      "explore": "Explore a first idea"
+    },
+    "goalLabel": "Your goal",
+    "ideaTitle": "Do you already have an agent idea?",
+    "ideaSubtitle": "Your idea is the starting point. If you already entered it, it is waiting here.",
+    "ideaLabel": "Your idea",
+    "ideaPlaceholder": "An agent that turns my notes into article drafts…",
+    "suggest": "Suggest an idea",
+    "ideaHint": "Edit the suggestion before continuing. You will test it in the builder.",
+    "ideas": [
+      "An agent that turns my notes into article drafts, with approval before publishing.",
+      "An agent that compares public information on a topic and prepares a summary with sources.",
+      "An agent that writes product descriptions from the specifications I provide.",
+      "An agent that summarizes meeting notes and prepares an action list for review."
+    ],
+    "audienceTitle": "Who will this agent help?",
+    "audienceSubtitle": "A specific audience helps you build something useful.",
+    "audienceLabel": "Who it is for",
+    "audiencePlaceholder": "Me, my marketing team, small online stores…",
+    "outcomeTitle": "What would a successful first result look like?",
+    "outcomeSubtitle": "Choose a concrete result to test before trying to automate everything.",
+    "outcomeLabel": "First expected result",
+    "outcomePlaceholder": "An article draft ready for review, with three verifiable sources…",
+    "summaryTitle": "Your first project is taking shape",
+    "summarySubtitle": "Here is the starting point we will pass to the builder. You stay in control at every step.",
+    "nextSteps": [
+      "Preview a personalized blueprint for your agent.",
+      "Choose its name and the subscription that fits your project.",
+      "Then build, test and approve it before publishing."
+    ],
+    "disclaimer": "A subscription provides the features of your selected plan. Results and potential earnings depend on your agent, testing and adoption; they are not guaranteed.",
+    "finish": "Prepare my agent",
+    "error": "We could not finish preparing your workspace. Your answers are saved; please try again.",
+    "authCheckpoint": "Your project is taking shape",
+    "authTitle": "Keep your idea. Create your space.",
+    "authSubtitle": "Your first answers are saved on this device. Create an account to prepare the next steps."
+  },
+  "preview": {
+    "badge": "Personalized preview",
+    "title": "Your idea is taking shape",
+    "subtitle": "We are arranging your brief into an initial agent blueprint.",
+    "readyTitle": "Your preview is ready",
+    "readySubtitle": "Here is your agent’s starting point. Name it, then choose a subscription to start building and testing it.",
+    "diagramLabel": "Proposed blueprint: brief, instructions, tools, output and review",
+    "nodes": {
+      "brief": "Your brief",
+      "instructions": "Instructions",
+      "output": "Output",
+      "review": "Review"
+    },
+    "tools": {
+      "research": "Suggested research",
+      "documents": "Suggested documents",
+      "writing": "Suggested writing",
+      "analysis": "Suggested analysis"
+    },
+    "stages": [
+      "Shaping your objective",
+      "Organizing your information",
+      "Suggesting capabilities",
+      "Assembling the blueprint",
+      "Preparing your project summary"
+    ],
+    "localNotice": "Animated preview prepared on this device. No agent or AI model runs at this stage.",
+    "skip": "Show the preview now",
+    "nameLabel": "Your agent’s name",
+    "defaultName": "My first agent",
+    "use": "Continue to use it",
+    "monetize": "Prepare to monetize it",
+    "paymentNotice": "A paid subscription is required to continue. Monetization is available with Pro or Scale. Tools will be validated and authorized during the build.",
+    "edit": "Edit my answers"
   }
 }

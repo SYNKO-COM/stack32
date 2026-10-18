@@ -6,7 +6,6 @@ import { isSupabaseConfigured, SUPABASE_KEY, SUPABASE_URL } from "@/lib/env";
 
 /** Route prefixes that require an authenticated user. */
 const PROTECTED_PREFIXES = [
-  "/onboarding",
   "/agents",
   "/settings",
   "/billing",

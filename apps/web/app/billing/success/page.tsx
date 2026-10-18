@@ -1,113 +1,57 @@
 "use client";
 
-import { CircleCheck, Loader2 } from "lucide-react";
+import { CircleCheck, CircleAlert, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
-
-type RefreshResult = {
-  paid?: boolean;
-  planKey?: string | null;
-  status?: string | null;
-};
+import { readCheckoutPayment } from "@/lib/actions/checkout-payment";
 
 function BillingSuccessInner() {
   const { t } = useTranslation("billing");
-  const searchParams = useSearchParams();
-  const isTopUp = searchParams.get("topup") === "1";
+  const params = useSearchParams();
+  const paymentId = params.get("payment");
+  const isTopUp = params.get("topup") === "1";
+  const failed = ["failed", "canceled"].includes(params.get("status") ?? "");
   const [paid, setPaid] = useState(false);
-  const [polling, setPolling] = useState(!isTopUp);
+  const [polling, setPolling] = useState(!failed);
 
   useEffect(() => {
-    if (isTopUp) {
-      setPaid(true);
-      setPolling(false);
-      return;
-    }
-
+    if (failed) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;
-    const maxAttempts = 20;
-    const intervalMs = 400;
-
     const tick = async () => {
+      if (cancelled) return;
       attempts += 1;
       try {
-        const res = await fetch("/api/billing/refresh", { method: "POST" });
-        if (res.ok) {
-          const data = (await res.json()) as RefreshResult;
-          if (data.paid) {
-            if (!cancelled) {
-              setPaid(true);
-              setPolling(false);
-            }
-            return;
-          }
+        // URL and browser completion callbacks never grant access or prove a sale.
+        const verified = paymentId ? await readCheckoutPayment(paymentId) : null;
+        const res = !isTopUp ? await fetch("/api/billing/refresh", { method: "POST" }) : null;
+        const subscription = res?.ok ? await res.json() as { paid?: boolean } : null;
+        if (cancelled) return;
+        if (verified?.paid || (!paymentId && !isTopUp && subscription?.paid)) {
+          setPaid(true); setPolling(false); return;
         }
-      } catch {
-        /* ignore transient */
-      }
-      if (attempts >= maxAttempts) {
-        if (!cancelled) setPolling(false);
-        return;
-      }
-      window.setTimeout(() => {
-        void tick();
-      }, intervalMs);
+      } catch { /* transient errors leave the outcome unconfirmed */ }
+      if (cancelled) return;
+      if (attempts >= 8) { setPolling(false); return; }
+      timer = setTimeout(() => void tick(), 1500);
     };
-
     void tick();
-    return () => {
-      cancelled = true;
-    };
-  }, [isTopUp]);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [failed, paymentId, isTopUp]);
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-      <CircleCheck className="mb-6 size-14 text-emerald-400" aria-hidden="true" />
-      <h1 className="text-3xl font-semibold tracking-tight">
-        {isTopUp ? t("success.topupTitle") : t("success.title")}
-      </h1>
-      <p className="mt-3 text-muted-foreground">
-        {isTopUp ? t("success.topupSubtitle") : t("success.subtitle")}
-      </p>
-      {polling && !paid ? (
-        <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          {t("success.activating", {
-            defaultValue: "Activating your plan…",
-          })}
-        </p>
-      ) : null}
-      {paid && !isTopUp ? (
-        <p className="mt-4 text-sm text-emerald-600 dark:text-emerald-400">
-          {t("success.activated", { defaultValue: "Your plan is active." })}
-        </p>
-      ) : null}
-      <Button asChild className="mt-8 rounded-full">
-        <Link href="/agents">{t("success.cta")}</Link>
-      </Button>
+      {paid ? <CircleCheck className="mb-6 size-14 text-emerald-500" aria-hidden="true" /> : polling ? <Loader2 className="mb-6 size-12 animate-spin text-brand" aria-hidden="true" /> : <CircleAlert className="mb-6 size-12 text-muted-foreground" aria-hidden="true" />}
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t(paid ? (isTopUp ? "success.topupTitle" : "success.title") : failed ? "success.failedTitle" : "success.pendingTitle")}</h1>
+      <p className="mt-3 max-w-lg text-muted-foreground" role="status">{t(paid ? "success.verified" : failed ? "success.failedBody" : "success.pendingBody")}</p>
+      <Button asChild className="mt-8 rounded-full"><Link href={failed ? "/billing/plans" : "/agents"}>{t(failed ? "checkout.backToPricing" : "success.cta")}</Link></Button>
     </div>
   );
 }
-
-/**
- * Poll server-side billing refresh so access appears within seconds of checkout
- * without trusting the browser alone (webhook remains canonical).
- */
 export default function BillingSuccessPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex flex-1 items-center justify-center py-12 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        </div>
-      }
-    >
-      <BillingSuccessInner />
-    </Suspense>
-  );
+  return <Suspense fallback={<div className="flex flex-1 items-center justify-center py-12"><Loader2 className="size-5 animate-spin" aria-label="Loading" /></div>}><BillingSuccessInner /></Suspense>;
 }

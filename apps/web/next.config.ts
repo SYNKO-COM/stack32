@@ -19,7 +19,7 @@ const securityHeaders = [
     // allowlist blocked getUserMedia before Chrome even prompted, so the mic
     // button always failed and told users to fix their browser settings — which
     // could never help, because the block came from this header.
-    value: "camera=(), microphone=(self), geolocation=(), payment=()",
+    value: 'camera=(), microphone=(self), geolocation=(), payment=(self "https://whop.com" "https://*.whop.com")',
   },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   // Required for Pipedream Connect popups (same-origin COOP breaks window.open).

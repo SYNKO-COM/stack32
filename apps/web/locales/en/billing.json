@@ -38,7 +38,7 @@
   },
   "plans": {
     "title": "Choose your plan",
-    "subtitle": "Three plans to publish and grow your agents. You can also start for free.",
+    "subtitle": "Choose a subscription to build, test and use your agent.",
     "subtitleManage": "Switch plans anytime. Your current plan is clearly marked.",
     "startFree": "Start for free",
     "currentPlan": "Current plan",
@@ -55,8 +55,8 @@
     "creditsLabel": "Builder credits",
     "dueToday": "Due today",
     "changePlan": "Change plan",
-    "unlockHint": "Check both required boxes on the right to unlock checkout.",
-    "unlockTitle": "Required checkboxes",
+    "unlockHint": "Check both agreements to enable payment. You can fill in your details now.",
+    "unlockTitle": "Your secure payment",
     "perMonth": "/ month",
     "perYear": "billed yearly",
     "loading": "Preparing secure checkout…",
@@ -66,7 +66,17 @@
       "terms": "I have read and accept the <terms>Terms of Use</terms>, the <sales>Subscription & Sales Terms</sales> and the <refunds>Refund Policy</refunds>.",
       "immediate": "I accept the immediate performance of the service and expressly waive my right of withdrawal.",
       "legalNote": "Payment activates your plan, servers and Builder credits immediately. Started periods are non-refundable under French Consumer Code art. L221-28 (and equivalent rules for digital services)."
-    }
+    },
+    "promo": "Promo code (optional)",
+    "calculating": "Calculating the total, including tax…",
+    "total": "Due today: {{amount}}",
+    "addressRequired": "Complete your address to see the final total.",
+    "processing": "Checking payment…",
+    "subscribe": "Subscribe · {{amount}}",
+    "secureFields": "Card details are handled in Whop’s secure hosted fields.",
+    "paymentNotConfirmed": "Payment is not confirmed. If bank verification was interrupted, try again to resume the same payment.",
+    "hostedFallback": "Use the full Whop checkout (other payment methods)",
+    "retryQuote": "Recalculate total"
   },
   "upgrade": {
     "title": "Upgrade to Pro",
@@ -90,7 +100,12 @@
     "subtitle": "Your subscription is active. Time to build your next agent.",
     "topupTitle": "Credits added",
     "topupSubtitle": "Your extra credits are available for this billing period. Your subscription was not changed.",
-    "cta": "Open the app"
+    "cta": "Open the app",
+    "failedTitle": "Payment did not complete",
+    "failedBody": "The payment was canceled or declined. You can return to your plan selection.",
+    "pendingTitle": "Checking your payment",
+    "pendingBody": "Your payment is not confirmed yet. Your access will update after Whop confirms it.",
+    "verified": "Whop confirmed your payment. Updating your access or credits may take a few moments."
   },
   "canceled": {
     "title": "Checkout canceled",

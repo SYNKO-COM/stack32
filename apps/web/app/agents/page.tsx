@@ -5,6 +5,9 @@ import { useEffect, useRef, useTransition } from "react";
 
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { Button } from "@/components/ui/button";
+import { useCurrentUser } from "@/hooks/use-auth";
+import { useSubscription } from "@/hooks/use-billing";
+import { readOnboardingDraft, clearOnboardingDraft } from "@/lib/onboarding-draft";
 import { useAgents, useCreateAgent } from "@/hooks/use-agents";
 import { useActiveWorkspace } from "@/hooks/use-workspaces";
 import { useTranslation } from "@/hooks/use-translation";
@@ -13,6 +16,7 @@ import {
   consumePendingPrompt,
   getPendingPrompt,
   setPrefillDraft,
+  setPendingPrompt,
 } from "@/lib/pending-prompt";
 import { getAgentRepository } from "@/lib/repositories/factory";
 import { useUiStore } from "@/store/ui-store";
@@ -30,6 +34,8 @@ export default function AgentsIndexPage() {
   const { activeWorkspaceId, isLoading: workspacesLoading } = useActiveWorkspace();
   const { data: agents, isLoading } = useAgents(activeWorkspaceId);
   const createAgent = useCreateAgent();
+  const { data: user } = useCurrentUser();
+  const { data: subscription, isLoading: billingLoading } = useSubscription();
   const handledRef = useRef(false);
   const [creating, startCreate] = useTransition();
 
@@ -38,7 +44,16 @@ export default function AgentsIndexPage() {
     // forever: create_agent_workspace is what creates the first workspace, so
     // requiring one before calling it is a deadlock — an endless spinner with no
     // error and no way out.
-    if (isLoading || workspacesLoading || handledRef.current || !agents) return;
+    if (isLoading || workspacesLoading || billingLoading || handledRef.current || !agents) return;
+
+    const preview = user ? readOnboardingDraft(user.id) : null;
+    if (preview?.awaitingPayment) {
+      if (!subscription || subscription.planKey === "free" || !["active", "trialing"].includes(subscription.status)) {
+        router.replace("/billing/plans");
+        return;
+      }
+      setPendingPrompt([preview.useCase, preview.audience, preview.outcome].filter(Boolean).join("\n"));
+    }
 
     const pending = getPendingPrompt();
     if (!pending && agents.length === 0) return;
@@ -50,6 +65,7 @@ export default function AgentsIndexPage() {
         // second one just because a landing prompt is pending (that forced the Pro popup).
         if (agents.length > 0) {
           const target = agents[0]!;
+          if (preview?.awaitingPayment && user) clearOnboardingDraft(user.id);
           const prompt = consumePendingPrompt();
           if (prompt?.trim()) {
             setPrefillDraft(prompt.trim(), { autoSend: true });
@@ -60,7 +76,9 @@ export default function AgentsIndexPage() {
 
         const agent = await createAgent.mutateAsync({
           workspaceId: activeWorkspaceId ?? undefined,
+          name: preview?.awaitingPayment ? preview.agentName : undefined,
         });
+        if (preview?.awaitingPayment && user) clearOnboardingDraft(user.id);
         const prompt = consumePendingPrompt();
         if (prompt?.trim()) {
           setPrefillDraft(prompt.trim(), { autoSend: true });
@@ -87,7 +105,7 @@ export default function AgentsIndexPage() {
       }
     };
     void go();
-  }, [agents, isLoading, workspacesLoading, createAgent, router, activeWorkspaceId, openDialog]);
+  }, [agents, isLoading, workspacesLoading, billingLoading, subscription, user, createAgent, router, activeWorkspaceId, openDialog]);
 
   if (isLoading || workspacesLoading || !agents) {
     return (

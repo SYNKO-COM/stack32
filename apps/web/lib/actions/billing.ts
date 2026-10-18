@@ -279,7 +279,7 @@ export async function createCheckoutAction(
   }
 
   // Route through the consent + embed page with the selected plan. Session is
-  // created after checkboxes so callers (upgrade dialog, etc.) never land on a
+  // created by that page so callers (upgrade dialog, etc.) never land on a
   // bare `?session=` URL the checkout page does not understand.
   const qs = new URLSearchParams({
     plan: planKey,
@@ -292,6 +292,8 @@ export async function createCheckoutAction(
 }
 
 export type WhopCheckoutSessionResult = {
+  accountId: string;
+  buyerEmail: string;
   sessionId: string;
   planId: string | null;
   purchaseUrl: string | null;
@@ -310,6 +312,7 @@ export async function createWhopCheckoutSession(input: {
   if (!user) throw new Error("UNAUTHENTICATED");
   if (!isWhopLiveConfigured()) throw new Error("WHOP_NOT_CONFIGURED");
 
+  if (!isPlanKey(input.planKey) || String(input.planKey) === "free" || !["monthly", "annual"].includes(input.interval) || !Number.isFinite(input.creditsMonthly)) throw new Error("INVALID_PLAN");
   const creditsMonthly = clampCreditsForPlan(input.planKey, input.creditsMonthly);
   const priced = pricePlanSelection(input.planKey, input.interval, creditsMonthly);
   const productId = requireWhopProductId(input.planKey);
@@ -374,6 +377,8 @@ export async function createWhopCheckoutSession(input: {
       : null;
 
   return {
+    accountId: companyId,
+    buyerEmail: user.email ?? "",
     sessionId: checkout.id,
     planId,
     purchaseUrl,

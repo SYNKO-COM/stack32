@@ -7,7 +7,7 @@ import { Check } from "lucide-react";
 import { CreditSelect } from "@/components/billing/credit-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useActivatePlan, useSubscription } from "@/hooks/use-billing";
+import { useSubscription } from "@/hooks/use-billing";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   creditOptionsForPlan,
@@ -43,13 +43,12 @@ const PLAN_RANK: Record<PlanKey, number> = {
 };
 
 /**
- * Post-onboarding paywall: paid plans only, plus a small free CTA underneath.
+ * Post-onboarding paywall: paid plans only.
  * When the user already has a paid plan, the current tier is marked and locked.
  */
 export function OnboardingPlans() {
   const { t, i18n } = useTranslation(["billing", "marketing"]);
   const router = useRouter();
-  const activate = useActivatePlan();
   const { data: subscription } = useSubscription();
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [creditByPlan, setCreditByPlan] = useState<Record<Exclude<PlanKey, "free">, number>>({
@@ -133,15 +132,6 @@ export function OnboardingPlans() {
     router.push(`/billing/checkout?${qs.toString()}`);
   };
 
-  const startFree = async () => {
-    if (hasPaidPlan) return;
-    await activate.mutateAsync({
-      planKey: "free",
-      interval: "monthly",
-      creditsMonthly: PLANS.free.baseCredits,
-    });
-    router.push("/agents");
-  };
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12 md:py-16">
@@ -268,7 +258,7 @@ export function OnboardingPlans() {
             <Button
               className="mt-8 w-full rounded-full"
               variant={plan.isCurrent ? "secondary" : plan.popular ? "default" : "outline"}
-              disabled={activate.isPending || plan.isCurrent}
+              disabled={plan.isCurrent}
               onClick={() => goCheckout(plan.id)}
             >
               {plan.cta}
@@ -282,18 +272,7 @@ export function OnboardingPlans() {
         ))}
       </div>
 
-      {!hasPaidPlan ? (
-        <div className="mt-8 text-center sm:mt-10">
-          <button
-            type="button"
-            className="text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
-            disabled={activate.isPending}
-            onClick={() => void startFree()}
-          >
-            {t("billing:plans.startFree")}
-          </button>
-        </div>
-      ) : null}
+
     </div>
   );
 }

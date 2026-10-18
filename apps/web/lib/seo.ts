@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { company } from "@/lib/company";
+import { PLANS } from "@/lib/billing/plans";
 import { SITE_URL } from "@/lib/site";
 
 export const SITE_NAME = "Stack32";
@@ -108,9 +109,9 @@ export function softwareApplicationJsonLd() {
     description: DEFAULT_DESCRIPTION,
     offers: {
       "@type": "Offer",
-      price: "0",
+      price: String(PLANS.starter.monthlyPriceUsd),
       priceCurrency: "USD",
-      description: "Free plan available; paid plans for more agents and credits.",
+      description: "Starter monthly subscription. Pro and Scale plans also available.",
     },
     publisher: {
       "@type": "Organization",
