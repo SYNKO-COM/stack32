@@ -195,7 +195,7 @@ export function OnboardingFlow() {
     setStep(draft.step);
     setPreviewStartedAt(draft.previewStartedAt);
     setAgentName(draft.agentName);
-    setShowIntro(draft.showIntro);
+    setShowIntro(draft.showIntro && !(typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches));
     setDiscoverySource(draft.discoverySource);
     setRole(draft.role);
     setFirstName(draft.firstName);
@@ -380,7 +380,7 @@ export function OnboardingFlow() {
 
   if (showIntro) {
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center text-center">
+      <div className="hidden min-h-[70vh] flex-col items-center justify-center text-center sm:flex">
         <motion.p
           initial={reducedMotion ? undefined : { opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}

@@ -62,6 +62,15 @@ test("phone form fields use a readable size without triggering iOS zoom", async 
   expect(fontSize).toBeGreaterThanOrEqual(16);
 });
 
+test("phone onboarding starts at the first question without a welcome delay", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // A frozen clock prevents the desktop welcome timer from hiding a mobile regression.
+  await page.clock.install();
+  await page.goto("/onboarding");
+  await expect(page.getByRole("radio", { name: /save time|gagner du temps/i })).toBeVisible();
+  await expect(page.getByText(/welcome to stack32|bienvenue sur stack32/i)).toHaveCount(0);
+});
+
 test("onboarding advances single choices and keeps progress and back fixed while scrolling", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 568 });
   await page.goto("/onboarding");
