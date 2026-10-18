@@ -64,11 +64,26 @@ test("phone form fields use a readable size without triggering iOS zoom", async 
 
 test("phone onboarding starts at the first question without a welcome delay", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  // A frozen clock prevents the desktop welcome timer from hiding a mobile regression.
-  await page.clock.install();
+  // Record even a brief welcome flash rather than merely waiting for it to disappear.
+  await page.addInitScript(() => {
+    const state = window as typeof window & { onboardingWelcomeSeen?: boolean };
+    state.onboardingWelcomeSeen = false;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (!(node instanceof Element)) continue;
+          const paragraphs = node.matches("p") ? [node] : [...node.querySelectorAll("p")];
+          if (paragraphs.some((p) => /welcome to stack32|bienvenue sur stack32/i.test(p.textContent ?? ""))) {
+            state.onboardingWelcomeSeen = true;
+          }
+        }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
   await page.goto("/onboarding");
   await expect(page.getByRole("radio", { name: /save time|gagner du temps/i })).toBeVisible();
   await expect(page.getByText(/welcome to stack32|bienvenue sur stack32/i)).toHaveCount(0);
+  expect(await page.evaluate(() => (window as typeof window & { onboardingWelcomeSeen?: boolean }).onboardingWelcomeSeen)).toBe(false);
 });
 
 test("onboarding advances single choices and keeps progress and back fixed while scrolling", async ({ page }) => {
