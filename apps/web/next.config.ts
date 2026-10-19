@@ -54,6 +54,7 @@ const productionHeaders =
     : [];
 
 const nextConfig: NextConfig = {
+  ...(process.env.STACK32_LOW_MEMORY_BUILD === "1" ? { experimental: { cpus: 1, webpackMemoryOptimizations: true } } : {}),
   transpilePackages: ["@stack32/config", "@stack32/generated-api-types"],
   outputFileTracingRoot: monorepoRoot,
   async headers() {

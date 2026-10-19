@@ -3,7 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
+import { DesktopOnboardingFlow } from "@/components/onboarding/desktop-onboarding-flow";
+import { MobileOnboardingFlow } from "@/components/onboarding/mobile-onboarding-flow";
+import { AuthForm } from "@/components/auth/auth-form";
+import { useOnboardingExperience } from "@/lib/onboarding/device";
 import { AnimatedBackground } from "@/components/shared/animated-background";
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
@@ -38,6 +41,8 @@ function OnboardingPageInner() {
   const { t } = useTranslation("common");
   const router = useRouter();
   const searchParams = useSearchParams();
+  const experience = useOnboardingExperience();
+  const mobile = experience === "mobile" || searchParams.get("experience") === "mobile";
   const {
     data: user,
     isLoading: userLoading,
@@ -67,6 +72,7 @@ function OnboardingPageInner() {
   );
 
   useEffect(() => {
+    if (experience === null || mobile) return;
     if (userLoading) return;
 
     if (userError || !user) return;
@@ -111,14 +117,18 @@ function OnboardingPageInner() {
     router,
     refetchProfile,
     searchParams,
+    experience,
+    mobile,
   ]);
 
   const readyForFlow = profileReadyForFlow || retryReady || startedIncomplete;
 
-  if (!mounted) return <OnboardingShell><BrandLoader label={t("loading")} size="lg" /></OnboardingShell>;
+  if (!mounted || experience === null) return <OnboardingShell><BrandLoader label={t("loading")} size="lg" /></OnboardingShell>;
+
+  if (mobile) return <OnboardingShell><MobileOnboardingFlow /></OnboardingShell>;
 
   if (!userLoading && !user && !userError) {
-    return <OnboardingShell><OnboardingFlow /></OnboardingShell>;
+    return <OnboardingShell><div className="mx-auto max-w-md py-10"><AuthForm mode="signup" preferredNext="/onboarding" /></div></OnboardingShell>;
   }
 
   if (settling || !readyForFlow || (profile?.onboardingCompleted && !startedIncomplete)) {
@@ -151,7 +161,7 @@ function OnboardingPageInner() {
 
   return (
     <OnboardingShell>
-      <OnboardingFlow />
+      <DesktopOnboardingFlow />
     </OnboardingShell>
   );
 }

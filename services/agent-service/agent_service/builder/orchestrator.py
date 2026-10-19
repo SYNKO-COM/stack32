@@ -4051,9 +4051,15 @@ class BuilderOrchestrator:
                 raw = re.sub(r"\s*```$", "", raw)
             data = json.loads(raw)
             if isinstance(data, dict):
+                if getattr(self, "require_blueprint", False) and not str(data.get("system_extra") or "").strip():
+                    raise ValueError("empty_agent_blueprint")
                 return data
         except Exception:  # noqa: BLE001
+            if getattr(self, "require_blueprint", False):
+                raise
             logger.debug("blueprint design fallback", exc_info=True)
+        if getattr(self, "require_blueprint", False):
+            raise ValueError("invalid_agent_blueprint")
         return {}
 
     async def _fast_patch(self, current: AgentSpec, content: str, identity: AgentIdentity) -> AgentSpec:

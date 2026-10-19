@@ -12,6 +12,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import {
   creditOptionsForPlan,
   OFFERED_PLAN_KEYS,
+  PLAN_KEYS,
   PLANS,
   pricePlanSelection,
   type BillingInterval,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/billing/plans";
 import { cn } from "@/lib/utils";
 import { onboardingPathForNext } from "@/lib/auth/post-auth";
+import { useOnboardingExperience } from "@/lib/onboarding/device";
 
 function formatUsd(amount: number, locale: string): string {
   const rounded = Math.round(amount * 100) / 100;
@@ -37,6 +39,7 @@ function formatCredits(n: number, locale: string): string {
 export default function PricingPage() {
   const { t, i18n } = useTranslation("marketing");
   const router = useRouter();
+  const experience = useOnboardingExperience();
   const { data: user } = useCurrentUser();
   const { data: profile } = useProfile();
   const [interval, setInterval] = useState<BillingInterval>("monthly");
@@ -50,7 +53,7 @@ export default function PricingPage() {
 
   const plans = useMemo(
     () =>
-      OFFERED_PLAN_KEYS.map((id) => {
+      (experience === "desktop" ? PLAN_KEYS : OFFERED_PLAN_KEYS).map((id) => {
         const credits = creditByPlan[id];
         const priced = pricePlanSelection(id, interval, credits);
         const showAnnual = interval === "annual" && PLANS[id].monthlyPriceUsd > 0;
@@ -85,7 +88,7 @@ export default function PricingPage() {
           ),
         };
       }),
-    [creditByPlan, interval, locale, t],
+    [creditByPlan, interval, locale, t, experience],
   );
 
   const included = t("pricing.included.items", { returnObjects: true }) as string[];
@@ -95,6 +98,10 @@ export default function PricingPage() {
   }[];
 
   const handleCta = async (planKey: PlanKey) => {
+    if (planKey === "free") {
+      router.push(user && profile?.onboardingCompleted ? "/agents" : "/onboarding");
+      return;
+    }
 
     const credits = creditByPlan[planKey];
     const qs = new URLSearchParams({

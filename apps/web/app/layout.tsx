@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Caveat, Geist_Mono, Manrope, Sanchez } from "next/font/google";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import Script from "next/script";
 
 import { Providers } from "@/components/providers/providers";
 import { CONSENT_COOKIE, parseConsentCookie } from "@/lib/consent";
-import { LOCALE_COOKIE, readLocaleCookie } from "@/lib/i18n/locales";
+import { LOCALE_COOKIE, requestLocale } from "@/lib/i18n/locales";
 import {
   DEFAULT_DESCRIPTION,
   DEFAULT_OG_IMAGE,
@@ -101,7 +101,7 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const localeCookie = cookieStore.get(LOCALE_COOKIE)?.value;
   const hasLocaleCookie = Boolean(localeCookie);
-  const initialLocale = readLocaleCookie(localeCookie);
+  const initialLocale = requestLocale(localeCookie, (await headers()).get("accept-language"));
   const initialTheme = readThemeCookie(cookieStore.get(THEME_COOKIE)?.value);
   const initialConsent = parseConsentCookie(cookieStore.get(CONSENT_COOKIE)?.value);
 

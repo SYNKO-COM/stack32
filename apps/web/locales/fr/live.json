@@ -73,6 +73,16 @@
     "approved": "Approuvé — reprise…",
     "denied": "Refusé — l’agent n’exécutera pas cette action.",
     "missing": "Les détails d’approbation manquent. Renvoyez votre demande.",
-    "error": "Impossible d’enregistrer votre décision. Réessayez."
+    "error": "Impossible d’enregistrer votre décision. Réessayez.",
+    "fields": {
+      "to": "Destinataires",
+      "cc": "Copie",
+      "bcc": "Copie cachée",
+      "subject": "Objet",
+      "body": "Message",
+      "text": "Contenu",
+      "title": "Titre",
+      "description": "Description"
+    }
   }
 }

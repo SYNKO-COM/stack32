@@ -1,7 +1,9 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { resumeMobileLaunchAfterSetup } from "@/lib/actions/mobile-onboarding";
 
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
 import { DaSelect } from "@/components/ui/da-select";
@@ -51,6 +53,8 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
   );
   const [completed, setCompleted] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const { data: connectionPayload, isFetching: connectionsLoading } = useQuery({
     queryKey: ["connections", agentId],
@@ -86,6 +90,8 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
       : "disconnected";
 
   const finish = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true);
     try {
       if (runId) {
         await submitBuilderSecret({
@@ -96,6 +102,7 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
       } else if (provider && resolvedModelId) {
         await updateAgentModel({ agentId, provider, modelId: resolvedModelId });
       }
+      if (fieldDefault(uiComponent.fields, "onboarding_run_id")) await resumeMobileLaunchAfterSetup(agentId);
       setCompleted(true);
       onSubmitted?.();
       void queryClient.invalidateQueries({ queryKey: ["builder"] });
@@ -105,7 +112,7 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
     } catch (err) {
       setErrorKey(agentServiceErrorKey(err));
       setCompleted(false);
-    }
+    } finally { savingRef.current = false; setSaving(false); }
   };
 
   if (completed) {
@@ -163,6 +170,7 @@ export function SecretForm({ uiComponent, runId, agentId, onSubmitted }: SecretF
       />
 
       {errorKey ? <p className="text-sm text-destructive">{t(errorKey)}</p> : null}
+      {connection && <Button disabled={saving || !resolvedModelId} onClick={() => void finish()} className="min-h-11 rounded-full">{t("common:actions.continue")}</Button>}
     </div>
   );
 }

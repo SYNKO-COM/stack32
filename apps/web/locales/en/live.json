@@ -73,6 +73,16 @@
     "approved": "Approved — continuing…",
     "denied": "Denied — the agent will not run this action.",
     "missing": "Approval details are missing. Try sending your request again.",
-    "error": "Could not save your decision. Try again."
+    "error": "Could not save your decision. Try again.",
+    "fields": {
+      "to": "Recipients",
+      "cc": "Cc",
+      "bcc": "Bcc",
+      "subject": "Subject",
+      "body": "Message",
+      "text": "Content",
+      "title": "Title",
+      "description": "Description"
+    }
   }
 }

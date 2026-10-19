@@ -18,6 +18,7 @@ import { useAgent, useAgentSpec } from "@/hooks/use-agents";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { useClearLiveThread, useCancelLiveRun, useLiveThread, useSendLiveMessage } from "@/hooks/use-live";
 import { useTranslation } from "@/hooks/use-translation";
+import { resumeMobileLaunchAfterSetup } from "@/lib/actions/mobile-onboarding";
 import { stripAttachedPlaceholders } from "@/lib/chat/message-attachments";
 import { CopySupportLogsButton } from "@/components/shared/copy-support-logs-button";
 import { gatherSupportDiagnostic } from "@/lib/actions/support-diagnostic";
@@ -442,6 +443,7 @@ export function LiveView({
                 userPrompt={promptBeforeLiveMessage(displayMessages, message.id)}
                 agentIcon={agent?.icon ?? "bot"}
                 onSecretSubmitted={() => {
+                  void resumeMobileLaunchAfterSetup(agentId).catch(() => { /* The existing status/form remains available for retry. */ });
                   void queryClient.invalidateQueries({ queryKey: ["live", agentId] });
                   void queryClient.invalidateQueries({ queryKey: ["live-execution"] });
                   void queryClient.invalidateQueries({ queryKey: ["active-live-run", agentId] });

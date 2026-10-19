@@ -2,6 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getMobileProject } from "@/lib/actions/mobile-onboarding";
+import { MOBILE_RETURN } from "@/lib/onboarding/journey";
 
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { useCurrentUser, useProfile } from "@/hooks/use-auth";
@@ -20,6 +23,8 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation("common");
   const router = useRouter();
   const { data: user, isLoading: userLoading, isError: userError } = useCurrentUser();
+  const journey = useQuery({ queryKey: ["onboarding", "project", user?.id], queryFn: getMobileProject, enabled: Boolean(user), staleTime: 0, retry: 1 });
+  const unfinishedJourney = Boolean(journey.data?.project && journey.data.project.status !== "launched");
   const {
     data: profile,
     isLoading: profileLoading,
@@ -39,6 +44,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
+    if (unfinishedJourney) { router.replace(MOBILE_RETURN); return; }
     if (userLoading) return;
 
     if (userError || !user) {
@@ -79,11 +85,12 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     userError,
     router,
     refetchProfile,
+    unfinishedJourney,
   ]);
 
   const resolvedComplete = knownComplete || retryComplete === true;
 
-  if (settling || resolvedComplete !== true) {
+  if (settling || journey.isLoading || unfinishedJourney || resolvedComplete !== true) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <BrandLoader label={t("loading")} size="lg" />

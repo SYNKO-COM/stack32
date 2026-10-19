@@ -3,10 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 
-import { readOnboardingDraft, writeOnboardingDraft, GUEST_ONBOARDING_ID } from "@/lib/onboarding-draft";
 import { setPendingPrompt } from "@/lib/pending-prompt";
-import { resolvePostAuthPath } from "@/lib/auth/post-auth";
-import { getAuthRepository } from "@/lib/repositories/factory";
+import { useCurrentUser, useProfile } from "@/hooks/use-auth";
+import { useOnboardingExperience } from "@/lib/onboarding/device";
 
 /**
  * Landing funnel: store the visitor's prompt, then start the public questions
@@ -17,19 +16,21 @@ import { getAuthRepository } from "@/lib/repositories/factory";
  */
 export function useStartFromPrompt() {
   const router = useRouter();
+  const { data: user } = useCurrentUser();
+  const { data: profile } = useProfile();
+  const experience = useOnboardingExperience();
 
   return useCallback(
-    async (prompt: string) => {
+    (prompt: string) => {
       setPendingPrompt(prompt);
-      const auth = getAuthRepository();
-      const user = await auth.getCurrentUser();
-      if (!user) {
-        if (prompt.trim()) writeOnboardingDraft(GUEST_ONBOARDING_ID, { ...readOnboardingDraft(GUEST_ONBOARDING_ID), step: 1, useCase: prompt.trim(), previewStartedAt: null });
+      // Public questions do not depend on another network auth request. The
+      // onboarding route itself resolves identity before its save checkpoint.
+      if (!user || !profile?.onboardingCompleted || experience === "mobile") {
         router.push("/onboarding");
         return;
       }
-      router.push(await resolvePostAuthPath());
+      router.push("/agents");
     },
-    [router],
+    [router, user, profile, experience],
   );
 }

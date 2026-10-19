@@ -42,12 +42,19 @@ export default defineConfig({
     },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: {
-    command: "next dev --webpack -p 3100",
+  webServer: [{
+    command: "node tests/e2e/helpers/onboarding-service.mjs",
+    url: "http://127.0.0.1:3139",
+    reuseExistingServer: !process.env.CI,
+    env: { E2E_SUPABASE_URL: LOCAL_SUPABASE_URL, E2E_SUPABASE_SECRET_KEY: LOCAL_SECRET_KEY },
+  }, {
+    command: process.env.E2E_USE_BUILD === "1" ? "next start -p 3100" : "next dev --webpack -p 3100",
     url: "http://localhost:3100",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
+      NODE_OPTIONS: "--max-old-space-size=4096",
+      NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PUBLIC_APP_URL: "http://localhost:3100",
       NEXT_PUBLIC_SITE_URL: "http://localhost:3100",
       NEXT_PUBLIC_DATA_MODE: "supabase",
@@ -55,10 +62,11 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: LOCAL_PUBLISHABLE_KEY,
       SUPABASE_SERVICE_ROLE_KEY: LOCAL_SECRET_KEY,
       AI_EXECUTION_MODE: "mock",
+      AGENT_SERVICE_URL: "http://127.0.0.1:3139",
       BILLING_MODE: "mock",
       // Force-disable hCaptcha in E2E (local Supabase captcha is off; localhost
       // tokens from a real sitekey fail and block signup).
       NEXT_PUBLIC_HCAPTCHA_SITEKEY: "",
     },
-  },
+  }],
 });

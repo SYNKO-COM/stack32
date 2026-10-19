@@ -104,6 +104,8 @@ export type Database = {
           agent_id: string
           created_at: string
           decided_at: string | null
+          execution_call_id: string | null
+          execution_claimed_at: string | null
           id: string
           installation_id: string | null
           payload: Json
@@ -118,6 +120,8 @@ export type Database = {
           agent_id: string
           created_at?: string
           decided_at?: string | null
+          execution_call_id?: string | null
+          execution_claimed_at?: string | null
           id?: string
           installation_id?: string | null
           payload?: Json
@@ -132,6 +136,8 @@ export type Database = {
           agent_id?: string
           created_at?: string
           decided_at?: string | null
+          execution_call_id?: string | null
+          execution_claimed_at?: string | null
           id?: string
           installation_id?: string | null
           payload?: Json
@@ -2479,6 +2485,92 @@ export type Database = {
           },
         ]
       }
+      onboarding_projects: {
+        Row: {
+          agent_id: string | null
+          brief: string | null
+          control: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          launch_run_id: string | null
+          lease_token: string | null
+          lease_until: string | null
+          preparation_run_id: string | null
+          preparation_started_at: string | null
+          state: Json
+          status: string
+          updated_at: string
+          user_id: string
+          version_id: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          brief?: string | null
+          control?: string | null
+          created_at?: string
+          error_code?: string | null
+          id: string
+          launch_run_id?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          preparation_run_id?: string | null
+          preparation_started_at?: string | null
+          state: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+          version_id?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          brief?: string | null
+          control?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          launch_run_id?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          preparation_run_id?: string | null
+          preparation_started_at?: string | null
+          state?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_projects_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_projects_launch_run_id_fkey"
+            columns: ["launch_run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_projects_preparation_run_id_fkey"
+            columns: ["preparation_run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_projects_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_responses: {
         Row: {
           company_name: string | null
@@ -3587,6 +3679,33 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: boolean
       }
+      begin_onboarding_preparation: {
+        Args: { p_brief: string; p_control?: string }
+        Returns: {
+          agent_id: string | null
+          brief: string | null
+          control: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          launch_run_id: string | null
+          lease_token: string | null
+          lease_until: string | null
+          preparation_run_id: string | null
+          preparation_started_at: string | null
+          state: Json
+          status: string
+          updated_at: string
+          user_id: string
+          version_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "onboarding_projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       check_username_availability: {
         Args: { p_username: string }
         Returns: Json
@@ -3619,10 +3738,39 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_onboarding_launch: { Args: { p_run_id: string }; Returns: boolean }
+      claim_onboarding_preparation: {
+        Args: { p_run_id: string }
+        Returns: {
+          agent_id: string | null
+          brief: string | null
+          control: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          launch_run_id: string | null
+          lease_token: string | null
+          lease_until: string | null
+          preparation_run_id: string | null
+          preparation_started_at: string | null
+          state: Json
+          status: string
+          updated_at: string
+          user_id: string
+          version_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "onboarding_projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_webhook_event: {
         Args: { p_provider: string; p_provider_event_id: string }
         Returns: boolean
       }
+      complete_mobile_onboarding_checkpoint: { Args: never; Returns: undefined }
       complete_onboarding: {
         Args: {
           p_company_name?: string
@@ -3668,6 +3816,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      consume_reviewed_action: {
+        Args: {
+          p_arguments: Json
+          p_call_id: string
+          p_run_id: string
+          p_tool_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       create_agent_workspace: {
         Args: {
           p_create_live_thread?: boolean
@@ -3702,10 +3860,46 @@ export type Database = {
         }
         Returns: number
       }
+      finish_onboarding_preparation: {
+        Args: {
+          p_error?: string
+          p_run_id: string
+          p_spec?: Json
+          p_token: string
+        }
+        Returns: boolean
+      }
       get_my_credit_usage: { Args: never; Returns: Json }
       heartbeat_run_queue_job: {
         Args: { p_lease_seconds?: number; p_owner: string; p_run_id: string }
         Returns: boolean
+      }
+      launch_onboarding_agent: {
+        Args: never
+        Returns: {
+          agent_id: string | null
+          brief: string | null
+          control: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          launch_run_id: string | null
+          lease_token: string | null
+          lease_until: string | null
+          preparation_run_id: string | null
+          preparation_started_at: string | null
+          state: Json
+          status: string
+          updated_at: string
+          user_id: string
+          version_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "onboarding_projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       lease_run_queue_job: {
         Args: { p_lease_seconds?: number; p_owner: string }
@@ -3794,6 +3988,33 @@ export type Database = {
       restore_agents_after_billing: {
         Args: { p_user_id: string }
         Returns: number
+      }
+      save_onboarding_project: {
+        Args: { p_id: string; p_state: Json }
+        Returns: {
+          agent_id: string | null
+          brief: string | null
+          control: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          launch_run_id: string | null
+          lease_token: string | null
+          lease_until: string | null
+          preparation_run_id: string | null
+          preparation_started_at: string | null
+          state: Json
+          status: string
+          updated_at: string
+          user_id: string
+          version_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "onboarding_projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_username: {
         Args: { p_username: string }

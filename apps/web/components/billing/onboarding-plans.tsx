@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/use-billing";
 import { useTranslation } from "@/hooks/use-translation";
+import { useOnboardingExperience } from "@/lib/onboarding/device";
+import { MOBILE_RETURN } from "@/lib/onboarding/journey";
 import {
   creditOptionsForPlan,
   PLAN_KEYS,
@@ -46,9 +48,10 @@ const PLAN_RANK: Record<PlanKey, number> = {
  * Post-onboarding paywall: paid plans only.
  * When the user already has a paid plan, the current tier is marked and locked.
  */
-export function OnboardingPlans() {
+export function OnboardingPlans({ mobileProject = false }: { mobileProject?: boolean }) {
   const { t, i18n } = useTranslation(["billing", "marketing"]);
   const router = useRouter();
+  const experience = useOnboardingExperience();
   const { data: subscription } = useSubscription();
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const [creditByPlan, setCreditByPlan] = useState<Record<Exclude<PlanKey, "free">, number>>({
@@ -132,6 +135,8 @@ export function OnboardingPlans() {
     router.push(`/billing/checkout?${qs.toString()}`);
   };
 
+  const startFree = () => router.push("/agents");
+
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12 md:py-16">
@@ -178,6 +183,9 @@ export function OnboardingPlans() {
             </span>
           </button>
         </div>
+
+      {mobileProject && <div className="mt-8 text-center"><Button variant="ghost" className="min-h-11" onClick={() => router.push(MOBILE_RETURN)}>{locale.startsWith("fr") ? "Revenir à mon agent" : "Back to my agent"}</Button></div>}
+      {!mobileProject && experience === "desktop" && !hasPaidPlan && <div className="mt-8 text-center"><Button variant="ghost" className="min-h-11" onClick={startFree}>{t("billing:plans.startFree")}</Button></div>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
