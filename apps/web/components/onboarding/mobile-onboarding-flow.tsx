@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Check, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Check, Compass, FlaskConical, Loader2, PenLine, RefreshCw, Rocket, Sparkles, Sprout, Store, TrendingUp, Workflow, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { StructureGraph } from "@/components/builder/structure-graph";
@@ -25,20 +25,32 @@ function toolName(id: string) {
   return names[id] ?? id.replace(/^pd:/, "").replace(/[_:]/g, " ");
 }
 
-/** Code-native Stack32 illustration: no remote assets or generated execution. */
-function AgentNetwork({ spec, active = false }: { spec?: PreparedSpec | null; active?: boolean }) {
-  const reduced = useReducedMotion();
-  const labels = spec ? spec.graph.nodes.slice(0, 6).map(n => n.name || n.type) : ["Mission", "Décision", "Résultat"];
-  return <div className="relative mx-auto my-6 w-full max-w-md overflow-hidden rounded-3xl border border-brand/20 bg-brand/[0.04] p-5" aria-hidden="true">
-    <svg viewBox="0 0 320 150" className="mx-auto h-32 w-full text-brand">
-      {[40, 160, 280].map((x, i) => <g key={x}>
-        <motion.path d={`M160 35 Q${x} 45 ${x} 110`} fill="none" stroke="currentColor" strokeOpacity=".4" strokeWidth="2" initial={false} animate={active && !reduced ? { pathLength: [0.2, 1, 0.2] } : { pathLength: 1 }} transition={{ duration: 3, delay: i * .3, repeat: Infinity }} />
-        <circle cx={x} cy="110" r="15" fill="currentColor" fillOpacity=".15" stroke="currentColor" />
-      </g>)}
-      <motion.circle cx="160" cy="35" r="23" fill="currentColor" fillOpacity=".14" stroke="currentColor" animate={active && !reduced ? { r: [23, 27, 23] } : { r: 23 }} transition={{ duration: 2, repeat: Infinity }} />
-      <path d="m148 30 12-7 12 7-12 7z m0 7 12 7 12-7 m-24 7 12 7 12-7" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
-    </svg>
-    <div className="flex flex-wrap justify-center gap-2">{labels.map((label, i) => <span key={`${label}-${i}`} className="rounded-full border border-brand/20 bg-background/80 px-3 py-1 text-xs text-foreground">{label}</span>)}</div>
+const INFO_CARD_ICONS: Record<string, LucideIcon[]> = {
+  "b.beginner": [Sprout, Rocket],
+  "b.experienced": [Compass, Rocket],
+  "b.business": [Bot, TrendingUp],
+  "a.complexity": [Sparkles],
+  "a.explain": [Workflow],
+  "b.describe": [PenLine],
+  "b.configure": [FlaskConical],
+  "b.present": [Store],
+};
+
+/** Present the existing educational copy in light, staggered cards. */
+function InformationCards({ stepId, body, reduced }: { stepId: string; body: string; reduced: boolean }) {
+  const paragraphs = body.split("\n\n");
+  return <div className="mt-6 grid gap-3" data-testid="onboarding-info-cards">
+    {paragraphs.map((paragraph, index) => {
+      const Icon = INFO_CARD_ICONS[stepId][index] ?? Sparkles;
+      const emphasis = index === paragraphs.length - 1;
+      return <motion.div key={paragraph} initial={reduced ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .35, delay: reduced ? 0 : .08 + index * .09, ease: [.22, 1, .36, 1] }} className={cn("relative overflow-hidden rounded-3xl border p-5 sm:p-6", emphasis ? "border-brand/20 bg-gradient-to-br from-brand/10 via-background/90 to-background shadow-[0_8px_30px_-18px_var(--brand)]" : "border-border/70 bg-background/80")}>
+        {emphasis && <motion.div aria-hidden="true" className="absolute inset-x-5 top-0 h-px origin-left bg-gradient-to-r from-brand/70 to-transparent" initial={reduced ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: .6, delay: .2 }} />}
+        <div className="flex items-start gap-3.5">
+          <span aria-hidden="true" className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", emphasis ? "bg-brand/12 text-brand" : "bg-muted text-muted-foreground")}><Icon className="size-[18px]" /></span>
+          <p className={cn("pt-1 text-base leading-relaxed", emphasis ? "text-foreground" : "text-muted-foreground")}>{paragraph}</p>
+        </div>
+      </motion.div>;
+    })}
   </div>;
 }
 
@@ -223,23 +235,28 @@ export function MobileOnboardingFlow() {
   if (!local || loadedFor !== accountKey || userLoading) return <div className="mx-auto max-w-md py-12">{error ? <><p role="alert">{error}</p><Button className="mt-5" onClick={() => window.location.reload()}>Réessayer</Button></> : <BrandLoader label="Préparation de ton parcours" />}</div>;
   const otherVisible = s.other && (Array.isArray(answers[stepId]) ? (answers[stepId] as string[]).includes("Autre") : answers[stepId] === "Autre");
   const projection = timeProjection(answers);
-  const progress = Math.round(((Math.max(0, index) + 1) / path.length) * 100);
+  // Before an objective is chosen, the three introductory screens are only
+  // the beginning of the journey, not a completed three-screen questionnaire.
+  const progressTotal = answers.goal ? path.length : pathFor({ goal: STEPS.goal.options![0] }).length;
+  const progress = Math.round(((Math.max(0, index) + 1) / progressTotal) * 100);
   const isPassive = s.type === "passive";
+  const showBack = index > 1 && !["build", "ready"].includes(stepId);
+  const educationalBody = s.body ?? ({ "b.describe": "Pars d'une demande concrète et du résultat attendu.", "b.configure": "Branche les sources utiles et vérifie un premier cas avec les outils disponibles.", "b.present": "Montre ce que ton agent sait faire avec une démonstration adaptée à ton client." } as Record<string, string>)[stepId];
 
   return <div className="mx-auto w-full max-w-xl pb-[max(1rem,env(safe-area-inset-bottom))]" data-testid="mobile-onboarding" data-step={stepId} lang="fr">
     <div className="sticky top-20 z-30 -mx-6 bg-background/95 px-6 pb-3 pt-2 backdrop-blur-sm">
       <div role="progressbar" aria-label="Progression du parcours" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div className="h-full rounded-full bg-brand transition-[width] motion-reduce:transition-none" style={{ width: `${progress}%` }} />
       </div>
-      <div className="mt-2 flex min-h-10 items-center justify-between">
-        {index > 1 && !["build", "ready"].includes(stepId) ? <Button variant="ghost" size="sm" className="-ml-3 min-h-10 gap-1.5" disabled={busy} onClick={() => update({ step: path.slice(0, index).reverse().find(id => STEPS[id].type !== "passive" && !(owner && id === "account")) ?? "definition" })}><ArrowLeft className="size-4" />Retour</Button> : <span />}
-        <span className="text-xs text-muted-foreground" role="status">{owner && project ? saveStatus === "saving" ? "Sauvegarde…" : saveStatus === "error" ? "Sauvegarde à réessayer" : "Projet sauvegardé" : "Conservé sur cet appareil"}</span>
-      </div>
+      {showBack && <div className="mt-2 flex min-h-10 items-center">
+        <Button variant="ghost" size="sm" className="-ml-3 min-h-10 gap-1.5" disabled={busy} onClick={() => update({ step: path.slice(0, index).reverse().find(id => STEPS[id].type !== "passive" && !(owner && id === "account")) ?? "definition" })}><ArrowLeft className="size-4" />Retour</Button>
+      </div>}
     </div>
-    <motion.section key={stepId} initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .2 }} className="pt-5" aria-labelledby="journey-heading">
-      {(s.type === "info" || isPassive) && stepId !== "ready" ? <AgentNetwork spec={stepId === "build" ? spec : null} active={isPassive} /> : null}
+    <span className="sr-only" role="status">{owner && project && saveStatus === "saving" ? "Sauvegarde…" : saveStatus === "error" ? "Sauvegarde à réessayer" : ""}</span>
+    <motion.section key={stepId} initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .3, ease: [.22, 1, .36, 1] }} className="pt-5" aria-labelledby="journey-heading">
+      {(s.type === "info" || isPassive) && stepId !== "ready" && <motion.div aria-hidden="true" data-testid="onboarding-agent-icon" className="mb-5 w-fit text-brand" initial={reducedMotion ? false : { opacity: 0, scale: .9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: .3 }}><Bot className="size-8" strokeWidth={1.75} /></motion.div>}
       <h1 ref={heading} id="journey-heading" tabIndex={-1} className="text-[clamp(1.65rem,5.6vw,2.25rem)] font-semibold leading-tight tracking-tight outline-none">{s.title}</h1>
-      {s.body && <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-muted-foreground">{s.body}</p>}
+      {INFO_CARD_ICONS[stepId] && educationalBody ? <InformationCards stepId={stepId} body={educationalBody} reduced={Boolean(reducedMotion)} /> : s.body && <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-muted-foreground">{s.body}</p>}
 
       {(s.type === "choice" || s.type === "multi") && <div className="mt-7 grid gap-3" role={s.type === "choice" ? "radiogroup" : "group"} aria-labelledby="journey-heading">
         {s.options?.map((option) => {
@@ -264,7 +281,6 @@ export function MobileOnboardingFlow() {
       </div>}
       {stepId === "b.suggestions" && <ul className="mt-6 space-y-4">{(answers["b.time"] === "Moins de 2 h" ? [["Réponses clients", "Préparer une réponse à une question fréquente d'un client."], ["Production de contenu", "Transformer le brief d'un indépendant en brouillon de publication."]] : [["Réponses clients", "Classer une demande et proposer une réponse à valider."], ["Qualification de prospects", "Résumer un besoin entrant et repérer les informations manquantes."], ["Suivi commercial", "Préparer le prochain suivi d'un échange fourni."]]).map(([title, body]) => <li key={title} className="rounded-2xl border border-border bg-background/70 p-5"><h2 className="font-medium">{title}</h2><p className="mt-2 text-sm text-muted-foreground">{body}</p></li>)}</ul>}
       {stepId === "b.clients" && <p className="mt-5 rounded-2xl bg-brand/10 p-5 text-sm leading-relaxed">{({ "Mon réseau": "Commence par une personne de ton réseau dont tu connais le besoin.", "Prospection directe": "Choisis une entreprise précise et prépare une prise de contact personnelle, sans envoi massif.", "Contenu et réseaux sociaux": "Publie un exemple de problème résolu et propose une démonstration aux personnes intéressées.", "Plateformes freelance": "Présente un cas simple et réponds à une demande correspondant à ton agent.", "J'ai besoin d'aide": "Choisis un professionnel de ton entourage, observe une tâche répétitive et propose-lui un test avec son accord." } as Record<string, string>)[String(answers["b.acquisition"])]}</p>}
-      {["b.describe", "b.configure", "b.present"].includes(stepId) && <p className="mt-5 text-muted-foreground">{stepId === "b.describe" ? "Pars d'une demande concrète et du résultat attendu." : stepId === "b.configure" ? "Branche les sources utiles et vérifie un premier cas avec les outils disponibles." : "Montre ce que ton agent sait faire avec une démonstration adaptée à ton client."}</p>}
       {["b.projection", "b.scenario"].includes(stepId) && <div className="mt-7 space-y-5 rounded-3xl border border-brand/20 bg-background/70 p-5">
         <p className="text-sm text-muted-foreground">Point de départ <span aria-hidden="true">→</span> Dans 3 mois</p><p className="text-4xl font-semibold tracking-tight text-brand">{euro(Number(answers["b.target"] ?? 1000))}<span className="mt-1 block text-base font-normal text-muted-foreground">par mois · ton objectif</span></p>
         {s.type === "scenario" && <><label htmlFor="reference-price" className="block text-sm font-medium">Prix de référence par vente d’agent</label><Input id="reference-price" type="number" inputMode="decimal" min={priceBounds(answers["b.price"]).min} max={priceBounds(answers["b.price"]).max} step="any" value={answers["b.referencePrice"] ?? priceBounds(answers["b.price"]).initial} onChange={e => answer("b.referencePrice", e.target.value)} onBlur={() => answer("b.referencePrice", referencePrice(answers))} className="min-h-12 text-base" /><p className="text-sm text-muted-foreground">Fourchette choisie : {String(answers["b.price"])}. Hypothèse : ventes d’agents à ce prix.</p><p className="text-xl font-medium">{monthlySales(answers) === null ? "Fixe un prix positif dans ta fourchette pour calculer le nombre de ventes." : `${monthlySales(answers)} ventes nécessaires par mois à ${euro(referencePrice(answers))}`}</p><p className="text-sm text-muted-foreground">Un scénario de ventes pour avancer vers ton cap ; il ne suppose ni ventes déjà réalisées ni abonnements récurrents.</p></>}
