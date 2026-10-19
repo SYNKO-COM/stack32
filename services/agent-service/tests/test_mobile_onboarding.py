@@ -1,4 +1,5 @@
 """Onboarding prepares real specs, fails honestly, and never executes tools."""
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
 import pytest
@@ -7,6 +8,14 @@ from agent_service.builder.onboarding import apply_control, onboarding_live_allo
 from agent_service.models.agent_spec import AgentIdentity, AgentInstructions, AgentSpec, ToolBinding
 from agent_service.models.graph_spec import default_linear_graph
 from agent_service.supabase_client import Persistence
+
+
+@pytest.fixture(autouse=True)
+def isolated_preparation_budget(monkeypatch):
+    @asynccontextmanager
+    async def budget(**kwargs):
+        yield
+    monkeypatch.setattr("agent_service.builder.onboarding.llm_run_budget", budget)
 
 
 def spec():
@@ -118,3 +127,19 @@ async def test_onboarding_launch_waits_for_model_setup_without_losing_its_run(mo
     assert any(field["key"] == "onboarding_run_id" and field["suggested_value"] == "original-launch"
                for field in metadata["ui_component"]["fields"])
     get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("lease,expected", [("2099-01-01T00:00:00Z", False), ("2000-01-01T00:00:00Z", True), (None, True)])
+async def test_dispatch_recovers_only_expired_preparation_leases(monkeypatch, lease, expected):
+    from types import SimpleNamespace
+
+    from agent_service.routers.onboarding import dispatch_onboarding
+    db = AsyncMock()
+    db._select.return_value = [{"status": "preparing", "preparation_run_id": "run", "lease_until": lease}]
+    db.get_owned_run.return_value = {"id": "run", "status": "running"}
+    dispatch = AsyncMock(return_value={"status": "queued"})
+    monkeypatch.setattr("agent_service.routers.onboarding.get_persistence", lambda: db)
+    monkeypatch.setattr("agent_service.routers.onboarding._guards", AsyncMock())
+    monkeypatch.setattr("agent_service.routers.onboarding.dispatch_run", dispatch)
+    await dispatch_onboarding(SimpleNamespace(user_id="owner"))
+    assert dispatch.await_count == int(expected)

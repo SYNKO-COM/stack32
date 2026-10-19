@@ -4,11 +4,15 @@ No generated agent or integration action executes during preparation.
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from agent_service.builder.orchestrator import BuilderOrchestrator
+from agent_service.compiler.graph_compiler import compile_graph
+from agent_service.config import get_settings
 from agent_service.gateway.router import TaskComplexity
 from agent_service.models.agent_spec import AgentIdentity, AgentSpec
+from agent_service.security.llm_budget import llm_run_budget
 from agent_service.supabase_client import Persistence, get_supabase_admin_client
 from agent_service.tools.runtime import SIDE_EFFECT_TOOLS
 
@@ -57,15 +61,20 @@ async def prepare_onboarding_run(db: Persistence, run_id: str) -> dict[str, Any]
         # must surface provider errors, rather than announce success on a timer.
         orch.require_blueprint = True
         brief = str(project["brief"])
-        spec, _ = await orch._generate_spec(
-            brief, AgentIdentity(name="Mon agent IA", role=brief.splitlines()[0][:240]),
-            TaskComplexity.STANDARD, None,
-            {"original_goal": brief, "context_notes": "Prepare a draft only; no external action."},
-            user_id=str(project["user_id"]), agent_id=str(project["agent_id"]),
-        )
+        async with asyncio.timeout(240), llm_run_budget(
+            run_id=run_id, user_id=str(project["user_id"]), agent_id=str(project["agent_id"]),
+            max_calls=get_settings().MAX_LLM_CALLS_PER_RUN, source="builder",
+        ):
+            spec, _ = await orch._generate_spec(
+                brief, AgentIdentity(name="Mon agent IA", role=brief.splitlines()[0][:240]),
+                TaskComplexity.STANDARD, None,
+                {"original_goal": brief, "context_notes": "Prepare a draft only; no external action."},
+                user_id=str(project["user_id"]), agent_id=str(project["agent_id"]),
+            )
         spec = apply_control(spec, project.get("control"))
         if not spec.graph.nodes:
             raise ValueError("empty_graph")
+        compile_graph(spec)  # Validate the executable graph without running it.
         saved = await rpc("finish_onboarding_preparation", {
             "p_run_id": run_id, "p_token": token, "p_spec": spec.model_dump(mode="json"),
         })

@@ -16,7 +16,7 @@ The active path uses stable functional step IDs. Inactive branch answers stay av
 
 ## Actual preparation and launch
 
-The begin RPC locks the project and calls the existing `create_agent_workspace` once. It creates a durable build run. The existing Cloud Tasks/Postgres dispatch sends its ID to the worker, which uses the existing builder's `_generate_spec` engine. Onboarding requires successful model design instead of the interactive builder's fallback. Preparation selects declarative tools and validates an AgentSpec; it does not run an agent, send messages, or invoke integrations. Worker claims are fenced; version persistence and readiness commit atomically. Failures retain answers and the agent for retry.
+The begin RPC locks the project and calls the existing `create_agent_workspace` once. It creates a durable build run. The existing Cloud Tasks/Postgres dispatch sends its ID to the worker, which uses the existing builder's `_generate_spec` engine. Onboarding requires successful model design instead of the interactive builder's fallback. Preparation runs inside the existing builder budget with a 240-second timeout, selects declarative tools and validates both the AgentSpec and executable graph; it does not run an agent, send messages, or invoke integrations. Worker claims are fenced; an expired preparation lease can be reclaimed after interruption; version persistence and readiness commit atomically. Failures retain answers and the agent for retry.
 
 Readiness requires the persisted spec plus the full 50 second presentation. The preview uses the actual existing `StructureGraph` in read-only mode and the prepared tools. `test_status=not_run` remains honest: external tools and the user's runtime model still need their usual setup and tests.
 
@@ -40,8 +40,16 @@ Preproduction billing is explicitly mock. Browser tests use local mock entitleme
 
 ## Preproduction release order
 
-1. All repository checks and PR CI green; PR base is `preprod`. Feature and preprod automatic Vercel deployments are disabled.
+1. Run the repository checks locally and inspect PR CI (if runners are available); PR base is `preprod`. A pending CI run is not a passing check. Feature and preprod automatic Vercel deployments are disabled.
 2. Verify CLI project reference is `fbqjuqnkemlofklrjeuo`; review dry-run migrations and apply only v3 migration.
 3. Submit `cloudbuild.preprod.yaml` only; verify both Cloud Run `-preprod` services, their dedicated database and `stack32-runs-preprod` queue.
 4. Stage web in Vercel project `prj_Q1gLhC7rGTQwFWTDwj3lYjry68Xs` (`stack32-preprod`) with `--skip-domain`; promote only after validation.
 5. Verify `https://pre-prod-659874458xx.stack32.com` on the new deployment and synthetic test accounts. Keep Supabase CLI linked to preproduction. Do not follow the historical instruction to re-link to production.
+
+## Local verification, 19 October 2026
+
+- Web: 305 unit tests; TypeScript and optimized webpack build passed.
+- Database: 220 pgTAP assertions passed using the local Supabase stack.
+- Backend: 1321 pytest tests passed; Ruff passed.
+- Browser: 15 Playwright tests passed, one existing integration smoke skipped because its OAuth fixture is absent. This includes the full desktop/free regression, A's 50-second presentation and single mock-paid launch, B's edited brief and projection, and large iPad orientation persistence.
+- On an 8 GB host, build first with `STACK32_LOW_MEMORY_BUILD=1`, then run `E2E_USE_BUILD=1 pnpm --filter @stack32/web test:e2e --workers=1` against local Supabase. Build-time public URLs must match Playwright's localhost URLs. The deterministic local builder fixture and mock billing are not real provider/payment validation.

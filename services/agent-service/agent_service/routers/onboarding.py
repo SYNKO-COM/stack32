@@ -1,6 +1,7 @@
 """Dispatch only persisted, owned onboarding jobs; client input cannot forge runs."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -27,7 +28,13 @@ async def dispatch_onboarding(user: CurrentUser) -> dict[str, Any]:
     if not run_id:
         return {"status": project["status"]}
     run = await db.get_owned_run(str(run_id), user.user_id)
-    if not run or run["status"] != "queued":
+    # A killed worker may leave a running preparation behind. Its fenced lease
+    # makes reclaim safe, while an active worker must never be duplicated.
+    expired_preparation = False
+    if run and not launching and run["status"] == "running":
+        lease = project.get("lease_until")
+        expired_preparation = not lease or datetime.fromisoformat(str(lease).replace("Z", "+00:00")) <= datetime.now(UTC)
+    if not run or (run["status"] != "queued" and not expired_preparation):
         return {"status": (run or {}).get("status", project["status"])}
     await _guards(user.user_id)
     from agent_service.queue.worker import process_run_by_id

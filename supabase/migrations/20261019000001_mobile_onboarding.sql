@@ -122,7 +122,7 @@ begin
   insert into public.runs(user_id,agent_id,agent_version_id,thread_id,run_type,input)
     values(auth.uid(),v.agent_id,v.version_id,tid,'live',jsonb_build_object('prompt',v.brief,'onboarding_launch',true,'locale','fr')) returning id into rid;
   update public.onboarding_projects set status='launched',launch_run_id=rid,updated_at=now() where id=v.id returning * into v;
-  update public.profiles set onboarding_completed=true where id=auth.uid();
+  update public.profiles set onboarding_completed=true,onboarding_completed_at=coalesce(onboarding_completed_at,now()) where id=auth.uid();
   return v;
 end $$;
 revoke all on function public.launch_onboarding_agent() from public,anon;
@@ -143,7 +143,7 @@ create or replace function public.complete_mobile_onboarding_checkpoint()
 returns void language plpgsql security definer set search_path = '' as $$
 begin
   if auth.uid() is null or not exists(select 1 from public.onboarding_projects where user_id=auth.uid()) then raise exception 'draft_missing'; end if;
-  update public.profiles set onboarding_completed=true where id=auth.uid();
+  update public.profiles set onboarding_completed=true,onboarding_completed_at=coalesce(onboarding_completed_at,now()) where id=auth.uid();
 end $$;
 revoke all on function public.complete_mobile_onboarding_checkpoint() from public,anon;
 grant execute on function public.complete_mobile_onboarding_checkpoint() to authenticated;

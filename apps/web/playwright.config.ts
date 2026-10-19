@@ -48,7 +48,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: { E2E_SUPABASE_URL: LOCAL_SUPABASE_URL, E2E_SUPABASE_SECRET_KEY: LOCAL_SECRET_KEY },
   }, {
-    command: "next dev --webpack -p 3100",
+    command: process.env.E2E_USE_BUILD === "1" ? "next start -p 3100" : "next dev --webpack -p 3100",
     url: "http://localhost:3100",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

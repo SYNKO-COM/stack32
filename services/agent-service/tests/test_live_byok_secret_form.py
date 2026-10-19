@@ -49,9 +49,13 @@ def test_each_prompt_gets_a_distinct_request_id():
 
 def test_both_gates_use_the_shared_builder():
     """Guard against one gate drifting back to a bare error payload."""
+    import ast
     import inspect
 
     from agent_service.runtime import live
 
-    source = inspect.getsource(live)
-    assert source.count("metadata=llm_configuration_required_metadata(") == 2
+    tree = ast.parse(inspect.getsource(live))
+    gates = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Name)
+             and node.func.id == "llm_configuration_required_metadata"]
+    assert len(gates) == 2

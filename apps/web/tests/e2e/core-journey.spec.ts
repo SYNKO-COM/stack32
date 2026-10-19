@@ -12,35 +12,10 @@ import { waitForSignupOtp } from "./helpers/inbucket";
 const password = "E2e-Password-123!";
 
 async function reachBuilderComposer(page: Page): Promise<void> {
-  const composer = page.getByTestId("builder-composer");
-
-  // Prefer an explicit post-onboarding build URL.
-  try {
-    await page.waitForURL(/\/agents\/[^/]+\/build/, { timeout: 45_000 });
-  } catch {
-    // Onboarding may have landed on /agents empty state (no auto-create).
-    await page.goto("/agents");
-  }
-
-  // Empty-state CTA when no agent exists yet.
-  if (!(await composer.isVisible().catch(() => false))) {
-    const createCta = page.getByRole("button", {
-      name: /create|créer|new agent|nouvel agent|get started|commencer/i,
-    });
-    if (await createCta.isVisible().catch(() => false)) {
-      await createCta.click();
-    }
-  }
-
-  // If we have an agent URL without /build, open Build.
-  const agentMatch = page.url().match(/\/agents\/([^/?#]+)/);
-  if (agentMatch && !page.url().includes("/build")) {
-    await page.goto(`/agents/${agentMatch[1]}/build`);
-  }
-
-  // Layout can show BrandLoader while agent/workspace queries settle.
-  await expect(composer).toBeVisible({ timeout: 60_000 });
-  // An automatic initial build may still be running; its result is checked below.
+  // A successful desktop onboarding has already created its single free agent.
+  // Never click a sidebar Create button while its route is still mounting.
+  await page.waitForURL(/\/agents\/[^/]+\/build/, { timeout: 60_000 });
+  await expect(page.getByTestId("builder-composer")).toBeVisible({ timeout: 60_000 });
 }
 
 test("signup, verify email, onboarding, build, logout and login again", async ({
