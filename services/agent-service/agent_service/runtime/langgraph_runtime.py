@@ -685,9 +685,11 @@ async def run_langgraph_agent(
 
     async def tools_node(state: AgentState) -> dict[str, Any]:
         from agent_service.runtime.approvals import (
+            approved_call,
             approved_tool_ids_for_run,
             create_approval_request,
             denied_tool_ids_for_run,
+            exact_draft_test_passed,
             requires_approval,
             summarize_action,
         )
@@ -700,7 +702,15 @@ async def run_langgraph_agent(
         denied_ids = await denied_tool_ids_for_run(user_id=user_id, run_id=run_id)
         # Connecting an account authorizes actions — do not pause live runs for
         # Approve/Deny unless the user previously denied this tool on this run.
-        approved_ids = list(set(approved_ids) | set(enabled_tools))
+        test_passed = False
+        if any(t.config.get("review_until_tested") for t in spec.tools):
+            test_passed = await exact_draft_test_passed(db, agent_id, spec)
+        explicit_review = {t.tool_id for t in spec.tools if t.enabled and (
+            t.approval_mode == "always" or t.approval_mode == "conditional" and not (
+                t.config.get("review_until_tested") and test_passed
+            )
+        )}
+        approved_ids = list((set(approved_ids) | set(enabled_tools)) - explicit_review)
         interrupt_reason: str | None = None
 
         for raw in raw_calls:
@@ -718,6 +728,12 @@ async def run_langgraph_agent(
                 continue
             from agent_service.integrations.app_keys import is_same_pipedream_app
 
+            review_required = call.tool_id in explicit_review or is_same_pipedream_app(call.tool_id, explicit_review)
+            call_approved = False
+            if review_required:
+                call_approved = await approved_call(user_id=user_id, run_id=run_id,
+                    tool_id=call.tool_id, call_id=call.call_id, arguments=call.arguments)
+
             if call.tool_id not in enabled_tools and not is_same_pipedream_app(
                 call.tool_id, enabled_tools
             ):
@@ -728,7 +744,7 @@ async def run_langgraph_agent(
                     "tool_id": call.tool_id,
                     "message": "The user denied this action.",
                 }
-            elif requires_approval(call.tool_id) and call.tool_id not in approved_ids:
+            elif (review_required and not call_approved) or (requires_approval(call.tool_id) and call.tool_id not in approved_ids and not call_approved):
                 # Persist approval + interrupt; return dry-run preview via execute_tool.
                 approval = await create_approval_request(
                     user_id=user_id,
@@ -739,19 +755,9 @@ async def run_langgraph_agent(
                     action_summary=summarize_action(call.tool_id, call.arguments),
                     payload={"arguments": call.arguments, "call_id": call.call_id},
                 )
-                try:
-                    obs = await execute_tool(
-                        call.tool_id,
-                        {**call.arguments, "dry_run": True},
-                        context={
-                            "user_id": user_id,
-                            "agent_id": agent_id,
-                            "thread_id": thread_id,
-                            "run_id": run_id,
-                        },
-                    )
-                except ToolError as exc:
-                    obs = {"error": exc.code, "message": str(exc)}
+                # Preview the request without invoking any provider. Arbitrary
+                # integration actions do not necessarily implement dry_run.
+                obs = {"tool_id": call.tool_id, "preview_args": call.arguments}
                 obs = {
                     **(obs if isinstance(obs, dict) else {"result": obs}),
                     "approval_required": True,
@@ -797,7 +803,7 @@ async def run_langgraph_agent(
                             "agent_id": agent_id,
                             "thread_id": thread_id,
                             "run_id": run_id,
-                            "approved_tool_ids": approved_ids,
+                            "approved_tool_ids": [*approved_ids, *([call.tool_id] if call_approved else [])],
                             "installation_id": installation_id,
                             "tool_configs": tool_configs,
                             "tool_config": tool_configs.get(call.tool_id),

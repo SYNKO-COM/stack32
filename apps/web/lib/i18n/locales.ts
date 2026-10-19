@@ -29,6 +29,13 @@ export function readLocaleCookie(value: string | undefined | null): Locale {
   return DEFAULT_LOCALE;
 }
 
+/** Match the browser's first language before hydration on a first visit. */
+export function requestLocale(cookieValue: string | undefined, acceptLanguage: string | null): Locale {
+  if (cookieValue && isSupportedLocale(cookieValue)) return cookieValue;
+  const first = acceptLanguage?.split(",")[0]?.trim().slice(0, 2).toLowerCase();
+  return first && isSupportedLocale(first) ? first : DEFAULT_LOCALE;
+}
+
 /** Persist the user's choice for the next visit (localStorage + cookie). */
 export function persistLocale(locale: Locale): void {
   if (typeof window === "undefined") return;

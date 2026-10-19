@@ -168,6 +168,31 @@ def requires_approval(tool_id: str) -> bool:
     return tool_id in SIDE_EFFECT_TOOLS
 
 
+async def approved_call(*, user_id: str, run_id: str, tool_id: str,
+                        call_id: str, arguments: dict[str, Any]) -> bool:
+    """Consume one exact reviewed action; never turn it into a tool-wide grant."""
+    async with get_supabase_admin_client() as client:
+        response = await client.post("/rpc/consume_reviewed_action", json={
+            "p_user_id": user_id, "p_run_id": run_id,
+            "p_tool_id": tool_id, "p_call_id": call_id, "p_arguments": arguments,
+        })
+        response.raise_for_status()
+        return response.json() is True
+
+
+async def exact_draft_test_passed(db: Any, agent_id: str, spec: Any) -> bool:
+    """After-test autonomy requires a passed test of this exact persisted spec."""
+    from agent_service.models.agent_spec import load_agent_spec
+    agents = await db._select("agents", {"id": f"eq.{agent_id}", "select": "draft_version_id", "limit": "1"})
+    version_id = agents[0].get("draft_version_id") if agents else None
+    if not version_id:
+        return False
+    versions = await db._select("agent_versions", {"id": f"eq.{version_id}", "agent_id": f"eq.{agent_id}", "select": "spec,test_status", "limit": "1"})
+    if not versions or versions[0].get("test_status") not in {"passed", "passed_with_warnings"}:
+        return False
+    return load_agent_spec(versions[0]["spec"]).model_dump(mode="json") == spec.model_dump(mode="json")
+
+
 def summarize_action(tool_id: str, arguments: dict[str, Any]) -> str:
     if tool_id == "gmail_send":
         to = str(arguments.get("to", ""))[:80]

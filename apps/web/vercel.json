@@ -17,7 +17,8 @@
       "codex/checkout-onboarding-preprod": false,
       "codex/onboarding-mobile-header": false,
       "codex/onboarding-navigation-layout": false,
-      "preprod": false
+      "preprod": false,
+      "codex/onboarding-mobile-tablet-v3": false
     }
   }
 }

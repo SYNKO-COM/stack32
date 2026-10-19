@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (found && completed) {
-          const dest = next === "/onboarding" || next.startsWith("/onboarding?") ? "/agents" : next;
+          const dest = next === "/onboarding?experience=mobile" ? next : next === "/onboarding" || next.startsWith("/onboarding?") ? "/agents" : next;
           return NextResponse.redirect(`${origin}${dest}`);
         }
         if (found && !completed) {

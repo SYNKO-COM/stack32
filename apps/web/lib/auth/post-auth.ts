@@ -87,6 +87,7 @@ export function isCheckoutNext(path: string | null | undefined): boolean {
 /** Onboarding URL, preserving a checkout destination when one was chosen. */
 export function onboardingPathForNext(preferredNext?: string | null): string {
   const next = safeNextPath(preferredNext);
+  if (next === "/onboarding?experience=mobile") return next;
   if (next && isCheckoutNext(next)) {
     return `/onboarding?next=${encodeURIComponent(next)}`;
   }
@@ -106,6 +107,7 @@ export async function resolvePostAuthPath(
 ): Promise<string> {
   const next = safeNextPath(preferredNext);
   const profile = await fetchProfileWithRetry();
+  if (next === "/onboarding?experience=mobile") return next;
 
   if (!profile?.onboardingCompleted) {
     return onboardingPathForNext(next);

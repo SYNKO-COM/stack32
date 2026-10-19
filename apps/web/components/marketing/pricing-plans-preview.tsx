@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import {
   OFFERED_PLAN_KEYS,
+  PLAN_KEYS,
   PLANS,
   pricePlanSelection,
   type BillingInterval,
 } from "@/lib/billing/plans";
 import { cn } from "@/lib/utils";
+import { useOnboardingExperience } from "@/lib/onboarding/device";
 
 const PREVIEW_FEATURE_COUNT = 4;
 
@@ -35,10 +37,11 @@ export function PricingPlansPreview() {
   const { t, i18n } = useTranslation(["marketing", "common"]);
   const [interval, setInterval] = useState<BillingInterval>("monthly");
   const locale = i18n.language || "en";
+  const experience = useOnboardingExperience();
 
   const plans = useMemo(
     () =>
-      OFFERED_PLAN_KEYS.map((id) => {
+      (experience === "desktop" ? PLAN_KEYS : OFFERED_PLAN_KEYS).map((id) => {
         const priced = pricePlanSelection(id, interval, PLANS[id].baseCredits);
         const showAnnual = interval === "annual" && PLANS[id].monthlyPriceUsd > 0;
         const allFeatures = [
@@ -69,7 +72,7 @@ export function PricingPlansPreview() {
           ),
         };
       }),
-    [interval, locale, t],
+    [interval, locale, t, experience],
   );
 
   return (

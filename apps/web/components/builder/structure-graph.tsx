@@ -144,9 +144,10 @@ function layoutGraph(spec: GraphSpec): { nodes: Node[]; edges: Edge[] } {
 interface StructureGraphProps {
   agentId: string;
   graph: GraphSpec;
+  readOnly?: boolean;
 }
 
-export function StructureGraph({ agentId, graph }: StructureGraphProps) {
+export function StructureGraph({ agentId, graph, readOnly = false }: StructureGraphProps) {
   const { t } = useTranslation("structure");
   const router = useRouter();
   const [selected, setSelected] = useState<GraphNode | null>(null);
@@ -230,7 +231,7 @@ export function StructureGraph({ agentId, graph }: StructureGraphProps) {
                     {t("nodeStates.modelProfile", { profile: String(selected.config.profile) })}
                   </p>
                 ) : null}
-                <Button
+                {!readOnly && <Button
                   variant="ghost"
                   size="sm"
                   className="gap-1.5 px-0 text-brand hover:bg-transparent hover:text-brand-from"
@@ -238,7 +239,7 @@ export function StructureGraph({ agentId, graph }: StructureGraphProps) {
                 >
                   <Hammer className="size-3.5" aria-hidden="true" />
                   {t("actions.changeInBuild")}
-                </Button>
+                </Button>}
               </div>
             </>
           ) : null}

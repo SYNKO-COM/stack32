@@ -1,0 +1,61 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select no_plan();
+insert into auth.users(id,aud,role,email,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
+values ('a0190000-0000-4000-8000-000000000001','authenticated','authenticated','mobile-a@stack32.test','{}','{}',now(),now()),
+       ('a0190000-0000-4000-8000-000000000002','authenticated','authenticated','mobile-b@stack32.test','{}','{}',now(),now());
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"a0190000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select lives_ok($$select public.save_onboarding_project('d0190000-0000-4000-8000-000000000001','{"version":3,"step":"account","answers":{},"initialPrompt":"Original prompt","updatedAt":100}')$$,'save a durable owned draft');
+select lives_ok($$select public.save_onboarding_project('d0190000-0000-4000-8000-000000000001','{"version":3,"step":"a.plan","answers":{},"initialPrompt":"Edited prompt","updatedAt":200}')$$,'save newer answers');
+select public.save_onboarding_project('d0190000-0000-4000-8000-000000000001','{"version":3,"step":"account","answers":{},"initialPrompt":"Stale prompt","updatedAt":150}');
+select is((select state->>'initialPrompt' from public.onboarding_projects),'Edited prompt','an older in-flight save cannot erase newer answers');
+select throws_ok($$update public.onboarding_projects set status='ready'$$,'42501',null,'client cannot forge readiness');
+select throws_ok($$select public.claim_onboarding_preparation(gen_random_uuid())$$,'42501',null,'client cannot claim worker privileges');
+select lives_ok($$select public.begin_onboarding_preparation('Prepare an invoice summary and ask for approval.','Avant chaque envoi')$$,'preparation uses the existing agent creation RPC');
+select public.begin_onboarding_preparation('Duplicate request must not replace the brief.','Après test et ajustement');
+select is((select count(*)::int from public.agents where user_id=auth.uid()),1,'duplicate start creates one agent');
+select is((select count(*)::int from public.runs where user_id=auth.uid()),1,'duplicate start creates one preparation run');
+select is((select brief from public.onboarding_projects),'Prepare an invoice summary and ask for approval.','duplicate start preserves the resolved brief');
+select set_config('request.jwt.claims','{"sub":"a0190000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+select is((select count(*)::int from public.onboarding_projects),0,'second account cannot read the first account draft');
+select throws_ok($$select public.save_onboarding_project('d0190000-0000-4000-8000-000000000001','{"version":3,"step":"account","answers":{},"initialPrompt":"","updatedAt":300}')$$,'P0001','draft_already_claimed','anonymous id cannot be claimed by another account');
+select throws_ok($$select public.launch_onboarding_agent()$$,'P0001','agent_not_ready','second account cannot launch a foreign draft');
+reset role;
+create temporary table claimed as select * from public.claim_onboarding_preparation((select preparation_run_id from public.onboarding_projects where id='d0190000-0000-4000-8000-000000000001'));
+select ok((select lease_token is not null from claimed),'worker acquires fenced preparation lease');
+select ok((public.claim_onboarding_preparation((select preparation_run_id from claimed))).id is null,'duplicate worker cannot acquire the same lease');
+select is(public.finish_onboarding_preparation((select preparation_run_id from claimed),gen_random_uuid(),'{"identity":{"name":"Invoice helper"},"goal":"Summarize invoices","graph":{}}'::jsonb) ,false,'wrong fencing token cannot complete preparation');
+select is(public.finish_onboarding_preparation((select preparation_run_id from claimed),(select lease_token from claimed),'{"identity":{"name":"Invoice helper"},"goal":"Summarize invoices","graph":{}}'::jsonb),true,'worker atomically persists actual prepared version');
+select is(public.finish_onboarding_preparation((select preparation_run_id from claimed),(select lease_token from claimed),'{"identity":{"name":"Duplicate"},"goal":"Duplicate","graph":{}}'::jsonb),false,'duplicate completion cannot create another version');
+select is((select count(*)::int from public.agent_versions where agent_id=(select agent_id from claimed)),2,'one skeleton plus one prepared version');
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"a0190000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select throws_ok($$select public.launch_onboarding_agent()$$,'P0001','paid_access_required','ready free user still cannot launch');
+reset role;
+insert into public.subscriptions(user_id,status,plan_key,current_period_end) values('a0190000-0000-4000-8000-000000000001','active','starter',now()+interval '1 month')
+on conflict(user_id) do update set status='active',plan_key='starter',current_period_end=now()+interval '1 month';
+set local role authenticated;
+select throws_ok($$select public.launch_onboarding_agent()$$,'P0001','preparation_sequence_pending','paid user still waits for the 50 second sequence');
+reset role;
+update public.onboarding_projects set preparation_started_at=now()-interval '51 seconds' where id='d0190000-0000-4000-8000-000000000001';
+set local role authenticated;
+select lives_ok($$select public.launch_onboarding_agent()$$,'paid user can launch their prepared agent');
+select public.launch_onboarding_agent();
+select is((select count(*)::int from public.runs where user_id=auth.uid() and run_type='live'),1,'return/reload cannot create a second launch run');
+select is((select count(*)::int from public.live_messages where user_id=auth.uid() and role='user'),1,'the resolved brief is sent once');
+reset role;
+select is(public.claim_onboarding_launch((select launch_run_id from public.onboarding_projects where id='d0190000-0000-4000-8000-000000000001')),true,'one worker claims the initial launch');
+select is(public.claim_onboarding_launch((select launch_run_id from public.onboarding_projects where id='d0190000-0000-4000-8000-000000000001')),false,'duplicate delivery cannot start the same launch concurrently');
+insert into public.agent_approval_requests(user_id,agent_id,run_id,tool_id,action_summary,payload,status,decided_at)
+select user_id,agent_id,launch_run_id,'gmail_send','Send exact test message','{"arguments":{"to":"test@example.invalid","body":"Exact test content"}}','approved',now()
+from public.onboarding_projects where id='d0190000-0000-4000-8000-000000000001';
+select is(public.consume_reviewed_action('a0190000-0000-4000-8000-000000000002',(select launch_run_id from public.onboarding_projects where id='d0190000-0000-4000-8000-000000000001'),'gmail_send','call-2','{"to":"test@example.invalid","body":"Exact test content"}'),false,'a different account cannot consume an approval');
+select is(public.consume_reviewed_action('a0190000-0000-4000-8000-000000000001',(select launch_run_id from public.onboarding_projects where id='d0190000-0000-4000-8000-000000000001'),'gmail_send','call-2','{"to":"attacker@example.invalid","body":"Exact test content"}'),false,'approval cannot change recipients');
+select is(public.consume_reviewed_action('a0190000-0000-4000-8000-000000000001',(select launch_run_id from public.onboarding_projects where id='d0190000-0000-4000-8000-000000000001'),'gmail_send','call-2','{"to":"test@example.invalid","body":"Exact test content"}'),true,'exact reviewed arguments permit one resumed call');
+select is(public.consume_reviewed_action('a0190000-0000-4000-8000-000000000001',(select launch_run_id from public.onboarding_projects where id='d0190000-0000-4000-8000-000000000001'),'gmail_send','call-3','{"to":"test@example.invalid","body":"Exact test content"}'),false,'approval cannot authorize a second send');
+update public.subscriptions set current_period_end=now()-interval '1 second' where user_id='a0190000-0000-4000-8000-000000000001';
+set local role authenticated;
+select throws_ok($$select public.launch_onboarding_agent()$$,'P0001','paid_access_required','expired subscription cannot bypass the server gate');
+select * from finish();
+rollback;

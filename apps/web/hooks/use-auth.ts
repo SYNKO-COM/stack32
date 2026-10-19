@@ -2,8 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { OnboardingAnswers } from "@/lib/domain/types";
+import type { OnboardingAnswers, User } from "@/lib/domain/types";
 import { getAuthRepository } from "@/lib/repositories/factory";
+import { clearAnonymousJourney } from "@/lib/onboarding/storage";
 
 const authKeys = {
   user: ["auth", "user"] as const,
@@ -46,7 +47,13 @@ export function useSignIn() {
       password: string;
       captchaToken?: string;
     }) => getAuthRepository().signInWithPassword(email, password, { captchaToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["auth"] }),
+    onSuccess: (user) => {
+      const previous = queryClient.getQueryData<User>(authKeys.user);
+      if (previous && previous.id !== user.id) queryClient.clear();
+      queryClient.setQueryData(authKeys.user, user);
+      queryClient.removeQueries({ queryKey: authKeys.profile });
+      return queryClient.invalidateQueries({ queryKey: ["auth"] });
+    },
   });
 }
 
@@ -87,7 +94,7 @@ export function useSignOut() {
   return useMutation({
     mutationFn: () => getAuthRepository().signOut(),
     // Clear (not just invalidate) so no private data survives logout in cache.
-    onSuccess: () => queryClient.clear(),
+    onSuccess: () => { clearAnonymousJourney(); queryClient.clear(); },
   });
 }
 

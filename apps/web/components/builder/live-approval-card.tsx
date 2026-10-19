@@ -12,6 +12,14 @@ function fieldValue(fields: BuilderUiComponent["fields"], key: string): string {
   return fields.find((f) => f.key === key)?.suggested_value ?? "";
 }
 
+function reviewedDetails(raw: string): [string, string][] {
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    return Object.entries(value).map(([key, entry]) => [key, typeof entry === "string" ? entry : JSON.stringify(entry, null, 2)]);
+  } catch { return []; }
+}
+
 export function LiveApprovalCard({
   agentId,
   uiComponent,
@@ -32,6 +40,8 @@ export function LiveApprovalCard({
   const actionSummary =
     fieldValue(uiComponent.fields, "action_summary") ||
     t("live:approval.defaultAction", { defaultValue: "Allow this action to continue." });
+  const actionDetails = fieldValue(uiComponent.fields, "action_details");
+  const detailLabels: Record<string, string> = t("live:approval.fields", { returnObjects: true, defaultValue: {} }) as Record<string, string>;
 
   if (!approvalId) {
     return (
@@ -67,6 +77,7 @@ export function LiveApprovalCard({
           ) : null}
         </div>
       </div>
+      {actionDetails && actionDetails !== "{}" && <dl className="max-h-80 space-y-3 overflow-auto rounded-xl bg-background/80 p-3 text-sm leading-relaxed">{reviewedDetails(actionDetails).map(([key, value]) => <div key={key}><dt className="font-medium">{detailLabels[key] ?? key.replace(/_/g, " ")}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">{value}</dd></div>)}</dl>}
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"

@@ -19,6 +19,7 @@ from agent_service.routers import (
     integrations,
     knowledge,
     live,
+    onboarding,
     runs,
     secrets,
     tasks,
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
     v1 = APIRouter(prefix="/v1")
     v1.include_router(agents.router)
     v1.include_router(builder.router)
+    v1.include_router(onboarding.router)
     v1.include_router(secrets.router)
     v1.include_router(live.router)
     v1.include_router(runs.router)

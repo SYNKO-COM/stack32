@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import Any
@@ -307,6 +308,9 @@ class LiveRuntime:
         images: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         content = redact_text((content or "").strip())
+        from agent_service.builder.onboarding import onboarding_live_allowed
+        if not await onboarding_live_allowed(self.db, user_id=user_id, agent_id=agent_id):
+            return {"error": "PAID_ACCESS_REQUIRED"}
         image_payloads = [img for img in (images or []) if isinstance(img, dict)]
         if not content and not image_payloads:
             return {"error": "BUILDER_INPUT_REJECTED"}
@@ -465,11 +469,16 @@ class LiveRuntime:
         images: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         await self.db.update_run_status(run_id, "running")
+        from agent_service.builder.onboarding import onboarding_live_allowed
+        if not await onboarding_live_allowed(self.db, user_id=user_id, agent_id=agent_id):
+            await self.db.fail_run(run_id, "PAID_ACCESS_REQUIRED")
+            return {"error": "PAID_ACCESS_REQUIRED"}
         # The run's input already says what woke it (the trigger service
         # stamps trigger_kind/trigger_id, schedules stamp schedule_id).
         # run.started carries it so the live structure can light the right
         # trigger node first instead of jumping straight to the agent.
         trigger_kind = "chat"
+        run_input: dict[str, Any] = {}
         try:
             run_rows = await self.db._select(
                 "runs", {"id": f"eq.{run_id}", "select": "input", "limit": "1"}
@@ -527,6 +536,7 @@ class LiveRuntime:
                 installation_id=installation_id,
                 images=images,
                 progress_id=progress_id,
+                onboarding_launch=bool(run_input.get("onboarding_launch")),
             )
 
     async def _execute_live_run_inner(
@@ -542,6 +552,7 @@ class LiveRuntime:
         installation_id: str | None = None,
         images: list[dict[str, Any]] | None = None,
         progress_id: str | None = None,
+        onboarding_launch: bool = False,
     ) -> dict[str, Any]:
         try:
             if await self._run_was_canceled(run_id, user_id):
@@ -562,8 +573,15 @@ class LiveRuntime:
                     allow_legacy_owner_fallback=True,
                     preferred_provider=getattr(getattr(spec, "model", None), "provider", None),
                 )
-            if self.settings.LIVE_REQUIRE_USER_LLM_KEY and not user_creds:
+            missing_model = not spec.model or not spec.model.provider or not spec.model.model_id
+            if self.settings.LIVE_REQUIRE_USER_LLM_KEY and not user_creds or onboarding_launch and missing_model:
                 await self.db.fail_run(run_id, "LLM_CONFIGURATION_REQUIRED")
+                setup_metadata = llm_configuration_required_metadata(spec, installation_id)
+                if onboarding_launch:
+                    setup_metadata["ui_component"]["fields"].append({
+                        "key": "onboarding_run_id", "type": "text", "required": False,
+                        "suggested_value": run_id,
+                    })
                 await self._finalize_progress(
                     progress_id=progress_id,
                     thread_id=thread_id,
@@ -571,7 +589,7 @@ class LiveRuntime:
                     user_id=user_id,
                     run_id=run_id,
                     content="live:errors.missingUserLlmKey",
-                    metadata=llm_configuration_required_metadata(spec, installation_id),
+                    metadata=setup_metadata,
                 )
                 return {"error": "LLM_CONFIGURATION_REQUIRED"}
 
@@ -737,6 +755,7 @@ class LiveRuntime:
                         approval_id = None
                         tool_id = None
                         action_summary = "Approve a sensitive action"
+                        review_arguments: dict[str, Any] = {}
                         for tr in lg.get("tool_results") or []:
                             res = tr.get("result") if isinstance(tr, dict) else None
                             if isinstance(res, dict) and res.get("approval_required"):
@@ -755,6 +774,8 @@ class LiveRuntime:
                                 user_id=user_id, approval_id=str(approval_id)
                             )
                             if row:
+                                payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+                                review_arguments = payload.get("arguments") if isinstance(payload.get("arguments"), dict) else {}
                                 tool_id = tool_id or row.get("tool_id")
                                 if row.get("action_summary"):
                                     action_summary = str(row["action_summary"])
@@ -783,6 +804,12 @@ class LiveRuntime:
                             "context": "live",
                             "request_id": req_id,
                             "fields": [
+                                {
+                                    "key": "action_details",
+                                    "type": "text",
+                                    "required": False,
+                                    "suggested_value": json.dumps(review_arguments, ensure_ascii=False, default=str),
+                                },
                                 {
                                     "key": "approval_id",
                                     "type": "text",

@@ -86,6 +86,15 @@ async def _process_run_by_id_inner(
     if status in ("completed", "failed", "canceled"):
         return {"status": status, "run_id": run_id}
 
+    if run_type == "build" and (run.get("input") or {}).get("onboarding_project_id"):
+        from agent_service.builder.onboarding import prepare_onboarding_run
+        return await prepare_onboarding_run(db, run_id)
+
+    if run_type == "live" and (run.get("input") or {}).get("onboarding_launch") and status == "queued":
+        from agent_service.builder.onboarding import rpc
+        if not await rpc("claim_onboarding_launch", {"p_run_id": run_id}):
+            return {"status": "running", "run_id": run_id, "duplicate_delivery": True}
+
     meta = run.get("input") or {}
     dispatch_token = int(meta.get("dispatch_token") or 0)
     claimed_token = int(meta.get("claimed_token") or 0)

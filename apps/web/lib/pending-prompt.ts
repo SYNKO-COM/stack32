@@ -4,10 +4,13 @@
  * first agent build.
  */
 
+import { captureMobilePrompt } from "@/lib/onboarding/storage";
+
 const KEY = "stack32.pendingPrompt";
 
 export function setPendingPrompt(prompt: string): void {
   if (typeof window === "undefined") return;
+  captureMobilePrompt(prompt);
   try {
     window.sessionStorage.setItem(KEY, prompt);
   } catch {
