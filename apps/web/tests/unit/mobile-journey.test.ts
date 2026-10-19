@@ -41,11 +41,12 @@ describe("validated mobile/tablet journey", () => {
     expect(difficulty({ "b.target": 10000, "b.time": "Moins de 2 h" })).toBe("Très ambitieux");
     expect(difficulty({ "b.target": 10000, "b.time": "Plus de 10 h" })).toBe("Réaliste");
   });
-  it("preserves the four intentional price categories and handles zero/open-ended prices", () => {
+  it("preserves the four price categories and fixed scenario assumptions across legacy drafts", () => {
     expect(PRICE_CATEGORIES).toEqual(["Entre 0 et 500 €", "Entre 500 et 1 000 €", "Entre 1 500 et 3 000 €", "Plus de 3 000 €"]);
     expect(monthlySales({ "b.target": 3000, "b.price": PRICE_CATEGORIES[0], "b.referencePrice": 500 })).toBe(6);
-    expect(monthlySales({ "b.target": 3000, "b.price": PRICE_CATEGORIES[0], "b.referencePrice": 0 })).toBeNull();
-    expect(referencePrice({ "b.price": PRICE_CATEGORIES[3], "b.referencePrice": 99000 })).toBe(99000);
+    expect(monthlySales({ "b.target": 3000, "b.price": PRICE_CATEGORIES[0], "b.referencePrice": 0 })).toBe(6);
+    expect(referencePrice({ "b.price": PRICE_CATEGORIES[3], "b.referencePrice": 99000 })).toBe(3500);
+    expect(referencePrice({ "b.price": PRICE_CATEGORIES[1], "b.referencePrice": 1 })).toBe(750);
   });
   it("keeps the edited idea and guided choice authoritative over the initial prompt", () => {
     const edited = draft({ ...business, "b.hasIdea": "Oui", "b.idea": "Edited mission" });

@@ -52,7 +52,8 @@ try {
  await next('Utiliser cet agent'); await expect(page).toHaveURL(/billing\/plans/,{timeout:40_000});
  await expect(page.getByRole('button',{name:/commencer gratuitement|start for free/i})).toHaveCount(0);
  await page.goto(base+'/billing/success?status=canceled');
- await page.getByRole('link',{name:'Revenir à mon agent'}).click(); await at('ready');
+ await expect(page.getByRole('link',{name:'Revenir à mon agent'})).toHaveCount(0);
+ await page.getByRole('link',{name:/offres|pricing/i}).click(); await expect(page).toHaveURL(/billing\/plans/);
  if((await rest('runs?select=id&agent_id=eq.'+ready.agent_id+'&run_type=eq.live')).length) throw new Error('Unpaid launch');
  // The preproduction deployment is configured BILLING_MODE=mock; no Whop purchase.
  await page.goto(base+'/api/billing/mock-activate?plan=starter&interval=monthly&credits=100');

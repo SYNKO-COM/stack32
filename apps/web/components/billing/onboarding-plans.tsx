@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/use-billing";
 import { useTranslation } from "@/hooks/use-translation";
 import { useOnboardingExperience } from "@/lib/onboarding/device";
-import { MOBILE_RETURN } from "@/lib/onboarding/journey";
 import {
   creditOptionsForPlan,
   PLAN_KEYS,
@@ -184,7 +183,6 @@ export function OnboardingPlans({ mobileProject = false }: { mobileProject?: boo
           </button>
         </div>
 
-      {mobileProject && <div className="mt-8 text-center"><Button variant="ghost" className="min-h-11" onClick={() => router.push(MOBILE_RETURN)}>{locale.startsWith("fr") ? "Revenir à mon agent" : "Back to my agent"}</Button></div>}
       {!mobileProject && experience === "desktop" && !hasPaidPlan && <div className="mt-8 text-center"><Button variant="ghost" className="min-h-11" onClick={startFree}>{t("billing:plans.startFree")}</Button></div>}
       </div>
 

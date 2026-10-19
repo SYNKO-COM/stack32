@@ -19,7 +19,8 @@
       "codex/onboarding-navigation-layout": false,
       "preprod": false,
       "codex/onboarding-mobile-tablet-v3": false,
-      "codex/onboarding-info-design": false
+      "codex/onboarding-info-design": false,
+      "codex/onboarding-motion-refinement": false
     }
   }
 }

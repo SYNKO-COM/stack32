@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
 import { readCheckoutPayment } from "@/lib/actions/checkout-payment";
 import { getMobileProject, launchMobileProject } from "@/lib/actions/mobile-onboarding";
-import { MOBILE_RETURN } from "@/lib/onboarding/journey";
 
 function BillingSuccessInner() {
   const { t } = useTranslation("billing");
@@ -71,7 +70,7 @@ function BillingSuccessInner() {
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t(paid ? (isTopUp ? "success.topupTitle" : "success.title") : failed ? "success.failedTitle" : "success.pendingTitle")}</h1>
       <p className="mt-3 max-w-lg text-muted-foreground" role="status">{t(paid ? "success.verified" : failed ? "success.failedBody" : "success.pendingBody")}</p>
       {mobile && !failed && !polling && !paid && <Button className="mt-6 rounded-full" onClick={() => { setPolling(true); setRetry(n => n + 1); }}>{t("common:actions.retry")}</Button>}
-      <Button asChild className="mt-8 rounded-full"><Link href={mobile ? MOBILE_RETURN : failed ? "/billing/plans" : "/agents"}>{mobile ? t("success.backToAgent", { defaultValue: "Revenir à mon agent" }) : t(failed ? "checkout.backToPricing" : "success.cta")}</Link></Button>
+      <Button asChild className="mt-8 rounded-full"><Link href={mobile ? "/billing/plans?onboarding=mobile" : failed ? "/billing/plans" : "/agents"}>{t(mobile || failed ? "checkout.backToPricing" : "success.cta")}</Link></Button>
     </div>
   );
 }
