@@ -53,3 +53,7 @@ Preproduction billing is explicitly mock. Browser tests use local mock entitleme
 - Backend: 1321 pytest tests passed; Ruff passed.
 - Browser: 15 Playwright tests passed, one existing integration smoke skipped because its OAuth fixture is absent. This includes the full desktop/free regression, A's 50-second presentation and single mock-paid launch, B's edited brief and projection, and large iPad orientation persistence.
 - On an 8 GB host, build first with `STACK32_LOW_MEMORY_BUILD=1`, then run `E2E_USE_BUILD=1 pnpm --filter @stack32/web test:e2e --workers=1` against local Supabase. Build-time public URLs must match Playwright's localhost URLs. The deterministic local builder fixture and mock billing are not real provider/payment validation.
+
+## Explicit preproduction smoke
+
+`tests/preprod/onboarding.smoke.mjs` requires `STACK32_PREPROD_TEST_ACCOUNT_FILE`, a private JSON file with `url`, `anon`, `user_id`, `email`, `password` and `session.access_token` for a dedicated confirmed `@stack32.test` account. It rejects every database except `fbqjuqnkemlofklrjeuo` and uses only the fixed preproduction domain. Never commit that private file. Run from `apps/web` with `node tests/preprod/onboarding.smoke.mjs` after publishing the validated API and web release. This test invokes the real builder, waits for readiness and the presentation, checks cancellation, uses only the configured mock billing route, verifies one launch and stops at the existing LLM connection requirement. It supplies no external account or runtime key.
