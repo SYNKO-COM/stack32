@@ -16,18 +16,18 @@ import { useCurrentUser, useProfile } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import { fetchProfileWithRetry, safeNextPath } from "@/lib/auth/post-auth";
 
-function OnboardingShell({ children }: { children: React.ReactNode }) {
+function OnboardingShell({ children, mobile = false }: { children: React.ReactNode; mobile?: boolean }) {
   return (
-    <div className="relative min-h-dvh">
+    <div className={mobile ? "relative flex h-dvh flex-col overflow-hidden" : "relative min-h-dvh"}>
       <AnimatedBackground variant="soft" />
-      <header className="sticky top-0 z-40 flex h-20 items-center justify-between bg-background/95 px-6 py-5 backdrop-blur-sm">
+      <header className={mobile ? "z-40 flex h-16 shrink-0 items-center justify-between px-6 py-3" : "sticky top-0 z-40 flex h-20 items-center justify-between bg-background/95 px-6 py-5 backdrop-blur-sm"}>
         <Logo href="/" size="lg" className="max-sm:gap-2.5 max-sm:[&_img]:size-8 max-sm:[&_.font-brand]:text-[1.35rem]" />
         <div className="flex items-center gap-1.5">
           <ThemeToggle size="lg" className="max-sm:[&_svg:not([class*='size-'])]:size-4" />
           <LanguageSwitcher size="lg" className="max-sm:[&_svg]:h-[15px] max-sm:[&_svg]:w-[22px]" />
         </div>
       </header>
-      <main className="px-6 pb-4">
+      <main className={mobile ? "min-h-0 flex-1 px-6" : "px-6 pb-4"}>
         {children}
       </main>
     </div>
@@ -125,7 +125,7 @@ function OnboardingPageInner() {
 
   if (!mounted || experience === null) return <OnboardingShell><BrandLoader label={t("loading")} size="lg" /></OnboardingShell>;
 
-  if (mobile) return <OnboardingShell><MobileOnboardingFlow /></OnboardingShell>;
+  if (mobile) return <OnboardingShell mobile><MobileOnboardingFlow /></OnboardingShell>;
 
   if (!userLoading && !user && !userError) {
     return <OnboardingShell><div className="mx-auto max-w-md py-10"><AuthForm mode="signup" preferredNext="/onboarding" /></div></OnboardingShell>;

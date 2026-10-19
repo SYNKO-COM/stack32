@@ -91,14 +91,13 @@ export function priceBounds(category: unknown) {
   return [{ min: 0, max: 500, initial: 500 }, { min: 500, max: 1000, initial: 750 }, { min: 1500, max: 3000, initial: 2000 }, { min: 3000.01, max: undefined, initial: 3500 }][Math.max(0, index)];
 }
 export function referencePrice(a: Answers) {
-  const bounds = priceBounds(a["b.price"]);
-  const candidate = Number(a["b.referencePrice"] ?? bounds.initial);
-  return Math.min(bounds.max ?? Infinity, Math.max(bounds.min, Number.isFinite(candidate) ? candidate : bounds.initial));
+  // This is a fixed, visible scenario assumption, never an observed sale price.
+  // Ignore legacy editable values when resuming an older draft.
+  return priceBounds(a["b.price"]).initial;
 }
 export function monthlySales(a: Answers): number | null {
-  const bounds = priceBounds(a["b.price"]);
-  const price = Number(a["b.referencePrice"] ?? bounds.initial);
-  return a["b.referencePrice"] !== "" && Number.isFinite(price) && price > 0 && price >= bounds.min && price <= (bounds.max ?? Infinity) ? Math.ceil(Number(a["b.target"] ?? 1000) / price) : null;
+  const price = referencePrice(a);
+  return Number.isFinite(price) && price > 0 ? Math.ceil(Number(a["b.target"] ?? 1000) / price) : null;
 }
 export const euro = (amount: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: Number.isInteger(amount) ? 0 : 2 }).format(amount);
 export function timeProjection(a: Answers): { current: string; target: string; assumptions: string } {

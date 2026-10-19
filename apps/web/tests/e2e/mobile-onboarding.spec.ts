@@ -46,6 +46,7 @@ test.describe("mobile journey — real local persistence, deterministic builder 
   test.use({ ...phone, locale: "fr-FR" });
   test("A: optional text, auth, real draft record, 50 seconds, cancellation and single paid launch", async ({ page }) => {
     test.setTimeout(240_000);
+    page.on("pageerror", error => console.error("Browser error:", error.message));
     const user = await userFixture();
     await begin(page, true);
     await choice(page, "Automatiser mon activité");
@@ -59,7 +60,11 @@ test.describe("mobile journey — real local persistence, deterministic builder 
     await choice(page, "Trop compliqué, pas les compétences");
     await at(page, "a.complexity"); await next(page);
     await choice(page, "Gagner du temps");
+    await at(page, "a.analysis");
+    const analysisStart = Date.now();
+    await expect(page.getByTestId("circular-preparation")).toBeVisible();
     await at(page, "a.suggestion");
+    expect(Date.now() - analysisStart).toBeGreaterThan(10_000);
     await expect(page.getByText(/50 % de temps économisé/)).toBeVisible();
     await next(page); await at(page, "a.explain"); await next(page);
     await loginCheckpoint(page, user.email);
@@ -77,13 +82,25 @@ test.describe("mobile journey — real local persistence, deterministic builder 
     expect(reloaded.agent_id).toBe(project.agent_id);
     expect(reloaded.brief).toContain("Avant chaque envoi");
     await expect(page.getByRole("button", { name: "Utiliser cet agent" })).toHaveCount(0);
+    await expect(page.getByTestId("prepared-agent-structure")).toBeVisible({ timeout: 15_000 });
+    await page.screenshot({ path: test.info().outputPath("building-current-structure.png") });
     await at(page, "ready").catch(async () => { await expect(page.getByTestId("mobile-onboarding")).toHaveAttribute("data-step", "ready", { timeout: 60_000 }); });
     expect(Date.now() - Date.parse(project.preparation_started_at)).toBeGreaterThanOrEqual(50_000);
+    await expect(page.getByTestId("prepared-agent-structure").locator(".react-flow__node-agent")).toBeVisible();
+    await expect(page.getByTestId("prepared-agent-structure").locator(".react-flow__controls")).toHaveCount(0);
+    const central = await page.locator('.react-flow__node[data-id="agent"]').boundingBox();
+    const model = await page.locator('.react-flow__node[data-id="attachment:model"]').boundingBox();
+    expect(model!.x + model!.width).toBeLessThan(central!.x);
+    await expect(page.getByText("Voir la mission préparée")).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("ready-current-structure.png") });
     await next(page, "Utiliser cet agent");
     await expect(page).toHaveURL(/billing\/plans/, { timeout: 30_000 });
     await expect(page.getByRole("button", { name: /gratuit|free/i })).toHaveCount(0);
     await page.goto("/billing/success?status=canceled");
-    await page.getByRole("link", { name: "Revenir à mon agent" }).click(); await at(page, "ready");
+    await expect(page.getByRole("link", { name: "Revenir à mon agent" })).toHaveCount(0);
+    await page.getByRole("link", { name: /tarifs|pricing/i }).click();
+    await expect(page).toHaveURL(/billing\/plans/);
+    await expect(page.getByRole("button", { name: /revenir à mon agent/i })).toHaveCount(0);
     const launchBefore = await rest(`rest/v1/runs?agent_id=eq.${project.agent_id}&run_type=eq.live&select=id`);
     expect(launchBefore).toHaveLength(0);
     // Explicit local mock entitlement, never a live Whop purchase.
@@ -96,6 +113,7 @@ test.describe("mobile journey — real local persistence, deterministic builder 
 
   test("B: prompt survives auth, edited idea overrides it, exclusive sectors and exact projection", async ({ page }) => {
     test.setTimeout(120_000);
+    page.on("pageerror", error => console.error("Browser error:", error.message));
     const user = await userFixture();
     await begin(page, true); await choice(page, "Gagner de l'argent grâce aux agents IA");
     await choice(page, "Oui, j'en ai déjà créé"); await at(page, "b.experienced"); await next(page);
@@ -107,7 +125,10 @@ test.describe("mobile journey — real local persistence, deterministic builder 
     await choice(page, "Je le propose à plusieurs clients"); await choice(page, "J'ai besoin d'aide"); await at(page, "b.clients"); await next(page);
     for (const id of ["b.describe", "b.configure", "b.present"]) { await at(page, id); await next(page); }
     await loginCheckpoint(page, user.email); await at(page, "b.projection");
-    await expect(page.getByText(/10\s500\s€.*par mois/)).toBeVisible(); await next(page);
+    await expect(page.getByTestId("goal-projection").getByLabel(/10\s500\s€ par mois/).locator("span").first()).toHaveText(/10\s500\s€/);
+    await page.getByRole("button", { name: "Désactiver le son" }).click();
+    await expect(page.getByRole("button", { name: "Activer le son" })).toHaveAttribute("aria-pressed", "false");
+    await page.screenshot({ path: test.info().outputPath("financial-projection.png") }); await next(page);
     await page.getByRole("checkbox", { name: "Commerce", exact: true }).click();
     await page.getByRole("checkbox", { name: "Je n'ai pas de préférence", exact: true }).click();
     await expect(page.getByRole("checkbox", { name: "Commerce", exact: true })).toHaveAttribute("aria-checked", "false"); await next(page);
@@ -116,9 +137,10 @@ test.describe("mobile journey — real local persistence, deterministic builder 
     await page.locator("#journey-answer").fill("Classer les demandes et rédiger un brouillon concis.");
     await page.reload(); await at(page, "b.idea");
     await expect(page.locator("#journey-answer")).toHaveValue("Classer les demandes et rédiger un brouillon concis.");
-    await next(page); await next(page, "Voir mon scénario");
-    await page.locator("#reference-price").fill("0"); await expect(page.getByText(/Fixe un prix positif/)).toBeVisible();
-    await page.locator("#reference-price").fill("500"); await expect(page.getByText(/21 ventes nécessaires/)).toBeVisible();
+    await next(page); await page.screenshot({ path: test.info().outputPath("departure-plan.png") }); await next(page, "Voir mon scénario");
+    await expect(page.locator("#reference-price")).toHaveCount(0);
+    await expect(page.getByText(/21 ventes nécessaires par mois à/)).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("fixed-scenario.png") });
     await next(page, "Préparer mon agent"); await at(page, "build");
     const [project] = await rest(`rest/v1/onboarding_projects?user_id=eq.${user.id}&select=*`);
     expect(project.brief).toContain("Classer les demandes et rédiger un brouillon concis.");

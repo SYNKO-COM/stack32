@@ -5,25 +5,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Bot, Check, Compass, FlaskConical, Loader2, PenLine, RefreshCw, Rocket, Sparkles, Sprout, Store, TrendingUp, Workflow, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { StructureGraph } from "@/components/builder/structure-graph";
+import { PreparedAgentPreview } from "@/components/onboarding/prepared-agent-preview";
+import { CircularPreparation, DeparturePlan, GoalProjection, LearningScene, useJourneySound } from "@/components/onboarding/journey-visuals";
 import { AuthForm } from "@/components/auth/auth-form";
 import { BrandLoader } from "@/components/shared/brand-loader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { useTranslation } from "@/hooks/use-translation";
 import { completeMobileCheckpoint, dispatchMobileProject, getMobileProject, launchMobileProject, prepareMobileProject, saveMobileProject, type OnboardingProject, type PreparedSpec } from "@/lib/actions/mobile-onboarding";
-import { canContinue, difficulty, euro, guidedBrief, isAutomation, MIN_PREPARATION_MS, MOBILE_RETURN, monthlySales, pathFor, priceBounds, referencePrice, resolveBrief, STEPS, TARGETS, timeProjection, type Journey } from "@/lib/onboarding/journey";
+import { canContinue, euro, guidedBrief, isAutomation, MIN_PREPARATION_MS, MOBILE_RETURN, monthlySales, pathFor, priceBounds, referencePrice, STEPS, TARGETS, timeProjection, type Journey } from "@/lib/onboarding/journey";
 import { claimableJourney, completeJourneyClaim, markJourneyClaim, newJourney, readJourney, writeJourney, type LocalJourney } from "@/lib/onboarding/storage";
 import { consumePendingPrompt, getPendingPrompt } from "@/lib/pending-prompt";
 import { cn } from "@/lib/utils";
 import { toggleSector } from "@/lib/onboarding/journey";
-
-function toolName(id: string) {
-  const names: Record<string, string> = { structured_output: "Mise en forme des réponses", web_search: "Recherche Web", fetch_url: "Lecture de pages publiques", knowledge_search: "Recherche dans tes documents", calculator: "Calcul", current_datetime: "Date et heure", gmail_send: "Envoi Gmail", gmail_read: "Lecture Gmail", calendar_create_event: "Création d'un événement" };
-  return names[id] ?? id.replace(/^pd:/, "").replace(/[_:]/g, " ");
-}
 
 const INFO_CARD_ICONS: Record<string, LucideIcon[]> = {
   "b.beginner": [Sprout, Rocket],
@@ -71,6 +66,9 @@ export function MobileOnboardingFlow() {
   const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
   const [now, setNow] = useState(() => Date.now());
   const heading = useRef<HTMLHeadingElement>(null);
+  const scroll = useRef<HTMLDivElement>(null);
+  const sound = useJourneySound();
+  const [passiveProgress, setPassiveProgress] = useState(0);
   const accountKey = owner ?? "guest";
   const projectStatus = project?.status;
 
@@ -109,7 +107,7 @@ export function MobileOnboardingFlow() {
   const path = pathFor(answers);
   const storedStep = state?.step ?? "welcome";
   const activeStep = path.includes(storedStep) ? storedStep : "goal";
-  const elapsed = project?.preparation_started_at ? now - Date.parse(project.preparation_started_at) : 0;
+  const elapsed = project?.preparation_started_at ? Math.max(0, now - Date.parse(project.preparation_started_at)) : 0;
   const ready = project?.status === "ready" && Boolean(spec) && elapsed >= MIN_PREPARATION_MS;
   const stepId = activeStep === "build" && ready ? "ready" : activeStep;
   const s = STEPS[stepId];
@@ -136,7 +134,7 @@ export function MobileOnboardingFlow() {
 
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
-    window.scrollTo({ top: 0, behavior: "instant" });
+    scroll.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [stepId]);
 
   useEffect(() => {
@@ -144,11 +142,15 @@ export function MobileOnboardingFlow() {
     // The synthesis itself is deterministic from the answers, not an invented model call.
     if (stepId === "a.analysis") timeProjection(local.state.answers);
     if (stepId === "b.analysis") guidedBrief(local.state.answers);
+    const duration = stepId === "welcome" ? 3000 : 12_000;
+    const started = performance.now();
+    const ticker = stepId === "welcome" ? null : setInterval(() => setPassiveProgress(Math.min(100, (performance.now() - started) / duration * 100)), 120);
     const timer = setTimeout(() => {
+      setPassiveProgress(0);
       const p = pathFor(local.state.answers);
       update({ step: p[p.indexOf(stepId) + 1] });
-    }, stepId === "welcome" ? 3000 : 1800);
-    return () => clearTimeout(timer);
+    }, duration + (stepId === "welcome" ? 0 : 250));
+    return () => { clearTimeout(timer); if (ticker) clearInterval(ticker); };
     // local answers are fixed on passive screens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepId, loadedFor, accountKey]);
@@ -175,6 +177,7 @@ export function MobileOnboardingFlow() {
 
   async function continueStep(skip = false) {
     if (!local || busy) return;
+    sound.prime();
     setError(null);
     let nextState = local.state;
     if (skip) nextState = { ...nextState, answers: { ...answers, [s.type === "text" ? stepId : `${stepId}.other`]: "" } };
@@ -241,22 +244,29 @@ export function MobileOnboardingFlow() {
   const progress = Math.round(((Math.max(0, index) + 1) / progressTotal) * 100);
   const isPassive = s.type === "passive";
   const showBack = index > 1 && !["build", "ready"].includes(stepId);
+  const learning = ["b.clients", "b.describe", "b.configure", "b.present"].includes(stepId);
+  const compactBody = ["b.projection", "b.scenario", "a.plan", "b.plan", "ready"].includes(stepId);
+  const analysis = ["a.analysis", "b.analysis"].includes(stepId);
+  const buildProgress = spec ? Math.min(100, elapsed / MIN_PREPARATION_MS * 100) : Math.min(92, elapsed / MIN_PREPARATION_MS * 92);
   const educationalBody = s.body ?? ({ "b.describe": "Pars d'une demande concrète et du résultat attendu.", "b.configure": "Branche les sources utiles et vérifie un premier cas avec les outils disponibles.", "b.present": "Montre ce que ton agent sait faire avec une démonstration adaptée à ton client." } as Record<string, string>)[stepId];
 
-  return <div className="mx-auto w-full max-w-xl pb-[max(1rem,env(safe-area-inset-bottom))]" data-testid="mobile-onboarding" data-step={stepId} lang="fr">
-    <div className="sticky top-20 z-30 -mx-6 bg-background/95 px-6 pb-3 pt-2 backdrop-blur-sm">
+  return <div className="mx-auto flex h-full w-full max-w-xl flex-col" data-testid="mobile-onboarding" data-step={stepId} lang="fr">
+    <div className="z-30 shrink-0 pb-2 pt-1">
       <div role="progressbar" aria-label="Progression du parcours" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div className="h-full rounded-full bg-brand transition-[width] motion-reduce:transition-none" style={{ width: `${progress}%` }} />
       </div>
-      {showBack && <div className="mt-2 flex min-h-10 items-center">
+      {showBack && <div className="mt-1 flex min-h-10 items-center">
         <Button variant="ghost" size="sm" className="-ml-3 min-h-10 gap-1.5" disabled={busy} onClick={() => update({ step: path.slice(0, index).reverse().find(id => STEPS[id].type !== "passive" && !(owner && id === "account")) ?? "definition" })}><ArrowLeft className="size-4" />Retour</Button>
       </div>}
     </div>
     <span className="sr-only" role="status">{owner && project && saveStatus === "saving" ? "Sauvegarde…" : saveStatus === "error" ? "Sauvegarde à réessayer" : ""}</span>
-    <motion.section key={stepId} initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .3, ease: [.22, 1, .36, 1] }} className="pt-5" aria-labelledby="journey-heading">
-      {(s.type === "info" || isPassive) && stepId !== "ready" && <motion.div aria-hidden="true" data-testid="onboarding-agent-icon" className="mb-5 w-fit text-brand" initial={reducedMotion ? false : { opacity: 0, scale: .9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: .3 }}><Bot className="size-8" strokeWidth={1.75} /></motion.div>}
-      <h1 ref={heading} id="journey-heading" tabIndex={-1} className="text-[clamp(1.65rem,5.6vw,2.25rem)] font-semibold leading-tight tracking-tight outline-none">{s.title}</h1>
-      {INFO_CARD_ICONS[stepId] && educationalBody ? <InformationCards stepId={stepId} body={educationalBody} reduced={Boolean(reducedMotion)} /> : s.body && <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-muted-foreground">{s.body}</p>}
+    <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(.5rem,env(safe-area-inset-bottom))] [scrollbar-width:thin]" data-testid="journey-scroll">
+    <motion.section key={stepId} initial={reducedMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .3, ease: [.22, 1, .36, 1] }} className="pt-2" aria-labelledby="journey-heading">
+      {(s.type === "info" || isPassive) && !["ready", "build"].includes(stepId) && !analysis && !learning && <motion.div aria-hidden="true" data-testid="onboarding-agent-icon" className="mb-4 w-fit text-brand" initial={reducedMotion ? false : { opacity: 0, scale: .9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: .3 }}><Bot className="size-8" strokeWidth={1.75} /></motion.div>}
+      <h1 ref={heading} id="journey-heading" tabIndex={-1} className="text-balance text-[clamp(1.6rem,5.3vw,2.15rem)] font-semibold leading-tight tracking-tight outline-none">{(analysis ? "Préparons ta première piste" : s.title).replace(/ ([?!:])$/, "\u00a0$1")}</h1>
+      {!compactBody && !learning && (INFO_CARD_ICONS[stepId] && educationalBody ? <InformationCards stepId={stepId} body={educationalBody} reduced={Boolean(reducedMotion)} /> : s.body && <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-muted-foreground">{s.body}</p>)}
+      {analysis && <CircularPreparation progress={passiveProgress} />}
+      {learning && <LearningScene stepId={stepId} hint={stepId === "b.clients" ? ({ "Mon réseau": "Commence par une personne de ton réseau dont tu connais le besoin.", "Prospection directe": "Choisis une entreprise précise et prépare une prise de contact personnelle, sans envoi massif.", "Contenu et réseaux sociaux": "Publie un exemple de problème résolu et propose une démonstration aux personnes intéressées.", "Plateformes freelance": "Présente un cas simple et réponds à une demande correspondant à ton agent.", "J'ai besoin d'aide": "Choisis un professionnel de ton entourage, observe une tâche répétitive et propose-lui un test avec son accord." } as Record<string, string>)[String(answers["b.acquisition"])] : undefined} />}
 
       {(s.type === "choice" || s.type === "multi") && <div className="mt-7 grid gap-3" role={s.type === "choice" ? "radiogroup" : "group"} aria-labelledby="journey-heading">
         {s.options?.map((option) => {
@@ -268,11 +278,10 @@ export function MobileOnboardingFlow() {
       </div>}
       {(s.type === "text" || otherVisible) && <div className="mt-6"><label className="sr-only" htmlFor="journey-answer">{s.type === "text" ? s.title : "Précision facultative"}</label><Textarea id="journey-answer" rows={5} maxLength={4000} value={String(answers[s.type === "text" ? stepId : `${stepId}.other`] ?? "")} onChange={event => answer(s.type === "text" ? stepId : `${stepId}.other`, event.target.value)} className="min-h-36 rounded-2xl bg-background/80 text-base" placeholder="Tu peux aussi passer cette étape." /></div>}
 
-      {s.type === "gauge" && <div className="mt-9 space-y-6">
+      {s.type === "gauge" && <div className="mt-7">
         <output htmlFor="income-target" className="block text-center text-5xl font-semibold tracking-tight text-brand">{euro(Number(answers["b.target"] ?? 1000))}</output>
-        <input id="income-target" aria-label={s.title} aria-valuetext={`${euro(Number(answers["b.target"] ?? 1000))} par mois`} type="range" min={0} max={190} step={1} value={TARGETS.indexOf(Number(answers["b.target"] ?? 1000))} onChange={e => answer("b.target", TARGETS[Number(e.target.value)])} className="min-h-11 w-full accent-brand" />
+        <input id="income-target" aria-label={s.title} aria-valuetext={`${euro(Number(answers["b.target"] ?? 1000))} par mois`} type="range" min={0} max={190} step={1} value={TARGETS.indexOf(Number(answers["b.target"] ?? 1000))} onChange={e => answer("b.target", TARGETS[Number(e.target.value)])} className="mt-5 block min-h-11 w-full accent-brand" />
         <div className="flex justify-between text-sm text-muted-foreground"><span>1 000 €</span><span>60 000 €</span></div>
-        <p className="text-center text-xl font-medium">{difficulty(answers)}</p><p className="text-sm leading-relaxed text-muted-foreground">Difficulté indicative selon ton temps disponible : des seuils de cap, pas une probabilité de gains.</p>
       </div>}
 
       {["a.suggestion", "a.projection"].includes(stepId) && <div className="mt-6 space-y-4 rounded-3xl border border-brand/20 bg-background/70 p-5">
@@ -280,28 +289,27 @@ export function MobileOnboardingFlow() {
         <p className="text-sm text-muted-foreground">Aujourd’hui</p><p className="text-xl font-medium">{projection.current}</p><ArrowRight className="size-5 text-brand" aria-hidden="true" /><p className="text-lg font-medium text-brand">{projection.target}</p><p className="text-sm leading-relaxed text-muted-foreground">{projection.assumptions}</p>
       </div>}
       {stepId === "b.suggestions" && <ul className="mt-6 space-y-4">{(answers["b.time"] === "Moins de 2 h" ? [["Réponses clients", "Préparer une réponse à une question fréquente d'un client."], ["Production de contenu", "Transformer le brief d'un indépendant en brouillon de publication."]] : [["Réponses clients", "Classer une demande et proposer une réponse à valider."], ["Qualification de prospects", "Résumer un besoin entrant et repérer les informations manquantes."], ["Suivi commercial", "Préparer le prochain suivi d'un échange fourni."]]).map(([title, body]) => <li key={title} className="rounded-2xl border border-border bg-background/70 p-5"><h2 className="font-medium">{title}</h2><p className="mt-2 text-sm text-muted-foreground">{body}</p></li>)}</ul>}
-      {stepId === "b.clients" && <p className="mt-5 rounded-2xl bg-brand/10 p-5 text-sm leading-relaxed">{({ "Mon réseau": "Commence par une personne de ton réseau dont tu connais le besoin.", "Prospection directe": "Choisis une entreprise précise et prépare une prise de contact personnelle, sans envoi massif.", "Contenu et réseaux sociaux": "Publie un exemple de problème résolu et propose une démonstration aux personnes intéressées.", "Plateformes freelance": "Présente un cas simple et réponds à une demande correspondant à ton agent.", "J'ai besoin d'aide": "Choisis un professionnel de ton entourage, observe une tâche répétitive et propose-lui un test avec son accord." } as Record<string, string>)[String(answers["b.acquisition"])]}</p>}
-      {["b.projection", "b.scenario"].includes(stepId) && <div className="mt-7 space-y-5 rounded-3xl border border-brand/20 bg-background/70 p-5">
-        <p className="text-sm text-muted-foreground">Point de départ <span aria-hidden="true">→</span> Dans 3 mois</p><p className="text-4xl font-semibold tracking-tight text-brand">{euro(Number(answers["b.target"] ?? 1000))}<span className="mt-1 block text-base font-normal text-muted-foreground">par mois · ton objectif</span></p>
-        {s.type === "scenario" && <><label htmlFor="reference-price" className="block text-sm font-medium">Prix de référence par vente d’agent</label><Input id="reference-price" type="number" inputMode="decimal" min={priceBounds(answers["b.price"]).min} max={priceBounds(answers["b.price"]).max} step="any" value={answers["b.referencePrice"] ?? priceBounds(answers["b.price"]).initial} onChange={e => answer("b.referencePrice", e.target.value)} onBlur={() => answer("b.referencePrice", referencePrice(answers))} className="min-h-12 text-base" /><p className="text-sm text-muted-foreground">Fourchette choisie : {String(answers["b.price"])}. Hypothèse : ventes d’agents à ce prix.</p><p className="text-xl font-medium">{monthlySales(answers) === null ? "Fixe un prix positif dans ta fourchette pour calculer le nombre de ventes." : `${monthlySales(answers)} ventes nécessaires par mois à ${euro(referencePrice(answers))}`}</p><p className="text-sm text-muted-foreground">Un scénario de ventes pour avancer vers ton cap ; il ne suppose ni ventes déjà réalisées ni abonnements récurrents.</p></>}
-      </div>}
-      {["a.plan", "b.plan"].includes(stepId) && <div className="mt-6 rounded-2xl border border-brand/20 bg-background/70 p-5"><p className="whitespace-pre-wrap text-sm leading-relaxed">{isAutomation(answers) ? String(answers["a.request"] || answers["a.tasks"] || "Un premier cas fourni par toi, à tester avant de l'automatiser.") : answers["b.hasIdea"] === "Oui" && String(answers["b.idea"] ?? "").trim() ? String(answers["b.idea"]) : guidedBrief(answers)}</p><p className="mt-4 text-sm text-muted-foreground">{isAutomation(answers) ? `${answers["a.output"] ?? "Résultat à valider"} · ${answers["a.control"] ?? "Validation humaine"} · ${answers["a.success"] ?? "Test sur un cas réel"}` : `${answers["b.client"] ?? "Client à préciser"} · ${answers["b.problem"] ?? "Besoin à tester"} · ${Array.isArray(answers["b.sectors"]) ? (answers["b.sectors"] as string[]).join(", ") : "Secteur à explorer"}`}</p></div>}
+      {["b.projection", "b.scenario"].includes(stepId) && <GoalProjection key={stepId} answers={answers} scenario={stepId === "b.scenario"} sound={sound} />}
+      {["a.plan", "b.plan"].includes(stepId) && <DeparturePlan answers={answers} />}
 
       {s.type === "auth" && <div className="mt-7">{owner ? <p className="text-sm text-muted-foreground">Tu es connecté. Sauvegardons ton projet pour continuer.</p> : <AuthForm mode={authMode} onModeChange={setAuthMode} preferredNext={MOBILE_RETURN} />}</div>}
-      {stepId === "build" && <div className="mt-6 space-y-5">
-        <p className="text-muted-foreground" role="status">{project?.status === "failed" ? "La préparation n'a pas abouti. Ton brouillon et tes réponses sont conservés." : spec ? "La mission et les branches sont préparées. Nous terminons leur présentation." : elapsed >= MIN_PREPARATION_MS ? "La préparation réelle prend un peu plus de temps. Nous attendons sa confirmation." : ["Préparation de la mission à partir de tes réponses…", "Organisation des décisions et des branches…", "Sélection des outils disponibles…", "Vérification du brouillon et des connexions à configurer…"][Math.min(3, Math.floor(elapsed / 12500))]}</p>
-        <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-brand transition-[width] motion-reduce:transition-none" style={{ width: `${spec ? Math.min(100, elapsed / MIN_PREPARATION_MS * 100) : Math.min(92, elapsed / MIN_PREPARATION_MS * 92)}%` }} /></div>
+      {stepId === "build" && <div className="space-y-4">
+        <CircularPreparation progress={buildProgress} build />
+        <p className="text-center text-sm leading-relaxed text-muted-foreground" role="status">{project?.status === "failed" ? "La préparation n'a pas abouti. Tes réponses sont conservées." : spec ? "Ta structure prend forme." : elapsed >= MIN_PREPARATION_MS ? "La préparation prend un peu plus de temps. Nous attendons sa confirmation." : "Nous préparons ton agent à partir de tes réponses…"}</p>
+        {spec ? <PreparedAgentPreview spec={spec} progress={buildProgress} /> : <div className="mt-5 flex h-48 flex-col items-center justify-center gap-4 rounded-3xl border border-brand/15 bg-brand/5" aria-hidden="true"><Loader2 className="size-6 animate-spin text-brand motion-reduce:animate-none" /><span className="text-xs text-muted-foreground">La structure apparaîtra dès sa préparation.</span></div>}
         {(project?.status === "failed" || elapsed > 90_000 && !spec) && <Button className="h-12 w-full rounded-full" disabled={busy} onClick={() => void retryPreparation()}><RefreshCw className="mr-2 size-4" />Réessayer</Button>}
       </div>}
-      {stepId === "ready" && spec && <div className="mt-6 space-y-5"><StructureGraph agentId={project!.agent_id!} graph={spec.graph} readOnly /><ul className="space-y-2">{spec.tools.map(t => <li key={t.tool_id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/70 px-4 py-3 text-sm"><span className="break-words">{toolName(t.tool_id)}</span><span className="shrink-0 text-xs text-muted-foreground">{t.approval_mode === "always" ? "À valider" : "Outil préparé"}</span></li>)}</ul><p className="text-sm leading-relaxed text-muted-foreground">Le brouillon est préparé. Avant une action, l’application demandera les connexions, le modèle et les permissions encore nécessaires. Aucun outil externe n’a été exécuté pendant cette préparation.</p><details><summary className="cursor-pointer text-sm text-brand">Voir la mission préparée</summary><p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{project?.brief ?? resolveBrief(local.state)}</p></details></div>}
+      {stepId === "ready" && spec && <div className="mt-4 space-y-4"><div className="journey-arrive flex items-center gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand"><Check className="size-5" /></span><p className="min-w-0 break-words font-medium">{spec.identity.name}</p></div><PreparedAgentPreview spec={spec} /><p className="text-sm text-muted-foreground">{isAutomation(answers) ? projection.target : `Ton cap : ${euro(Number(answers["b.target"] ?? 1000))} / mois · scénario de ${monthlySales(answers)} ventes à ${euro(referencePrice(answers))}.`}</p></div>}
+
     </motion.section>
 
     {error && <p role="alert" className="mt-5 rounded-xl border border-destructive/30 p-4 text-sm text-destructive">{error}</p>}
     {saveStatus === "error" && <Button variant="link" onClick={() => { void saveMobileProject(local.id, local.state, owner!).then(saved => { setProject(saved); setSaveStatus("saved"); }).catch(() => setSaveStatus("error")); }}>Réessayer la sauvegarde</Button>}
-    {!isPassive && (s.type !== "auth" || owner) && <div className="mt-8 flex flex-col items-center gap-2">
+    {!isPassive && (s.type !== "auth" || owner) && <div className={cn("flex flex-col items-center gap-2", stepId === "ready" ? "mt-4" : "mt-7")}>
       <Button className="min-h-12 w-full max-w-sm rounded-full px-6 text-base" disabled={busy || !canContinue(s, answers)} onClick={() => void continueStep()}>{busy ? <Loader2 className="mr-2 size-4 animate-spin motion-reduce:animate-none" /> : null}{s.action ?? "Continuer"}</Button>
       {(s.type === "text" || otherVisible) && <Button variant="ghost" className="min-h-11 text-muted-foreground" disabled={busy} onClick={() => void continueStep(true)}>Passer cette étape</Button>}
     </div>}
+    </div>
     {/* The exact validated French copy is authoritative; language switching keeps every answer. */}
     {i18n.language.startsWith("en") && <span className="sr-only">French onboarding journey</span>}
   </div>;

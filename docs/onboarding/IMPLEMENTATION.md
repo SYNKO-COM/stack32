@@ -61,3 +61,15 @@ Preproduction billing is explicitly mock. Browser tests use local mock entitleme
 ## Real preproduction verification
 
 The explicit smoke passed on the published preproduction domain with a dedicated synthetic account: the real builder persisted an 8-node/3-tool draft, readiness waited for the full presentation, cancellation preserved the same agent, mock paid access created exactly one live run, and missing user LLM configuration stopped that run with `LLM_CONFIGURATION_REQUIRED` and the existing connection form. No runtime key, external tool action or real payment was supplied. This verifies the setup pause, not completion of a real BYOK run.
+
+## Presentation revision, 19 October 2026
+
+The latest user review supersedes the original specification on these presentation points: the scenario reference price is now fixed from the selected category (legacy editable values are ignored), the difficulty label is removed, and checkout cancellation returns to offers rather than offering a return to the prepared agent. The four price categories, selected goal, paid entitlement checks and durable draft remain unchanged.
+
+Mobile/tablet now use a fixed-height shell: the transparent logo/header and progress stay outside the question's scroll region. This preserves the dotted background without scrolling text underneath the controls. Desktop retains its original shell and onboarding/free offer.
+
+The two short analysis screens present a 12-second circular sequence. They organize existing answers; they do not claim an LLM was invoked. The final preparation still waits for the real saved spec and the server's 50-second minimum. Its preview uses the application's stored-spec mapper, product graph adapter, layout and node components, with progressively revealed nodes and drawn links. It has no drag, zoom, controls or configuration drawers. Until a real spec exists it shows an explicit waiting placeholder rather than fabricated modules.
+
+The four teaching screens use distinct conversation, test, demonstration and acquisition compositions. Projection counts to the exact chosen goal, with / mois beside it, a one-shot entrance/chart effect and an optional locally synthesized chime. Audio is unlocked only by a user gesture, may be muted and is not required for progression. Reduced motion retains every label and progress value. The fixed scenario assumption is identified as a hypothesis, and sales counts use the existing ceiling calculation; no sale or guaranteed earnings are implied.
+
+The final screen keeps the actual structure, name, concise objective and use action. Extra tool inventory, technical preparation notes and expandable mission are removed. No API/runtime authorization, database migration, production price, credential, webhook or external integration is changed in this revision.
