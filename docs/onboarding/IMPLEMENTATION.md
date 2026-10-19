@@ -57,3 +57,7 @@ Preproduction billing is explicitly mock. Browser tests use local mock entitleme
 ## Explicit preproduction smoke
 
 `tests/preprod/onboarding.smoke.mjs` requires `STACK32_PREPROD_TEST_ACCOUNT_FILE`, a private JSON file with `url`, `anon`, `user_id`, `email`, `password` and `session.access_token` for a dedicated confirmed `@stack32.test` account. It rejects every database except `fbqjuqnkemlofklrjeuo` and uses only the fixed preproduction domain. Never commit that private file. Run from `apps/web` with `node tests/preprod/onboarding.smoke.mjs` after publishing the validated API and web release. This test invokes the real builder, waits for readiness and the presentation, checks cancellation, uses only the configured mock billing route, verifies one launch and stops at the existing LLM connection requirement. It supplies no external account or runtime key.
+
+## Real preproduction verification
+
+The explicit smoke passed on the published preproduction domain with a dedicated synthetic account: the real builder persisted an 8-node/3-tool draft, readiness waited for the full presentation, cancellation preserved the same agent, mock paid access created exactly one live run, and missing user LLM configuration stopped that run with `LLM_CONFIGURATION_REQUIRED` and the existing connection form. No runtime key, external tool action or real payment was supplied. This verifies the setup pause, not completion of a real BYOK run.

@@ -135,7 +135,7 @@ function layoutGraph(spec: GraphSpec): { nodes: Node[]; edges: Edge[] } {
     target: edge.target,
     label: edge.label,
     animated: false,
-    style: { stroke: "hsl(var(--muted-foreground) / 0.35)" },
+    style: { stroke: "var(--muted-foreground)", strokeOpacity: 0.35 },
   }));
 
   return { nodes, edges };
@@ -192,18 +192,19 @@ export function StructureGraph({ agentId, graph, readOnly = false }: StructureGr
           nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.2 }}
+          minZoom={readOnly ? 0.2 : 0.5}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
           proOptions={{ hideAttribution: true }}
         >
-          <Background gap={20} size={1} color="hsl(var(--muted-foreground) / 0.08)" />
+          <Background gap={20} size={1} color="color-mix(in srgb, var(--muted-foreground) 8%, transparent)" />
           <Controls showInteractive={false} className="!glass !rounded-xl !border-border" />
-          <MiniMap
+          {!readOnly && <MiniMap
             className="!glass !rounded-xl !border-border"
-            nodeColor={() => "hsl(var(--brand) / 0.35)"}
-            maskColor="hsl(var(--background) / 0.65)"
-          />
+            nodeColor={() => "color-mix(in srgb, var(--brand) 35%, transparent)"}
+            maskColor="color-mix(in srgb, var(--background) 65%, transparent)"
+          />}
         </ReactFlow>
       </div>
 
