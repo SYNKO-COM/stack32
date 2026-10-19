@@ -144,12 +144,13 @@ export function MobileOnboardingFlow() {
     if (stepId === "b.analysis") guidedBrief(local.state.answers);
     const duration = stepId === "welcome" ? 3000 : 12_000;
     const started = performance.now();
-    const ticker = setInterval(() => setPassiveProgress(Math.min(100, (performance.now() - started) / duration * 100)), 120);
+    const ticker = stepId === "welcome" ? null : setInterval(() => setPassiveProgress(Math.min(100, (performance.now() - started) / duration * 100)), 120);
     const timer = setTimeout(() => {
+      setPassiveProgress(0);
       const p = pathFor(local.state.answers);
       update({ step: p[p.indexOf(stepId) + 1] });
     }, duration + (stepId === "welcome" ? 0 : 250));
-    return () => { clearTimeout(timer); clearInterval(ticker); };
+    return () => { clearTimeout(timer); if (ticker) clearInterval(ticker); };
     // local answers are fixed on passive screens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepId, loadedFor, accountKey]);

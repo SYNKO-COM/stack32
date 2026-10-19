@@ -21,7 +21,7 @@ test("mobile presentation: transparent fixed header, compact gauge and distinct 
     await page.screenshot({ path: test.info().outputPath("compact-gauge.png") });
     await next(page); await choose(page, "Un complément"); await at(page, "b.analysis");
     const progress = page.getByTestId("circular-preparation").getByRole("progressbar");
-    await expect(progress).toHaveAttribute("aria-valuenow", /[0-9]+/);
+    expect(Number(await progress.getAttribute("aria-valuenow"))).toBeLessThan(15);
     await at(page, "b.suggestions"); await next(page, "Voir comment en faire une offre");
     await choose(page, "Je le crée pour un client"); await choose(page, "Mon réseau");
     for (const step of ["b.clients", "b.describe", "b.configure", "b.present"]) {
