@@ -88,6 +88,9 @@ test.describe("mobile journey — real local persistence, deterministic builder 
     expect(Date.now() - Date.parse(project.preparation_started_at)).toBeGreaterThanOrEqual(50_000);
     await expect(page.getByTestId("prepared-agent-structure").locator(".react-flow__node-agent")).toBeVisible();
     await expect(page.getByTestId("prepared-agent-structure").locator(".react-flow__controls")).toHaveCount(0);
+    const central = await page.locator('.react-flow__node[data-id="agent"]').boundingBox();
+    const model = await page.locator('.react-flow__node[data-id="attachment:model"]').boundingBox();
+    expect(model!.x + model!.width).toBeLessThan(central!.x);
     await expect(page.getByText("Voir la mission préparée")).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath("ready-current-structure.png") });
     await next(page, "Utiliser cet agent");

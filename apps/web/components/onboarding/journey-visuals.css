@@ -3,8 +3,8 @@
 @keyframes journey-line { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 .journey-arrive { animation: journey-arrive 500ms cubic-bezier(.22,1,.36,1) both; }
 .journey-bar { transform-origin: bottom; animation: journey-bar 800ms cubic-bezier(.22,1,.36,1) both; }
-.journey-preview-node { animation: journey-arrive 600ms cubic-bezier(.22,1,.36,1) both; }
+.journey-preview-node > div { animation: journey-arrive 600ms cubic-bezier(.22,1,.36,1) both; animation-delay: inherit; }
 .journey-preview-line { stroke-dasharray: 1; animation: journey-line 750ms ease-out both; }
 @media (prefers-reduced-motion: reduce) {
-  .journey-arrive, .journey-bar, .journey-preview-node, .journey-preview-line { animation: none; }
+  .journey-arrive, .journey-bar, .journey-preview-node > div, .journey-preview-line { animation: none; }
 }
