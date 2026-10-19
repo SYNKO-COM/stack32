@@ -98,7 +98,7 @@ test.describe("mobile journey — real local persistence, deterministic builder 
     await expect(page.getByRole("button", { name: /gratuit|free/i })).toHaveCount(0);
     await page.goto("/billing/success?status=canceled");
     await expect(page.getByRole("link", { name: "Revenir à mon agent" })).toHaveCount(0);
-    await page.getByRole("link", { name: /offres|pricing/i }).click();
+    await page.getByRole("link", { name: /tarifs|pricing/i }).click();
     await expect(page).toHaveURL(/billing\/plans/);
     await expect(page.getByRole("button", { name: /revenir à mon agent/i })).toHaveCount(0);
     const launchBefore = await rest(`rest/v1/runs?agent_id=eq.${project.agent_id}&run_type=eq.live&select=id`);
