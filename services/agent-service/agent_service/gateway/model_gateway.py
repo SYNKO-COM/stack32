@@ -29,7 +29,7 @@ def _model_omits_temperature(model_lower: str) -> bool:
     if "/o4" in model_lower or model_lower.startswith("o4") or "/o4-" in model_lower:
         return True
     # Match gpt-5, gpt-5.5, gpt-5-mini, openai/gpt-5.5, etc.
-    if "gpt-5" in model_lower:
+    if "gpt-5" in model_lower or "gpt-6" in model_lower:
         return True
     return False
 
@@ -58,6 +58,7 @@ class ModelCallResult(BaseModel):
     cost_usd: float = 0.0
     latency_ms: int = 0
     tool_calls: list[dict[str, Any]] = []
+    usage_id: str | None = None
 
 
 class CircuitBreaker:
@@ -187,6 +188,10 @@ class ModelGateway:
         budget = get_run_llm_budget()
         if budget is not None and budget.calls >= budget.max_calls:
             raise LlmCallBudgetExceeded()
+        if (budget is not None and not (api_key or budget.user_funded_llm)
+                and budget.max_cost_usd is not None and budget.cost_usd >= budget.max_cost_usd):
+            from agent_service.security.llm_budget import UserBudgetExhausted
+            raise UserBudgetExhausted()
 
         timeout = float(timeout_seconds or profile_timeout_seconds(profile))
         try:
@@ -225,11 +230,16 @@ class ModelGateway:
                 stage=coding_stage,
                 reasoning_effort=reasoning_effort,
                 latency_ms=int(getattr(result, "latency_ms", 0) or 0),
-                idempotency_key=f"{budget.run_id}:{budget.calls + 1}",
+                idempotency_key=(
+                    f"{budget.run_id}:{result.usage_id}" if isinstance(result, ModelCallResult) and result.usage_id
+                    else f"{budget.run_id}:{budget.scope_id}:{budget.calls + 1}"
+                ),
             )
         elif budget is not None:
-            # Structured response_model path — still counts as a call.
+            # Compatibility for custom/mock gateways returning parsed schemas.
             budget.register_call(model=f"{profile.value}:structured")
+        if response_model is not None and isinstance(result, ModelCallResult):
+            return response_model.model_validate_json(result.content)
         return result
 
     async def _complete_inner(
@@ -268,6 +278,7 @@ class ModelGateway:
                     response_model=response_model,
                     api_key=api_key,
                     tools=tools,
+                    reasoning_effort=reasoning_effort,
                 )
                 self._breaker.record_success(route)
                 return result
@@ -278,8 +289,11 @@ class ModelGateway:
         if not settings.has_any_llm_provider:
             raise RuntimeError("MODEL_PROVIDER_UNAVAILABLE")
 
-        models = resolve_models(profile)
-        if model:
+        from agent_service.gateway.builder_models import selected_builder_model
+
+        selected = selected_builder_model() if profile != ModelProfile.EMBEDDING else None
+        models = [selected] if selected else resolve_models(profile)
+        if model and not selected:
             models = [model] + [m for m in models if m != model]
         last_error: Exception | None = None
         safe_messages = redact_obj(messages)
@@ -397,6 +411,12 @@ class ModelGateway:
         tools: list[dict[str, Any]] | None = None,
         reasoning_effort: str | None = None,
     ) -> ModelCallResult | T:
+        if _provider_from_model(model) == "openai" and "gpt-6" in model:
+            from agent_service.gateway.openai_responses import complete_responses
+            return await complete_responses(
+                model=model, messages=messages, max_tokens=max_tokens, api_key=api_key,
+                tools=tools, reasoning_effort=reasoning_effort, json_output=response_model is not None,
+            )
         from litellm import acompletion
 
         started = time.perf_counter()
@@ -485,7 +505,11 @@ class ModelGateway:
         if cost <= 0 and (input_tokens > 0 or output_tokens > 0):
             from agent_service.billing.pricing import estimate_cost_usd_from_tokens
 
-            cost, _pricing_source = estimate_cost_usd_from_tokens(model, input_tokens, output_tokens)
+            details = getattr(usage, "prompt_tokens_details", None)
+            cached = int(getattr(details, "cached_tokens", 0) or 0)
+            cost, _pricing_source = estimate_cost_usd_from_tokens(
+                model, input_tokens, output_tokens, cached_input_tokens=cached
+            )
 
         result = ModelCallResult(
             content=content,
@@ -496,9 +520,8 @@ class ModelGateway:
             cost_usd=cost,
             latency_ms=latency_ms,
             tool_calls=parsed_calls,
+            usage_id=getattr(response, "id", None),
         )
-        if response_model is not None:
-            return response_model.model_validate_json(content)
         return result
 
     async def _litellm_responses(

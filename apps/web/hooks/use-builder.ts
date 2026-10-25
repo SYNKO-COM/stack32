@@ -16,6 +16,7 @@ export type SendBuilderMessageInput = {
   content: string;
   attachments?: ComposerAttachment[];
   mode?: "build" | "chat";
+  modelTier?: import("@/lib/ai/builder-models").BuilderModelTier;
 };
 
 function composerToMessageAttachments(
@@ -110,7 +111,9 @@ export function useSendBuilderMessage(agentId: string) {
       const content = typeof input === "string" ? input : input.content;
       const attachments = typeof input === "string" ? undefined : input.attachments;
       const mode = typeof input === "string" ? undefined : input.mode;
-      return getBuilderRepository().sendMessage(agentId, content, attachments, mode);
+      return getBuilderRepository().sendMessage(
+        agentId, content, attachments, mode, typeof input === "string" ? undefined : input.modelTier,
+      );
     },
     onMutate: async (input) => {
       const content = typeof input === "string" ? input : input.content;

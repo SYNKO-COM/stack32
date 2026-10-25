@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from agent_service.auth import CurrentUser
 from agent_service.builder.orchestrator import BuilderOrchestrator
+from agent_service.gateway.builder_models import BuilderModelTier
 from agent_service.security.rate_limit import (
     BudgetExceeded,
     RateLimitExceeded,
@@ -31,9 +32,10 @@ class BuilderImagePayload(BaseModel):
 class BuilderMessageRequest(BaseModel):
     content: str = Field(default="", max_length=8000)
     thread_id: UUID | None = None
-    # UI language the assistant must answer in, regardless of the prompt language.
+    # UI language used when the message does not provide a language preference.
     locale: str = Field(default="en", max_length=8)
     mode: str = Field(default="build", pattern="^(build|chat)$")
+    model_tier: BuilderModelTier | None = None
     images: list[BuilderImagePayload] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="after")
@@ -75,6 +77,31 @@ async def _guards(user_id: str) -> None:
         ) from exc
 
 
+@router.get("/builder/models")
+async def builder_models(user: CurrentUser) -> dict[str, Any]:
+    """Only advertise models present in this environment's provider account."""
+    import asyncio
+
+    from openai import AsyncOpenAI
+
+    from agent_service.config import get_settings
+    from agent_service.gateway.builder_models import BUILDER_MODELS
+
+    settings = get_settings()
+    if not settings.BUILDER_MODEL_SELECTION_ENABLED or not settings.OPENAI_API_KEY:
+        return {"models": []}
+    try:
+        async with AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=10, max_retries=0) as client:
+            available = {m.id for m in (await asyncio.wait_for(client.models.list(), timeout=12)).data}
+        return {"models": [
+            {"tier": tier, "model": model.split("/", 1)[1]}
+            for tier, model in BUILDER_MODELS.items() if model.split("/", 1)[1] in available
+        ]}
+    except Exception:  # noqa: BLE001
+        # No misleading choices during an outage; legacy routing remains available.
+        return {"models": []}
+
+
 @router.post("/agents/{agent_id}/builder/messages")
 async def post_agent_builder_message(
     agent_id: UUID,
@@ -83,6 +110,10 @@ async def post_agent_builder_message(
     request: Request,
 ) -> dict[str, Any]:
     await _guards(user.user_id)
+    if body.model_tier is not None:
+        from agent_service.config import get_settings
+        if not get_settings().BUILDER_MODEL_SELECTION_ENABLED:
+            raise HTTPException(status_code=409, detail={"code": "BUILDER_MODEL_UNAVAILABLE"})
     db = get_persistence()
     agent = await db.get_owned_agent(str(agent_id), user.user_id)
     if not agent:
@@ -113,6 +144,7 @@ async def post_agent_builder_message(
         content=body.content,
         locale=body.locale,
         mode=body.mode,
+        model_tier=body.model_tier,
         images=[img.model_dump() for img in body.images],
     )
     return _http_from_result(result)

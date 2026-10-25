@@ -69,6 +69,7 @@ export class SupabaseBuilderRepository implements BuilderRepository {
     content: string,
     attachments: ComposerAttachment[] = [],
     mode: "build" | "chat" = "build",
+    modelTier?: import("@/lib/ai/builder-models").BuilderModelTier,
   ): Promise<void> {
     const supabase = requireSupabaseBrowserClient();
     const threadId = await this.getOrCreateThreadId(agentId);
@@ -117,6 +118,7 @@ export class SupabaseBuilderRepository implements BuilderRepository {
       metadata: {
         attachments: prepared.messageAttachments,
         mode,
+        model_tier: modelTier,
       } as unknown as Json,
     });
     if (error) throw error;
@@ -133,6 +135,7 @@ export class SupabaseBuilderRepository implements BuilderRepository {
       prompt: promptForModel,
       images: prepared.imagePayloads,
       mode,
+      modelTier,
     });
   }
 

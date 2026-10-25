@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     MODEL_CONFIG_PATH: str = "services/model-gateway/config/models.yaml"
 
     # Platform-internal Builder routing (OpenAI-first; no xAI defaults).
+    BUILDER_MODEL_SELECTION_ENABLED: bool = False
     MODEL_FAST_PRIMARY: str = "openai/gpt-5.6-luna"
     MODEL_FAST_FALLBACK: str = "openai/gpt-5.6-terra"
     MODEL_BALANCED_PRIMARY: str = "openai/gpt-5.6-terra"

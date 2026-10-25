@@ -150,6 +150,11 @@ class CodingAgent:
         chain = [route.model] + [
             m for m in platform_model_chain(ModelProfile.CODING, stage=coding_stage) if m != route.model
         ]
+        from agent_service.gateway.builder_models import selected_builder_model
+
+        selected = selected_builder_model()
+        if selected:
+            chain = [selected]
         last_exc: Exception | None = None
         for model_id in chain:
             try:
