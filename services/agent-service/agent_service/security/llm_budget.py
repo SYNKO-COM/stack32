@@ -134,6 +134,7 @@ class RunLlmBudget:
 
         key = idempotency_key or f"{self.run_id}:{self.calls}:{uuid.uuid4().hex[:12]}"
         provider = model.split("/", 1)[0] if "/" in model else "unknown"
+        recorded_source = self.source
 
         async def _write() -> None:
             try:
@@ -148,7 +149,7 @@ class RunLlmBudget:
                     provider=provider,
                     model=model,
                     reasoning_effort=reasoning_effort,
-                    source=self.source,
+                    source=recorded_source,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     estimated_cost_usd=float(cost_usd or 0),
