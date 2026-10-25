@@ -1267,6 +1267,9 @@ export function BuildView({ agentId }: { agentId: string }) {
     setAwaitingReply(false);
     if (turnHasTerminal) {
       void queryClient.invalidateQueries({ queryKey: ["active-build-run", agentId] });
+      // The completion arrives after the send request settled. Refresh both the
+      // sidebar list and detail/spec caches now, so Built never stays Building.
+      void queryClient.invalidateQueries({ queryKey: ["agents"] });
     }
   }, [messages, pendingToken, awaitingReply, busy, waitingOnForm, agentId, queryClient, turnHasTerminal]);
 
