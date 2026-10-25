@@ -68,6 +68,8 @@ Les résultats, identifiants des seuls agents de test, mesures et corrections se
 
 ## Vérifications locales avant publication
 
-- Backend : **1 361 tests passés** (dont 37 nouvelles régressions), Ruff réussi ; Bandit aucun problème de sévérité moyenne/haute.
+- Backend : **1 363 tests attendus après les deux cas de non-modification ajoutés** (39 nouvelles régressions ; dernière suite complète avant ces deux cas : 1 361 passés), Ruff réussi ; Bandit aucun problème de sévérité moyenne/haute.
 - Web : **305 tests unitaires passés**, typage réussi ; lint 0 erreur et 42 avertissements préexistants.
 - Build, tests navigateur complets, CI, publication et retest préproduction : à exécuter. Ces tests unitaires ne constituent pas une validation des modèles chez le fournisseur ni des intégrations OAuth réelles.
+
+- Reproduction S02 production : une simple question française demandant le récapitulatif des outils, avec « Ne modifie rien », ouvre le formulaire d’identité au lieu de répondre. Aucun formulaire soumis et aucune nouvelle connexion créée. Régression couverte par le routeur de questions, y compris les interdictions explicites d’éditer.

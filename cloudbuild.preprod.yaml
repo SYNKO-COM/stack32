@@ -58,6 +58,7 @@ steps:
       # moment the message lands" costs. The worker inherits it via the
       # describe/replace clone below.
       - --min-instances=1
+      - --update-env-vars=BUILDER_MODEL_SELECTION_ENABLED=true
       - --quiet
 
   # Builds are hour-long requests; sharing the API's instances let a handful
