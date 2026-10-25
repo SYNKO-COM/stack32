@@ -68,6 +68,18 @@ def spec_changes(before: Any, after: Any) -> dict[str, Any]:
         "enabled_tools": tools,
         "goal": after.goal,
         "instructions": after.instructions.system[:5000],
+        "prohibited_actions": after.instructions.prohibited_actions,
+        "behavioural_rules": after.instructions.behavioral_rules,
+        "triggers": [
+            {k: v for k, v in trigger.model_dump(mode="json").items()
+             if k in {"kind", "enabled", "cron", "timezone", "app_id", "component_id"}}
+            for trigger in after.triggers
+        ],
+        "approvals": after.approvals.model_dump(mode="json"),
+        "enabled_tool_details": [
+            {"tool_id": tool.tool_id, "provider": tool.provider, "approval_mode": tool.approval_mode}
+            for tool in after.tools if tool.enabled
+        ],
         "connections_required": [r.model_dump(mode="json") for r in after.connection_requirements],
         "connection_status": "Not checked here. A tool definition is not a connected account.",
     }

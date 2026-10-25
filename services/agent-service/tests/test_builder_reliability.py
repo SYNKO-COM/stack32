@@ -305,3 +305,16 @@ async def test_deferred_usage_write_keeps_the_call_stage_source(make_settings):
         budget.source = "builder"
         await asyncio.gather(*budget.pending_usage)
     assert persistence.record_llm_usage_event.await_args.kwargs["source"] == "coding"
+
+
+
+def test_summary_evidence_includes_actual_triggers_and_prohibitions():
+    from agent_service.models.agent_spec import AgentIdentity, AgentInstructions, AgentSpec, TriggerConfig
+    from agent_service.models.graph_spec import default_linear_graph
+    agent = AgentSpec(identity=AgentIdentity(name="QA", role="Calculate"), goal="Calculate",
+                      instructions=AgentInstructions(system="Calculate", prohibited_actions=["No publication"]),
+                      graph=default_linear_graph([]), triggers=[TriggerConfig(kind="chat", enabled=True)])
+    evidence = spec_changes(None, agent)
+    assert evidence["prohibited_actions"] == ["No publication"]
+    assert [trigger["kind"] for trigger in evidence["triggers"]] == ["chat"]
+    assert "approvals" in evidence
