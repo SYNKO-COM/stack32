@@ -8,7 +8,7 @@ import {
   type ListingBillingInterval,
 } from "@/lib/marketplace/slug";
 import { clampReviewRating, shuffleArray } from "@/lib/marketplace/shuffle";
-import type { Json } from "@/lib/supabase/database.types";
+import { createOwnedAgentBriefDraft } from "@/lib/marketplace/brief-draft";
 import { requireSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ListingVisibility = "private" | "public";
@@ -190,47 +190,6 @@ function extractBriefFromSpec(raw: Record<string, unknown>): {
 }
 
 /** Patch identity/brief fields without wiping model, tools, graph, etc. */
-function patchSpecBrief(
-  raw: Record<string, unknown>,
-  fields: {
-    name: string;
-    role: string;
-    goal: string;
-    instructions: string;
-    rules: string[];
-  },
-): Record<string, unknown> {
-  const identity = asRecord(raw.identity);
-  const nextInstructions =
-    raw.instructions !== null &&
-    typeof raw.instructions === "object" &&
-    !Array.isArray(raw.instructions)
-      ? {
-          ...asRecord(raw.instructions),
-          system: fields.instructions,
-          behavioral_rules: fields.rules,
-        }
-      : {
-          system: fields.instructions,
-          tone: "professional",
-          language: "auto",
-          behavioral_rules: fields.rules,
-        };
-
-  return {
-    ...raw,
-    name: fields.name,
-    goal: fields.goal,
-    identity: {
-      ...identity,
-      name: fields.name,
-      role: fields.role,
-    },
-    instructions: nextInstructions,
-    rules: fields.rules,
-  };
-}
-
 export async function getAgentListingSettingsAction(
   agentId: string,
 ): Promise<AgentListingSettings> {
@@ -358,46 +317,6 @@ async function assertUniqueAgentName(
   if (clash) throw new Error("duplicate_name");
 }
 
-async function patchOwnedAgentVersionsBrief(
-  supabase: Awaited<ReturnType<typeof requireSupabaseServerClient>>,
-  agent: {
-    draft_version_id?: string | null;
-    published_version_id?: string | null;
-  },
-  fields: {
-    name: string;
-    role: string;
-    goal: string;
-    instructions: string;
-    rules: string[];
-  },
-): Promise<void> {
-  const versionIds = new Set<string>();
-  if (typeof agent.draft_version_id === "string" && agent.draft_version_id) {
-    versionIds.add(agent.draft_version_id);
-  }
-  if (typeof agent.published_version_id === "string" && agent.published_version_id) {
-    versionIds.add(agent.published_version_id);
-  }
-  if (versionIds.size === 0) return;
-
-  for (const versionId of versionIds) {
-    const { data: version, error } = await supabase
-      .from("agent_versions")
-      .select("id, spec")
-      .eq("id", versionId)
-      .maybeSingle();
-    if (error) throw error;
-    if (!version) continue;
-    const nextSpec = patchSpecBrief(asRecord(version.spec), fields);
-    const { error: updateError } = await supabase
-      .from("agent_versions")
-      .update({ spec: nextSpec as Json })
-      .eq("id", versionId);
-    if (updateError) throw updateError;
-  }
-}
-
 export type UpdateAgentListingResult =
   | { ok: true; settings: AgentListingSettings; slugAdjusted?: boolean }
   | { ok: false; code: "duplicate_name" | "invalid_name" | "not_found" | "save_failed" };
@@ -486,6 +405,15 @@ export async function updateAgentListingAction(input: {
     patch.slug = resolvedSlug;
   }
 
+  try {
+    const draftVersionId = await createOwnedAgentBriefDraft(supabase, owned, user.id, {
+      name, role, goal, instructions, rules,
+    });
+    if (draftVersionId) patch.draft_version_id = draftVersionId;
+  } catch {
+    return { ok: false, code: "save_failed" };
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- listing_billing_interval pending codegen
   const { error } = await (supabase as any)
     .from("agents")
@@ -493,18 +421,6 @@ export async function updateAgentListingAction(input: {
     .eq("id", input.agentId)
     .eq("user_id", user.id);
   if (error) return { ok: false, code: "save_failed" };
-
-  try {
-    await patchOwnedAgentVersionsBrief(supabase, owned, {
-      name,
-      role,
-      goal,
-      instructions,
-      rules,
-    });
-  } catch {
-    return { ok: false, code: "save_failed" };
-  }
 
   const settings = await getAgentListingSettingsAction(input.agentId);
   const requestedSlug =
