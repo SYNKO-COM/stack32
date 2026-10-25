@@ -292,3 +292,16 @@ async def test_question_router_failure_cannot_authorise_a_mutation(make_settings
     orch.gateway = MagicMock()
     orch.gateway.complete = AsyncMock(side_effect=RuntimeError("provider unavailable"))
     assert await orch._route_question("Can you explain how to add Gmail?") == "chat"
+
+
+@pytest.mark.asyncio
+async def test_deferred_usage_write_keeps_the_call_stage_source(make_settings):
+    make_settings()
+    import asyncio
+    persistence = SimpleNamespace(record_llm_usage_event=AsyncMock())
+    budget = RunLlmBudget(run_id="r", user_id="u", agent_id="a", max_calls=4, source="coding")
+    with patch("agent_service.supabase_client.get_persistence", return_value=persistence):
+        budget.register_call(model="openai/gpt-6.1-sol", input_tokens=100, output_tokens=10, cost_usd=.0003)
+        budget.source = "builder"
+        await asyncio.gather(*budget.pending_usage)
+    assert persistence.record_llm_usage_event.await_args.kwargs["source"] == "coding"
