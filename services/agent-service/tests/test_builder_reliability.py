@@ -38,6 +38,8 @@ def test_explicit_operations(message, expected):
 @pytest.mark.parametrize("message", [
     "S'il te plaît peux-tu me faire un récapitulatif de tous les outils et à quoi ils servent ?",
     "Quels sont ses outils ?", "Explain this agent", "What tools do I have?", "Pourquoi ce choix ?",
+    "S’il te plaît, peux-tu me faire un récapitulatif des outils ? Ne modifie rien.",
+    "What tools do I have? Don't modify anything.",
 ])
 def test_questions_are_read_only_in_build(message):
     assert is_read_only_question(message)

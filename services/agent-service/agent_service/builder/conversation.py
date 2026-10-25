@@ -25,6 +25,12 @@ def reply_locale(text: str, fallback: str = "en") -> str:
 
 def is_read_only_question(text: str) -> bool:
     message = normalise(text).strip()
+    # “Ne modifie rien” is a prohibition, not an edit instruction.
+    message = re.sub(
+        r"\b(?:ne (?:modifie|change|supprime|cree|ajoute|connecte) (?:rien|pas)|"
+        r"(?:do not|don't|without) (?:modify|change|edit|add|delete|connect)(?: anything)?)\b",
+        "", message,
+    )
     # Only unambiguous requests to explain/inspect. Mixed question + edit stays Build.
     mutation = r"\b(?:create|build|add|remove|delete|change|modify|connect|configure|repair|fix|cree|creer|ajoute|ajouter|supprime|supprimer|modifie|modifier|branche|connecte|configure|repare|corrige|remplace)\b"
     if re.search(mutation, message):
