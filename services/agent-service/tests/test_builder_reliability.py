@@ -219,3 +219,23 @@ def test_form_continuations_have_distinct_usage_scopes():
     first = RunLlmBudget(run_id="r", user_id="u", agent_id="a", max_calls=20)
     resumed = RunLlmBudget(run_id="r", user_id="u", agent_id="a", max_calls=20)
     assert first.scope_id != resumed.scope_id
+
+
+@pytest.mark.asyncio
+async def test_stopped_chat_never_publishes_a_late_completion(make_settings):
+    make_settings()
+    db = AsyncMock()
+    db.load_draft_spec.return_value = None
+    db._select.return_value = []
+    db.get_owned_run.return_value = {"status": "canceled", "input": {}}
+    db.get_owned_agent.return_value = {"first_ready_celebrated": True}
+    orch = BuilderOrchestrator(db)
+    orch.gateway = MagicMock()
+    orch.gateway.complete = AsyncMock(return_value=SimpleNamespace(content="Late response"))
+    result = await orch._handle_chat_turn(
+        run_id="r", user_id="u", agent_id="a", thread_id="t", content="Quels outils ?",
+        agent={"status": "built", "name": "QA"}, locale="fr",
+    )
+    assert result["status"] == "canceled"
+    db.insert_assistant_message.assert_not_awaited()
+    db.complete_run.assert_not_awaited()

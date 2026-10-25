@@ -3039,7 +3039,7 @@ class BuilderOrchestrator:
         # Ready celebration + "Open AI Agent" on first successful definition build.
         first_ready = bool(play_ready_sound and status == "built")
         file_paths = [str(p.get("path")) for p in project_files if p.get("path")]
-        timeline = await self._build_turn_timeline(run_id=run_id, user_id=user_id)
+        timeline: list[str] = []  # Narration is grounded in persisted spec differences.
         run_input = (current or {}).get("input") or {}
         reply_locale = str(run_input.get("locale") or "en") if isinstance(run_input, dict) else "en"
         detected_problems = (
@@ -3066,6 +3066,8 @@ class BuilderOrchestrator:
             detected_problems=detected_problems,
             changes=spec_changes(current_spec, spec),
         )
+        if await self._run_was_canceled(run_id, user_id):
+            return await self._finish_canceled_build(run_id, user_id, agent_id)
         if first_ready:
             meta: dict[str, Any] = {
                 "tone": "success",
@@ -3324,6 +3326,9 @@ class BuilderOrchestrator:
                 if lang == "French"
                 else "Chat mode is on — ask me a question, or switch to Build to make changes."
             )
+
+        if await self._run_was_canceled(run_id, user_id):
+            return await self._finish_canceled_build(run_id, user_id, agent_id)
 
         await self.db.insert_assistant_message(
             thread_id=thread_id,
