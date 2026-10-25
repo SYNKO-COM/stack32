@@ -11,7 +11,7 @@ import { BuildProgressPanel } from "@/components/builder/build-progress-panel";
 import { BuilderWorkingPanel } from "@/components/builder/builder-working-panel";
 import { DynamicQuestionsForm } from "@/components/builder/dynamic-questions-form";
 import { IntegrationConnectionCard } from "@/components/builder/integration-connection-card";
-import { MessageEntrance, TypewriterText } from "@/components/builder/message-motion";
+import { MessageEntrance } from "@/components/builder/message-motion";
 import { IdentityConfirmedMessage, ReadyCard } from "@/components/builder/ready-card";
 import { SecretForm } from "@/components/builder/secret-form";
 import { ToolChangeReviewForm } from "@/components/builder/tool-change-review-form";
@@ -23,6 +23,8 @@ import { MessageAttachmentPreviews } from "@/components/shared/message-attachmen
 import { PromptComposer } from "@/components/shared/prompt-composer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { getBuilderModelOptions } from "@/lib/actions/builder";
+import type { BuilderModelTier } from "@/lib/ai/builder-models";
 import { useAgent } from "@/hooks/use-agents";
 import { useCurrentUser } from "@/hooks/use-auth";
 import {
@@ -371,8 +373,9 @@ function BuilderBubble({
     !isCancelNotice &&
     !isBackendFailure;
 
-  const hasTypeableBody = showIdentityConfirmed || showReady || Boolean(content);
-  const [typedDone, setTypedDone] = useState(!animateWrite || !hasTypeableBody);
+  // Provider text arrives already complete; render Markdown once, with a soft
+  // entrance, rather than typing plain text and replacing the whole layout.
+  const typedDone = true;
 
   const notifyRevealDone = () => {
     if (revealNotified.current) return;
@@ -402,9 +405,7 @@ function BuilderBubble({
   const showForms = !formHidden && typedDone;
   const runId = message.interruptRunId ?? "";
 
-  const markTyped = () => {
-    setTypedDone(true);
-  };
+  const markTyped = notifyRevealDone;
 
   return (
     <MessageEntrance active={isFresh && animateNow}>
@@ -529,27 +530,7 @@ function BuilderBubble({
               />
             ) : (
               <>
-                {content ? (
-                  animateWrite && !typedDone && !isCancelNotice ? (
-                    <p>
-                      <TypewriterText text={content} active onDone={markTyped} />
-                    </p>
-                  ) : (
-                    <Markdown content={content} />
-                  )
-                ) : null}
-                {message.projectFiles && message.projectFiles.length > 0 ? (
-                  <ul className="mt-3 flex flex-wrap gap-1.5">
-                    {message.projectFiles.slice(0, 8).map((path) => (
-                      <li
-                        key={path}
-                        className="rounded-md bg-foreground/[0.06] px-2 py-0.5 font-mono text-[11px] font-semibold text-foreground"
-                      >
-                        {path.split("/").pop() ?? path}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                {content ? <Markdown content={content} /> : null}
               </>
             )}
 
@@ -726,6 +707,12 @@ export function BuildView({ agentId }: { agentId: string }) {
     // next form/progress never appears. Poll only while this turn is waiting.
     forcePoll: awaitingReply || pendingToken !== null,
   });
+  const { data: modelOptions = [] } = useQuery({
+    queryKey: ["builder-models"], queryFn: getBuilderModelOptions,
+    staleTime: 300_000, retry: false, refetchOnWindowFocus: false,
+  });
+  const [selectedTier, setSelectedTier] = useState<BuilderModelTier>("standard");
+  const availableTier = modelOptions.find((option) => option.tier === selectedTier)?.tier ?? modelOptions[0]?.tier;
   const sendMessage = useSendBuilderMessage(agentId);
   const openDialog = useUiStore((s) => s.openDialog);
   // Latest-value refs: assigning during render tears under concurrent
@@ -1197,7 +1184,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   const handleSend = async (
     value: string,
     attachments?: ComposerAttachment[],
-    options?: { mode?: BuilderInteractionMode },
+    options?: { mode?: BuilderInteractionMode; modelTier?: BuilderModelTier },
   ) => {
     // eslint-disable-next-line react-hooks/purity -- event handler; epoch token pairs the in-flight turn with its clear effect
     const token = Date.now();
@@ -1211,6 +1198,7 @@ export function BuildView({ agentId }: { agentId: string }) {
         content: value,
         attachments,
         mode: sentMode,
+        modelTier: options?.modelTier ?? availableTier,
       });
     } catch (error) {
       setPendingToken(null);
@@ -1619,6 +1607,9 @@ export function BuildView({ agentId }: { agentId: string }) {
           initialValue={prefill}
           draftKey={`builder:${agentId}`}
           showModeSelector
+          modelOptions={modelOptions}
+          modelTier={availableTier}
+          onModelTierChange={setSelectedTier}
           mode={interactionMode}
           onModeChange={(next) => {
             setInteractionMode(next);

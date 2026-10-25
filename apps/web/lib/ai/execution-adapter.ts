@@ -26,6 +26,7 @@ export interface BuilderExecutionInput {
   images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
   /** build = can mutate; chat = read-only Q&A. */
   mode?: "build" | "chat";
+  modelTier?: import("@/lib/ai/builder-models").BuilderModelTier;
 }
 
 export interface LiveExecutionInput {
@@ -57,7 +58,7 @@ export class NotImplementedError extends Error {
 
 /** Calls the Agent Service builder endpoints; persistence is handled server-side. */
 export class RealBuilderExecutionAdapter implements BuilderExecutionAdapter {
-  async execute({ agentId, threadId, prompt, locale, images, mode }: BuilderExecutionInput): Promise<void> {
+  async execute({ agentId, threadId, prompt, locale, images, mode, modelTier }: BuilderExecutionInput): Promise<void> {
     const accessToken = await requireAccessToken();
     await agentServiceFetch(`/v1/agents/${agentId}/builder/messages`, {
       method: "POST",
@@ -67,6 +68,7 @@ export class RealBuilderExecutionAdapter implements BuilderExecutionAdapter {
         thread_id: threadId,
         locale,
         mode: mode ?? "build",
+        model_tier: modelTier,
         images: (images ?? []).map((img) => ({
           name: img.name,
           mime_type: img.mimeType,

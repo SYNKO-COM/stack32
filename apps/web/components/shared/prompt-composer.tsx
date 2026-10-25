@@ -36,8 +36,11 @@ export type ComposerAttachment = {
 /** Builder interaction mode — Build can change the agent; Chat is read-only. */
 export type BuilderInteractionMode = "build" | "chat";
 
+import type { BuilderModelOption, BuilderModelTier } from "@/lib/ai/builder-models";
+
 export type PromptComposerSubmitOptions = {
   mode?: BuilderInteractionMode;
+  modelTier?: BuilderModelTier;
 };
 
 interface PromptComposerProps {
@@ -64,6 +67,9 @@ interface PromptComposerProps {
   mode?: BuilderInteractionMode;
   defaultMode?: BuilderInteractionMode;
   onModeChange?: (mode: BuilderInteractionMode) => void;
+  modelOptions?: BuilderModelOption[];
+  modelTier?: BuilderModelTier;
+  onModelTierChange?: (tier: BuilderModelTier) => void;
   /** Persist typed text in sessionStorage so tab switches don't wipe the draft. */
   draftKey?: string;
 }
@@ -194,6 +200,9 @@ export function PromptComposer({
   defaultMode = "build",
   onModeChange,
   draftKey,
+  modelOptions = [],
+  modelTier = "standard",
+  onModelTierChange,
 }: PromptComposerProps) {
   const { t } = useTranslation("common");
   const [value, setValue] = useState(() => {
@@ -357,7 +366,7 @@ export function PromptComposer({
       };
       try {
         const result = await Promise.resolve(
-          onSubmit(payload, snapshot, showModeSelector ? { mode } : undefined),
+          onSubmit(payload, snapshot, showModeSelector ? { mode, modelTier: modelOptions.length ? modelTier : undefined } : undefined),
         );
         // Callers return false to keep the typed text — e.g. plan limit / busy.
         if (result === false) restoreDraft();
@@ -656,6 +665,31 @@ export function PromptComposer({
               </Button>
             ) : (
               <>
+                {showModeSelector && modelOptions.length > 0 ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="ghost" size="sm" disabled={busy || disabled}
+                        className="h-10 gap-1 rounded-full px-2 text-xs sm:h-8"
+                        aria-label={t("composer.models.label")}>
+                        {t(`composer.models.${modelTier}`)}
+                        <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64 rounded-xl p-1.5">
+                      {modelOptions.map((option) => (
+                        <DropdownMenuItem key={option.tier} onClick={() => onModelTierChange?.(option.tier)}
+                          className="gap-2 rounded-lg py-2">
+                          <span className="flex-1">
+                            <span className="block font-medium">{t(`composer.models.${option.tier}`)}</span>
+                            <span className="block text-xs text-muted-foreground">{option.model}</span>
+                          </span>
+                          {option.tier === modelTier ? <Check className="size-4" aria-hidden="true" /> : null}
+                        </DropdownMenuItem>
+                      ))}
+                      <p className="px-2 py-2 text-xs text-muted-foreground">{t("composer.models.billing")}</p>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
                 {showModeSelector ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

@@ -9,3 +9,9 @@ apps/web/.next
 test-results
 .vercel
 supabase/.temp
+
+# Never upload local credentials with a source build.
+.env
+.env.*
+**/.env
+**/.env.*

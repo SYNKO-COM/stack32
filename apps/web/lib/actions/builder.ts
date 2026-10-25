@@ -73,6 +73,7 @@ export async function executeBuilderTurn(input: {
   prompt: string;
   images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
   mode?: "build" | "chat";
+  modelTier?: import("@/lib/ai/builder-models").BuilderModelTier;
 }): Promise<void> {
   const { userId } = await requireOwnedAgent(input.agentId);
   if (currentAiExecutionMode() === "disabled") {
@@ -110,6 +111,7 @@ export async function executeBuilderTurn(input: {
       prompt: input.prompt,
       images: input.images,
       mode: input.mode ?? "build",
+      modelTier: input.modelTier,
     });
   } catch (err) {
     const contentKey =
@@ -688,4 +690,19 @@ async function localCancelBuilderRun(input: {
   }
 
   return { status: "canceled", id: lastId };
+}
+
+
+/** Server-scoped provider availability; never expose an API key to the composer. */
+export async function getBuilderModelOptions(): Promise<import("@/lib/ai/builder-models").BuilderModelOption[]> {
+  if (currentAiExecutionMode() !== "agent-service") return [];
+  try {
+    const accessToken = await requireAccessToken();
+    const result = await agentServiceFetch<{ models: import("@/lib/ai/builder-models").BuilderModelOption[] }>(
+      "/v1/builder/models", { accessToken },
+    );
+    return result.models;
+  } catch {
+    return [];
+  }
 }

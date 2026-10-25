@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -59,6 +60,10 @@ class RunLlmBudget:
     output_tokens: int = 0
     cost_usd: float = 0.0
     models: list[str] = field(default_factory=list)
+    scope_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    pending_usage: list = field(default_factory=list)
+    # Ephemeral encrypted reasoning items for Responses tool continuations; never logged.
+    responses_reasoning: dict[str, list] = field(default_factory=dict)
 
     def register_call(
         self,
@@ -126,7 +131,6 @@ class RunLlmBudget:
         error_code: str | None,
     ) -> None:
         import asyncio
-        import uuid
 
         key = idempotency_key or f"{self.run_id}:{self.calls}:{uuid.uuid4().hex[:12]}"
         provider = model.split("/", 1)[0] if "/" in model else "unknown"
@@ -169,7 +173,7 @@ class RunLlmBudget:
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(_write())
+            self.pending_usage.append(loop.create_task(_write()))
         except RuntimeError:
             pass
 
@@ -295,6 +299,18 @@ async def llm_run_budget(
     enforce_user_budget: bool = True,
     user_funded_llm: bool = False,
 ):
+    parent = get_run_llm_budget()
+    if parent is not None and parent.run_id == run_id:
+        # One reservation, one call sequence and one roll-up for the whole turn.
+        # Nested coding scopes used to reset both the cost ceiling and call ids.
+        old_source, old_limit = parent.source, parent.max_calls
+        parent.source = source
+        parent.max_calls = min(old_limit, parent.calls + (max_calls or old_limit))
+        try:
+            yield parent
+        finally:
+            parent.source, parent.max_calls = old_source, old_limit
+        return
     settings = get_settings()
     ceiling: float | None = None
     plan_key, credits_monthly = "free", 0
@@ -326,6 +342,10 @@ async def llm_run_budget(
         yield budget
     finally:
         _current_budget.reset(token)
+        # Finish the audit ledger before Cloud Run can suspend an idle instance.
+        if budget.pending_usage:
+            import asyncio
+            await asyncio.gather(*budget.pending_usage, return_exceptions=True)
         if reserved:
             await _settle_run_budget(run_id)
         logger.info(

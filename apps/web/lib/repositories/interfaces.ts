@@ -99,6 +99,7 @@ export interface BuilderRepository {
     content: string,
     attachments?: ComposerAttachment[],
     mode?: "build" | "chat",
+    modelTier?: import("@/lib/ai/builder-models").BuilderModelTier,
   ): Promise<void>;
   /** "Fix automatically" action — mock repair until the real Builder Agent. */
   repairAgent(agentId: string): Promise<void>;

@@ -21,6 +21,10 @@ class ModelPricing:
 
 # Reservation rates use published standard pricing (Sonnet $3/$15 not promo).
 PLATFORM_MODEL_PRICING: dict[str, ModelPricing] = {
+    # Standard processing, official pricing checked 2026-10-25.
+    "openai/gpt-6-luna": ModelPricing("openai", "gpt-6-luna", 0.10, 0.01, 0.50),
+    "openai/gpt-6.1-sol": ModelPricing("openai", "gpt-6.1-sol", 2.00, 0.10, 10.00),
+    "openai/gpt-6-astra": ModelPricing("openai", "gpt-6-astra", 10.00, 1.00, 50.00),
     "openai/gpt-5.6-luna": ModelPricing("openai", "gpt-5.6-luna", 0.20, 0.02, 1.20),
     "openai/gpt-5.6-terra": ModelPricing("openai", "gpt-5.6-terra", 2.00, 0.20, 12.00),
     "openai/gpt-5.6-sol": ModelPricing("openai", "gpt-5.6-sol", 5.00, 0.50, 30.00),
@@ -83,11 +87,16 @@ def estimate_cost_usd_from_tokens(
         cost = (input_tokens * inp + output_tokens * out) / 1_000_000.0
         return cost, "conservative_fallback"
 
-    uncached = max(0, input_tokens - cached_input_tokens)
+    input_tokens = max(0, input_tokens)
+    output_tokens = max(0, output_tokens)
+    cached_input_tokens = min(input_tokens, max(0, cached_input_tokens))
+    uncached = input_tokens - cached_input_tokens
+    long_context = pricing.model.startswith("gpt-6") and input_tokens > 272_000
+    input_multiplier, output_multiplier = (2, 1.5) if long_context else (1, 1)
     cost = (
-        uncached * pricing.input_usd_per_m
-        + cached_input_tokens * pricing.cached_input_usd_per_m
-        + output_tokens * pricing.output_usd_per_m
+        uncached * pricing.input_usd_per_m * input_multiplier
+        + cached_input_tokens * pricing.cached_input_usd_per_m * input_multiplier
+        + output_tokens * pricing.output_usd_per_m * output_multiplier
     ) / 1_000_000.0
     return cost, "registry"
 

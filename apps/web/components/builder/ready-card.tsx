@@ -2,9 +2,8 @@
 
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect } from "react";
 
-import { TypewriterText } from "@/components/builder/message-motion";
 import { Markdown } from "@/components/shared/markdown";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/hooks/use-translation";
@@ -25,7 +24,8 @@ export function IdentityConfirmedMessage({
   onDone?: () => void;
 }) {
   const { t } = useTranslation("builder");
-  const [done, setDone] = useState(!animate);
+  useEffect(() => { onDone?.(); }, [onDone]);
+  void animate;
   const toneLabel = summary.tone
     ? t(`identity.toneOptions.${summary.tone}`, { defaultValue: summary.tone })
     : "";
@@ -47,22 +47,6 @@ export function IdentityConfirmedMessage({
     .filter((line) => line !== null)
     .join("\n");
 
-  const finish = () => {
-    setDone(true);
-    onDone?.();
-  };
-
-  if (!animate) {
-    return <Markdown content={markdown} />;
-  }
-
-  if (!done) {
-    return (
-      <p>
-        <TypewriterText text={lead} active onDone={finish} />
-      </p>
-    );
-  }
 
   return <Markdown content={markdown} />;
 }
@@ -95,7 +79,8 @@ export function ReadyCard({
 }) {
   const { t } = useTranslation("builder");
   const router = useRouter();
-  const [typedDone, setTypedDone] = useState(!animate);
+  useEffect(() => { onDone?.(); }, [onDone]);
+  void animate;
   const name = identitySummary?.name;
 
   const actionList = actions ?? ["open_ai_agent"];
@@ -112,28 +97,15 @@ export function ReadyCard({
     }
     return name ? t("ready.titleNamed", { name }) : t("ready.title");
   })();
-  const plainBody = `${lead}\n\n${content}`.replace(/\*\*/g, "");
-
-  const finish = () => {
-    setTypedDone(true);
-    onDone?.();
-  };
 
   const goAiAgent = () => {
     router.push(`/agents/${agentId}/agent`);
   };
 
-  if (animate && !typedDone) {
-    return (
-      <p>
-        <TypewriterText text={plainBody} active onDone={finish} />
-      </p>
-    );
-  }
 
   return (
     <div className="space-y-4">
-      <Markdown content={`${lead}\n\n${content}`} />
+      <Markdown content={content || lead} />
 
       {opensAiAgent ? (
         <p className="text-sm text-muted-foreground">

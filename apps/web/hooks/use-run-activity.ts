@@ -54,10 +54,10 @@ export function useRunActivity(runId: string | null | undefined, enabled: boolea
         .from("run_events")
         .select("event_type, payload, sequence, created_at")
         .eq("run_id", runId)
-        .order("sequence", { ascending: true })
+        .order("sequence", { ascending: false })
         .limit(80);
       if (error) throw error;
-      return (data ?? []).map((row) => {
+      return [...(data ?? [])].reverse().map((row) => {
         const payload =
           row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
             ? (row.payload as Record<string, unknown>)
