@@ -59,8 +59,11 @@ async def _cancel_run_impl(
     run_type = str(run.get("run_type") or "")
     if agent_id and run_type == "build":
         agent = await db.get_owned_agent(str(agent_id), user.user_id)
-        restore = "ready" if agent and agent.get("first_ready_celebrated") else "draft"
-        await db.update_agent_status(str(agent_id), user.user_id, restore)
+        from agent_service.builder.conversation import status_after_builder_cancel
+
+        restore = status_after_builder_cancel(run, agent or {})
+        if restore is not None:
+            await db.update_agent_status(str(agent_id), user.user_id, restore)
     if silent:
         return run
     if thread_id and agent_id:

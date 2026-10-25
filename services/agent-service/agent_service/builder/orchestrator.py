@@ -251,11 +251,13 @@ class BuilderOrchestrator:
             await self.db.clear_builder_interrupt(run_id, user_id)
         except Exception:  # noqa: BLE001
             logger.debug("clear_interrupt_on_cancel_failed", exc_info=True)
+        from agent_service.builder.conversation import status_after_builder_cancel
+
+        run_row = await self.db.get_owned_run(run_id, user_id)
         agent_row = await self.db.get_owned_agent(agent_id, user_id)
-        restore = (
-            "ready" if agent_row and agent_row.get("first_ready_celebrated") else "draft"
-        )
-        await self.db.update_agent_status(agent_id, user_id, restore)
+        restore = status_after_builder_cancel(run_row or {}, agent_row or {})
+        if restore is not None:
+            await self.db.update_agent_status(agent_id, user_id, restore)
         return {"status": "canceled", "run_id": run_id}
 
     async def handle_message(
@@ -299,6 +301,7 @@ class BuilderOrchestrator:
                 "locale": locale,
                 "mode": interaction_mode,
                 "model_tier": model_tier,
+                "agent_status_before": agent.get("status"),
                 "image_count": len(image_payloads),
             },
         )
@@ -2384,14 +2387,7 @@ class BuilderOrchestrator:
                         "run_id": run_id,
                     },
                 )
-            agent_row = await self.db.get_owned_agent(agent_id, user_id)
-            restore = (
-                "ready"
-                if agent_row and agent_row.get("first_ready_celebrated")
-                else "draft"
-            )
-            await self.db.update_agent_status(agent_id, user_id, restore)
-            return {"status": "canceled", "run_id": run_id}
+            return await self._finish_canceled_build(run_id, user_id, agent_id)
         except Exception as exc:  # noqa: BLE001
             if getattr(exc, "code", None) in {"PIPEDREAM_PLAN_REQUIRED", "INTEGRATION_CATALOG_UNAVAILABLE"}:
                 code = str(exc.code)
