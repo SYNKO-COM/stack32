@@ -28,7 +28,8 @@ def is_read_only_question(text: str) -> bool:
     # “Ne modifie rien” is a prohibition, not an edit instruction.
     message = re.sub(
         r"\b(?:ne (?:modifie|change|supprime|cree|ajoute|connecte) (?:rien|pas)|"
-        r"(?:do not|don't|without) (?:modify|change|edit|add|delete|connect)(?: anything)?)\b",
+        r"sans (?:rien )?(?:modifier|changer|supprimer|creer|ajouter|connecter)(?: quoi que ce soit)?|"
+        r"(?:do not|don't|without) (?:modify|modifying|change|changing|edit|editing|add|adding|delete|deleting|connect|connecting)(?: anything)?)\b",
         "", message,
     )
     # Only unambiguous requests to explain/inspect. Mixed question + edit stays Build.
@@ -70,3 +71,14 @@ def spec_changes(before: Any, after: Any) -> dict[str, Any]:
         "connections_required": [r.model_dump(mode="json") for r in after.connection_requirements],
         "connection_status": "Not checked here. A tool definition is not a connected account.",
     }
+
+
+def needs_question_routing(text: str) -> bool:
+    """Ambiguous conversational turns get a semantic check before any mutation."""
+    if "?" in text:
+        return True
+    return bool(re.match(
+        r"^(?:please |s['’]il te plait[, ]+)?(?:explain|describe|summari[sz]e|tell me|"
+        r"can you|could you|would you|what|which|why|how|explique|decris|resume|"
+        r"peux.tu|pourrais.tu|tu peux|est.ce que|quels|quelles|pourquoi|comment|"
+        r"je voudrais savoir|j['’]aimerais comprendre)\b", normalise(text).strip()))

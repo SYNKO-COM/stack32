@@ -262,3 +262,33 @@ async def test_form_resume_resolves_agent_from_owned_run_without_agent_argument(
     assert result == {"name": "QA"}
     assert seen["agent_id"] == "owned-agent"
     assert seen["user_id"] == "u"
+
+
+@pytest.mark.parametrize("message", [
+    "Quels outils sont activés, sans rien modifier ?",
+    "Explique cet agent sans modifier quoi que ce soit.",
+    "What tools are available without changing anything?",
+])
+def test_no_edit_variants_remain_read_only(message):
+    assert is_read_only_question(message)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["chat", "build"])
+async def test_ambiguous_question_uses_validated_semantic_route(make_settings, mode):
+    make_settings()
+    from agent_service.builder.orchestrator import QuestionRoute
+    orch = BuilderOrchestrator(MagicMock())
+    orch.gateway = MagicMock()
+    orch.gateway.complete = AsyncMock(return_value=QuestionRoute(mode=mode))
+    assert await orch._route_question("Quels outils pourrais-tu ajouter ?") == mode
+    assert orch.gateway.complete.await_args.kwargs["response_model"] is QuestionRoute
+
+
+@pytest.mark.asyncio
+async def test_question_router_failure_cannot_authorise_a_mutation(make_settings):
+    make_settings()
+    orch = BuilderOrchestrator(MagicMock())
+    orch.gateway = MagicMock()
+    orch.gateway.complete = AsyncMock(side_effect=RuntimeError("provider unavailable"))
+    assert await orch._route_question("Can you explain how to add Gmail?") == "chat"
