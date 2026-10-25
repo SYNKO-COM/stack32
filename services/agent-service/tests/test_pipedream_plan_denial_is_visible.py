@@ -63,3 +63,5 @@ async def test_builder_reports_denial_without_a_false_ready_agent():
     shown = orchestrator.db.update_assistant_message.call_args.kwargs
     assert "forfait Pipedream" in shown["content"]
     assert shown["metadata"]["completed"] is True
+    # A progress card hides content and remains non-terminal in the web chat.
+    assert "card" not in shown["metadata"]
