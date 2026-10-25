@@ -708,7 +708,7 @@ export function BuildView({ agentId }: { agentId: string }) {
     forcePoll: awaitingReply || pendingToken !== null,
   });
   const { data: modelOptions = [] } = useQuery({
-    queryKey: ["builder-models"], queryFn: getBuilderModelOptions,
+    queryKey: ["builder-models"], queryFn: () => getBuilderModelOptions(),
     staleTime: 300_000, retry: false, refetchOnWindowFocus: false,
   });
   const [selectedTier, setSelectedTier] = useState<BuilderModelTier>("standard");

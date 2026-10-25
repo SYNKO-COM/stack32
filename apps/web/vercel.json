@@ -22,7 +22,8 @@
       "codex/onboarding-info-design": false,
       "codex/onboarding-motion-refinement": false,
       "codex/builder-reliability-audit": false,
-      "codex/builder-form-resume-fix": false
+      "codex/builder-form-resume-fix": false,
+      "codex/builder-model-query-fix": false
     }
   }
 }
