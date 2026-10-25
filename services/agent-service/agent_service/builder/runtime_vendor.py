@@ -59,3 +59,29 @@ async def vendor_runtime_into(provider, handle) -> int:
     for entry in files:
         await provider.write_file(handle, entry["path"], entry["content"])
     return len(files)
+
+
+async def prepare_verification_runtime(provider, handle) -> None:
+    """Provide platform code on every fresh workspace, including snapshot repair."""
+    from agent_service.sandbox.base import SandboxError
+
+    if not await vendor_runtime_into(provider, handle):
+        raise SandboxError("Platform runtime is unavailable", code="SANDBOX_RUNTIME_MISSING")
+    if provider.name != "e2b":
+        return
+    check = await provider.run_command(
+        handle, ["python", "-c", "import pytest, pytest_asyncio, ruff, pydantic"],
+        timeout_seconds=30,
+    )
+    if check.ok:
+        return
+    # Only fixed platform dependencies; never install a generated project's
+    # pyproject, which references the private, already-vendored runtime.
+    installed = await provider.run_command(
+        handle,
+        ["python", "-m", "pip", "install", "--disable-pip-version-check",
+         "pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.6,<1", "pydantic>=2.7,<3"],
+        timeout_seconds=120,
+    )
+    if not installed.ok:
+        raise SandboxError("Verification dependencies could not be prepared", code="SANDBOX_BOOTSTRAP_FAILED")

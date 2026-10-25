@@ -80,3 +80,16 @@ async def test_a_run_with_no_timestamps_at_all_stays_cancellable():
 async def test_a_malformed_timestamp_is_ignored_not_trusted():
     row = {"id": "r1", "started_at": "not-a-date", "created_at": ago(2)}
     assert await _run_is_silent_enough_to_cancel(FakeDb(), row, "u1") is False
+
+
+def test_canceling_chat_does_not_change_agent_readiness():
+    from agent_service.builder.conversation import status_after_builder_cancel
+
+    assert status_after_builder_cancel({"input": {"mode": "chat"}}, {"status": "needs_attention", "first_ready_celebrated": True}) is None
+
+
+def test_canceling_build_restores_its_actual_previous_status():
+    from agent_service.builder.conversation import status_after_builder_cancel
+
+    assert status_after_builder_cancel({"input": {"mode": "build", "agent_status_before": "needs_attention"}}, {"status": "building", "first_ready_celebrated": True}) == "needs_attention"
+    assert status_after_builder_cancel({"input": {}}, {"status": "published"}) == "published"

@@ -251,11 +251,13 @@ class BuilderOrchestrator:
             await self.db.clear_builder_interrupt(run_id, user_id)
         except Exception:  # noqa: BLE001
             logger.debug("clear_interrupt_on_cancel_failed", exc_info=True)
+        from agent_service.builder.conversation import status_after_builder_cancel
+
+        run_row = await self.db.get_owned_run(run_id, user_id)
         agent_row = await self.db.get_owned_agent(agent_id, user_id)
-        restore = (
-            "ready" if agent_row and agent_row.get("first_ready_celebrated") else "draft"
-        )
-        await self.db.update_agent_status(agent_id, user_id, restore)
+        restore = status_after_builder_cancel(run_row or {}, agent_row or {})
+        if restore is not None:
+            await self.db.update_agent_status(agent_id, user_id, restore)
         return {"status": "canceled", "run_id": run_id}
 
     async def handle_message(
@@ -299,6 +301,7 @@ class BuilderOrchestrator:
                 "locale": locale,
                 "mode": interaction_mode,
                 "model_tier": model_tier,
+                "agent_status_before": agent.get("status"),
                 "image_count": len(image_payloads),
             },
         )
@@ -2384,15 +2387,32 @@ class BuilderOrchestrator:
                         "run_id": run_id,
                     },
                 )
-            agent_row = await self.db.get_owned_agent(agent_id, user_id)
-            restore = (
-                "ready"
-                if agent_row and agent_row.get("first_ready_celebrated")
-                else "draft"
-            )
-            await self.db.update_agent_status(agent_id, user_id, restore)
-            return {"status": "canceled", "run_id": run_id}
+            return await self._finish_canceled_build(run_id, user_id, agent_id)
         except Exception as exc:  # noqa: BLE001
+            if getattr(exc, "code", None) in {"PIPEDREAM_PLAN_REQUIRED", "INTEGRATION_CATALOG_UNAVAILABLE"}:
+                code = str(exc.code)
+                run_row = await self.db.get_owned_run(run_id, user_id)
+                locale = str(((run_row or {}).get("input") or {}).get("locale") or "en")
+                locale = reply_locale(content, locale)
+                messages = {
+                    "PIPEDREAM_PLAN_REQUIRED": {
+                        "fr": "La construction est arrêtée : le forfait Pipedream actuel ne permet pas les appels d’outils dans l’environnement fournisseur configuré. Une activation du forfait ou un projet de test adapté est nécessaire. Aucune intégration demandée n’a été retirée pour masquer ce blocage.",
+                        "en": "Build stopped: the current Pipedream plan does not allow tool calls in the configured provider environment. An eligible plan or a separate test project is required. Requested integrations have not been silently removed.",
+                    },
+                    "INTEGRATION_CATALOG_UNAVAILABLE": {
+                        "fr": "La construction est arrêtée : une intégration demandée n’a aucune action disponible dans le catalogue. Le projet est conservé ; réessaie lorsque le fournisseur est disponible ou choisis explicitement un autre outil.",
+                        "en": "Build stopped: a requested integration has no available catalog actions. Your project is retained; retry when the provider is available or explicitly choose another tool.",
+                    },
+                }
+                if progress_id:
+                    await self.db.update_assistant_message(
+                        message_id=progress_id, content=messages[code].get(locale, messages[code]["en"]),
+                        metadata={"tone": "error", "card": "build_progress", "completed": True,
+                                  "run_id": run_id, "error_code": code},
+                    )
+                await self.db.fail_run(run_id, code)
+                await self.db.update_agent_status(agent_id, user_id, "needs_attention")
+                return {"error": code, "run_id": run_id}
             failed_steps = [
                 {"labelKey": "understanding", "state": "done"},
                 {"labelKey": "capabilities", "state": "done"},
@@ -3688,6 +3708,18 @@ class BuilderOrchestrator:
         else:
             goal = original_goal if current is not None else content[:4000]
 
+        from agent_service.builder.tool_review import reviewable_app_keys
+        from agent_service.integrations.pipedream.client import PipedreamError
+
+        resolved_apps = reviewable_app_keys(tools)
+        missing_actions = [
+            item for item in ambiguous
+            if item.get("reason") == "no_actions"
+            and str(item.get("app_id") or item.get("app_query") or "") not in resolved_apps
+        ]
+        if missing_actions:
+            raise PipedreamError("INTEGRATION_CATALOG_UNAVAILABLE")
+
         tools = filter_unsolicited_database_tools(
             tools,
             prompt=f"{content}\n{goal}\n{notes}",
@@ -3888,6 +3920,16 @@ class BuilderOrchestrator:
             connection_requirements=connection_requirements,
             triggers=triggers,
         )
+        if current is not None and current.tools:
+            # Identity setup creates a skeleton with no tools; its first mission
+            # still needs full blueprint instructions rather than an edit patch.
+            from agent_service.builder.instruction_edit import edit_instructions
+
+            edited = await edit_instructions(self.gateway, current, content)
+            spec.instructions = edited.instructions
+            spec.rules = edited.rules
+            spec.model_policy = current.model_policy.model_copy(deep=True)
+            spec.starter_prompts = list(current.starter_prompts)
         return spec, ambiguous
 
     async def _design_agent_blueprint(
@@ -4007,8 +4049,11 @@ class BuilderOrchestrator:
                     data["identity"]["tone"] = tone
         if "rename" in lower or "name" in lower:
             data["identity"]["name"] = identity.name or current.identity.name
-        if "rule" in lower:
-            data["rules"].append({"id": f"rule_{len(data['rules'])+1}", "text": content[:500]})
+        from agent_service.builder.instruction_edit import edit_instructions
+
+        edited = await edit_instructions(self.gateway, current, content)
+        data["instructions"] = edited.instructions.model_dump()
+        data["rules"] = [rule.model_dump() for rule in edited.rules]
         data["identity"] = {**data["identity"], **identity.model_dump()}
         from agent_service.builder.capabilities import (
             apps_user_asked_to_remove,

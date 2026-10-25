@@ -169,16 +169,6 @@ class CodeBuildPipeline:
         for f in files:
             await provider.write_file(handle, f["path"], f["content"])
 
-        # The generated project imports stack32_agent_runtime, which does not
-        # exist in a stock sandbox image. Without this every build failed at
-        # import and the coding agent burned its turns on `pip download` and
-        # `find /` instead of writing the user's agent.
-        from agent_service.builder.runtime_vendor import vendor_runtime_into
-
-        vendored = await vendor_runtime_into(provider, handle)
-        if vendored:
-            logger.info("vendored stack32_agent_runtime into sandbox files=%s", vendored)
-
         return await self.build_from_workspace(
             handle=handle, blueprint=blueprint, files=files,
             user_id=user_id, agent_id=agent_id, run_id=run_id,
@@ -208,6 +198,12 @@ class CodeBuildPipeline:
             await self.emit(evt, payload)
 
         provider = self._provider()
+        # Restored snapshots exclude platform vendor files and a fresh E2B VM
+        # has no prior pip installs. Bootstrap both creation and repair paths
+        # before spending model calls on project verification.
+        from agent_service.builder.runtime_vendor import prepare_verification_runtime
+
+        await prepare_verification_runtime(provider, handle)
         await emit("builder.run.started", {"objective": blueprint.description[:200]})
         await emit("builder.sandbox.ready", {"provider": provider.name})
         await emit("builder.project.scaffolding", {"pattern": blueprint.resolved_pattern()})

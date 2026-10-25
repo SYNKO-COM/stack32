@@ -91,7 +91,11 @@ class ProviderRegistry:
                 continue
             try:
                 tools = await provider.search_tools(query, limit=per_provider)
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                if getattr(exc, "code", None) == "PIPEDREAM_PLAN_REQUIRED" and not scored:
+                    # Do not silently drop an explicitly requested integration.
+                    # Existing native results remain usable when available.
+                    raise
                 logger.exception("provider_search_failed provider=%s", name)
                 continue
             scored.extend(tools)

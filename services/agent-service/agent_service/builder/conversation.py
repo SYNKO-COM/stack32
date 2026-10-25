@@ -94,3 +94,17 @@ def needs_question_routing(text: str) -> bool:
         r"can you|could you|would you|what|which|why|how|explique|decris|resume|"
         r"peux.tu|pourrais.tu|tu peux|est.ce que|quels|quelles|pourquoi|comment|"
         r"je voudrais savoir|j['’]aimerais comprendre)\b", normalise(text).strip()))
+
+
+def status_after_builder_cancel(run: dict, agent: dict) -> str | None:
+    """Stopping a read-only answer must never mark a broken agent as ready."""
+    payload = run.get("input") or {}
+    if payload.get("mode") == "chat":
+        return None
+    previous = payload.get("agent_status_before")
+    if previous in {"draft", "built", "ready", "needs_setup", "needs_attention", "published", "archived"}:
+        return str(previous)
+    current = agent.get("status")
+    if current in {"built", "ready", "needs_setup", "needs_attention", "published", "archived"}:
+        return str(current)
+    return "ready" if agent.get("first_ready_celebrated") else "draft"
