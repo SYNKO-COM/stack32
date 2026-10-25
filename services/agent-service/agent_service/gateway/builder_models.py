@@ -33,8 +33,12 @@ def builder_model_scope(fn):
         token = _current_tier.set(tier)
         try:
             from agent_service.security.llm_budget import llm_run_budget
+            agent_id = kwargs.get("agent_id") or (run or {}).get("agent_id")
+            if not agent_id:
+                # Let the endpoint return its normal owned-run / interrupt error.
+                return await fn(self, *args, **kwargs)
             async with llm_run_budget(
-                run_id=kwargs["run_id"], user_id=kwargs["user_id"], agent_id=kwargs["agent_id"],
+                run_id=kwargs["run_id"], user_id=kwargs["user_id"], agent_id=str(agent_id),
             ):
                 return await fn(self, *args, **kwargs)
         finally:

@@ -239,3 +239,26 @@ async def test_stopped_chat_never_publishes_a_late_completion(make_settings):
     assert result["status"] == "canceled"
     db.insert_assistant_message.assert_not_awaited()
     db.complete_run.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_form_resume_resolves_agent_from_owned_run_without_agent_argument(make_settings):
+    make_settings()
+    from contextlib import asynccontextmanager
+
+    from agent_service.security import llm_budget
+    seen = {}
+    @asynccontextmanager
+    async def budget(**kwargs):
+        seen.update(kwargs)
+        yield
+    class Owner:
+        db = SimpleNamespace(get_owned_run=AsyncMock(return_value={"agent_id": "owned-agent", "input": {}}))
+        @builder_model_scope
+        async def resume_with_identity(self, *, run_id, user_id, name):
+            return {"name": name}
+    with patch.object(llm_budget, "llm_run_budget", budget):
+        result = await Owner().resume_with_identity(run_id="r", user_id="u", name="QA")
+    assert result == {"name": "QA"}
+    assert seen["agent_id"] == "owned-agent"
+    assert seen["user_id"] == "u"
