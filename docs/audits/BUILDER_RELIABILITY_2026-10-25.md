@@ -73,3 +73,5 @@ Les résultats, identifiants des seuls agents de test, mesures et corrections se
 - Build, tests navigateur complets, CI, publication et retest préproduction : à exécuter. Ces tests unitaires ne constituent pas une validation des modèles chez le fournisseur ni des intégrations OAuth réelles.
 
 - Reproduction S02 production : une simple question française demandant le récapitulatif des outils, avec « Ne modifie rien », ouvre le formulaire d’identité au lieu de répondre. Aucun formulaire soumis et aucune nouvelle connexion créée. Régression couverte par le routeur de questions, y compris les interdictions explicites d’éditer.
+
+- Contrôle distant pip-audit bloqué par trois CVE de `filelock 3.32.7`. LiteLLM 1.104+ impose `<4` alors que le correctif publié commence à 4.2.1. Sélection de la dernière version officielle compatible vérifiée, LiteLLM 1.103.0, et contrainte `filelock>=4.2.1,<5` ; aucun contrôle de sécurité désactivé. Tests et audit à rejouer sur cette combinaison.
