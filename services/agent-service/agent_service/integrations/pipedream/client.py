@@ -162,8 +162,13 @@ class PipedreamClient:
                         path,
                         response.status_code,
                     )
+                    error_code = "PIPEDREAM_API_FAILED"
+                    # Keep provider response bodies out of logs/UI. Recognise
+                    # only the actionable plan denial reproduced by QA.
+                    if response.status_code == 400 and "tool calling" in response.text.lower() and "current plan" in response.text.lower():
+                        error_code = "PIPEDREAM_PLAN_REQUIRED"
                     raise PipedreamError(
-                        "PIPEDREAM_API_FAILED",
+                        error_code,
                         f"Pipedream API error ({response.status_code})",
                         status=response.status_code,
                     )

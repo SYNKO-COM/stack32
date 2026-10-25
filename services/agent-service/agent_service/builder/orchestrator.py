@@ -2393,6 +2393,30 @@ class BuilderOrchestrator:
             await self.db.update_agent_status(agent_id, user_id, restore)
             return {"status": "canceled", "run_id": run_id}
         except Exception as exc:  # noqa: BLE001
+            if getattr(exc, "code", None) in {"PIPEDREAM_PLAN_REQUIRED", "INTEGRATION_CATALOG_UNAVAILABLE"}:
+                code = str(exc.code)
+                run_row = await self.db.get_owned_run(run_id, user_id)
+                locale = str(((run_row or {}).get("input") or {}).get("locale") or "en")
+                locale = reply_locale(content, locale)
+                messages = {
+                    "PIPEDREAM_PLAN_REQUIRED": {
+                        "fr": "La construction est arrêtée : le forfait Pipedream actuel ne permet pas les appels d’outils dans l’environnement fournisseur configuré. Une activation du forfait ou un projet de test adapté est nécessaire. Aucune intégration demandée n’a été retirée pour masquer ce blocage.",
+                        "en": "Build stopped: the current Pipedream plan does not allow tool calls in the configured provider environment. An eligible plan or a separate test project is required. Requested integrations have not been silently removed.",
+                    },
+                    "INTEGRATION_CATALOG_UNAVAILABLE": {
+                        "fr": "La construction est arrêtée : une intégration demandée n’a aucune action disponible dans le catalogue. Le projet est conservé ; réessaie lorsque le fournisseur est disponible ou choisis explicitement un autre outil.",
+                        "en": "Build stopped: a requested integration has no available catalog actions. Your project is retained; retry when the provider is available or explicitly choose another tool.",
+                    },
+                }
+                if progress_id:
+                    await self.db.update_assistant_message(
+                        message_id=progress_id, content=messages[code].get(locale, messages[code]["en"]),
+                        metadata={"tone": "error", "card": "build_progress", "completed": True,
+                                  "run_id": run_id, "error_code": code},
+                    )
+                await self.db.fail_run(run_id, code)
+                await self.db.update_agent_status(agent_id, user_id, "needs_attention")
+                return {"error": code, "run_id": run_id}
             failed_steps = [
                 {"labelKey": "understanding", "state": "done"},
                 {"labelKey": "capabilities", "state": "done"},
@@ -3687,6 +3711,18 @@ class BuilderOrchestrator:
             goal = original_goal
         else:
             goal = original_goal if current is not None else content[:4000]
+
+        from agent_service.builder.tool_review import reviewable_app_keys
+        from agent_service.integrations.pipedream.client import PipedreamError
+
+        resolved_apps = reviewable_app_keys(tools)
+        missing_actions = [
+            item for item in ambiguous
+            if item.get("reason") == "no_actions"
+            and str(item.get("app_id") or item.get("app_query") or "") not in resolved_apps
+        ]
+        if missing_actions:
+            raise PipedreamError("INTEGRATION_CATALOG_UNAVAILABLE")
 
         tools = filter_unsolicited_database_tools(
             tools,
