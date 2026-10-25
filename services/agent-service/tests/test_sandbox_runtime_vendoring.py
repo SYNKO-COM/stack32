@@ -156,3 +156,56 @@ def test_the_indexer_skips_the_vendored_runtime():
     assert _is_vendored(f"{root}vendor/stack32_agent_runtime/model.py", root) is True
     assert _is_vendored(f"{root}src/agent/tools.py", root) is False
     assert _is_vendored("vendor/stack32_agent_runtime/model.py", root) is True
+
+
+async def test_a_restored_workspace_receives_runtime_before_verification():
+    """A snapshot omits vendor; repair runs in a new workspace, not the old VM."""
+    from agent_service.builder.build_pipeline import CodeBuildPipeline
+
+    provider, handle = await _workspace()
+    try:
+        blueprint = _blueprint()
+        files = render_agent_project(blueprint)
+        for f in files:
+            await provider.write_file(handle, f["path"], f["content"])
+        report = await CodeBuildPipeline(provider=provider).build_from_workspace(
+            handle=handle, blueprint=blueprint, files=files, user_id="qa", agent_id="qa",
+            run_id="qa", persist=False, scaffolded=False,
+        )
+        assert report.success, report.test_output
+        assert await provider.read_file(handle, "vendor/stack32_agent_runtime/__init__.py")
+    finally:
+        await provider.destroy_workspace(handle)
+
+
+async def test_e2b_repair_bootstrap_uses_only_platform_dependencies():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from agent_service.builder.runtime_vendor import prepare_verification_runtime
+    from agent_service.sandbox.base import CommandResult
+
+    provider = SimpleNamespace(
+        name="e2b", write_file=AsyncMock(),
+        run_command=AsyncMock(side_effect=[CommandResult(1, "", "missing pytest", 1), CommandResult(0, "", "", 1)]),
+    )
+    await prepare_verification_runtime(provider, object())
+    argv = provider.run_command.call_args.args[1]
+    assert argv[:4] == ["python", "-m", "pip", "install"]
+    assert not any("stack32-agent-runtime" in x or ".[dev]" in x for x in argv)
+    assert provider.write_file.await_count > 0
+
+
+async def test_failed_bootstrap_stops_before_spending_model_calls():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    import pytest
+
+    from agent_service.builder.runtime_vendor import prepare_verification_runtime
+    from agent_service.sandbox.base import CommandResult, SandboxError
+
+    provider = SimpleNamespace(name="e2b", write_file=AsyncMock(),
+        run_command=AsyncMock(return_value=CommandResult(1, "", "unavailable", 1)))
+    with pytest.raises(SandboxError, match="Verification dependencies"):
+        await prepare_verification_runtime(provider, object())

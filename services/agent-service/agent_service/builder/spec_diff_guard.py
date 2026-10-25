@@ -43,7 +43,9 @@ def diff_spec_violations(
         violations.append("memory changed")
     if protected.get("triggers") and a["triggers"] != b["triggers"]:
         violations.append("triggers changed")
-    if protected.get("model_policy") and a["model"] != b["model"]:
+    if protected.get("model_policy") and (
+        a["model"] != b["model"] or after.model_policy != before.model_policy
+    ):
         violations.append("model configuration changed")
 
     if protected.get("tool_set") and not contract.explicit_user_tool_change:

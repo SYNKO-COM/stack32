@@ -3888,6 +3888,14 @@ class BuilderOrchestrator:
             connection_requirements=connection_requirements,
             triggers=triggers,
         )
+        if current is not None:
+            from agent_service.builder.instruction_edit import edit_instructions
+
+            edited = await edit_instructions(self.gateway, current, content)
+            spec.instructions = edited.instructions
+            spec.rules = edited.rules
+            spec.model_policy = current.model_policy.model_copy(deep=True)
+            spec.starter_prompts = list(current.starter_prompts)
         return spec, ambiguous
 
     async def _design_agent_blueprint(
@@ -4007,8 +4015,11 @@ class BuilderOrchestrator:
                     data["identity"]["tone"] = tone
         if "rename" in lower or "name" in lower:
             data["identity"]["name"] = identity.name or current.identity.name
-        if "rule" in lower:
-            data["rules"].append({"id": f"rule_{len(data['rules'])+1}", "text": content[:500]})
+        from agent_service.builder.instruction_edit import edit_instructions
+
+        edited = await edit_instructions(self.gateway, current, content)
+        data["instructions"] = edited.instructions.model_dump()
+        data["rules"] = [rule.model_dump() for rule in edited.rules]
         data["identity"] = {**data["identity"], **identity.model_dump()}
         from agent_service.builder.capabilities import (
             apps_user_asked_to_remove,
