@@ -3888,7 +3888,9 @@ class BuilderOrchestrator:
             connection_requirements=connection_requirements,
             triggers=triggers,
         )
-        if current is not None:
+        if current is not None and current.tools:
+            # Identity setup creates a skeleton with no tools; its first mission
+            # still needs full blueprint instructions rather than an edit patch.
             from agent_service.builder.instruction_edit import edit_instructions
 
             edited = await edit_instructions(self.gateway, current, content)

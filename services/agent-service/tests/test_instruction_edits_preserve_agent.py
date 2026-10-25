@@ -111,3 +111,23 @@ def test_repair_guard_preserves_policy_even_when_concrete_model_is_unchanged(ori
         contract=RepairContract(repair_id="qa", user_request="Only output format"),
     )
     assert guarded.model_policy == original.model_policy
+
+
+async def test_identity_skeleton_still_gets_its_first_complete_mission(original):
+    skeleton = original.model_copy(deep=True)
+    skeleton.tools = []
+    skeleton.instructions.system = "Introduce yourself."
+    orchestrator = BuilderOrchestrator.__new__(BuilderOrchestrator)
+    orchestrator.gateway = SimpleNamespace(complete=AsyncMock())
+    orchestrator._design_agent_blueprint = AsyncMock(return_value={
+        "system_extra": "Read only example.com and calculate using calculator.",
+    })
+    orchestrator._select_tools = AsyncMock(return_value=(original.tools, [], []))
+    orchestrator._preserved_model = AsyncMock(return_value=None)
+    updated, _ = await orchestrator._generate_spec(
+        "Create the first mission.", original.identity, TaskComplexity.STANDARD, skeleton,
+        capabilities={"tool_trigger": True, "tool_trigger_component_id": "test", "tool_trigger_app_id": "test"},
+    )
+    assert "Read only example.com" in updated.instructions.system
+    assert "Introduce yourself" not in updated.instructions.system
+    orchestrator.gateway.complete.assert_not_called()
