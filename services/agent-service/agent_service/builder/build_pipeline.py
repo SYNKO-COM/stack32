@@ -247,7 +247,9 @@ class CodeBuildPipeline:
         from agent_service.verifier.repair import RepairLoopController
 
         settings = get_settings()
-        needs_repair = test_status != "passed" or lint_status != "passed"
+        requested_edit_pending = bool(repair_objective and not scaffolded)
+        requested_edit_completed = not requested_edit_pending
+        needs_repair = requested_edit_pending or test_status != "passed" or lint_status != "passed"
         can_repair = repair_model_fn is not None or self.gateway is not None
         repair_controller = RepairLoopController(
             target_iterations=max(5, settings.MAX_REPAIR_ATTEMPTS),
@@ -270,11 +272,12 @@ class CodeBuildPipeline:
                 )
 
                 failure_excerpt0 = summarise_exec_failure(test_result, lint_result)
-                await record_error_observation(
-                    error_code="SANDBOX_TESTS_FAILED" if test_status != "passed" else "SANDBOX_LINT_FAILED",
-                    reason=failure_excerpt0 or f"tests={test_status} lint={lint_status}",
-                    context={"agent_id": agent_id, "project": blueprint.name, "source": "coding_pipeline"},
-                )
+                if test_status != "passed" or lint_status != "passed":
+                    await record_error_observation(
+                        error_code="SANDBOX_TESTS_FAILED" if test_status != "passed" else "SANDBOX_LINT_FAILED",
+                        reason=failure_excerpt0 or f"tests={test_status} lint={lint_status}",
+                        context={"agent_id": agent_id, "project": blueprint.name, "source": "coding_pipeline"},
+                    )
                 lessons = await lessons_for_repair(
                     error_code="SANDBOX_TESTS_FAILED",
                     reason=failure_excerpt0,
@@ -305,10 +308,19 @@ class CodeBuildPipeline:
                 source="coding",
             ):
                 external_expert_calls = 0
-                while test_status != "passed" or lint_status != "passed":
-                    failure_excerpt = summarise_exec_failure(test_result, lint_result)
+                while requested_edit_pending or test_status != "passed" or lint_status != "passed":
+                    # Passing the old tests only verifies the baseline. A MODIFY
+                    # request still needs one coding turn before re-verification.
+                    applying_requested_edit = requested_edit_pending
+                    requested_edit_pending = False
+                    failure_excerpt = (
+                        "The baseline passes verification. Apply the requested change and add relevant regression coverage."
+                        if applying_requested_edit and test_status == "passed" and lint_status == "passed"
+                        else summarise_exec_failure(test_result, lint_result)
+                    )
                     error_code = (
-                        "SANDBOX_TESTS_FAILED" if test_status != "passed" else "SANDBOX_LINT_FAILED"
+                        "REQUESTED_EDIT" if applying_requested_edit and test_status == "passed" and lint_status == "passed"
+                        else "SANDBOX_TESTS_FAILED" if test_status != "passed" else "SANDBOX_LINT_FAILED"
                     )
                     try:
                         fingerprint = failure_fingerprint(
@@ -455,15 +467,22 @@ class CodeBuildPipeline:
                         model_fn=_stage_aware_decide if repair_model_fn is None else _stage_aware_decide,
                     )
                     repaired = repaired or result.success
+                    requested_edit_completed = requested_edit_completed or result.success
                     stop_reason = result.stop_reason
                     if stop_reason in {"MODEL_PROVIDER_UNAVAILABLE", "MODEL_BUDGET_EXCEEDED"}:
                         category_stop = classify_failure(stop_reason)
                         if category_stop == "PROVIDER_TEMPORARY":
                             prior_failures += 1
+                            requested_edit_pending = applying_requested_edit
                             continue
                         break
 
-                    files = await self._read_all(provider, handle, [f["path"] for f in files])
+                    paths = {f["path"] for f in files}
+                    paths.update(
+                        path.removeprefix(handle.root.rstrip("/") + "/")
+                        for path in result.files_touched
+                    )
+                    files = await self._read_all(provider, handle, sorted(paths))
                     test_result = await registry.get("exec.run_tests").run(ctx, {})
                     test_status = "passed" if test_result.get("ok") else "failed"
                     lint_result, lint_status = await _lint_with_autofix(registry, ctx)
@@ -562,7 +581,7 @@ class CodeBuildPipeline:
                 except Exception:  # noqa: BLE001
                     logger.exception("coding_repair_failure_lesson_failed")
 
-        success = test_status == "passed" and lint_status == "passed"
+        success = test_status == "passed" and lint_status == "passed" and requested_edit_completed
         structure = sorted(f["path"] for f in files)
 
         # Classify a terminal failure so callers/readiness can react (repairable vs

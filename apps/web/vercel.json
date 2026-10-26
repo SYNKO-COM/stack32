@@ -25,7 +25,8 @@
       "codex/builder-form-resume-fix": false,
       "codex/builder-model-query-fix": false,
       "codex/builder-question-routing": false,
-      "codex/builder-preserve-instructions": false
+      "codex/builder-preserve-instructions": false,
+      "codex/builder-apply-requested-edits": false
     }
   }
 }

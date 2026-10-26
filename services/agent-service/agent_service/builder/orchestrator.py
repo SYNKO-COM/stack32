@@ -2407,7 +2407,7 @@ class BuilderOrchestrator:
                 if progress_id:
                     await self.db.update_assistant_message(
                         message_id=progress_id, content=messages[code].get(locale, messages[code]["en"]),
-                        metadata={"tone": "error", "card": "build_progress", "completed": True,
+                        metadata={"tone": "error", "completed": True,
                                   "run_id": run_id, "error_code": code},
                     )
                 await self.db.fail_run(run_id, code)
