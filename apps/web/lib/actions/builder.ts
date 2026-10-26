@@ -74,7 +74,7 @@ export async function executeBuilderTurn(input: {
   images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
   mode?: "build" | "chat";
   modelTier?: import("@/lib/ai/builder-models").BuilderModelTier;
-}): Promise<void> {
+}): Promise<void | { runId?: string }> {
   const { userId } = await requireOwnedAgent(input.agentId);
   if (currentAiExecutionMode() === "disabled") {
     await insertDisabledNotice(userId, input.agentId, input.threadId);
@@ -103,7 +103,7 @@ export async function executeBuilderTurn(input: {
     .single();
 
   try {
-    await getAdapter().execute({
+    return await getAdapter().execute({
       userId,
       locale: await currentLocale(),
       agentId: input.agentId,
@@ -599,6 +599,8 @@ export async function cancelBuilderRun(input: {
   agentId: string;
   /** "watchdog" marks an automatic cancel — the server checks it is warranted. */
   reason?: "watchdog";
+  /** Exact run returned by a send that was stopped before its creation. */
+  runId?: string;
 }): Promise<{ status: string; id?: string }> {
   const { userId } = await requireOwnedAgent(input.agentId);
   if (currentAiExecutionMode() !== "agent-service") {
@@ -608,8 +610,11 @@ export async function cancelBuilderRun(input: {
   try {
     const accessToken = await requireAccessToken();
     const query = input.reason ? `?reason=${input.reason}` : "";
+    const path = input.runId
+      ? `/v1/runs/${encodeURIComponent(input.runId)}/cancel`
+      : `/v1/agents/${input.agentId}/builder/cancel${query}`;
     return await agentServiceFetch<{ status: string; id?: string }>(
-      `/v1/agents/${input.agentId}/builder/cancel${query}`,
+      path,
       {
         method: "POST",
         accessToken,
@@ -617,7 +622,7 @@ export async function cancelBuilderRun(input: {
     );
   } catch {
     // Agent service down / unreachable — still clear local run state so Stop resets the UI.
-    return localCancelBuilderRun({ agentId: input.agentId, userId });
+    return localCancelBuilderRun({ agentId: input.agentId, userId, runId: input.runId });
   }
 }
 
@@ -625,9 +630,10 @@ export async function cancelBuilderRun(input: {
 async function localCancelBuilderRun(input: {
   agentId: string;
   userId: string;
+  runId?: string;
 }): Promise<{ status: string; id?: string }> {
   const admin = requireSupabaseAdminClient();
-  const { data: actives } = await admin
+  let activeQuery = admin
     .from("runs")
     .select("id,thread_id,status")
     .eq("agent_id", input.agentId)
@@ -636,15 +642,19 @@ async function localCancelBuilderRun(input: {
     .in("status", ["queued", "running", "waiting_for_input"])
     .order("created_at", { ascending: false })
     .limit(20);
+  if (input.runId) activeQuery = activeQuery.eq("id", input.runId);
+  const { data: actives } = await activeQuery;
 
   const rows = actives ?? [];
   if (rows.length === 0) {
-    await admin
-      .from("agents")
-      .update({ status: "draft" })
-      .eq("id", input.agentId)
-      .eq("user_id", input.userId)
-      .in("status", ["building", "waiting_for_input"]);
+    if (!input.runId) {
+      await admin
+        .from("agents")
+        .update({ status: "draft" })
+        .eq("id", input.agentId)
+        .eq("user_id", input.userId)
+        .in("status", ["building", "waiting_for_input"]);
+    }
     return { status: "idle" };
   }
 
@@ -671,12 +681,14 @@ async function localCancelBuilderRun(input: {
       .in("status", ["pending", "leased"]);
   }
 
-  await admin
-    .from("agents")
-    .update({ status: "draft" })
-    .eq("id", input.agentId)
-    .eq("user_id", input.userId)
-    .in("status", ["building", "waiting_for_input"]);
+  if (!input.runId) {
+    await admin
+      .from("agents")
+      .update({ status: "draft" })
+      .eq("id", input.agentId)
+      .eq("user_id", input.userId)
+      .in("status", ["building", "waiting_for_input"]);
+  }
 
   if (threadId && lastId) {
     await admin.from("builder_messages").insert({

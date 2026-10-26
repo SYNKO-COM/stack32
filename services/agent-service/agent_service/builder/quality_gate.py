@@ -110,7 +110,9 @@ async def self_critique(
                         "You are Stack32 Build Critic. Score whether this agent build is "
                         "safe to show the user as done. Be strict about broken tests, "
                         "missing tools, vague identity, or claims without verification. "
-                        "Return ONLY JSON matching the schema."
+                        "Return ONLY JSON with ok (boolean), score (integer from 0 to 10 inclusive, "
+                        "never a percentage), issues (string[]), suggested_fixes (string[]), "
+                        "next_pattern (done|react|plan_execute|repair), summary (string)."
                     ),
                 },
                 {

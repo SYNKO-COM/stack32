@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,6 @@ import { useUiStore } from "@/store/ui-store";
 
 export function UserMenu() {
   const { t } = useTranslation(["builder", "common"]);
-  const router = useRouter();
   const { data: user } = useCurrentUser();
   const { data: subscription } = useSubscription();
   const { data: creditUsage } = useCreditUsage();
@@ -109,7 +107,11 @@ export function UserMenu() {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {
-              void signOut.mutateAsync().then(() => router.push("/"));
+              void signOut.mutateAsync().then(() => {
+                // Discard prefetched private routes and in-flight server actions
+                // after logout instead of racing their client-side redirects.
+                window.location.assign("/");
+              });
             }}
           >
             {t("common:actions.logout")}

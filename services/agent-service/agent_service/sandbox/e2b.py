@@ -166,12 +166,18 @@ class E2BSandbox:
         # Prefer argv arrays; E2B commands.run accepts a string, so join safely.
         import shlex
 
+        from e2b import CommandExitException
+
         cmd_str = " ".join(shlex.quote(part) for part in command)
         start = time.monotonic()
         try:
             res = await sbx.commands.run(  # type: ignore[attr-defined]
                 cmd_str, cwd=workdir, timeout=timeout
             )
+        except CommandExitException as exc:
+            # A completed command with exit != 0 is a verification result, not
+            # an unavailable sandbox. Preserve its output for bootstrap/repair.
+            res = exc
         except Exception as exc:  # noqa: BLE001
             msg = str(exc).lower()
             if "timeout" in msg or "timed out" in msg:

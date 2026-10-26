@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback, useRef } from "react";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { ComposerAttachment } from "@/components/shared/prompt-composer";
@@ -17,6 +19,8 @@ export type SendBuilderMessageInput = {
   attachments?: ComposerAttachment[];
   mode?: "build" | "chat";
   modelTier?: import("@/lib/ai/builder-models").BuilderModelTier;
+  /** Client-only; never sent through a server action. */
+  signal?: AbortSignal;
 };
 
 function composerToMessageAttachments(
@@ -106,13 +110,15 @@ export function useBuilderThread(agentId: string, opts?: { forcePoll?: boolean }
 
 export function useSendBuilderMessage(agentId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  const pendingSends = useRef(new Set<AbortController>());
+  const mutation = useMutation({
     mutationFn: (input: string | SendBuilderMessageInput) => {
       const content = typeof input === "string" ? input : input.content;
       const attachments = typeof input === "string" ? undefined : input.attachments;
       const mode = typeof input === "string" ? undefined : input.mode;
       return getBuilderRepository().sendMessage(
         agentId, content, attachments, mode, typeof input === "string" ? undefined : input.modelTier,
+        typeof input === "string" ? undefined : input.signal,
       );
     },
     onMutate: async (input) => {
@@ -167,12 +173,33 @@ export function useSendBuilderMessage(agentId: string) {
       void queryClient.invalidateQueries({ queryKey: ["agents", agentId] });
     },
   });
+  const { mutateAsync: runMutation } = mutation;
+  const mutateAsync = useCallback(async (input: string | SendBuilderMessageInput) => {
+    const controller = new AbortController();
+    pendingSends.current.add(controller);
+    try {
+      await runMutation({
+        ...(typeof input === "string" ? { content: input } : input),
+        signal: controller.signal,
+      });
+    } finally {
+      pendingSends.current.delete(controller);
+    }
+  }, [runMutation]);
+  const cancelPending = useCallback(() => {
+    for (const controller of pendingSends.current) controller.abort();
+  }, []);
+  return { ...mutation, mutateAsync, cancelPending };
 }
 
 export function useCancelBuilderRun(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (reason?: "watchdog") => cancelBuilderRun({ agentId, reason }),
+    mutationFn: (target?: "watchdog" | { runId: string }) => cancelBuilderRun({
+      agentId,
+      reason: typeof target === "string" ? target : undefined,
+      runId: typeof target === "object" ? target.runId : undefined,
+    }),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ["builder", agentId] });
       await queryClient.cancelQueries({ queryKey: ["active-build-run", agentId] });

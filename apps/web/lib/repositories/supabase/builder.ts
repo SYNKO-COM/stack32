@@ -1,6 +1,6 @@
 import type { ComposerAttachment } from "@/components/shared/prompt-composer";
 import type { BuilderThread } from "@/lib/domain/types";
-import { executeBuilderRepair, executeBuilderTurn } from "@/lib/actions/builder";
+import { cancelBuilderRun, executeBuilderRepair, executeBuilderTurn } from "@/lib/actions/builder";
 import { prepareChatAttachments, signMessageAttachments } from "@/lib/chat/prepare-attachments";
 import { mapBuilderMessage } from "@/lib/domain/mappers";
 import { requireSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -70,7 +70,9 @@ export class SupabaseBuilderRepository implements BuilderRepository {
     attachments: ComposerAttachment[] = [],
     mode: "build" | "chat" = "build",
     modelTier?: import("@/lib/ai/builder-models").BuilderModelTier,
+    signal?: AbortSignal,
   ): Promise<void> {
+    if (signal?.aborted) return;
     const supabase = requireSupabaseBrowserClient();
     const threadId = await this.getOrCreateThreadId(agentId);
     const {
@@ -85,6 +87,7 @@ export class SupabaseBuilderRepository implements BuilderRepository {
       throw new AgentServiceError("BUDGET_EXCEEDED", "Monthly AI budget exceeded.", 402);
     }
 
+    if (signal?.aborted) return;
     const messageId = crypto.randomUUID();
     const text = content.trim();
     const prepared =
@@ -129,7 +132,8 @@ export class SupabaseBuilderRepository implements BuilderRepository {
         ? "Please analyze the attached image(s) and help me build from them."
         : displayContent.trim() || "Hello");
 
-    await executeBuilderTurn({
+    if (signal?.aborted) return;
+    const result = await executeBuilderTurn({
       agentId,
       threadId,
       prompt: promptForModel,
@@ -137,6 +141,11 @@ export class SupabaseBuilderRepository implements BuilderRepository {
       mode,
       modelTier,
     });
+    // Stop can beat run creation. Cancel again once its exact id is known;
+    // a later turn must never be canceled by this earlier request.
+    if (signal?.aborted && result?.runId) {
+      await cancelBuilderRun({ agentId, runId: result.runId });
+    }
   }
 
   async repairAgent(agentId: string): Promise<void> {

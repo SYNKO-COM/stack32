@@ -39,7 +39,7 @@ export interface LiveExecutionInput {
 }
 
 export interface BuilderExecutionAdapter {
-  execute(input: BuilderExecutionInput): Promise<void>;
+  execute(input: BuilderExecutionInput): Promise<void | { runId?: string }>;
   repair(input: Omit<BuilderExecutionInput, "prompt">): Promise<void>;
 }
 
@@ -58,9 +58,9 @@ export class NotImplementedError extends Error {
 
 /** Calls the Agent Service builder endpoints; persistence is handled server-side. */
 export class RealBuilderExecutionAdapter implements BuilderExecutionAdapter {
-  async execute({ agentId, threadId, prompt, locale, images, mode, modelTier }: BuilderExecutionInput): Promise<void> {
+  async execute({ agentId, threadId, prompt, locale, images, mode, modelTier }: BuilderExecutionInput): Promise<{ runId?: string }> {
     const accessToken = await requireAccessToken();
-    await agentServiceFetch(`/v1/agents/${agentId}/builder/messages`, {
+    const result = await agentServiceFetch<{ run_id?: string }>(`/v1/agents/${agentId}/builder/messages`, {
       method: "POST",
       accessToken,
       body: {
@@ -76,6 +76,7 @@ export class RealBuilderExecutionAdapter implements BuilderExecutionAdapter {
         })),
       },
     });
+    return { runId: result.run_id };
   }
 
   async repair({ agentId, locale }: Omit<BuilderExecutionInput, "prompt">): Promise<void> {
