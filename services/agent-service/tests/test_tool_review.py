@@ -320,3 +320,23 @@ def test_live_repair_skips_tool_review_when_tools_unchanged():
         )
         is False
     )
+
+
+@pytest.mark.parametrize("prompt", [
+    "Conserve toutes les instructions, les six règles, les outils et tous les paramètres existants.",
+    "Ajoute un test du format JSON. Ne change ni identité, ni outils, ni modèle.",
+    "Add a regression test and keep all tools unchanged.",
+    "Don't change any tools; repair the output format.",
+    "Sans changer les outils, corrige les tests.",
+    "Conserve Gmail et ajoute un test de calcul.",
+])
+def test_preserving_tools_or_adding_tests_does_not_request_catalog_discovery(prompt):
+    assert not prompt_implies_tool_change(prompt)
+
+
+@pytest.mark.parametrize("prompt", [
+    "Ajoute un outil Gmail", "Supprime Gmail de cet agent", "Connecte ServiceExotique",
+    "Conserve les outils existants et ajoute Notion", "Replace Gmail with Outlook",
+])
+def test_explicit_tool_changes_still_use_the_tool_review_path(prompt):
+    assert prompt_implies_tool_change(prompt)

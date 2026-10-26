@@ -2491,7 +2491,10 @@ class BuilderOrchestrator:
             from agent_service.builder.tool_review import prompt_implies_tool_change
 
             tool_change_request = prompt_implies_tool_change(content)
-            if complexity == TaskComplexity.FAST and current_spec is not None and not tool_change_request:
+            reuse_existing = current_spec is not None and not tool_change_request and (
+                complexity == TaskComplexity.FAST or intent in (BuilderIntent.REPAIR, BuilderIntent.MODIFY)
+            )
+            if reuse_existing:
                 await self.db.emit_event(
                     run_id, "builder.plan.created", {"mapping_key": "builder.progress.architecture"}
                 )

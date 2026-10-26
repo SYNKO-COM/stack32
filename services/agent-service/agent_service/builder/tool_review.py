@@ -133,40 +133,42 @@ def prompt_implies_tool_change(prompt: str) -> bool:
     text = (prompt or "").strip().lower()
     if not text:
         return False
-    # Narrow markers: explicit tool/integration intent — NOT domain words like
-    # "facture" / "sheets" that appear in ordinary repair prompts.
-    markers = (
-        "outil",
-        "outils",
-        "tool",
-        "tools",
-        "integration",
-        "intégration",
-        "integrer",
-        "intégrer",
-        "brancher",
-        "connecter",
-        "connect ",
-        "ajoute",
-        "ajouter",
-        "add ",
-        "remove",
-        "retire",
-        "supprime",
-        "enlève",
-        "enleve",
-        "pas mis d'outil",
-        "pas d'outil",
-        "manque un outil",
-        "manque d'outil",
-        "manque d'outils",
-    )
-    if any(m in text for m in markers):
+    if re.search(r"pas\s+mis\s+d['’]outils?|manque\s+(?:un\s+outil|d['’]outils?)|missing\s+tools?", text):
         return True
-    # Explicit "ajoute/retire <app>" style via catalog query extractor.
+
     from agent_service.builder.capabilities import extract_external_app_queries
 
-    return bool(extract_external_app_queries(text))
+    actions = re.compile(
+        r"\b(?:r?ajout(?:e|er|ez)?|add|remove|retir(?:e|er|ez)|supprim(?:e|er|ez)|delete|"
+        r"enl[eè]v(?:e|er|ez)|connect(?:e|er|ez)?|branch(?:e|er|ez)|int[eéè]gr(?:e|er|ez)|"
+        r"remplac(?:e|er|ez)|replace|chang(?:e|er|ez|ing)|use|utilis(?:e|er|ez))\b"
+    )
+    non_tool_objects = re.compile(
+        r"^(?:tests?|regression|r[eé]gression|assertion|validation|format|code|prompt|instructions?|"
+        r"r[eè]gles?|rules?|ton|tone|mod[eè]le|models?|m[eé]moire|memory|description|nom|name|titre|title|"
+        r"expression|r[eé]sultat|result|champ|field|condition|filtre|filter|retry|message|r[eé]ponse|response|"
+        r"output|sortie|sc[eé]nario|scenario|section|paragraphe|paragraph|texte|text|bouton|button|"
+        r"sch[eé]ma|schema|animation|guardrails?|garde[- ]fou)\b"
+    )
+    for clause in re.split(r"[.;!?\n]", text):
+        for action in actions.finditer(clause):
+            prefix = clause[:action.start()]
+            tail = clause[action.end():].strip()
+            if re.search(r"(?:\bne|n['’]|don['’]t|do not|not|never|sans|without)\s*$", prefix):
+                continue
+            if re.match(r"(?:pas|jamais|not|never)\b", tail):
+                continue
+            target = re.split(r"\b(?:et|and|mais|but)\b", tail, maxsplit=1)[0].strip()
+            target = re.sub(r"^(?:(?:un|une|des|le|la|les|the|a|an|new|nouvel|nouveau)\s+)+", "", target)
+            target = re.sub(r"^l['’]", "", target)
+            if not target or non_tool_objects.match(target):
+                continue
+            if re.search(r"\b(?:outils?|tools?|int[eé]grations?)\b", target) or extract_external_app_queries(target):
+                return True
+            # Explicit connection/add/remove of an unknown app remains supported.
+            if not action.group().startswith(("chang", "use", "utilis")):
+                return True
+    return False
 
 
 def should_interrupt_tool_review(
