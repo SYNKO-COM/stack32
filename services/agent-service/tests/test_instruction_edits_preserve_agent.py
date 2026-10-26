@@ -171,3 +171,18 @@ async def test_explicit_new_tool_still_reaches_catalog_and_confirmation(original
     assert result == {"status": "interrupted"}
     orchestrator._fast_patch.assert_not_awaited()
     orchestrator._maybe_interrupt_for_provider_clarification.assert_awaited_once()
+
+
+async def test_code_repair_never_appends_platform_history_to_runtime_mission(original, monkeypatch):
+    import agent_service.learning as learning
+
+    lessons = AsyncMock(return_value=[{"lesson": "platform-only sentinel"}])
+    monkeypatch.setattr(learning, "lessons_for_repair", lessons)
+    monkeypatch.setattr(learning, "format_lessons_for_prompt", lambda *a, **kw: "Past Stack32 repairs: platform-only sentinel")
+    orchestrator = BuilderOrchestrator.__new__(BuilderOrchestrator)
+    orchestrator._validate = lambda spec: {"ok": True}
+    repaired = await orchestrator._repair(original, {"status": "failed", "reason": "test assertion failed"})
+    assert repaired.instructions == original.instructions
+    assert repaired.rules == original.rules
+    assert repaired.tools == original.tools
+    lessons.assert_not_awaited()

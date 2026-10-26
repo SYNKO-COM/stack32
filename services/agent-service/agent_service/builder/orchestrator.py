@@ -4003,7 +4003,9 @@ class BuilderOrchestrator:
                             "named and do not invent near-homophones.\n"
                             "Always include every third-party app the user mentioned; "
                             "the builder resolves tools via Pipedream Connect (3000+ apps). "
-                            "Keep tool_hints short (max 8)."
+                            "Keep tool_hints short (max 8). "
+                            "Platform lessons guide the builder only: never copy repair history, errors, "
+                            "logs or platform implementation details into system_extra, extra_rules or starter_prompts."
                             + (
                                 "\nApply these platform lessons when relevant:\n" + lesson_block
                                 if lesson_block
@@ -4492,7 +4494,6 @@ class BuilderOrchestrator:
         return spec, test_report
 
     async def _repair(self, spec: AgentSpec, test_report: dict[str, Any]) -> AgentSpec:
-        from agent_service.learning import format_lessons_for_prompt
         from agent_service.models.failure_report import AgentFailureReport, SuggestedPatch
 
         try:
@@ -4500,62 +4501,12 @@ class BuilderOrchestrator:
         except Exception:  # noqa: BLE001
             report = AgentFailureReport(status="failed", reason=str(test_report.get("reason") or ""))
 
-        # Enrich repair with platform lessons from past fixed errors.
-        from agent_service.learning import lessons_for_repair
-
-        lessons = await lessons_for_repair(
-            error_code=report.error_code,
-            reason=report.reason,
-            limit=5,
-        )
-        lesson_block = format_lessons_for_prompt(lessons)
-        try:
-            from agent_service.integrations.pipedream.knowledge import (
-                builder_guidance_block,
-                load_connect_knowledge_markdown,
-            )
-            from agent_service.learning.playbooks import (
-                format_playbooks_for_prompt,
-                playbooks_for_tool,
-            )
-
-            pd_repair = builder_guidance_block(tool_ids=[t.tool_id for t in spec.tools])
-            for t in spec.tools[:6]:
-                pbs = await playbooks_for_tool(tool_id=t.tool_id, limit=3)
-                pb_block = format_playbooks_for_prompt(pbs)
-                if pb_block:
-                    pd_repair = (pd_repair + "\n" + pb_block).strip()
-                    break
-            # Keep repair prompts short — only hard rules from knowledge, not full doc.
-            if report.error_code in {"PIPEDREAM_ACTION_FAILED", "LIVE_TOOL_MISCONFIGURED"}:
-                kd = load_connect_knowledge_markdown()
-                hard = "\n".join(
-                    line for line in kd.splitlines() if line.startswith(("1.", "2.", "3.", "4.", "5.", "|"))
-                )[:900]
-                if hard:
-                    pd_repair = (pd_repair + "\n" + hard).strip()
-            if pd_repair:
-                lesson_block = (lesson_block + "\n\n" + pd_repair).strip()[:2800]
-        except Exception:  # noqa: BLE001
-            logger.debug("pipedream_repair_knowledge_failed", exc_info=True)
-
+        # Platform lessons already guide the builder/coding context. They must
+        # never become runtime mission text in an end user's agent.
         data = spec.model_dump()
         patches = report.suggested_patches or [
             SuggestedPatch(kind="reset_linear_graph", reason="fallback"),
-            SuggestedPatch(
-                kind="append_system_instruction",
-                text="Follow safety policies. Prefer concise accurate answers.",
-                reason="fallback",
-            ),
         ]
-        if lesson_block:
-            patches.append(
-                SuggestedPatch(
-                    kind="append_system_instruction",
-                    text=lesson_block,
-                    reason="Apply proven repairs from prior Stack32 failures",
-                )
-            )
         for patch in patches:
             if patch.kind == "reset_linear_graph":
                 data["graph"] = default_linear_graph(
