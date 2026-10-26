@@ -100,6 +100,7 @@ export interface BuilderRepository {
     attachments?: ComposerAttachment[],
     mode?: "build" | "chat",
     modelTier?: import("@/lib/ai/builder-models").BuilderModelTier,
+    signal?: AbortSignal,
   ): Promise<void>;
   /** "Fix automatically" action — mock repair until the real Builder Agent. */
   repairAgent(agentId: string): Promise<void>;

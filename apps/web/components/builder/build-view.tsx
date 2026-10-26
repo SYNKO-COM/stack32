@@ -1161,6 +1161,7 @@ export function BuildView({ agentId }: { agentId: string }) {
   };
 
   const handleStop = () => {
+    sendMessage.cancelPending();
     const runToStop = activeRunId;
     if (runToStop) {
       setStoppedRunIds((prev) => {
@@ -1176,9 +1177,13 @@ export function BuildView({ agentId }: { agentId: string }) {
     setPendingToken(null);
     setAwaitingReply(false);
     // No reason: the user pressed Stop, and that is always honoured.
-    void cancelRun.mutateAsync(undefined).catch(() => {
-      /* local fallback already handled in cancelBuilderRun */
-    });
+    // An early send may not have created a run yet. Its abort signal handles
+    // that race; an agent-wide delayed cancel could otherwise stop a new turn.
+    if (runToStop || !sendMessage.isPending) {
+      void cancelRun.mutateAsync(runToStop ? { runId: runToStop } : undefined).catch(() => {
+        /* local fallback already handled in cancelBuilderRun */
+      });
+    }
   };
 
   const handleSend = async (
