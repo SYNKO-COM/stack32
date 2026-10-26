@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from agent_service.builder.coding import (
     CodingAgent,
     LoopDetector,
@@ -73,7 +75,8 @@ async def test_apply_patch_exact_match():
         await provider.destroy_workspace(handle)
 
 
-async def test_full_coding_loop_write_fail_repair_pass():
+@pytest.mark.parametrize("wire_aliases", [False, True])
+async def test_full_coding_loop_write_fail_repair_pass(wire_aliases):
     """End-to-end M-C: inspect -> run tests (fail) -> repair -> run tests (pass)."""
     provider = LocalSandbox()
     handle = await provider.create_workspace(SandboxConfig(command_timeout_seconds=30))
@@ -94,8 +97,13 @@ async def test_full_coding_loop_write_fail_repair_pass():
             ModelDecision("", [{"call_id": "3", "tool_id": "workspace.apply_patch",
                                  "arguments": {"path": "calc.py", "old_string": "return a - b  # bug", "new_string": "return a + b"}}]),
             ModelDecision("", [{"call_id": "4", "tool_id": "exec.run_tests", "arguments": {}}]),
+            ModelDecision("", [{"call_id": "5", "tool_id": "exec.run_lint", "arguments": {}}]),
             ModelDecision("Fixed the add function; all tests pass.", []),
         ]
+        if wire_aliases:
+            for decision in script:
+                for call in decision.tool_calls:
+                    call["tool_id"] = call["tool_id"].replace(".", "__")
         calls = {"i": 0}
 
         async def model_fn(messages, tools):
@@ -110,6 +118,8 @@ async def test_full_coding_loop_write_fail_repair_pass():
         assert result.stop_reason == "COMPLETED"
         assert "calc.py" in result.files_touched
         assert result.ledger.verification["tests"] == "passed"
+        assert result.ledger.verification["lint"] == "passed"
+        assert "builder.file.patch.completed" in events
         assert "builder.tests.failed" in events
         assert "builder.tests.passed" in events
         # Verify the real file was actually repaired.
