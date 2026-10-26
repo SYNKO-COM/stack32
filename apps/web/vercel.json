@@ -27,7 +27,8 @@
       "codex/builder-question-routing": false,
       "codex/builder-preserve-instructions": false,
       "codex/builder-apply-requested-edits": false,
-      "codex/e2b-command-exit-results": false
+      "codex/e2b-command-exit-results": false,
+      "codex/coding-tool-alias-ledger": false
     }
   }
 }

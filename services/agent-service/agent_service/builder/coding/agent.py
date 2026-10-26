@@ -417,6 +417,10 @@ class CodingAgent:
         tool = self.registry.get(tool_id)
         if tool is None:
             return {"error": "TOOL_NOT_ALLOWED", "tool": tool_id}
+        # Provider-safe wire aliases resolve to the same operation. Bookkeeping
+        # must use the registry id too, or successful exec__run_tests never marks
+        # verification as passed and the model loops until its budget expires.
+        tool_id = tool.id
         # Basic schema validation: required properties present.
         required = tool.input_schema.get("required", [])
         missing = [k for k in required if k not in args]

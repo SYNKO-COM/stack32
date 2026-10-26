@@ -11,7 +11,7 @@ from agent_service.builder.instruction_edit import (
     apply_instruction_patch,
     edit_instructions,
 )
-from agent_service.builder.orchestrator import BuilderOrchestrator
+from agent_service.builder.orchestrator import BuilderIntent, BuilderOrchestrator
 from agent_service.builder.repair_contract import RepairContract
 from agent_service.builder.spec_diff_guard import clamp_spec_to_repair_contract
 from agent_service.gateway.router import TaskComplexity
@@ -131,3 +131,58 @@ async def test_identity_skeleton_still_gets_its_first_complete_mission(original)
     assert "Read only example.com" in updated.instructions.system
     assert "Introduce yourself" not in updated.instructions.system
     orchestrator.gateway.complete.assert_not_called()
+
+
+async def test_standard_repair_of_existing_tools_never_queries_external_catalog(original):
+    class ReusedCurrentSpec(Exception):
+        pass
+
+    orchestrator = BuilderOrchestrator.__new__(BuilderOrchestrator)
+    orchestrator.db = SimpleNamespace(
+        get_owned_agent=AsyncMock(return_value={"status": "needs_attention"}), emit_event=AsyncMock(),
+    )
+    orchestrator._fast_patch = AsyncMock(side_effect=ReusedCurrentSpec())
+    orchestrator._generate_spec = AsyncMock()
+    orchestrator._maybe_interrupt_for_provider_clarification = AsyncMock()
+    with pytest.raises(ReusedCurrentSpec):
+        await orchestrator._continue_build_steps(
+            run_id="run", user_id="owner", agent_id="qa", thread_id="thread",
+            content="Vérifie et répare le projet. Ajoute un test. Conserve les outils et les paramètres.",
+            identity=original.identity, complexity=TaskComplexity.STANDARD,
+            current_spec=original, capabilities=None, progress_id=None, board={}, tick=AsyncMock(),
+            builder_intent=BuilderIntent.REPAIR,
+        )
+    orchestrator._fast_patch.assert_awaited_once_with(original, "Vérifie et répare le projet. Ajoute un test. Conserve les outils et les paramètres.", original.identity)
+    orchestrator._generate_spec.assert_not_awaited()
+    orchestrator._maybe_interrupt_for_provider_clarification.assert_not_awaited()
+
+
+async def test_explicit_new_tool_still_reaches_catalog_and_confirmation(original):
+    orchestrator = BuilderOrchestrator.__new__(BuilderOrchestrator)
+    orchestrator.db = SimpleNamespace(get_owned_agent=AsyncMock(return_value={"status": "built"}))
+    orchestrator._fast_patch = AsyncMock()
+    orchestrator._maybe_interrupt_for_provider_clarification = AsyncMock(return_value={"status": "interrupted"})
+    result = await orchestrator._continue_build_steps(
+        run_id="run", user_id="owner", agent_id="qa", thread_id="thread",
+        content="Ajoute Google Sheets pour ma comptabilité", identity=original.identity,
+        complexity=TaskComplexity.STANDARD, current_spec=original, capabilities=None,
+        progress_id=None, board={}, tick=AsyncMock(), builder_intent=BuilderIntent.MODIFY,
+    )
+    assert result == {"status": "interrupted"}
+    orchestrator._fast_patch.assert_not_awaited()
+    orchestrator._maybe_interrupt_for_provider_clarification.assert_awaited_once()
+
+
+async def test_code_repair_never_appends_platform_history_to_runtime_mission(original, monkeypatch):
+    import agent_service.learning as learning
+
+    lessons = AsyncMock(return_value=[{"lesson": "platform-only sentinel"}])
+    monkeypatch.setattr(learning, "lessons_for_repair", lessons)
+    monkeypatch.setattr(learning, "format_lessons_for_prompt", lambda *a, **kw: "Past Stack32 repairs: platform-only sentinel")
+    orchestrator = BuilderOrchestrator.__new__(BuilderOrchestrator)
+    orchestrator._validate = lambda spec: {"ok": True}
+    repaired = await orchestrator._repair(original, {"status": "failed", "reason": "test assertion failed"})
+    assert repaired.instructions == original.instructions
+    assert repaired.rules == original.rules
+    assert repaired.tools == original.tools
+    lessons.assert_not_awaited()
