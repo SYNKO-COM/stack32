@@ -146,3 +146,96 @@ async def test_loop_terminates_on_repeated_call():
         assert "LOOP" in result.stop_reason
     finally:
         await provider.destroy_workspace(handle)
+
+
+async def test_verification_can_repeat_after_each_edit_of_the_same_file():
+    """Fresh checks after real progress must not look like a model loop."""
+    provider = LocalSandbox()
+    handle = await provider.create_workspace(SandboxConfig(command_timeout_seconds=30))
+    try:
+        await provider.write_file(handle, 'value.py', 'def value():\n    return 0\n')
+        await provider.write_file(handle, 'test_value.py', 'from value import value\n\n\ndef test_value():\n    assert value() >= 0\n')
+        script = []
+        for n in range(4):
+            script.extend([
+                ModelDecision('', [{'tool_id': 'workspace__apply_patch', 'arguments': {
+                    'path': 'value.py', 'old_string': f'return {n}', 'new_string': f'return {n + 1}',
+                }}]),
+                ModelDecision('', [{'tool_id': 'exec__run_tests', 'arguments': {}}]),
+                ModelDecision('', [{'tool_id': 'exec__run_lint', 'arguments': {}}]),
+            ])
+        script.append(ModelDecision('Four edits verified.', []))
+
+        async def model_fn(messages, tools):
+            return script.pop(0)
+
+        agent = CodingAgent(provider=provider, handle=handle, engine=ContextEngine(provider, handle), max_turns=18)
+        result = await agent.run('Iterate with verification', system_prompt='test', model_fn=model_fn)
+        assert result.success, result.stop_reason
+        assert result.ledger.workspace_revision == 4
+        assert result.files_touched == ['value.py']
+        assert result.ledger.verification == {'tests': 'passed', 'lint': 'passed'}
+        assert 'return 4' in await provider.read_file(handle, 'value.py')
+    finally:
+        await provider.destroy_workspace(handle)
+
+
+@pytest.mark.parametrize('rerun_tests_only', [False, True])
+async def test_completion_rejects_checks_from_before_a_second_edit(rerun_tests_only):
+    provider = LocalSandbox()
+    handle = await provider.create_workspace(SandboxConfig(command_timeout_seconds=30))
+    try:
+        await provider.write_file(handle, 'value.py', 'def value():\n    return 0\n')
+        await provider.write_file(handle, 'test_value.py', 'from value import value\n\n\ndef test_value():\n    assert value() >= 0\n')
+        script = [
+            ModelDecision('', [{'tool_id': 'workspace.apply_patch', 'arguments': {
+                'path': 'value.py', 'old_string': 'return 0', 'new_string': 'return 1',
+            }}]),
+            ModelDecision('', [{'tool_id': 'exec.run_tests', 'arguments': {}}]),
+            ModelDecision('', [{'tool_id': 'exec.run_lint', 'arguments': {}}]),
+            ModelDecision('', [{'tool_id': 'workspace.apply_patch', 'arguments': {
+                'path': 'value.py', 'old_string': 'return 1', 'new_string': 'return 2',
+            }}]),
+        ]
+        if rerun_tests_only:
+            script.append(ModelDecision('', [{'tool_id': 'exec.run_tests', 'arguments': {}}]))
+        observed_messages = []
+
+        async def model_fn(messages, tools):
+            observed_messages[:] = messages
+            return script.pop(0) if script else ModelDecision('Done without checking again.', [])
+
+        agent = CodingAgent(provider=provider, handle=handle, engine=ContextEngine(provider, handle), max_turns=7)
+        result = await agent.run('Require fresh validation', system_prompt='test', model_fn=model_fn)
+        assert not result.success
+        assert result.ledger.workspace_revision == 2
+        assert result.ledger.verification['lint'] == 'pending'
+        assert result.ledger.verification['tests'] == ('passed' if rerun_tests_only else 'pending')
+        reminder = 'Lint has not passed' if rerun_tests_only else 'Verification has NOT_RUN'
+        assert any(reminder in message.get('content', '') for message in observed_messages)
+    finally:
+        await provider.destroy_workspace(handle)
+
+
+async def test_rejected_patch_does_not_invalidate_or_reset_progress():
+    provider = LocalSandbox()
+    handle = await provider.create_workspace(SandboxConfig())
+    try:
+        await provider.write_file(handle, 'value.py', 'x = 1\n')
+        engine = ContextEngine(provider, handle)
+        await engine.build()
+        ctx = ToolContext(provider, handle, engine)
+        ledger = WorkLedger(verification={'tests': 'passed', 'lint': 'passed'})
+        detector = LoopDetector()
+        agent = CodingAgent(provider=provider, handle=handle, engine=engine)
+        for _ in range(3):
+            result = await agent._execute(ctx, ledger, detector, 'workspace.apply_patch', {
+                'path': 'value.py', 'old_string': 'missing', 'new_string': 'x = 2',
+            })
+            assert result['ok'] is False
+        assert ledger.workspace_revision == 0
+        assert ledger.files_touched == []
+        assert ledger.verification == {'tests': 'passed', 'lint': 'passed'}
+        assert detector.reason() == 'LOOP_DETECTED_REPEATED_CALL'
+    finally:
+        await provider.destroy_workspace(handle)

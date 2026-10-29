@@ -100,6 +100,7 @@ class BuildReport:
     snapshot: dict[str, Any] | None = None
     repaired: bool = False
     stop_reason: str = "COMPLETED"
+    changed_files: list[str] = field(default_factory=list)
     failure_category: str | None = None
     events: list[str] = field(default_factory=list)
 
@@ -227,6 +228,7 @@ class CodeBuildPipeline:
         lint_result, lint_status = await _lint_with_autofix(registry, ctx)
 
         repaired = False
+        changed_files: set[str] = set()
         stop_reason = "COMPLETED"
         # Capture the quality policy before the agent can touch it. A repair that
         # disables ruff rules, deletes a failing test or marks it skipped turns
@@ -466,6 +468,7 @@ class CodeBuildPipeline:
                         system_prompt=system_prompt,
                         model_fn=_stage_aware_decide if repair_model_fn is None else _stage_aware_decide,
                     )
+                    changed_files.update(result.files_touched)
                     repaired = repaired or result.success
                     requested_edit_completed = requested_edit_completed or result.success
                     stop_reason = result.stop_reason
@@ -510,6 +513,10 @@ class CodeBuildPipeline:
                             test_status = "failed"
                             stop_reason = "REPAIR_WEAKENED_GATES"
                             repaired = False
+                            break
+                        if applying_requested_edit and not result.success:
+                            # Green baseline tests do not prove the requested
+                            # edit completed; retain the actual coding stop.
                             break
                         stop_reason = "COMPLETED"
                         try:
@@ -628,6 +635,7 @@ class CodeBuildPipeline:
             test_status=test_status, lint_status=lint_status,
             test_output=str(test_result.get("stdout", ""))[:4000],
             snapshot=snapshot, repaired=repaired, stop_reason=stop_reason,
+            changed_files=sorted(changed_files),
             failure_category=failure_category, events=events,
         )
 

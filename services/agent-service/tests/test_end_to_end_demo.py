@@ -74,7 +74,7 @@ async def test_full_end_to_end_demo(capsys):
         tools=[BUGGY_ADD],
     )
 
-    # Scripted repair: read -> tests (fail) -> patch the bug -> tests (pass) -> done.
+    # Scripted repair: read -> tests (fail) -> patch the bug -> tests (pass) -> lint (pass) -> done.
     repair_script = [
         ModelDecision("", [{"call_id": "1", "tool_id": "workspace.read_file", "arguments": {"path": "src/agent/tools.py"}}]),
         ModelDecision("", [{"call_id": "2", "tool_id": "exec.run_tests", "arguments": {}}]),
@@ -84,7 +84,8 @@ async def test_full_end_to_end_demo(capsys):
             "new_string": "args['a'] + args['b']",
         }}]),
         ModelDecision("", [{"call_id": "4", "tool_id": "exec.run_tests", "arguments": {}}]),
-        ModelDecision("Repaired add_numbers; tests pass.", []),
+        ModelDecision("", [{"call_id": "5", "tool_id": "exec.run_lint", "arguments": {}}]),
+        ModelDecision("Repaired add_numbers; tests and lint pass.", []),
     ]
     idx = {"i": 0}
 
@@ -99,7 +100,8 @@ async def test_full_end_to_end_demo(capsys):
 
     # --- assertions covering every demo stage ---
     assert report.repaired, f"expected a repair; stop={report.stop_reason}"
-    assert report.success and report.test_status == "passed"
+    assert report.success and report.test_status == report.lint_status == "passed"
+    assert "src/agent/tools.py" in report.changed_files
     assert "builder.tests.failed" in report.events  # a real failure occurred
     assert "builder.tests.passed" in report.events  # ...and was repaired
     assert "src/agent/orchestrator.py" in report.structure  # real executable structure

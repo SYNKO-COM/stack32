@@ -28,7 +28,8 @@
       "codex/builder-preserve-instructions": false,
       "codex/builder-apply-requested-edits": false,
       "codex/e2b-command-exit-results": false,
-      "codex/coding-tool-alias-ledger": false
+      "codex/coding-tool-alias-ledger": false,
+      "codex/coding-verification-revisions": false
     }
   }
 }
