@@ -151,7 +151,8 @@ async def test_summary_is_grounded_in_persisted_evidence_not_prompt(make_setting
     answer = await orch._compose_builder_reply(
         user_prompt="Crée Gmail CRM Calendar", identity=AgentIdentity(name="Compteur", role="Count text"),
         status="needs_attention", first_ready=False, file_paths=["tools.json"],
-        test_report={"status": "passed"}, build_ok=False, detected_problems=["Sandbox unavailable"],
+        test_report={"status": "passed"}, build_ok=False, detected_problems=["Coding stopped"],
+        code_verification={"tests": "passed", "lint": "passed", "coding_stop": "LOOP_DETECTED_REPEATED_CALL", "snapshot_saved": False},
         changes={"enabled_tools": ["calculator"], "changed_sections": ["instructions"]}, locale="fr",
     )
     assert answer == "La validation reste incomplète."
@@ -159,6 +160,9 @@ async def test_summary_is_grounded_in_persisted_evidence_not_prompt(make_setting
     assert "connected tools (email" not in str(messages)
     assert '"enabled_tools": ["calculator"]' in messages[1]["content"]
     assert '"sandbox_build_ok": false' in messages[1]["content"]
+    assert '"lint": "passed"' in messages[1]["content"]
+    assert '"snapshot_saved": false' in messages[1]["content"]
+    assert 'code_verification for code edits, tests and lint' in messages[0]['content']
 
 
 def test_spec_changes_preserve_tools_and_show_actual_sections():

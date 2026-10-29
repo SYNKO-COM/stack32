@@ -36,6 +36,12 @@ class LoopDetector:
         fp = fingerprint(tool_name, arguments)
         return self._counts.get(fp, 0) >= self.max_identical
 
+    def observe_progress(self) -> None:
+        """Repeated reads/checks are meaningful again after a workspace write."""
+        self._counts.clear()
+        self._last_failure_sig = None
+        self._identical_failures = 0
+
     def observe_failure(self, signature: str, *, files_changed: bool) -> None:
         if signature == self._last_failure_sig and not files_changed:
             self._identical_failures += 1

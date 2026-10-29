@@ -2849,6 +2849,7 @@ class BuilderOrchestrator:
         skip_sandbox = bool(_apps_to_remove(content))
         build_ok: bool | None = None
         build_failure_reason: str | None = None
+        code_verification: dict[str, Any] | None = None
         if (
             self.settings.BUILDER_SANDBOX_ENABLED
             and test_report["status"].startswith("passed")
@@ -2947,6 +2948,13 @@ class BuilderOrchestrator:
                         version_id=version.get("id"),
                     )
                 build_ok = bool(getattr(build_report, "success", False))
+                code_verification = {
+                    "tests": getattr(build_report, "test_status", "not_run"),
+                    "lint": getattr(build_report, "lint_status", "not_run"),
+                    "coding_stop": getattr(build_report, "stop_reason", "UNKNOWN"),
+                    "changed_files": list(getattr(build_report, "changed_files", []) or [])[:30],
+                    "snapshot_saved": bool(getattr(build_report, "snapshot", None)),
+                }
                 if not build_ok:
                     build_failure_reason = str(
                         getattr(build_report, "stop_reason", None)
@@ -3103,6 +3111,7 @@ class BuilderOrchestrator:
             build_ok=build_ok,
             detected_problems=detected_problems,
             changes=spec_changes(current_spec, spec),
+            code_verification=code_verification,
         )
         if await self._run_was_canceled(run_id, user_id):
             return await self._finish_canceled_build(run_id, user_id, agent_id)
@@ -3484,6 +3493,7 @@ class BuilderOrchestrator:
         build_ok: bool | None = None,
         detected_problems: list[str] | None = None,
         changes: dict[str, Any] | None = None,
+        code_verification: dict[str, Any] | None = None,
     ) -> str:
         """Summarise persisted changes, never infer capabilities from the request."""
         import json
@@ -3505,6 +3515,7 @@ class BuilderOrchestrator:
             "test_report": test_report,
             "remaining_problems": problems,
             "persisted_changes": changes or {},
+            "code_verification": code_verification,
         }
         try:
             result = await self.gateway.complete(
@@ -3520,6 +3531,9 @@ class BuilderOrchestrator:
                         "If outcome is not built or sandbox_build_ok is false, state what remains incomplete; "
                         "never announce a working agent or a successful validation. A smoke test is not a live external integration test. "
                         "If changed_sections is empty say that no configuration changed. "
+                        "Configuration differences and code edits are separate: use code_verification for code edits, tests and lint. "
+                        "Passed tests/lint may coexist with an incomplete coding stage. Do not say checks were never run if they passed. "
+                        "Only claim code edits were saved when snapshot_saved is true. "
                         "Use concise Markdown, 2–6 sentences or a few specific bullets; no stock closing message."
                     )},
                     {"role": "user", "content": json.dumps({"request": user_prompt[:4000], "evidence": evidence}, ensure_ascii=False)},

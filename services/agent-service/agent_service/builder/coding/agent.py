@@ -323,12 +323,12 @@ class CodingAgent:
                         ),
                     })
                     continue
-                if code_changed and lint_state == "failed":
+                if code_changed and lint_state != "passed":
                     verification_repairs += 1
                     messages.append({"role": "assistant", "content": decision.content})
                     messages.append({
                         "role": "user",
-                        "content": "Lint is failing. Fix lint issues before finishing.",
+                        "content": "Lint has not passed for the latest code. Run exec.run_lint and fix any issues before finishing.",
                     })
                     continue
                 if ledger.verification.get("tests") == "failed" and verification_repairs < self.max_verification_repairs:
@@ -369,7 +369,7 @@ class CodingAgent:
                 ],
             })
 
-            files_before = set(ctx.files_touched)
+            revision_before = ledger.workspace_revision
             for i, call in enumerate(decision.tool_calls):
                 tool_id = str(call.get("tool_id") or "")
                 call_id = str(call.get("call_id") or f"call_{i}")
@@ -386,7 +386,7 @@ class CodingAgent:
                     "content": json.dumps(observation)[:12_000],
                 })
 
-            files_changed = set(ctx.files_touched) != files_before
+            files_changed = ledger.workspace_revision != revision_before
             if files_changed:
                 code_changed = True
             reason = detector.reason()
@@ -453,10 +453,19 @@ class CodingAgent:
         )
 
         # Post-processing: ledger facts, touched files, verification status.
-        if tool_id in ("workspace.create_file", "workspace.apply_patch", "workspace.delete_file"):
+        changed = tool_id in ("workspace.create_file", "workspace.apply_patch", "workspace.delete_file") and not (
+            result.get("error") or result.get("ok") is False
+        )
+        if changed:
             path = str(args.get("path", ""))
             if path:
                 ledger.touch(path)
+            ledger.workspace_revision += 1
+            # A second edit of the same path is still a new revision. Earlier
+            # green checks cannot validate it, while repeated checks/reads now
+            # observe different code and must not trip the stagnation guard.
+            ledger.verification.update(tests="pending", lint="pending")
+            detector.observe_progress()
         if tool_id == "exec.run_tests":
             ok = bool(result.get("ok"))
             ledger.verification["tests"] = "passed" if ok else "failed"

@@ -39,6 +39,7 @@ class WorkLedger(BaseModel):
     next_action: str | None = None
     turn_count: int = 0
     tool_call_count: int = 0
+    workspace_revision: int = 0
     verification: dict[str, str] = Field(default_factory=lambda: {"lint": "pending", "tests": "pending"})
 
     def add_fact(self, fact: str) -> None:

@@ -59,3 +59,22 @@ async def test_provider_failure_cannot_report_old_green_project_as_modified():
         assert "builder.ready" not in report.events
     finally:
         await provider.destroy_workspace(handle)
+
+
+async def test_coding_loop_failure_keeps_reason_even_when_outer_checks_pass():
+    provider, handle, blueprint, files = await workspace()
+
+    async def repeats(messages, tools, **kwargs):
+        return ModelDecision('', [{'tool_id': 'workspace.read_file', 'arguments': {'path': 'src/agent/prompts.py'}}])
+
+    try:
+        report = await CodeBuildPipeline(provider=provider).build_from_workspace(
+            handle=handle, blueprint=blueprint, files=files, user_id='qa', agent_id='qa', run_id='qa',
+            persist=False, scaffolded=False, repair_objective='Apply the new mission', repair_model_fn=repeats,
+        )
+        assert not report.success and report.snapshot is None
+        assert report.test_status == report.lint_status == 'passed'
+        assert report.stop_reason == 'LOOP_DETECTED_REPEATED_CALL'
+        assert report.changed_files == []
+    finally:
+        await provider.destroy_workspace(handle)
